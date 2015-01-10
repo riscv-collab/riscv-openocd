@@ -116,11 +116,9 @@ WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" '"${UNINST_EXE}"'
 WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
 WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
 WriteUninstaller "${PRODLCNAME}-uninstall.exe"
+
 SectionEnd
 
-; SectionGroup "Open On-Chip Debugger" SectionSystem
-
-; SectionGroupEnd
 
 Section "Scripts" SectionScripts
 
@@ -129,26 +127,20 @@ File /r "${GIT_FOLDER}\tcl\*"
 
 SectionEnd
 
-; !ifdef DLLDIR
 Section "Libraries (DLL)" SectionDll
 
 SetOutPath "$INSTDIR\bin"
 File "${INSTALL_FOLDER}\bin\*.dll"
 
 SectionEnd
-; !endif
 
-; !ifdef CONFIG_DOCUMENTATION
 Section "Documentation" SectionDoc
 
 SetOutPath "$INSTDIR\doc"
 File "${BUILD_FOLDER}\doc\openocd.pdf"
 File /r "${BUILD_FOLDER}\doc\openocd.html"
 
-SetOutPath "$INSTDIR\license"
-
 SectionEnd
-; !endif
 
 ; Optional section (can be disabled by the user)
 Section "Start Menu Shortcuts" SectionMenu
@@ -188,7 +180,6 @@ SectionEnd
 ; Descriptions (mouse-over).
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
 
-; !insertmacro MUI_DESCRIPTION_TEXT ${SectionSystem}	"Open On-Chip Debugger."
 !insertmacro MUI_DESCRIPTION_TEXT ${SectionScripts}	"TCL scripts."
 !insertmacro MUI_DESCRIPTION_TEXT ${SectionDll}		"Runtime Libraries (DLL)."
 !insertmacro MUI_DESCRIPTION_TEXT ${SectionDoc}		"Documentation."
