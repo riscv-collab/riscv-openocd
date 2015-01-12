@@ -154,7 +154,11 @@ cp "${WORK}/hidapi-0.7.0/README.txt" "${OPENOCD_PKG_FOLDER}/license/hidapi"
 
 mkdir -p "${WORK}/output"
 
-NDATE=$(date -u +%Y%m%d%H%M)
+if [ -z "${NDATE}" ]
+then
+  NDATE=$(date -u +%Y%m%d%H%M)
+fi
+
 INSTALLER=${WORK}/output/gnuarmeclipse-openocd-osx-${OUTFILE_VERSION}-${NDATE}.pkg
 
 cd "${WORK}"
