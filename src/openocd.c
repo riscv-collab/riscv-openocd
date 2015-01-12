@@ -48,7 +48,7 @@
 #endif
 
 #define OPENOCD_VERSION	\
-	"Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
+	"GNU ARM Eclipse Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
 
 /* Give scripts and TELNET a way to find out what version this is */
 static int jim_version_command(Jim_Interp *interp, int argc,
