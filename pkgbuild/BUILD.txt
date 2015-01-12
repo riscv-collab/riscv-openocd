@@ -1,7 +1,7 @@
 
 The entire build procedure is defined in a shell script, available from:
 
-  https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/
+  https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/pkgbuild/build-openocd-osx.sh
 
 The procedure requires the presence of MacPorts in the PATH:
 
@@ -9,10 +9,15 @@ The procedure requires the presence of MacPorts in the PATH:
 
 and the following MacPorts packages:
 
-  sudo port install libtool automake autoconf pkgconfig libusb [libusb-compat]
+  sudo port install libtool automake autoconf pkgconfig libusb libusb-compat
   sudo port install texinfo texlive
 
-After downloading the build script, eventually adjust the WORK folder 
+To download the build script, use:
+
+  curl -L https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/pkgbuild/build-openocd-osx.sh?format=raw \
+  -o ~/Downloads/build-openocd-osx.sh
+
+After downloading the script, eventually adjust the WORK folder 
 definition to a folder of your choice.
 
 The output of the build script is a .pkg file in the ${WORK}/output folder.
