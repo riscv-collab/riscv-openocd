@@ -1,6 +1,12 @@
 #!/bin/bash
 
-# Script to cross build the Windows version of OpenOCD with MinGW-w64 on Debian.
+# Script to cross build the 32-bit Windows version of OpenOCD with MinGW-w64
+# on Debian.
+
+# Prerequisites:
+#
+# sudo apt-get install git doxygen libtool autoconf automake texinfo texlive \
+# autotools-dev pkg-config  mingw-w64 mingw-w64-tools mingw-w64-dev
 
 # DEBUG="y"
 
