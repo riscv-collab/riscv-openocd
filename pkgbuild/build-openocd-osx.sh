@@ -132,6 +132,7 @@ cp "${OPENOCD_GIT_FOLDER}/AUTHORS" "${OPENOCD_PKG_FOLDER}/license/openocd"
 cp "${OPENOCD_GIT_FOLDER}/COPYING" "${OPENOCD_PKG_FOLDER}/license/openocd"
 cp "${OPENOCD_GIT_FOLDER}/"NEW* "${OPENOCD_PKG_FOLDER}/license/openocd"
 cp "${OPENOCD_GIT_FOLDER}/README" "${OPENOCD_PKG_FOLDER}/license/openocd"
+cp "${OPENOCD_GIT_FOLDER}/README.OSX" "${OPENOCD_PKG_FOLDER}/license/openocd"
 
 cp "${WORK}/hidapi-0.7.0/AUTHORS.txt" "${OPENOCD_PKG_FOLDER}/license/hidapi"
 cp "${WORK}/hidapi-0.7.0/"LICENSE* "${OPENOCD_PKG_FOLDER}/license/hidapi"
