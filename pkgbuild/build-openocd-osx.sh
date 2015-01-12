@@ -9,6 +9,8 @@
 # sudo port install libtool automake autoconf pkgconfig libusb [libusb-compat]
 # sudo port install texinfo texlive
 
+# DEBUG="y"
+
 WORK=/Users/$(whoami)/Work/openocd
 mkdir -p "${WORK}"
 
@@ -23,6 +25,9 @@ OPENOCD_PKG_FOLDER="${WORK}/pkg_root"
 
 HIDAPI_FOLDER="hidapi-0.7.0"
 HIDAPI_ARCHIVE="${HIDAPI_FOLDER}.zip"
+
+PKGBUILD_RELATIVE_INSTALL="Applications/GNU ARM Eclipse/OpenOCD"
+INSTALL_FOLDER=/${PKGBUILD_RELATIVE_INSTALL}
 
 # http://www.signal11.us/oss/hidapi/
 # https://github.com/downloads/signal11/hidapi/hidapi-0.7.0.zip
@@ -77,12 +82,16 @@ fi
 
 export HIDAPI_CFLAGS="-I${WORK}/${HIDAPI_FOLDER}/hidapi"
 export HIDAPI_LIBS="-L${WORK}/${HIDAPI_FOLDER}/mac -lhid"
+if [ "${DEBUG}" != "y" ]
+then
+  export CFLAGS="-g"
+fi
 export LIBS="-framework IOKit -framework CoreFoundation"
 
 cd "${OPENOCD_BUILD_FOLDER}"
 LDFLAGS=-L/opt/local/lib CPPFLAGS=-I/opt/local/include \
 "${OPENOCD_GIT_FOLDER}/configure" \
---prefix=  \
+--prefix=""  \
 --enable-aice \
 --disable-amtjtagaccel \
 --enable-armjtagew \
@@ -110,7 +119,11 @@ LDFLAGS=-L/opt/local/lib CPPFLAGS=-I/opt/local/include \
 --enable-vsllink
 
 cd "${OPENOCD_BUILD_FOLDER}"
-make bindir="bin" pkgdatadir= all pdf html
+make bindir="bin" pkgdatadir="" all pdf html
+if [ "${DEBUG}" == "y" ]
+then
+  strip src/openocd
+fi
 
 mkdir -p ${OPENOCD_PKG_FOLDER}/bin
 mkdir -p ${OPENOCD_PKG_FOLDER}/scripts
@@ -149,5 +162,5 @@ cd "${WORK}"
 pkgbuild --identifier ilg.gnuarmeclipse.openocd \
 --root "${OPENOCD_PKG_FOLDER}" \
 --version "${OUTFILE_VERSION}" \
---install-location Applications/GNU\ ARM\ Eclipse/OpenOCD \
+--install-location "${PKGBUILD_RELATIVE_INSTALL}" \
 "${INSTALLER}"
