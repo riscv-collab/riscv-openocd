@@ -1,0 +1,14 @@
+
+This is the GNU ARM Eclipse version of OpenOCD for 32-bit Windows.
+
+If generally follows the official releases.
+
+The changes are minimal, and mainly consist in the packing
+procedure to generate the .pkg installer.
+
+For more info and support, please read the project pages from:
+
+http://gnuarmeclipse.livius.net/blog/
+
+
+Liviu Ionescu

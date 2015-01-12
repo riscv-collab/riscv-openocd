@@ -1,7 +1,14 @@
+#!/bin/bash
+
+# Script to cross build the Windows version of OpenOCD with MinGW-w64 on Debian.
+
+# DEBUG="y"
 
 WORK="/media/Work/openocd"
+mkdir -p "${WORK}"
 
 OUTFILE_VERSION="0.8.0"
+OPENOCD_TARGET="w32"
 
 INPUT_VERSION="0.8.0"
 INPUT_ZIP="openocd-${INPUT_VERSION}_x86_devkit.zip"
@@ -9,24 +16,40 @@ INPUT_ZIP_FOLDER="openocd-${INPUT_VERSION}_x86_devkit"
 
 OPENOCD_GIT_FOLDER="${WORK}/gnuarmeclipse-openocd.git"
 OPENOCD_DOWNLOAD_FOLDER="${WORK}/download"
-OPENOCD_BUILD_FOLDER="${WORK}/build/w32"
-OPENOCD_INSTALL_FOLDER="${WORK}/install/w32"
+OPENOCD_BUILD_FOLDER="${WORK}/build/${OPENOCD_TARGET}"
+OPENOCD_INSTALL_FOLDER="${WORK}/install/${OPENOCD_TARGET}"
 
-mkdir -p "${WORK}"
+if [ ! -d "${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}" ]
+then
+    mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
+    cd "${OPENOCD_DOWNLOAD_FOLDER}"
+    wget "http://sourceforge.net/projects/picusb/files/${INPUT_ZIP}"
 
-cd "${WORK}"
-git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
-#git clone http://git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
-cd "${OPENOCD_GIT_FOLDER}"
-git checkout gnuarmeclipse
+    mkdir -p "${OPENOCD_INSTALL_FOLDER}"
+    cd "${OPENOCD_INSTALL_FOLDER}"
+    unzip "${OPENOCD_DOWNLOAD_FOLDER}/${INPUT_ZIP}"
+fi
 
-mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-cd "${OPENOCD_DOWNLOAD_FOLDER}"
-wget "http://sourceforge.net/projects/picusb/files/${INPUT_ZIP}"
+if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
+then
+    cd "${WORK}"
 
-mkdir -p "${OPENOCD_INSTALL_FOLDER}"
-cd "${OPENOCD_INSTALL_FOLDER}"
-unzip "${OPENOCD_DOWNLOAD_FOLDER}/${INPUT_ZIP}"
+    if [ "$(whoami)" == "ilg" ]
+    then
+        git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
+    else
+        git clone http://git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
+    fi
+
+    # Change to the gnuarmeclipse branch.
+    cd "${OPENOCD_GIT_FOLDER}"
+    git checkout gnuarmeclipse
+
+    # Prepare autotools.
+    cd "${OPENOCD_GIT_FOLDER}"
+    ./bootstrap
+fi
+
 
 export CROSS_COMPILE="i686-w64-mingw32"
 
@@ -45,15 +68,25 @@ export HIDAPI_LIBS="-L${PKG_CONFIG_PREFIX}/lib -lhidapi"
 
 export PKG_CONFIG_PATH="${PKG_CONFIG_PREFIX}/lib/pkgconfig"
 
-cd "${OPENOCD_GIT_FOLDER}"
-./bootstrap
+if [ "${DEBUG}" == "y" ]
+then
+    export CFLAGS="-g"
+fi
+
+mkdir -p "${OPENOCD_BUILD_FOLDER}"
+
+if [ -f "${OPENOCD_BUILD_FOLDER}/config.h" ]
+then
+    cd "${OPENOCD_BUILD_FOLDER}"
+    make distclean
+fi
 
 mkdir -p "${OPENOCD_BUILD_FOLDER}"
 cd "${OPENOCD_BUILD_FOLDER}"
 "${OPENOCD_GIT_FOLDER}/configure" \
 --build=$(uname -m)-linux-gnu \
 --host=$CROSS_COMPILE \
---prefix=  \
+--prefix=""  \
 --enable-aice \
 --enable-amtjtagaccel \
 --enable-armjtagew \
@@ -81,7 +114,10 @@ cd "${OPENOCD_BUILD_FOLDER}"
 --enable-vsllink
 
 make bindir="bin" pkgdatadir= all pdf html
-i686-w64-mingw32-strip src/openocd.exe
+if [ "${DEBUG}" != "y" ]
+then
+  ${CROSS_COMPILE}-strip src/openocd.exe
+fi
 
 mkdir -p "${WORK}/output"
 
@@ -91,8 +127,7 @@ NSIS_FILE="${NSIS_FOLDER}/gnuarmeclipse-openocd.nsi"
 NDATE=$(date -u +%Y%m%d%H%M)
 OUTFILE="${WORK}/output/gnuarmeclipse-openocd-w32-${OUTFILE_VERSION}-${NDATE}-setup.exe"
 
-NSIS_FLAGS="-V2 -NOCD"
-#NSIS_FLAGS="-V4 -NOCD"
+NSIS_FLAGS="-V4 -NOCD"
 
 cd "${OPENOCD_BUILD_FOLDER}"
 makensis ${NSIS_FLAGS} \
@@ -102,5 +137,3 @@ makensis ${NSIS_FLAGS} \
 -DNSIS_FOLDER="${NSIS_FOLDER}" \
 -DOUTFILE="${OUTFILE}" \
 "${NSIS_FILE}"
-
-
