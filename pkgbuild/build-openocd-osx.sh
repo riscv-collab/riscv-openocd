@@ -82,7 +82,7 @@ fi
 
 export HIDAPI_CFLAGS="-I${WORK}/${HIDAPI_FOLDER}/hidapi"
 export HIDAPI_LIBS="-L${WORK}/${HIDAPI_FOLDER}/mac -lhid"
-if [ "${DEBUG}" != "y" ]
+if [ "${DEBUG}" == "y" ]
 then
   export CFLAGS="-g"
 fi
@@ -120,7 +120,7 @@ LDFLAGS=-L/opt/local/lib CPPFLAGS=-I/opt/local/include \
 
 cd "${OPENOCD_BUILD_FOLDER}"
 make bindir="bin" pkgdatadir="" all pdf html
-if [ "${DEBUG}" == "y" ]
+if [ "${DEBUG}" != "y" ]
 then
   strip src/openocd
 fi
