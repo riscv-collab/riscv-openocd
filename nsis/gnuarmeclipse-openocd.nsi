@@ -103,6 +103,12 @@ File "${BUILD_FOLDER}\src\openocd.exe"
 SetOutPath "$INSTDIR\license"
 File /r "${INSTALL_FOLDER}\dev_kit\license\*"
 
+SetOutPath "$INSTDIR\info"
+File "${NSIS_FOLDER}\build-openocd-w32-cross-debian.sh"
+File "${NSIS_FOLDER}\INFO.txt"
+File "${NSIS_FOLDER}\BUILD.txt"
+File "${GIT_FOLDER}\pkgbuild\CHANGES.txt"
+
 !ifdef W64
 SetRegView 64
 !endif
