@@ -52,7 +52,7 @@ int configuration_output_handler(struct command_context *context, const char *li
 	return ERROR_OK;
 }
 
-#ifdef _WIN32
+// #ifdef _WIN32
 static char *find_suffix(const char *text, const char *suffix)
 {
 	size_t text_len = strlen(text);
@@ -66,9 +66,9 @@ static char *find_suffix(const char *text, const char *suffix)
 
 	return (char *)text + text_len - suffix_len;
 }
-#endif
+// #endif
 
-static void add_default_dirs(void)
+static void add_default_dirs(char* argv0)
 {
 	const char *run_prefix;
 	char *path;
@@ -92,7 +92,39 @@ static void add_default_dirs(void)
 
 	run_prefix = strExePath;
 #else
-	run_prefix = "";
+    char strElfPath[PATH_MAX];
+    char strElfRealPath[PATH_MAX];
+    
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
+    if (strchr(argv0, '/') == NULL) {
+        /* If the name has no path separators, use default logic */
+        run_prefix = "";
+    } else {
+        if (*argv0 != '/') {
+            /* Relative path must be appended to current directory */
+            getcwd(strElfPath, PATH_MAX);
+            if (strElfPath[strlen(strElfPath)-1] != '/') {
+                strcat(strElfPath, "/");
+            }
+            strcat(strElfPath, argv0);
+        } else {
+            /* Absolute folder is used as is */
+            strncpy(strElfPath, argv0, PATH_MAX);
+        }
+        /* Convert to canonical path */
+        realpath(strElfPath, strElfRealPath);
+#pragma GCC diagnostic pop
+        
+        /* Strip executable file name, leaving path (there always is a '/' */
+        *strrchr(strElfRealPath, '/') = '\0';
+
+        char *end_of_prefix = find_suffix(strElfRealPath, BINDIR);
+        if (end_of_prefix != NULL)
+            *end_of_prefix = '\0';
+    
+        run_prefix = strElfRealPath;
+    }
 #endif
 
 	LOG_DEBUG("bindir=%s", BINDIR);
@@ -219,7 +251,7 @@ int parse_cmdline_args(struct command_context *cmd_ctx, int argc, char *argv[])
 	/* paths specified on the command line take precedence over these
 	 * built-in paths
 	 */
-	add_default_dirs();
+	add_default_dirs(argv[0]);
 
 	return ERROR_OK;
 }
