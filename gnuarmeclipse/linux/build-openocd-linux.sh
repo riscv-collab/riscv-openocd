@@ -5,7 +5,8 @@
 # Prerequisites:
 #
 # sudo apt-get install git doxygen libtool autoconf automake texinfo texlive \
-# autotools-dev pkg-config  mingw-w64 mingw-w64-tools mingw-w64-dev
+# autotools-dev pkg-config cmake libusb-1.0.0-dev libudev-dev \
+# g++ libboost1.49-dev swig2.0 python2.7-dev libconfuse-dev
 
 WORK="/media/Work/openocd"
 
@@ -86,7 +87,6 @@ if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${HIDAPI_ARCHIVE}" ]
 then
   mkdir -p ${OPENOCD_DOWNLOAD_FOLDER}
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
-  HIDAPI_ARCHIVE="${HIDAPI}.zip"
   wget https://github.com/downloads/signal11/hidapi/${HIDAPI_ARCHIVE}
 fi
 
