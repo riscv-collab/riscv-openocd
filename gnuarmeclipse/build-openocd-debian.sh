@@ -51,7 +51,8 @@ then
   tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI}.tar.bz2"
 fi
 
-if [ ! -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.a" ]
+if [ !  \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.a" -o \
+           -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.a" \)  ]
 then
   rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
@@ -111,7 +112,7 @@ then
   tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2"
 fi
 
-if [ ! -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb.a" ]
+if [ ! -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.a" ]
 then
   rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
@@ -146,7 +147,7 @@ if [ ! -f "${WORK}/${HIDAPI}/libhid.a" ]
 then
   cd "${WORK}/${HIDAPI}/linux"
   make clean
-  make
+  make LDFLAGS="-lpthread"
   ar -r  "libhid.a"  hid-libusb.o
 fi
 
@@ -181,6 +182,9 @@ fi
 
 cd "${OPENOCD_BUILD_FOLDER}"
 
+export HIDAPI_CFLAGS="-I${WORK}/${HIDAPI}/hidapi"
+export HIDAPI_LIBS="-L${WORK}/${HIDAPI}/linux -lhid"
+
 LIBFTDI_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/include/libftdi1" \
 LIBUSB0_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/include" \
 LIBUSB1_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/include/libusb-1.0" \
@@ -189,10 +193,7 @@ LIBFTDI_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib -lftdi1" \
 LIBUSB0_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib -lusb" \
 LIBUSB1_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib -lusb-1.0" \
 \
-HIDAPI_CFLAGS="-I${WORK}/${HIDAPI}/hidapi" \
-HIDAPI_LIBS="-L${WORK}/${HIDAPI}/linux -lhid" \
-\
-LDFLAGS='-Wl,-rpath=\$$ORIGIN' \
+LDFLAGS='-Wl,-rpath=\$$ORIGIN -lpthread' \
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib" \
@@ -203,6 +204,7 @@ LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib":\
 --infodir="${INSTALL_ROOT}/openocd/info"  \
 --localedir="${INSTALL_ROOT}/openocd/locale"  \
 --mandir="${INSTALL_ROOT}/openocd/man"  \
+--docdir="${INSTALL_ROOT}/openocd/doc"  \
 --enable-aice \
 --enable-amtjtagaccel \
 --enable-armjtagew \
@@ -239,9 +241,14 @@ then
 
   sudo rm -rf "${INSTALL_ROOT}/openocd"
 
-  sudo make install
+  sudo make install install-pdf install-html install-man
 
-  sudo /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin"
+  if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64" ]
+  then
+    sudo /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin"
+  else
+    sudo /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin"
+  fi
   sudo ln -s "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2"
   sudo ln -s "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin/libftdi1.so"
 
@@ -254,6 +261,10 @@ then
   sudo ln -s "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so"
 
   readelf -d "${INSTALL_ROOT}/openocd/bin/openocd"
+
+  echo
+  "${INSTALL_ROOT}/openocd/bin/openocd" --version
+
   echo
   echo "Done."
 fi
