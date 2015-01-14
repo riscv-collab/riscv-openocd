@@ -15,8 +15,18 @@ OPENOCD_TARGET="linux"
 
 INSTALL_ROOT="/opt/gnuarmeclipse"
 
+# For updates, please check the corresponding pages
+
+# http://www.intra2net.com/en/developer/libftdi/download.php
 LIBFTDI="libftdi1-1.2"
-LIBUSB0="libusb-compat-0.1.4"
+
+# https://sourceforge.net/projects/libusb/files/libusb-compat-0.1/
+LIBUSB0="libusb-compat-0.1.5"
+
+# https://sourceforge.net/projects/libusb/files/libusb-1.0/
+LIBUSB1="libusb-1.0.19"
+
+# https://github.com/signal11/hidapi/downloads
 HIDAPI="hidapi-0.7.0"
 
 OPENOCD_GIT_FOLDER="${WORK}/gnuarmeclipse-openocd.git"
@@ -43,12 +53,15 @@ fi
 
 if [ ! -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.a" ]
 then
+  rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
   cd "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
 
+  rm -rf "${WORK}/${LIBFTDI}/build/linux"
   mkdir -p "${WORK}/${LIBFTDI}/build/linux"
   cd "${WORK}/${LIBFTDI}/build/linux"
   cmake -DCMAKE_INSTALL_PREFIX="${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}" ../..
+  make clean
   make 
   make install
 fi
@@ -70,12 +83,45 @@ fi
 
 if [ ! -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb.a" ]
 then
+  rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
   cd "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
 
+  rm -rf "${WORK}/${LIBUSB0}/build/linux"
   mkdir -p "${WORK}/${LIBUSB0}/build/linux"
   cd "${WORK}/${LIBUSB0}/build/linux"
   "${WORK}/${LIBUSB0}/configure" --prefix="${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
+  make clean
+  make 
+  make install
+fi
+
+# http://www.libusb.info
+
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2" ]
+then
+  mkdir -p ${OPENOCD_DOWNLOAD_FOLDER}
+  cd ${OPENOCD_DOWNLOAD_FOLDER}
+  wget http://sourceforge.net/projects/libusb/files/libusb-1.0/${LIBUSB1}/${LIBUSB1}.tar.bz2
+fi
+
+if [ ! -d "${WORK}/${LIBUSB1}" ]
+then
+  cd "${WORK}"
+  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2"
+fi
+
+if [ ! -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb.a" ]
+then
+  rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
+  cd "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
+
+  rm -rf "${WORK}/${LIBUSB1}/build/linux"
+  mkdir -p "${WORK}/${LIBUSB1}/build/linux"
+  cd "${WORK}/${LIBUSB1}/build/linux"
+  "${WORK}/${LIBUSB1}/configure" --prefix="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
+  make clean
   make 
   make install
 fi
@@ -99,6 +145,7 @@ fi
 if [ ! -f "${WORK}/${HIDAPI}/libhid.a" ]
 then
   cd "${WORK}/${HIDAPI}/linux"
+  make clean
   make
   ar -r  "libhid.a"  hid-libusb.o
 fi
@@ -133,14 +180,23 @@ then
 fi
 
 cd "${OPENOCD_BUILD_FOLDER}"
+
 LIBFTDI_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/include/libftdi1" \
 LIBUSB0_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/include" \
+LIBUSB1_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/include/libusb-1.0" \
+\
 LIBFTDI_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib -lftdi1" \
 LIBUSB0_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib -lusb" \
+LIBUSB1_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib -lusb-1.0" \
+\
 HIDAPI_CFLAGS="-I${WORK}/${HIDAPI}/hidapi" \
 HIDAPI_LIBS="-L${WORK}/${HIDAPI}/linux -lhid" \
+\
 LDFLAGS='-Wl,-rpath=\$$ORIGIN' \
-LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib":"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib" \
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib" \
+\
 "${OPENOCD_GIT_FOLDER}/configure" \
 --prefix="${INSTALL_ROOT}/openocd"  \
 --datarootdir="${INSTALL_ROOT}" \
@@ -174,16 +230,31 @@ LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib":"$
 --enable-vsllink
 
 cd "${OPENOCD_BUILD_FOLDER}"
+make clean
 make bindir="bin" pkgdatadir= all pdf html
-strip src/openocd
 
-sudo make install
+if [ -f src/openocd ]
+then
+  strip src/openocd
 
-sudo /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin"
-sudo ln -s "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2"
-sudo ln -s "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin/libftdi1.so"
-sudo /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin"
-sudo ln -s "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4"
-sudo ln -s "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin/libusb.so"
+  sudo rm -rf "${INSTALL_ROOT}/openocd"
 
+  sudo make install
+
+  sudo /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin"
+  sudo ln -s "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2"
+  sudo ln -s "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin/libftdi1.so"
+
+  sudo /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin"
+  sudo ln -s "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4"
+  sudo ln -s "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin/libusb.so"
+
+  sudo /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin"
+  sudo ln -s "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0"
+  sudo ln -s "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so"
+
+  readelf -d "${INSTALL_ROOT}/openocd/bin/openocd"
+  echo
+  echo "Done."
+fi
 
