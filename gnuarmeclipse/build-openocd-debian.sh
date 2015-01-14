@@ -8,7 +8,12 @@
 # autotools-dev pkg-config cmake libusb-1.0.0-dev libudev-dev \
 # g++ libboost1.49-dev swig2.0 python2.7-dev libconfuse-dev
 
-WORK="/media/Work/openocd"
+if [ -d /media/Work ]
+then
+  WORK="/media/Work/openocd"
+else
+  WORK=~/Work/openocd
+fi
 
 OUTFILE_VERSION="0.8.0"
 OPENOCD_TARGET="linux"
@@ -182,19 +187,22 @@ fi
 
 cd "${OPENOCD_BUILD_FOLDER}"
 
-export HIDAPI_CFLAGS="-I${WORK}/${HIDAPI}/hidapi"
-export HIDAPI_LIBS="-L${WORK}/${HIDAPI}/linux -lhid"
+# On some machines libftdi ends in lib64, so we refer both lib & lib64
 
 LIBFTDI_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/include/libftdi1" \
 LIBUSB0_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/include" \
 LIBUSB1_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/include/libusb-1.0" \
+HIDAPI_CFLAGS="-I${WORK}/${HIDAPI}/hidapi" \
 \
-LIBFTDI_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib -lftdi1" \
+LIBFTDI_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib -L${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib -lftdi1" \
 LIBUSB0_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib -lusb" \
 LIBUSB1_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib -lusb-1.0" \
+HIDAPI_LIBS="-L${WORK}/${HIDAPI}/linux -lhid" \
 \
 LDFLAGS='-Wl,-rpath=\$$ORIGIN -lpthread' \
-LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib":\
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:\
+"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib" \
 \
