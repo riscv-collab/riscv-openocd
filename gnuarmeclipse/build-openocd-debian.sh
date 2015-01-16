@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+set -u
 
 # Script to cross build the GNU/Linux version of OpenOCD on Debian.
 # Also tested on Ubuntu 14.10, Manjaro 0.8.11.
@@ -16,11 +18,14 @@ if [ -d /media/Work ]
 then
   OPENOCD_WORK=${OPENOCD_WORK:-"/media/Work/openocd"}
 else
-  OPENOCD_WORK=${OPENOCD_WORK:-~/Work/openocd}
+  OPENOCD_WORK=${OPENOCD_WORK:-${HOME}/Work/openocd}
 fi
 
 # The folder where OpenOCD is installed.
 INSTALL_ROOT=${INSTALL_ROOT:-"/opt/gnuarmeclipse"}
+
+PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-""}
 
 # ----- Local variables -----
 
@@ -75,6 +80,25 @@ then
     make install install-pdf install-html install-man
 
     # Copy the dynamic libraries to the same folder where the application file is.
+
+    if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64" ]
+    then
+      /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin"
+    else
+      /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin"
+    fi
+    ln -s "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0"
+    ln -s "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so"
+
+    if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64" ]
+    then
+      /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin"
+    else
+      /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin"
+    fi
+    ln -s "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4"
+    ln -s "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin/libusb.so"
+
     if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64" ]
     then
       /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin"
@@ -83,14 +107,6 @@ then
     fi
     ln -s "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2"
     ln -s "${INSTALL_ROOT}/openocd/bin/libftdi1.so.2.2.0" "${INSTALL_ROOT}/openocd/bin/libftdi1.so"
-
-    /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin"
-    ln -s "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4"
-    ln -s "${INSTALL_ROOT}/openocd/bin/libusb-0.1.so.4.4.4" "${INSTALL_ROOT}/openocd/bin/libusb.so"
-
-    /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin"
-    ln -s "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0"
-    ln -s "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so.0.1.0" "${INSTALL_ROOT}/openocd/bin/libusb-1.0.so"
 
     # Display some information about the resulted application.
     readelf -d "${INSTALL_ROOT}/openocd/bin/openocd"
@@ -129,7 +145,8 @@ then
 fi
 
 # Build and install the new USB library.
-if [ ! -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.a" ]
+if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.a" -o \
+          -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.a" \) ]
 then
   rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
@@ -165,7 +182,8 @@ then
 fi
 
 # Build and install the old USB library.
-if [ ! -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb.a" ]
+if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb.a" -o \
+          -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb.a" \) ]
 then
   rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
@@ -176,7 +194,10 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
 
   # Configure
-  PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":"${PKG_CONFIG_PATH}" \
+  PKG_CONFIG_PATH=\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig":\
+"${PKG_CONFIG_PATH}" \
   \
   "${OPENOCD_WORK}/${LIBUSB0}/configure" \
   --prefix="${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
@@ -217,7 +238,10 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
 
   # Configure
-  PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":"${PKG_CONFIG_PATH}" \
+  PKG_CONFIG_PATH=\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig":\
+"${PKG_CONFIG_PATH}" \
   \
   cmake \
   -DCMAKE_INSTALL_PREFIX="${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}" \
@@ -251,8 +275,13 @@ fi
 if [ ! -f "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}/${HIDAPI_OBJECT}" ]
 then
   cd "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}"
-  make clean
-  make LDFLAGS="-lpthread"
+
+  PKG_CONFIG_PATH=\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig":\
+"${PKG_CONFIG_PATH}" \
+  \
+  make LDFLAGS="-lpthread" clean all
 
   # Make just compiles the file. Create the archive.
   # No dynamic/shared libs involved.
@@ -305,16 +334,22 @@ HIDAPI_LIBS="-L${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET} -lhid" \
 \
 LDFLAGS='-Wl,-rpath=\$$ORIGIN -lpthread' \
 \
-PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
+PKG_CONFIG_PATH=\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/pkgconfig":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/pkgconfig":\
 "${PKG_CONFIG_PATH}" \
-LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:\
+LD_LIBRARY_PATH=\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib":\
+"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib" \
+"${LD_LIBRARY_PATH}" \
 \
 "${OPENOCD_GIT_FOLDER}/configure" \
 --prefix="${INSTALL_ROOT}/openocd"  \
