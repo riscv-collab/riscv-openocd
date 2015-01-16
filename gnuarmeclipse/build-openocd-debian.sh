@@ -14,6 +14,8 @@ set -u
 # ----- Externally configurable variables -----
 
 # The folder where the entire build procedure will run.
+# If you prefer to build in a separate folder, define it before invoking
+# the script.
 if [ -d /media/Work ]
 then
   OPENOCD_WORK=${OPENOCD_WORK:-"/media/Work/openocd"}
@@ -22,6 +24,8 @@ else
 fi
 
 # The folder where OpenOCD is installed.
+# If you prefer to install in different location, like in your home folder,
+# define it before invoking the script.
 INSTALL_ROOT=${INSTALL_ROOT:-"/opt/gnuarmeclipse"}
 
 PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
@@ -125,7 +129,12 @@ fi
 # Create the work folder.
 mkdir -p "${OPENOCD_WORK}"
 
-# http://www.libusb.info
+# Build the USB libraries.
+#
+# Both USB libraries are available from a single project LIBUSB
+# 	http://www.libusb.info
+# with source files ready to download from SourceForge
+# 	https://sourceforge.net/projects/libusb/files
 
 # Download the new USB library.
 if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2" ]
@@ -206,7 +215,11 @@ then
   make clean install
 fi
 
-# http://www.intra2net.com/en/developer/libftdi
+# Build the FTDI library.
+#
+# There are two versions of the FDDI library; we recommend using the 
+# open source one, available from intra2net.
+#	http://www.intra2net.com/en/developer/libftdi/
 
 # Download the FTDI library.
 if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI}.tar.bz2" ]
@@ -289,19 +302,26 @@ then
 fi
 
 # Get the GNU ARM Eclipse OpenOCD git repository.
+#
+# The custom OpenOCD branch is available from the dedicated Git repository
+# which is part of the GNU ARM Eclipse project hosted on SourceForge.
+# Generally this branch follows the official OpenOCD master branch, 
+# with updates after every OpenOCD public release.
+
 if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
 then
   cd "${OPENOCD_WORK}"
 
   if [ "$(whoami)" == "ilg" ]
   then
-  # ilg has full access to the repo.
+    # Shortcut for ilg, who has full access to the repo.
     git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
   else
+    # For regular read/only access, use the git url.
     git clone http://git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
   fi
 
-  # Change to the gnuarmeclipse branch.
+  # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
   cd "${OPENOCD_GIT_FOLDER}"
   git checkout gnuarmeclipse
 
@@ -310,6 +330,7 @@ then
   ./bootstrap
 fi
 
+# On first run, create the build folder.
 mkdir -p "${OPENOCD_BUILD_FOLDER}/openocd"
 
 # On subsequent runs, clear it to always force a configure.
@@ -384,11 +405,17 @@ LD_LIBRARY_PATH=\
 --enable-usbprog \
 --enable-vsllink
 
+# Note: a very important detail here is LDFLAGS='-Wl,-rpath=\$$ORIGIN which 
+# adds a special record to the ELF file asking the loader to search for the 
+# libraries first in the same folder where the executable is located. The 
+# task is complicated due to the multiple substitutions that are done on 
+# the way, and need to be escaped.
+
 # Do a clean build, with documentation.
-cd "${OPENOCD_BUILD_FOLDER}/openocd"
 
 # The bindir and pkgdatadir are required to configure bin and scripts folders
 # at the same level in the hierarchy.
+cd "${OPENOCD_BUILD_FOLDER}/openocd"
 make bindir="bin" pkgdatadir="" clean all pdf html
 
 if [ -f src/openocd ]
