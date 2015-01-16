@@ -118,13 +118,21 @@ then
     # Check if the application starts (if all dynamic libraries are available).
     echo
     "${INSTALL_ROOT}/openocd/bin/openocd" --version
+    RESULT="$?"
 
     echo
-    echo "Installed. (Configure openocd_path to ${INSTALL_ROOT}/openocd/bin)."
+    if [ "${RESULT}" == "0" ]
+    then
+      echo "Installed. (Configure openocd_path to ${INSTALL_ROOT}/openocd/bin)."
+    else
+      echo "Install failed."
+    fi
 
     exit
   fi
 fi
+
+# ----- Begin of common part --------------------------------------------------
 
 # Create the work folder.
 mkdir -p "${OPENOCD_WORK}"
@@ -341,7 +349,7 @@ then
   make distclean
 fi
 
-# -----------------------------------------------------------------------------
+# ----- End of common part ----------------------------------------------------
 
 # Configure OpenOCD. Use the same options as Freddie Chopin.
 
