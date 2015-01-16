@@ -19,9 +19,9 @@ DEBUG=${DEBUG:-"n"}
 # The folder where the entire build procedure will run.
 if [ -d /media/Work ]
 then
-  WORK=${WORK:-"/media/Work/openocd"}
+  OPENOCD_WORK=${OPENOCD_WORK:-"/media/Work/openocd"}
 else
-  WORK=${WORK:-~/Work/openocd}
+  OPENOCD_WORK=${OPENOCD_WORK:-~/Work/openocd}
 fi
 
 INSTALL_FOLDER=${INSTALL_FOLDER:-"/Applications/GNU ARM Eclipse/OpenOCD"}
@@ -58,12 +58,12 @@ OPENOCD_TARGET="osx"
 HIDAPI_TARGET="mac"
 HIDAPI_OBJECT="hid.o"
 
-OPENOCD_GIT_FOLDER="${WORK}/gnuarmeclipse-openocd.git"
-OPENOCD_DOWNLOAD_FOLDER="${WORK}/download"
-OPENOCD_BUILD_FOLDER="${WORK}/build/${OPENOCD_TARGET}"
-OPENOCD_INSTALL_FOLDER="${WORK}/install/${OPENOCD_TARGET}"
+OPENOCD_GIT_FOLDER="${OPENOCD_WORK}/gnuarmeclipse-openocd.git"
+OPENOCD_DOWNLOAD_FOLDER="${OPENOCD_WORK}/download"
+OPENOCD_BUILD_FOLDER="${OPENOCD_WORK}/build/${OPENOCD_TARGET}"
+OPENOCD_INSTALL_FOLDER="${OPENOCD_WORK}/install/${OPENOCD_TARGET}"
 
-OPENOCD_PKG_FOLDER="${WORK}/pkg_root"
+OPENOCD_PKG_FOLDER="${OPENOCD_WORK}/pkg_root"
 
 WGET="wget"
 WGET_OUT="-O"
@@ -75,15 +75,15 @@ then
     rm -rf "${OPENOCD_BUILD_FOLDER}"
     rm -rf "${OPENOCD_INSTALL_FOLDER}"
     rm -rf "${OPENOCD_PKG_FOLDER}"
-    rm -rf "${WORK}/${LIBFTDI}"
-    rm -rf "${WORK}/${LIBUSB0}"
-    rm -rf "${WORK}/${LIBUSB1}"
-    rm -rf "${WORK}/${HIDAPI}"
+    rm -rf "${OPENOCD_WORK}/${LIBFTDI}"
+    rm -rf "${OPENOCD_WORK}/${LIBUSB0}"
+    rm -rf "${OPENOCD_WORK}/${LIBUSB1}"
+    rm -rf "${OPENOCD_WORK}/${HIDAPI}"
   fi
 fi
 
 # Create the work folder.
-mkdir -p "${WORK}"
+mkdir -p "${OPENOCD_WORK}"
 
 # http://www.libusb.info
 
@@ -98,9 +98,9 @@ then
 fi
 
 # Unpack the new USB library.
-if [ ! -d "${WORK}/${LIBUSB1}" ]
+if [ ! -d "${OPENOCD_WORK}/${LIBUSB1}" ]
 then
-  cd "${WORK}"
+  cd "${OPENOCD_WORK}"
   tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2"
 fi
 
@@ -116,7 +116,7 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
   CFLAGS="-Wno-non-literal-null-conversion" \
-  "${WORK}/${LIBUSB1}/configure" \
+  "${OPENOCD_WORK}/${LIBUSB1}/configure" \
   --prefix="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
   make clean install
 fi
@@ -134,9 +134,9 @@ then
 fi
 
 # Unpack the old USB library.
-if [ ! -d "${WORK}/${LIBUSB0}" ]
+if [ ! -d "${OPENOCD_WORK}/${LIBUSB0}" ]
 then
-  cd "${WORK}"
+  cd "${OPENOCD_WORK}"
   tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0}.tar.bz2"
 fi
 
@@ -151,9 +151,13 @@ then
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
 
-  PKG_CONFIG_PATH="${PKG_CONFIG_PATH}":"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig" \
-  "${WORK}/${LIBUSB0}/configure" \
+  # Configure
+  PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":"${PKG_CONFIG_PATH}" \
+  \
+  "${OPENOCD_WORK}/${LIBUSB0}/configure" \
   --prefix="${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
+
+  # Build
   make clean install
 fi
 
@@ -170,9 +174,9 @@ then
 fi
 
 # Unpack the FTDI library.
-if [ ! -d "${WORK}/${LIBFTDI}" ]
+if [ ! -d "${OPENOCD_WORK}/${LIBFTDI}" ]
 then
-  cd "${WORK}"
+  cd "${OPENOCD_WORK}"
   tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI}.tar.bz2"
 fi
 
@@ -188,10 +192,14 @@ then
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
 
-  PKG_CONFIG_PATH="${PKG_CONFIG_PATH}":"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig" \
+  # Configure
+  PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":"${PKG_CONFIG_PATH}" \
+  \
   cmake \
   -DCMAKE_INSTALL_PREFIX="${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}" \
-  "${WORK}/${LIBFTDI}"
+  "${OPENOCD_WORK}/${LIBFTDI}"
+
+  # Build
   make clean install
 fi
 
@@ -209,16 +217,16 @@ then
 fi
 
 # Unpack the HDI library.
-if [ ! -d "${WORK}/${HIDAPI}" ]
+if [ ! -d "${OPENOCD_WORK}/${HIDAPI}" ]
 then
-  cd "${WORK}"
+  cd "${OPENOCD_WORK}"
   unzip "${OPENOCD_DOWNLOAD_FOLDER}/${HIDAPI_ARCHIVE}"
 fi
 
 # Build the new HDI library.
-if [ ! -f "${WORK}/${HIDAPI}/${HIDAPI_TARGET}/${HIDAPI_TARGET}" ]
+if [ ! -f "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}/${HIDAPI_TARGET}" ]
 then
-  cd "${WORK}/${HIDAPI}/${HIDAPI_TARGET}"
+  cd "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}"
   make clean
   make LDFLAGS="-lpthread"
 
@@ -230,7 +238,7 @@ fi
 # Get the GNU ARM Eclipse OpenOCD git repository.
 if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
 then
-  cd "${WORK}"
+  cd "${OPENOCD_WORK}"
 
   if [ "$(whoami)" == "ilg" ]
   then
@@ -275,14 +283,13 @@ cd "${OPENOCD_BUILD_FOLDER}/openocd"
 # All variables below are passed on the command line before 'configure'.
 # Be sure all these lines end in '\' to ensure lines are concatenated.
 # On some machines libftdi ends in lib64, so we refer both lib & lib64
-HIDAPI_CFLAGS="-I${WORK}/${HIDAPI}/hidapi" \
-HIDAPI_LIBS="-L${WORK}/${HIDAPI}/${HIDAPI_TARGET} -lhid" \
+HIDAPI_CFLAGS="-I${OPENOCD_WORK}/${HIDAPI}/hidapi" \
+HIDAPI_LIBS="-L${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET} -lhid" \
 \
 LDFLAGS="-L/opt/local/lib" \
 CPPFLAGS="-I/opt/local/include" \
 LIBS="-framework IOKit -framework CoreFoundation" \
-PKG_CONFIG_PATH=\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
+PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/pkgconfig":\
@@ -388,15 +395,15 @@ cp "${OPENOCD_GIT_FOLDER}/"NEW* "${OPENOCD_PKG_FOLDER}/license/openocd"
 cp "${OPENOCD_GIT_FOLDER}/README" "${OPENOCD_PKG_FOLDER}/license/openocd"
 cp "${OPENOCD_GIT_FOLDER}/README.OSX" "${OPENOCD_PKG_FOLDER}/license/openocd"
 
-cp "${WORK}/hidapi-0.7.0/AUTHORS.txt" "${OPENOCD_PKG_FOLDER}/license/hidapi"
-cp "${WORK}/hidapi-0.7.0/"LICENSE* "${OPENOCD_PKG_FOLDER}/license/hidapi"
-cp "${WORK}/hidapi-0.7.0/README.txt" "${OPENOCD_PKG_FOLDER}/license/hidapi"
+cp "${OPENOCD_WORK}/hidapi-0.7.0/AUTHORS.txt" "${OPENOCD_PKG_FOLDER}/license/hidapi"
+cp "${OPENOCD_WORK}/hidapi-0.7.0/"LICENSE* "${OPENOCD_PKG_FOLDER}/license/hidapi"
+cp "${OPENOCD_WORK}/hidapi-0.7.0/README.txt" "${OPENOCD_PKG_FOLDER}/license/hidapi"
 
-mkdir -p "${WORK}/output"
+mkdir -p "${OPENOCD_WORK}/output"
 
-INSTALLER=${WORK}/output/gnuarmeclipse-openocd-osx-${OUTFILE_VERSION}-${NDATE}.pkg
+INSTALLER=${OPENOCD_WORK}/output/gnuarmeclipse-openocd-osx-${OUTFILE_VERSION}-${NDATE}.pkg
 
-cd "${WORK}"
+cd "${OPENOCD_WORK}"
 
 pkgbuild --identifier ilg.gnuarmeclipse.openocd \
 --root "${OPENOCD_PKG_FOLDER}" \
