@@ -224,7 +224,7 @@ then
 fi
 
 # Build the new HDI library.
-if [ ! -f "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}/${HIDAPI_TARGET}" ]
+if [ ! -f "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}/${HIDAPI_OBJECT}" ]
 then
   cd "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}"
   make clean
