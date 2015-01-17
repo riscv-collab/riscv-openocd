@@ -1,6 +1,6 @@
 #!/bin/bash
-set -e
-set -u
+set -euo pipefail
+IFS=$'\n\t'
 
 # Script to build the OS X version of OpenOCD. It produces an install package
 # that expands in "/Applications/GNU ARM Eclipse/OpenOCD".
@@ -76,9 +76,11 @@ OPENOCD_PKG_FOLDER="${OPENOCD_WORK}/pkg_root"
 WGET="wget"
 WGET_OUT="-O"
 
+ACTION=${1:-}
+
 if [ $# > 0 ]
 then
-  if [ $1 == "clean" ]
+  if [ "${ACTION}" == "clean" ]
   then
     # Remove most build and temporary folders
     rm -rf "${OPENOCD_BUILD_FOLDER}"
@@ -398,7 +400,7 @@ mkdir -p "${OPENOCD_PKG_FOLDER}/info"
 # Make all dynlib references relative to the executable folder.
 
 cp "${OPENOCD_BUILD_FOLDER}/openocd/src/openocd" "${OPENOCD_PKG_FOLDER}/bin"
-otool -L "${OPENOCD_PKG_FOLDER}/bin/openocd"
+# otool -L "${OPENOCD_PKG_FOLDER}/bin/openocd"
 install_name_tool -change "libftdi1.2.dylib" "@executable_path/libftdi1.2.dylib" "${OPENOCD_PKG_FOLDER}/bin/openocd"
 install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/openocd"
 install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/openocd"
@@ -407,21 +409,21 @@ install_name_tool -change "/opt/local/lib/libusb-0.1.4.dylib" "@executable_path/
 otool -L "${OPENOCD_PKG_FOLDER}/bin/openocd"
 
 cp "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.2.2.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
-otool -L "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
+# otool -L "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
 install_name_tool -id libftdi1.2.dylib "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
 install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
 install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
 otool -L "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
 
 cp "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.4.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
-otool -L "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
+# otool -L "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
 install_name_tool -id libusb-0.1.4.dylib "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
 install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
 install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
 otool -L "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
 
 cp "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
-otool -L "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
+# otool -L "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
 install_name_tool -id libusb-1.0.0.dylib "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
 install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
 install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"

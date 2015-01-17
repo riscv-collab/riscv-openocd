@@ -408,66 +408,65 @@ make bindir="bin" pkgdatadir="" clean all pdf html
 if [ -f src/openocd ]
 then
   strip src/openocd
-
-  # Always clear the destination folder, to have a consistent package.
-  rm -rf "${OPENOCD_INSTALL_FOLDER}/openocd"
-
-  cd "${OPENOCD_BUILD_FOLDER}/openocd"
- 
-  # Install, including documentation.
-  make install install-pdf install-html install-man
-
-  # Copy the dynamic libraries to the same folder where the application file is.
-
-  if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64" ]
-  then
-    /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.so.0.1.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  else
-    /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.so.0.1.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  fi
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-1.0.so.0.1.0" "libusb-1.0.so.0")
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-1.0.so.0.1.0" "libusb-1.0.so")
-
-  if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64" ]
-  then
-    /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb-0.1.so.4.4.4" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  else
-    /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  fi
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb-0.1.so.4")
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb.so")
-
-  if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64" ]
-  then
-    /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.so.2.2.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  else
-    /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.so.2.2.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  fi
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so.2")
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so")
-
-  # Create the distribution archive
-  mkdir -p "${OPENOCD_OUTPUT}"
-
-  OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-debian64-${OUTFILE_VERSION}-${NDATE}.tgz"
-
-  cd "${OPENOCD_INSTALL_FOLDER}"
-  tar czf "${OPENOCD_ARCHIVE}" --owner root --group root openocd
-
-  # Display some information about the resulted application.
-  readelf -d "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
-
-  # Check if the application starts (if all dynamic libraries are available).
-  echo
-  "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd" --version
-  RESULT="$?"
-
-  echo
-  if [ "${RESULT}" == "0" ]
-  then
-    echo "Build completed."
-  else
-    echo "Build failed."
-  fi
 fi
 
+# Always clear the destination folder, to have a consistent package.
+rm -rf "${OPENOCD_INSTALL_FOLDER}/openocd"
+
+cd "${OPENOCD_BUILD_FOLDER}/openocd"
+ 
+# Install, including documentation.
+make install install-pdf install-html install-man
+
+# Copy the dynamic libraries to the same folder where the application file is.
+
+if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64" ]
+then
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.so.0.1.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+else
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.so.0.1.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+fi
+(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-1.0.so.0.1.0" "libusb-1.0.so.0")
+(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-1.0.so.0.1.0" "libusb-1.0.so")
+
+if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64" ]
+then
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb-0.1.so.4.4.4" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+else
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+fi
+(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb-0.1.so.4")
+(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb.so")
+
+if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64" ]
+then
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.so.2.2.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+else
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.so.2.2.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+fi
+(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so.2")
+(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so")
+
+# Create the distribution archive
+mkdir -p "${OPENOCD_OUTPUT}"
+
+OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-debian64-${OUTFILE_VERSION}-${NDATE}.tgz"
+
+cd "${OPENOCD_INSTALL_FOLDER}"
+tar czf "${OPENOCD_ARCHIVE}" --owner root --group root openocd
+
+# Display some information about the resulted application.
+readelf -d "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+
+# Check if the application starts (if all dynamic libraries are available).
+echo
+"${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd" --version
+RESULT="$?"
+
+echo
+if [ "${RESULT}" == "0" ]
+then
+  echo "Build completed."
+else
+  echo "Build failed."
+fi
