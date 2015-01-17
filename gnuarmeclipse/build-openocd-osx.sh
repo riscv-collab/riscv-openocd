@@ -254,7 +254,7 @@ then
 fi
 
 # Build the new HDI library.
-if [ ! -f "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}/${HIDAPI_OBJECT}" ]
+if [ ! -f "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}/libhid.a" ]
 then
   cd "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}"
 
@@ -263,7 +263,7 @@ then
 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig":\
 "${PKG_CONFIG_PATH}" \
   \
-  make LDFLAGS="-lpthread" clean all
+  make clean "${HIDAPI_OBJECT}"
 
   # Make just compiles the file. Create the archive.
   # No dynamic/shared libs involved.
