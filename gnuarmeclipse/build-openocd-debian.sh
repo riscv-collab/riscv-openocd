@@ -52,7 +52,7 @@ LIBUSB1="libusb-1.0.19"
 # https://github.com/signal11/hidapi/downloads
 HIDAPI="hidapi-0.7.0"
 
-OPENOCD_TARGET="linux"
+OPENOCD_TARGET="debian64"
 HIDAPI_TARGET="linux"
 HIDAPI_OBJECT="hid-libusb.o"
 
@@ -85,6 +85,7 @@ then
 
     # Always clear the destination folder, to have a consistent package.
     rm -rf "${INSTALL_ROOT}/openocd"
+    mkdir -p "${INSTALL_ROOT}"
 
     # Transfer the install folder to the final destination. 
     # Use tar to preserve rights.
@@ -404,18 +405,13 @@ LD_LIBRARY_PATH=\
 # at the same level in the hierarchy.
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
 make bindir="bin" pkgdatadir="" clean all pdf html
-
-if [ -f src/openocd ]
-then
-  strip src/openocd
-fi
+strip src/openocd
 
 # Always clear the destination folder, to have a consistent package.
 rm -rf "${OPENOCD_INSTALL_FOLDER}/openocd"
 
-cd "${OPENOCD_BUILD_FOLDER}/openocd"
- 
 # Install, including documentation.
+cd "${OPENOCD_BUILD_FOLDER}/openocd"
 make install install-pdf install-html install-man
 
 # Copy the dynamic libraries to the same folder where the application file is.
@@ -436,7 +432,7 @@ else
   /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 fi
 (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb-0.1.so.4")
-(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb.so")
+(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb-0.1.so")
 
 if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64" ]
 then
@@ -447,16 +443,40 @@ fi
 (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so.2")
 (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so")
 
+# For packages built on Debian, libudev.0 is used, but other distributions
+# include only libudev.1, so we add libudev.0 locally.
+if [ -f "/usr/lib/x86_64-linux-gnu/libgudev-1.0.so.0.1.1" ]
+then
+  /usr/bin/install -c -m 644 "/lib/x86_64-linux-gnu/libudev.so.0.13.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libudev.so.0.13.0" "libudev.so.0")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libudev.so.0.13.0" "libudev.so")
+else
+  echo "WARNING: libudev.so not copied locally!"
+fi
+
+# Add librt.so.1 locally, to be sure it is available always.
+if [ -f "/lib/x86_64-linux-gnu/librt.so.1" ]
+then
+  /usr/bin/install -c -m 644 "/lib/x86_64-linux-gnu/librt.so.1" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "librt.so.1" "librt.so")
+else
+  echo "WARNING: librt.so not copied locally!"
+fi
+
 # Create the distribution archive
 mkdir -p "${OPENOCD_OUTPUT}"
 
-OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-debian64-${OUTFILE_VERSION}-${NDATE}.tgz"
+OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}.tgz"
 
 cd "${OPENOCD_INSTALL_FOLDER}"
 tar czf "${OPENOCD_ARCHIVE}" --owner root --group root openocd
 
 # Display some information about the resulted application.
+echo
 readelf -d "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+
+echo
+ls -l "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 
 # Check if the application starts (if all dynamic libraries are available).
 echo

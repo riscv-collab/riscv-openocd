@@ -70,7 +70,7 @@ RequestExecutionLevel admin
 ; Pages.
 
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "${GIT_FOLDER}\COPYING"
+!insertmacro MUI_PAGE_LICENSE "${INSTALL_FOLDER}\COPYING"
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -97,17 +97,16 @@ SectionIn RO
 
 ; Set output path to the installation directory.
 SetOutPath "$INSTDIR\bin"
-
-File "${BUILD_FOLDER}\src\openocd.exe"
+File "${INSTALL_FOLDER}\bin\openocd.exe"
 
 SetOutPath "$INSTDIR\license"
-File /r "${INSTALL_FOLDER}\dev_kit\license\*"
+File /r "${INSTALL_FOLDER}\license\*"
 
 SetOutPath "$INSTDIR\info"
-File "${NSIS_FOLDER}\build-openocd-w32-cross-debian.sh"
-File "${NSIS_FOLDER}\INFO.txt"
-File "${NSIS_FOLDER}\BUILD.txt"
-File "${GIT_FOLDER}\pkgbuild\CHANGES.txt"
+File "${INSTALL_FOLDER}\info\build-openocd-w32-cross-debian.sh"
+File "${INSTALL_FOLDER}\info\INFO.txt"
+File "${INSTALL_FOLDER}\info\BUILD.txt"
+File "${INSTALL_FOLDER}\info\CHANGES.txt"
 
 !ifdef W64
 SetRegView 64
@@ -129,7 +128,7 @@ SectionEnd
 Section "Scripts" SectionScripts
 
 SetOutPath "$INSTDIR\scripts"
-File /r "${GIT_FOLDER}\tcl\*" 
+File /r "${INSTALL_FOLDER}\scripts\*" 
 
 SectionEnd
 
@@ -143,8 +142,18 @@ SectionEnd
 Section "Documentation" SectionDoc
 
 SetOutPath "$INSTDIR\doc"
-File "${BUILD_FOLDER}\doc\openocd.pdf"
-File /r "${BUILD_FOLDER}\doc\openocd.html"
+File "${INSTALL_FOLDER}\doc\openocd.pdf"
+File /r "${INSTALL_FOLDER}\doc\openocd.html"
+
+SectionEnd
+
+Section "Contributed" SectionContrib
+
+SetOutPath "$INSTDIR\contrib"
+File /r "${INSTALL_FOLDER}\contrib\*" 
+
+SetOutPath "$INSTDIR\OpenULINK"
+File /r "${INSTALL_FOLDER}\OpenULINK\*" 
 
 SectionEnd
 
@@ -175,6 +184,8 @@ RMDir /r "$INSTDIR\bin"
 RMDir /r "$INSTDIR\scripts"
 RMDir /r "$INSTDIR\doc"
 RMDir /r "$INSTDIR\license"
+RMDir /r "$INSTDIR\contrib"
+RMDir /r "$INSTDIR\OpenULINK"
 
 ; Remove uninstaller
 Delete "${UNINST_EXE}"
@@ -189,6 +200,7 @@ SectionEnd
 !insertmacro MUI_DESCRIPTION_TEXT ${SectionScripts}	"TCL scripts."
 !insertmacro MUI_DESCRIPTION_TEXT ${SectionDll}		"Runtime Libraries (DLL)."
 !insertmacro MUI_DESCRIPTION_TEXT ${SectionDoc}		"Documentation."
+!insertmacro MUI_DESCRIPTION_TEXT ${SectionContrib}	"Contributed."
 !insertmacro MUI_DESCRIPTION_TEXT ${SectionMenu}	"Menu entries."
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_END

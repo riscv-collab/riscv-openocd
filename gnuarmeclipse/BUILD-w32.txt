@@ -1,0 +1,24 @@
+
+The entire build procedure is defined in a shell script, available from:
+
+  https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/build-openocd-w32-cross-debian.sh
+
+To download the build script, use:
+
+  wget https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/build-openocd-w32-cross-debian.sh?format=raw \
+  -O ~/Downloads/build-openocd-w32-cross-debian.sh
+
+To execute the script:
+
+  bash ~/Downloads/build-openocd-w32-cross-debian.sh
+
+The output of the build script is a setup file in the ${OPENOCD_WORK}/output 
+folder.
+
+The script was developped on Debian x64. Running it on other GNU/Linux
+distributions is possible, but might require some adjustments.
+
+Many thanks to my friend Dan Maiorescu for his major contributions 
+to this project.
+
+Liviu Ionescu
