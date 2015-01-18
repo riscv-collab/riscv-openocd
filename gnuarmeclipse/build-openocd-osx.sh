@@ -13,6 +13,16 @@ IFS=$'\n\t'
 # sudo port install cmake boost libconfuse swig-python
 # sudo port install texinfo texlive
 
+# Prepare MacPorts environment.
+
+export PATH=/opt/local/bin:/opt/local/sbin:$PATH
+port version >/dev/null
+if [ $? != 0 ]
+then
+  echo "Mandatory MacPorts not found, quit."
+  exit 1
+fi
+
 # ----- Externally configurable variables -----
 
 # Define it externally to "y"
@@ -28,18 +38,11 @@ else
   OPENOCD_WORK=${OPENOCD_WORK:-${HOME}/Work/openocd}
 fi
 
-# The folder where OpenOCD will be installed.
-INSTALL_FOLDER=${INSTALL_FOLDER:-"/Applications/GNU ARM Eclipse/OpenOCD"}
-
+# The UTC date part in the name of the archive.
 NDATE=${NDATE:-$(date -u +%Y%m%d%H%M)}
 
-export PATH=/opt/local/bin:/opt/local/sbin:$PATH
-port version >/dev/null
-if [ $? != 0 ]
-then
-  echo "Mandatory MacPorts not found, exit."
-  exit 1
-fi
+# The folder where OpenOCD will be installed.
+INSTALL_FOLDER=${INSTALL_FOLDER:-"/Applications/GNU ARM Eclipse/OpenOCD"}
 
 PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
 DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-""}
@@ -48,7 +51,7 @@ DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-""}
 
 OUTFILE_VERSION="0.8.0"
 
-# For updates, please check the corresponding pages
+# For updates, please check the corresponding pages.
 
 # http://www.intra2net.com/en/developer/libftdi/download.php
 LIBFTDI="libftdi1-1.2"
@@ -63,6 +66,7 @@ LIBUSB1="libusb-1.0.19"
 HIDAPI="hidapi-0.7.0"
 
 OPENOCD_TARGET="osx"
+
 HIDAPI_TARGET="mac"
 HIDAPI_OBJECT="hid.o"
 
@@ -70,8 +74,7 @@ OPENOCD_GIT_FOLDER="${OPENOCD_WORK}/gnuarmeclipse-openocd.git"
 OPENOCD_DOWNLOAD_FOLDER="${OPENOCD_WORK}/download"
 OPENOCD_BUILD_FOLDER="${OPENOCD_WORK}/build/${OPENOCD_TARGET}"
 OPENOCD_INSTALL_FOLDER="${OPENOCD_WORK}/install/${OPENOCD_TARGET}"
-
-OPENOCD_PKG_FOLDER="${OPENOCD_WORK}/pkg_root"
+OPENOCD_OUTPUT="${OPENOCD_WORK}/output"
 
 WGET="wget"
 WGET_OUT="-O"
@@ -83,13 +86,16 @@ then
   if [ "${ACTION}" == "clean" ]
   then
     # Remove most build and temporary folders
-    rm -rf "${OPENOCD_BUILD_FOLDER}"
-    rm -rf "${OPENOCD_INSTALL_FOLDER}"
-    rm -rf "${OPENOCD_PKG_FOLDER}"
-    rm -rf "${OPENOCD_WORK}/${LIBFTDI}"
-    rm -rf "${OPENOCD_WORK}/${LIBUSB0}"
-    rm -rf "${OPENOCD_WORK}/${LIBUSB1}"
-    rm -rf "${OPENOCD_WORK}/${HIDAPI}"
+    rm -rfv "${OPENOCD_BUILD_FOLDER}"
+    rm -rfv "${OPENOCD_INSTALL_FOLDER}"
+    #rm -rfv "${OPENOCD_PKG_FOLDER}"
+    rm -rfv "${OPENOCD_WORK}/${LIBFTDI}"
+    rm -rfv "${OPENOCD_WORK}/${LIBUSB0}"
+    rm -rfv "${OPENOCD_WORK}/${LIBUSB1}"
+    rm -rfv "${OPENOCD_WORK}/${HIDAPI}"
+
+    # exit 0
+    # Continue with build
   fi
 fi
 
@@ -99,7 +105,7 @@ fi
 mkdir -p "${OPENOCD_WORK}"
 
 # Build the USB libraries.
-#
+
 # Both USB libraries are available from a single project LIBUSB
 # 	http://www.libusb.info
 # with source files ready to download from SourceForge
@@ -126,11 +132,11 @@ fi
 if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.a" -o \
           -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.a" \) ]
 then
-  rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
+  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
   cd "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
 
-  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
+  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
@@ -163,11 +169,11 @@ fi
 if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb.a" -o \
           -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb.a" \) ]
 then
-  rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
+  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
   cd "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
 
-  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
+  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
 
@@ -185,7 +191,7 @@ then
 fi
 
 # Build the FTDI library.
-#
+
 # There are two versions of the FDDI library; we recommend using the 
 # open source one, available from intra2net.
 #	http://www.intra2net.com/en/developer/libftdi/
@@ -211,11 +217,11 @@ fi
 if [ !  \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.a" -o \
            -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.a" \)  ]
 then
-  rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
+  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
   cd "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
 
-  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
+  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
 
@@ -233,6 +239,10 @@ then
   make clean install
 fi
 
+
+# Build the HDI library.
+
+# This is just a simple wrapper over libusb.
 # http://www.signal11.us/oss/hidapi/
 
 # Download the HDI library.
@@ -271,7 +281,7 @@ then
 fi
 
 # Get the GNU ARM Eclipse OpenOCD git repository.
-#
+
 # The custom OpenOCD branch is available from the dedicated Git repository
 # which is part of the GNU ARM Eclipse project hosted on SourceForge.
 # Generally this branch follows the official OpenOCD master branch, 
@@ -350,7 +360,12 @@ DYLD_LIBRARY_PATH=\
 "${DYLD_LIBRARY_PATH}" \
 \
 "${OPENOCD_GIT_FOLDER}/configure" \
---prefix=""  \
+--prefix="${OPENOCD_INSTALL_FOLDER}/openocd"  \
+--datarootdir="${OPENOCD_INSTALL_FOLDER}" \
+--infodir="${OPENOCD_INSTALL_FOLDER}/openocd/info"  \
+--localedir="${OPENOCD_INSTALL_FOLDER}/openocd/locale"  \
+--mandir="${OPENOCD_INSTALL_FOLDER}/openocd/man"  \
+--docdir="${OPENOCD_INSTALL_FOLDER}/openocd/doc"  \
 --enable-aice \
 --disable-amtjtagaccel \
 --enable-armjtagew \
@@ -388,82 +403,146 @@ then
   strip src/openocd
 fi
 
-# Prepare the pkgbuild root folder.
-rm -rf "${OPENOCD_PKG_FOLDER}"
-mkdir -p "${OPENOCD_PKG_FOLDER}/bin"
-mkdir -p "${OPENOCD_PKG_FOLDER}/scripts"
-mkdir -p "${OPENOCD_PKG_FOLDER}/doc"
-mkdir -p "${OPENOCD_PKG_FOLDER}/license/openocd"
-mkdir -p "${OPENOCD_PKG_FOLDER}/license/hidapi"
-mkdir -p "${OPENOCD_PKG_FOLDER}/info"
+# Always clear the destination folder, to have a consistent package.
+rm -rfv "${OPENOCD_INSTALL_FOLDER}/openocd"
 
-# Make all dynlib references relative to the executable folder.
+# Exhaustive install, including documentation.
 
-cp "${OPENOCD_BUILD_FOLDER}/openocd/src/openocd" "${OPENOCD_PKG_FOLDER}/bin"
-# otool -L "${OPENOCD_PKG_FOLDER}/bin/openocd"
-install_name_tool -change "libftdi1.2.dylib" "@executable_path/libftdi1.2.dylib" "${OPENOCD_PKG_FOLDER}/bin/openocd"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/openocd"
-install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/openocd"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.4.dylib" "@executable_path/libusb-0.1.4.dylib" "${OPENOCD_PKG_FOLDER}/bin/openocd"
-install_name_tool -change "/opt/local/lib/libusb-0.1.4.dylib" "@executable_path/libusb-0.1.4.dylib" "${OPENOCD_PKG_FOLDER}/bin/openocd"
-otool -L "${OPENOCD_PKG_FOLDER}/bin/openocd"
+cd "${OPENOCD_BUILD_FOLDER}/openocd"
+make install install-pdf install-html install-man
 
-cp "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.2.2.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
-# otool -L "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
-install_name_tool -id libftdi1.2.dylib "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
-install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
-otool -L "${OPENOCD_PKG_FOLDER}/bin/libftdi1.2.dylib"
+# Copy the dynamic libraries to the same folder where the application file is.
+# Post-process dynamic libraries paths to be relative to executable folder.
 
-cp "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.4.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
-# otool -L "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
-install_name_tool -id libusb-0.1.4.dylib "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
-install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
-otool -L "${OPENOCD_PKG_FOLDER}/bin/libusb-0.1.4.dylib"
+# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+install_name_tool -change "libftdi1.2.dylib" "@executable_path/libftdi1.2.dylib" \
+"${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
+"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" \
+"${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.4.dylib" \
+"@executable_path/libusb-0.1.4.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+install_name_tool -change "/opt/local/lib/libusb-0.1.4.dylib" \
+"@executable_path/libusb-0.1.4.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
 
-cp "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
-# otool -L "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
-install_name_tool -id libusb-1.0.0.dylib "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
-install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
-otool -L "${OPENOCD_PKG_FOLDER}/bin/libusb-1.0.0.dylib"
+cp "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.2.2.0.dylib" \
+"${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
+# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
+install_name_tool -id libftdi1.2.dylib "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
+install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
+"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
+install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" \
+"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
+otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
 
-# "${OPENOCD_PKG_FOLDER}/bin/openocd" --version
+cp "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.4.dylib" \
+"${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
+# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
+install_name_tool -id libusb-0.1.4.dylib "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
+install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
+"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
+install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" \
+"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
+otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
 
-cp -r "${OPENOCD_GIT_FOLDER}/tcl/"* "${OPENOCD_PKG_FOLDER}/scripts"
+cp "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
+"${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
+# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
+install_name_tool -id libusb-1.0.0.dylib "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
+install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
+"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
+install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" \
+"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
+otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
 
-cp "${OPENOCD_BUILD_FOLDER}/openocd/doc/openocd.pdf" "${OPENOCD_PKG_FOLDER}/doc"
-cp -r "${OPENOCD_BUILD_FOLDER}/openocd/doc/openocd.html" "${OPENOCD_PKG_FOLDER}/doc"
+# Copy the license files.
 
-cp -r "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/pkgbuild/"* "${OPENOCD_PKG_FOLDER}/info"
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/AUTHORS" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/COPYING" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/"NEWS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
 
-cp "${OPENOCD_GIT_FOLDER}/AUTHORS" "${OPENOCD_PKG_FOLDER}/license/openocd"
-cp "${OPENOCD_GIT_FOLDER}/COPYING" "${OPENOCD_PKG_FOLDER}/license/openocd"
-cp "${OPENOCD_GIT_FOLDER}/"NEW* "${OPENOCD_PKG_FOLDER}/license/openocd"
-cp "${OPENOCD_GIT_FOLDER}/README" "${OPENOCD_PKG_FOLDER}/license/openocd"
-cp "${OPENOCD_GIT_FOLDER}/README.OSX" "${OPENOCD_PKG_FOLDER}/license/openocd"
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"AUTHORS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"LICENSE* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
 
-cp "${OPENOCD_WORK}/hidapi-0.7.0/AUTHORS.txt" "${OPENOCD_PKG_FOLDER}/license/hidapi"
-cp "${OPENOCD_WORK}/hidapi-0.7.0/"LICENSE* "${OPENOCD_PKG_FOLDER}/license/hidapi"
-cp "${OPENOCD_WORK}/hidapi-0.7.0/README.txt" "${OPENOCD_PKG_FOLDER}/license/hidapi"
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"AUTHORS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"COPYING* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"LICENSE* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
 
-mkdir -p "${OPENOCD_WORK}/output"
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"AUTHORS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"COPYING* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"NEWS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
 
-INSTALLER=${OPENOCD_WORK}/output/gnuarmeclipse-openocd-osx-${OUTFILE_VERSION}-${NDATE}.pkg
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"AUTHORS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"COPYING* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"LICENSE* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"NEWS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
 
+# Copy the GNU ARM Eclipse info files.
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-osx.txt" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/BUILD-osx.txt" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/BUILD.txt"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/CHANGES.txt" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-osx.sh" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
+
+# Create the distribution installer.
+
+mkdir -p "${OPENOCD_OUTPUT}"
+
+OPENOCD_INSTALLER=${OPENOCD_WORK}/output/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}.pkg
+
+# Create the installer package, with content from the
+# ${OPENOCD_INSTALL_FOLDER}/openocd folder.
+# The "${INSTALL_FOLDER:1}" is a substring that skips first char.
 cd "${OPENOCD_WORK}"
-
-# Create the installer package, with content from the pkg_root folder.
+echo
 pkgbuild --identifier ilg.gnuarmeclipse.openocd \
---root "${OPENOCD_PKG_FOLDER}" \
+--root "${OPENOCD_INSTALL_FOLDER}/openocd" \
 --version "${OUTFILE_VERSION}" \
 --install-location "${INSTALL_FOLDER:1}" \
-"${INSTALLER}"
+"${OPENOCD_INSTALLER}"
+
+echo
+ls -l "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 
 # Check if the application starts (if all dynamic libraries are available).
 echo
-"${OPENOCD_PKG_FOLDER}/bin/openocd" --version
+"${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd" --version
 RESULT="$?"
 
 echo
@@ -474,3 +553,4 @@ else
   echo "Buld failed."
 fi
 
+exit 0

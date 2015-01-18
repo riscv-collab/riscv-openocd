@@ -29,7 +29,7 @@ NDATE=${NDATE:-$(date -u +%Y%m%d%H%M)}
 # The folder where OpenOCD is installed.
 # If you prefer to install in different location, like in your home folder,
 # define it before invoking the script.
-INSTALL_ROOT=${INSTALL_ROOT:-"/opt/gnuarmeclipse"}
+INSTALL_FOLDER=${INSTALL_FOLDER:-"/opt/gnuarmeclipse"}
 
 PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-""}
@@ -38,7 +38,7 @@ LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-""}
 
 OUTFILE_VERSION="0.8.0"
 
-# For updates, please check the corresponding pages
+# For updates, please check the corresponding pages.
 
 # http://www.intra2net.com/en/developer/libftdi/download.php
 LIBFTDI="libftdi1-1.2"
@@ -53,6 +53,7 @@ LIBUSB1="libusb-1.0.19"
 HIDAPI="hidapi-0.7.0"
 
 OPENOCD_TARGET="debian64"
+
 HIDAPI_TARGET="linux"
 HIDAPI_OBJECT="hid-libusb.o"
 
@@ -72,43 +73,44 @@ then
   if [ "${ACTION}" == "clean" ]
   then
     # Remove most build and temporary folders
-    rm -rf "${OPENOCD_BUILD_FOLDER}"
-    rm -rf "${OPENOCD_INSTALL_FOLDER}"
-    rm -rf "${OPENOCD_WORK}/${LIBFTDI}"
-    rm -rf "${OPENOCD_WORK}/${LIBUSB0}"
-    rm -rf "${OPENOCD_WORK}/${LIBUSB1}"
-    rm -rf "${OPENOCD_WORK}/${HIDAPI}"
+    rm -rfv "${OPENOCD_BUILD_FOLDER}"
+    rm -rfv "${OPENOCD_INSTALL_FOLDER}"
+    rm -rfv "${OPENOCD_WORK}/${LIBFTDI}"
+    rm -rfv "${OPENOCD_WORK}/${LIBUSB0}"
+    rm -rfv "${OPENOCD_WORK}/${LIBUSB1}"
+    rm -rfv "${OPENOCD_WORK}/${HIDAPI}"
 
-    # exit
+    # exit 0
+    # Continue with build
   elif [ "${ACTION}" == "install" ]
   then
 
     # Always clear the destination folder, to have a consistent package.
-    rm -rf "${INSTALL_ROOT}/openocd"
-    mkdir -p "${INSTALL_ROOT}"
+    rm -rfv "${INSTALL_FOLDER}/openocd"
+    mkdir -p "${INSTALL_FOLDER}"
 
     # Transfer the install folder to the final destination. 
     # Use tar to preserve rights.
     cd "${OPENOCD_INSTALL_FOLDER}"
-    tar c -z --owner root --group root -f - openocd | tar x -z -f - -C "${INSTALL_ROOT}"
+    tar c -z --owner root --group root -f - openocd | tar x -z -f - -C "${INSTALL_FOLDER}"
 
     # Display some information about the resulted application.
-    readelf -d "${INSTALL_ROOT}/openocd/bin/openocd"
+    readelf -d "${INSTALL_FOLDER}/openocd/bin/openocd"
 
     # Check if the application starts (if all dynamic libraries are available).
     echo
-    "${INSTALL_ROOT}/openocd/bin/openocd" --version
+    "${INSTALL_FOLDER}/openocd/bin/openocd" --version
     RESULT="$?"
 
     echo
     if [ "${RESULT}" == "0" ]
     then
-      echo "Installed. (Configure openocd_path to ${INSTALL_ROOT}/openocd/bin)."
+      echo "Installed. (Configure openocd_path to ${INSTALL_FOLDER}/openocd/bin)."
     else
       echo "Install failed."
     fi
 
-    exit
+    exit 0
   fi
 fi
 
@@ -118,7 +120,7 @@ fi
 mkdir -p "${OPENOCD_WORK}"
 
 # Build the USB libraries.
-#
+
 # Both USB libraries are available from a single project LIBUSB
 # 	http://www.libusb.info
 # with source files ready to download from SourceForge
@@ -145,11 +147,11 @@ fi
 if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.a" -o \
           -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.a" \) ]
 then
-  rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
+  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
   cd "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
 
-  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
+  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
@@ -182,11 +184,11 @@ fi
 if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb.a" -o \
           -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb.a" \) ]
 then
-  rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
+  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
   cd "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
 
-  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
+  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
 
@@ -204,7 +206,7 @@ then
 fi
 
 # Build the FTDI library.
-#
+
 # There are two versions of the FDDI library; we recommend using the 
 # open source one, available from intra2net.
 #	http://www.intra2net.com/en/developer/libftdi/
@@ -230,11 +232,11 @@ fi
 if [ !  \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.a" -o \
            -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.a" \)  ]
 then
-  rm -rf "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
+  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
   cd "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
 
-  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
+  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
 
@@ -252,6 +254,10 @@ then
   make clean install
 fi
 
+
+# Build the HDI library.
+
+# This is just a simple wrapper over libusb.
 # http://www.signal11.us/oss/hidapi/
 
 # Download the HDI library.
@@ -290,7 +296,7 @@ then
 fi
 
 # Get the GNU ARM Eclipse OpenOCD git repository.
-#
+
 # The custom OpenOCD branch is available from the dedicated Git repository
 # which is part of the GNU ARM Eclipse project hosted on SourceForge.
 # Generally this branch follows the official OpenOCD master branch, 
@@ -408,9 +414,10 @@ make bindir="bin" pkgdatadir="" clean all pdf html
 strip src/openocd
 
 # Always clear the destination folder, to have a consistent package.
-rm -rf "${OPENOCD_INSTALL_FOLDER}/openocd"
+rm -rfv "${OPENOCD_INSTALL_FOLDER}/openocd"
 
-# Install, including documentation.
+# Exhaustive install, including documentation.
+
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
 make install install-pdf install-html install-man
 
@@ -471,7 +478,8 @@ else
   echo "WARNING: librt.so not copied locally!"
 fi
 
-# Copy the license files
+# Copy the license files.
+
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
 /usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/AUTHORS" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
@@ -522,7 +530,7 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
 /usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
 
-# Copy the GNU ARM Eclipse info files
+# Copy the GNU ARM Eclipse info files.
 /usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-linux.txt" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
@@ -533,7 +541,8 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
 /usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-debian.sh" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
 
-# Create the distribution archive
+# Create the distribution archive.
+
 mkdir -p "${OPENOCD_OUTPUT}"
 
 OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}.tgz"
@@ -541,7 +550,7 @@ OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUT
 cd "${OPENOCD_INSTALL_FOLDER}"
 tar czf "${OPENOCD_ARCHIVE}" --owner root --group root openocd
 
-# Display some information about the resulted application.
+# Display some information about the created application.
 echo
 readelf -d "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
 
@@ -560,3 +569,5 @@ then
 else
   echo "Build failed."
 fi
+
+exit 0

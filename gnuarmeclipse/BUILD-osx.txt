@@ -1,0 +1,33 @@
+
+This package was build on an OS X machine, using the script provided in
+
+  gnuarmeclipse/build-openocd-osx.sh
+
+To run it, first be sure the the packages required in the Prerequisites 
+section are installed, then copy the script and execute it with bash:
+
+  bash build-openocd-osx.sh
+
+The output of the build script is a .pkg install in the ${OPENOCD_WORK}/output 
+folder.
+
+To build the latest version of the package please use the script from:
+
+  wget https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/build-openocd-osx.sh?format=raw \
+  -O ~/Downloads/build-openocd-osx.sh
+
+  bash ~/Downloads/build-openocd-debian.sh
+
+The script was developped on OS X 10.9.5 with MacPorts 2.3.2. Running it on other 
+versions is possible, but might require some adjustments.
+
+Up-to-date build informations are available in the GNU ARM Eclipse project wiki:
+
+  http://gnuarmeclipse.livius.net/wiki/
+
+Many thanks to my friend Dan Maiorescu for his major contributions 
+to this project.
+
+
+Liviu Ionescu
+

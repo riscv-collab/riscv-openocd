@@ -52,9 +52,10 @@ then
   if [ "${ACTION}" == "clean" ]
   then
     # Remove most build and temporary folders
-    rm -rf "${OPENOCD_BUILD_FOLDER}"
-    rm -rf "${OPENOCD_INSTALL_FOLDER}"
+    rm -rfv "${OPENOCD_BUILD_FOLDER}"
+    rm -rfv "${OPENOCD_INSTALL_FOLDER}"
 
+    # exit 0
     # Continue with build
   fi
 fi
@@ -84,7 +85,7 @@ then
 fi
 
 # Get the GNU ARM Eclipse OpenOCD git repository.
-#
+
 # The custom OpenOCD branch is available from the dedicated Git repository
 # which is part of the GNU ARM Eclipse project hosted on SourceForge.
 # Generally this branch follows the official OpenOCD master branch, 
@@ -125,25 +126,7 @@ fi
 
 # Configure OpenOCD. Use the same options as Freddie Chopin.
 
-cd "${OPENOCD_BUILD_FOLDER}/openocd"
-
 CROSS_COMPILE="i686-w64-mingw32"
-
-# export OUTPUT_DIR="${OPENOCD_BUILD_FOLDER}"
-# export PKG_CONFIG_PREFIX="${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit"
-
-# export LIBFTDI_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/include/libftdi1"
-# export LIBUSB1_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/include/libusb-1.0"
-# export LIBUSB0_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/include/libusb-win32"
-
-# export LIBFTDI_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/lib -lftdi1"
-# export LIBUSB1_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/lib -lusb-1.0"
-# export LIBUSB0_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/lib -lusb"
-# export HIDAPI_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/include/hidapi"
-# export HIDAPI_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/lib -lhidapi"
-
-# export PKG_CONFIG_PATH="${PKG_CONFIG_PREFIX}/lib/pkgconfig"
-
 
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
 
@@ -206,7 +189,7 @@ make bindir="bin" pkgdatadir="" clean all pdf html
 ${CROSS_COMPILE}-strip src/openocd.exe
 
 # Always clear the destination folder, to have a consistent package.
-rm -rf "${OPENOCD_INSTALL_FOLDER}/openocd"
+rm -rfv "${OPENOCD_INSTALL_FOLDER}/openocd"
 
 # Install, including documentation.
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
@@ -219,45 +202,46 @@ cp "${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/bin/"*.dll \
 # Copy license files
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license"
 cp -r "${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/license/"* \
-"${OPENOCD_INSTALL_FOLDER}/openocd/license"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license"
 
 find "${OPENOCD_INSTALL_FOLDER}/openocd/license" -type f \
 -exec unix2dos {} \;
 
-# Copy info files
+# Copy the GNU ARM Eclipse info files.
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse"
 cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-w32-cross-debian.sh" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse"
 unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/build-openocd-w32-cross-debian.sh"
 cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-w32.txt" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
 unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
 cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/BUILD-w32.txt" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/BUILD.txt"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/BUILD.txt"
 unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/BUILD.txt"
 cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/CHANGES.txt" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/"
 unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/CHANGES.txt"
 
 # Not passed as it, used by makensis for the MUI_PAGE_LICENSE; must be DOS.
 cp "${OPENOCD_GIT_FOLDER}/COPYING" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/COPYING"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/COPYING"
 unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/COPYING"
 
 # Create the distribution setup.
+
 mkdir -p "${OPENOCD_OUTPUT}"
 
 NSIS_FOLDER="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/nsis"
 NSIS_FILE="${NSIS_FOLDER}/gnuarmeclipse-openocd.nsi"
 
-OUTFILE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}-setup.exe"
+OPENOCD_SETUP="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}-setup.exe"
 
 cd "${OPENOCD_BUILD_FOLDER}"
-
+echo
 makensis -V4 -NOCD \
 -DINSTALL_FOLDER="${OPENOCD_INSTALL_FOLDER}/openocd" \
 -DNSIS_FOLDER="${NSIS_FOLDER}" \
--DOUTFILE="${OUTFILE}" \
+-DOUTFILE="${OPENOCD_SETUP}" \
 "${NSIS_FILE}"
 RESULT="$?"
 
@@ -269,3 +253,4 @@ else
   echo "Build failed."
 fi
 
+exit 0
