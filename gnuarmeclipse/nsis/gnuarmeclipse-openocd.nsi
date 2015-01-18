@@ -102,11 +102,13 @@ File "${INSTALL_FOLDER}\bin\openocd.exe"
 SetOutPath "$INSTDIR\license"
 File /r "${INSTALL_FOLDER}\license\*"
 
-SetOutPath "$INSTDIR\info"
-File "${INSTALL_FOLDER}\info\build-openocd-w32-cross-debian.sh"
-File "${INSTALL_FOLDER}\info\INFO.txt"
-File "${INSTALL_FOLDER}\info\BUILD.txt"
-File "${INSTALL_FOLDER}\info\CHANGES.txt"
+SetOutPath "$INSTDIR"
+File "${INSTALL_FOLDER}\INFO.txt"
+
+SetOutPath "$INSTDIR\GNU ARM Eclipse"
+File "${INSTALL_FOLDER}\GNU ARM Eclipse\build-openocd-w32-cross-debian.sh"
+File "${INSTALL_FOLDER}\GNU ARM Eclipse\BUILD.txt"
+File "${INSTALL_FOLDER}\GNU ARM Eclipse\CHANGES.txt"
 
 !ifdef W64
 SetRegView 64
@@ -179,17 +181,11 @@ DeleteRegKey HKLM "SOFTWARE\${PRODUCT}"
 Delete "$SMPROGRAMS\${PRODUCT}\Uninstall.lnk"
 RMDir "$SMPROGRAMS\${PRODUCT}"
 
-; Remove files and directories used
-RMDir /r "$INSTDIR\bin"
-RMDir /r "$INSTDIR\scripts"
-RMDir /r "$INSTDIR\doc"
-RMDir /r "$INSTDIR\license"
-RMDir /r "$INSTDIR\contrib"
-RMDir /r "$INSTDIR\OpenULINK"
-
 ; Remove uninstaller
 Delete "${UNINST_EXE}"
-RMDir "$INSTDIR"
+
+; Remove files and directories used
+RMDir /r "$INSTDIR"
 SectionEnd
 
 ;--------------------------------

@@ -30,7 +30,7 @@ NDATE=${NDATE:-$(date -u +%Y%m%d%H%M)}
 
 OUTFILE_VERSION="0.8.0"
 
-OPENOCD_TARGET="w32"
+OPENOCD_TARGET="win32"
 
 INPUT_VERSION="0.8.0"
 INPUT_ZIP="openocd-${INPUT_VERSION}_x86_devkit.zip"
@@ -221,21 +221,25 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license"
 cp -r "${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}/dev_kit/license/"* \
 "${OPENOCD_INSTALL_FOLDER}/openocd/license"
 
-# Copy info files
-mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/info"
-cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-w32-cross-debian.sh" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/info"
-unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/info"
-cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-w32.txt" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/info/INFO.txt"
-unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/info/INFO.txt"
-cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/BUILD-w32.txt" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/info/BUILD.txt"
-unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/info/BUILD.txt"
-cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/CHANGES.txt" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/info/"
-unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/info/CHANGES.txt"
+find "${OPENOCD_INSTALL_FOLDER}/openocd/license" -type f \
+-exec unix2dos {} \;
 
+# Copy info files
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse"
+cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-w32-cross-debian.sh" \
+"${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse"
+unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/build-openocd-w32-cross-debian.sh"
+cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-w32.txt" \
+"${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
+unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
+cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/BUILD-w32.txt" \
+"${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/BUILD.txt"
+unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/BUILD.txt"
+cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/CHANGES.txt" \
+"${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/"
+unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/CHANGES.txt"
+
+# Not passed as it, used by makensis for the MUI_PAGE_LICENSE; must be DOS.
 cp "${OPENOCD_GIT_FOLDER}/COPYING" \
 "${OPENOCD_INSTALL_FOLDER}/openocd/COPYING"
 unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/COPYING"

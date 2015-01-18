@@ -418,27 +418,33 @@ make install install-pdf install-html install-man
 
 if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64" ]
 then
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.so.0.1.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.so.0.1.0" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 else
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.so.0.1.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.so.0.1.0" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 fi
 (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-1.0.so.0.1.0" "libusb-1.0.so.0")
 (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-1.0.so.0.1.0" "libusb-1.0.so")
 
 if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64" ]
 then
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb-0.1.so.4.4.4" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb-0.1.so.4.4.4" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 else
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 fi
 (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb-0.1.so.4")
 (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb-0.1.so")
 
 if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64" ]
 then
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.so.2.2.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.so.2.2.0" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 else
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.so.2.2.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.so.2.2.0" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 fi
 (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so.2")
 (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so")
@@ -447,7 +453,8 @@ fi
 # include only libudev.1, so we add libudev.0 locally.
 if [ -f "/usr/lib/x86_64-linux-gnu/libgudev-1.0.so.0.1.1" ]
 then
-  /usr/bin/install -c -m 644 "/lib/x86_64-linux-gnu/libudev.so.0.13.0" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  /usr/bin/install -c -m 644 "/lib/x86_64-linux-gnu/libudev.so.0.13.0" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
   (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libudev.so.0.13.0" "libudev.so.0")
   (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libudev.so.0.13.0" "libudev.so")
 else
@@ -457,11 +464,74 @@ fi
 # Add librt.so.1 locally, to be sure it is available always.
 if [ -f "/lib/x86_64-linux-gnu/librt.so.1" ]
 then
-  /usr/bin/install -c -m 644 "/lib/x86_64-linux-gnu/librt.so.1" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  /usr/bin/install -c -m 644 "/lib/x86_64-linux-gnu/librt.so.1" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
   (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "librt.so.1" "librt.so")
 else
   echo "WARNING: librt.so not copied locally!"
 fi
+
+# Copy the license files
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/AUTHORS" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/COPYING" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/"NEWS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
+
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"AUTHORS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"LICENSE* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
+
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"AUTHORS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"COPYING* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"LICENSE* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
+
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"AUTHORS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"COPYING* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"NEWS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
+
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"AUTHORS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"COPYING* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"LICENSE* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"NEWS* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"README* \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
+
+# Copy the GNU ARM Eclipse info files
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-linux.txt" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/BUILD-linux.txt" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/BUILD.txt"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/CHANGES.txt" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-debian.sh" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
 
 # Create the distribution archive
 mkdir -p "${OPENOCD_OUTPUT}"

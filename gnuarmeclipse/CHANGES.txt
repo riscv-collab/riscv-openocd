@@ -1,15 +1,20 @@
 
-The following changes were applied to the master branch:
+The following changes were applied to the OpenOCD master branch:
 
 [2015-01-12]
 
 - src/openocd.c
-add branding 'GNU ARM Eclipse' to the greeting message, to 
-more easily identify this cusom version.
+
+Add branding 'GNU ARM Eclipse' to the greeting message, to 
+more easily identify this custom version.
 
 - helper/options.c
-update the logic used to locate the 'scripts' folder, by 
+
+Update the logic used to locate the 'scripts' folder, by 
 using the argv[0], as on Windows. The logic is a bit more
 complicated, to accomodate 3 cases (no path, relative path
 and absolute path).
+
+
+Liviu Ionescu
 
