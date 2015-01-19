@@ -208,19 +208,19 @@ find "${OPENOCD_INSTALL_FOLDER}/openocd/license" -type f \
 -exec unix2dos {} \;
 
 # Copy the GNU ARM Eclipse info files.
-mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse"
+mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
 cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-w32-cross-debian.sh" \
-  "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse"
-unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/build-openocd-w32-cross-debian.sh"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
+unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/build-openocd-w32-cross-debian.sh"
 cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-w32.txt" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
 unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
 cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/BUILD-w32.txt" \
-  "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/BUILD.txt"
-unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/BUILD.txt"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/BUILD.txt"
+unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/BUILD.txt"
 cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/CHANGES.txt" \
-  "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/"
-unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/GNU ARM Eclipse/CHANGES.txt"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
+unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/CHANGES.txt"
 
 # Not passed as it, used by makensis for the MUI_PAGE_LICENSE; must be DOS.
 cp "${OPENOCD_GIT_FOLDER}/COPYING" \

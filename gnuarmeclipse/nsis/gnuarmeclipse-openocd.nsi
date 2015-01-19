@@ -105,10 +105,10 @@ File /r "${INSTALL_FOLDER}\license\*"
 SetOutPath "$INSTDIR"
 File "${INSTALL_FOLDER}\INFO.txt"
 
-SetOutPath "$INSTDIR\GNU ARM Eclipse"
-File "${INSTALL_FOLDER}\GNU ARM Eclipse\build-openocd-w32-cross-debian.sh"
-File "${INSTALL_FOLDER}\GNU ARM Eclipse\BUILD.txt"
-File "${INSTALL_FOLDER}\GNU ARM Eclipse\CHANGES.txt"
+SetOutPath "$INSTDIR\gnuarmeclipse"
+File "${INSTALL_FOLDER}\gnuarmeclipse\build-openocd-w32-cross-debian.sh"
+File "${INSTALL_FOLDER}\gnuarmeclipse\BUILD.txt"
+File "${INSTALL_FOLDER}\gnuarmeclipse\CHANGES.txt"
 
 !ifdef W64
 SetRegView 64
