@@ -16,9 +16,9 @@ IFS=$'\n\t'
 # The folder where the entire build procedure will run.
 # If you prefer to build in a separate folder, define it before invoking
 # the script.
-if [ -d /media/Work ]
+if [ -d /media/${USER}/Work ]
 then
-  OPENOCD_WORK=${OPENOCD_WORK:-"/media/Work/openocd"}
+  OPENOCD_WORK=${OPENOCD_WORK:-"/media/${USER}/Work/openocd"}
 else
   OPENOCD_WORK=${OPENOCD_WORK:-${HOME}/Work/openocd}
 fi
@@ -52,7 +52,7 @@ LIBUSB1="libusb-1.0.19"
 # https://github.com/signal11/hidapi/downloads
 HIDAPI="hidapi-0.7.0"
 
-OPENOCD_TARGET="debian64"
+OPENOCD_TARGET="ubuntu64"
 
 HIDAPI_TARGET="linux"
 HIDAPI_OBJECT="hid-libusb.o"
@@ -68,7 +68,7 @@ WGET_OUT="-O"
 
 ACTION=${1:-}
 
-if [ $# > 0 ]
+if [ $# -gt 0 ]
 then
   if [ "${ACTION}" == "clean" ]
   then
@@ -465,17 +465,17 @@ then
   (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libudev.so.0.13.0" "libudev.so.0")
   (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libudev.so.0.13.0" "libudev.so")
 else
-  echo 'WARNING: libudev.so not copied locally!'
+  echo "WARNING: libudev.so not copied locally!"
 fi
 
 # Add librt.so.1 locally, to be sure it is available always.
-if [ -f "/lib/x86_64-linux-gnu/librt.so.1" -o -L "/lib/x86_64-linux-gnu/librt.so.1" ]
+if [ -f "/lib/x86_64-linux-gnu/librt.so.1" ]
 then
   /usr/bin/install -c -m 644 "/lib/x86_64-linux-gnu/librt.so.1" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
   (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "librt.so.1" "librt.so")
 else
-  echo 'WARNING: librt.so not copied locally!'
+  echo "WARNING: librt.so not copied locally!"
 fi
 
 # Copy the license files.
@@ -566,6 +566,7 @@ echo
 if [ "${RESULT}" == "0" ]
 then
   echo "Build completed."
+  echo "File ${OPENOCD_ARCHIVE} created."
 else
   echo "Build failed."
 fi

@@ -8,7 +8,7 @@ section are installed, then copy the script and execute it with bash:
 
   bash build-openocd-debian.sh
 
-The output of the build script is a setup file in the ${OPENOCD_WORK}/output 
+The output of the build script is .tgz file in the ${OPENOCD_WORK}/output 
 folder.
 
 To build the latest version of the package please use the script from:
