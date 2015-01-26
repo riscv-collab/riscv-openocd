@@ -2,14 +2,39 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Script to cross build the GNU/Linux version of OpenOCD on Debian.
-# Also tested on Ubuntu 14.10, Manjaro 0.8.11.
+# Script to cross build the GNU/Linux version of OpenOCD on GNU/Linux.
+# Developed on Ubuntu 14.04 LTS.
+# Also tested on Debian 7, Manjaro 0.8.11.
 
 # Prerequisites:
 #
 # sudo apt-get install git doxygen libtool autoconf automake autotools-dev pkg-config
 # sudo apt-get texinfo texlive
 # sudo apt-get install cmake libudev-dev libconfuse-dev g++ libboost1.49-dev swig2.0 python2.7-dev
+
+# Parse actions 
+ACTION_CLEAN=""
+ACTION_PULL=""
+ACTION_INSTALL=""
+
+while [ $# -gt 0 ]
+do
+  if [ "$1" == "clean" ]
+  then
+    ACTION_CLEAN="$1"
+  elif [ "$1" == "pull" ]
+  then
+    ACTION_PULL="$1"
+  elif [ "$1" == "install" ]
+  then
+    ACTION_INSTALL="$1"
+  else
+    echo "Unknown action $1"
+    exit 1
+  fi
+
+  shift
+done
 
 # ----- Externally configurable variables -----
 
@@ -34,6 +59,26 @@ INSTALL_FOLDER=${INSTALL_FOLDER:-"/opt/gnuarmeclipse"}
 PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-""}
 
+LSB_PGM=$(which lsb_release)
+if [ ! -z "${LSB_PGM}" ]
+then
+  DISTRO_NAME=$(lsb_release -si | tr "[:upper:]" "[:lower:]")
+  echo $(lsb_release -i)
+else
+  DISTRO_NAME="linux"
+fi
+
+if [ "$(uname -m)" == "x86_64" ]
+then
+  DISTRO_BITS="64"
+elif [ "$(uname -m)" == "i686" ]
+then
+  DISTRO_BITS="32"
+else
+  echo "Unknown uname -m $(uname -m)"
+  exit 1
+fi
+
 # ----- Local variables -----
 
 OUTFILE_VERSION="0.8.0"
@@ -52,7 +97,7 @@ LIBUSB1="libusb-1.0.19"
 # https://github.com/signal11/hidapi/downloads
 HIDAPI="hidapi-0.7.0"
 
-OPENOCD_TARGET="ubuntu64"
+OPENOCD_TARGET="${DISTRO_NAME}${DISTRO_BITS}"
 
 HIDAPI_TARGET="linux"
 HIDAPI_OBJECT="hid-libusb.o"
@@ -66,52 +111,61 @@ OPENOCD_OUTPUT="${OPENOCD_WORK}/output"
 WGET="wget"
 WGET_OUT="-O"
 
-ACTION=${1:-}
-
-if [ $# -gt 0 ]
+# Process actions
+if [ "${ACTION_INSTALL}" == "install" ]
 then
-  if [ "${ACTION}" == "clean" ]
+
+  # Always clear the destination folder, to have a consistent package.
+  rm -rfv "${INSTALL_FOLDER}/openocd"
+  mkdir -p "${INSTALL_FOLDER}"
+
+  # Transfer the install folder to the final destination. 
+  # Use tar to preserve rights.
+  cd "${OPENOCD_INSTALL_FOLDER}"
+  tar c -z --owner root --group root -f - openocd | tar x -z -f - -C "${INSTALL_FOLDER}"
+
+  # Display some information about the resulted application.
+  readelf -d "${INSTALL_FOLDER}/openocd/bin/openocd"
+
+  # Check if the application starts (if all dynamic libraries are available).
+  echo
+  "${INSTALL_FOLDER}/openocd/bin/openocd" --version
+  RESULT="$?"
+
+  echo
+  if [ "${RESULT}" == "0" ]
   then
-    # Remove most build and temporary folders
-    rm -rfv "${OPENOCD_BUILD_FOLDER}"
-    rm -rfv "${OPENOCD_INSTALL_FOLDER}"
-    rm -rfv "${OPENOCD_WORK}/${LIBFTDI}"
-    rm -rfv "${OPENOCD_WORK}/${LIBUSB0}"
-    rm -rfv "${OPENOCD_WORK}/${LIBUSB1}"
-    rm -rfv "${OPENOCD_WORK}/${HIDAPI}"
-
-    # exit 0
-    # Continue with build
-  elif [ "${ACTION}" == "install" ]
-  then
-
-    # Always clear the destination folder, to have a consistent package.
-    rm -rfv "${INSTALL_FOLDER}/openocd"
-    mkdir -p "${INSTALL_FOLDER}"
-
-    # Transfer the install folder to the final destination. 
-    # Use tar to preserve rights.
-    cd "${OPENOCD_INSTALL_FOLDER}"
-    tar c -z --owner root --group root -f - openocd | tar x -z -f - -C "${INSTALL_FOLDER}"
-
-    # Display some information about the resulted application.
-    readelf -d "${INSTALL_FOLDER}/openocd/bin/openocd"
-
-    # Check if the application starts (if all dynamic libraries are available).
-    echo
-    "${INSTALL_FOLDER}/openocd/bin/openocd" --version
-    RESULT="$?"
-
-    echo
-    if [ "${RESULT}" == "0" ]
-    then
-      echo "Installed. (Configure openocd_path to ${INSTALL_FOLDER}/openocd/bin)."
-    else
-      echo "Install failed."
-    fi
-
-    exit 0
+    echo "Installed. (Configure openocd_path to ${INSTALL_FOLDER}/openocd/bin)."
+  else
+    echo "Install failed."
   fi
+
+  exit 0
+fi
+
+
+# Test if various tools are present
+gcc --version
+git --version
+automake --version
+cmake --version
+readelf --version
+
+if [ "${ACTION_CLEAN}" == "clean" ]
+then
+  # Remove most build and temporary folders
+  echo
+  echo "rm build install..."
+
+  rm -rf "${OPENOCD_BUILD_FOLDER}"
+  rm -rf "${OPENOCD_INSTALL_FOLDER}"
+  rm -rf "${OPENOCD_WORK}/${LIBFTDI}"
+  rm -rf "${OPENOCD_WORK}/${LIBUSB0}"
+  rm -rf "${OPENOCD_WORK}/${LIBUSB1}"
+  rm -rf "${OPENOCD_WORK}/${HIDAPI}"
+
+  # exit 0
+  # Continue with build
 fi
 
 # ----- Begin of common part --------------------------------------------------
@@ -248,6 +302,10 @@ then
   \
   cmake \
   -DCMAKE_INSTALL_PREFIX="${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}" \
+  -DFTDIPP:BOOL=off \
+  -DPYTHON_BINDINGS:BOOL=off \
+  -DEXAMPLES:BOOL=off \
+  -DDOCUMENTATION:BOOL=off \
   "${OPENOCD_WORK}/${LIBFTDI}"
 
   # Build
@@ -309,6 +367,8 @@ then
   if [ "$(whoami)" == "ilg" ]
   then
     # Shortcut for ilg, who has full access to the repo.
+    echo
+    echo "Enter SourceForge password for git clone"
     git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
   else
     # For regular read/only access, use the git url.
@@ -320,8 +380,28 @@ then
   git checkout gnuarmeclipse
 
   # Prepare autotools.
+  echo
+  echo "bootstrap..."
+
   cd "${OPENOCD_GIT_FOLDER}"
   ./bootstrap
+else
+  if [ "${ACTION_PULL}" == "pull" ]
+  then
+    echo
+    echo "Enter SourceForge password for git pull"
+    cd "${OPENOCD_GIT_FOLDER}"
+    git pull
+
+    rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
+
+    # Prepare autotools.
+    echo
+    echo "bootstrap..."
+
+    cd "${OPENOCD_GIT_FOLDER}"
+    ./bootstrap
+  fi
 fi
 
 # On first run, create the build folder.
@@ -330,14 +410,19 @@ mkdir -p "${OPENOCD_BUILD_FOLDER}/openocd"
 # On subsequent runs, clear it to always force a configure.
 if [ -f "${OPENOCD_BUILD_FOLDER}/openocd/config.h" ]
 then
-  cd "${OPENOCD_BUILD_FOLDER}/openocd"
+  echo
+  echo "make distclean..."
 
+  cd "${OPENOCD_BUILD_FOLDER}/openocd"
   make distclean
 fi
 
 # ----- End of common part ----------------------------------------------------
 
 # Configure OpenOCD. Use the same options as Freddie Chopin.
+
+echo
+echo "configure..."
 
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
 
@@ -411,134 +496,159 @@ LD_LIBRARY_PATH=\
 # at the same level in the hierarchy.
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
 make bindir="bin" pkgdatadir="" clean all pdf html
-strip src/openocd
 
 # Always clear the destination folder, to have a consistent package.
+echo
+echo "remove install..."
+
 rm -rfv "${OPENOCD_INSTALL_FOLDER}/openocd"
 
 # Exhaustive install, including documentation.
 
+echo
+echo "make install..."
+
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
-make install install-pdf install-html install-man
+make install-strip install-pdf install-html install-man
 
 # Copy the dynamic libraries to the same folder where the application file is.
+echo
+echo "copy shared libs..."
 
-if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64" ]
+ILIB=$(find "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib"* -type f -name 'libusb-1.0.so.*.*' -print)
+if [ ! -z "${ILIB}" ]
 then
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.so.0.1.0" \
+  ILIB_BASE="$(basename ${ILIB})"
+  /usr/bin/install -v -c -m 644 "${ILIB}" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-else
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.so.0.1.0" \
-  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2.\3/')"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2/')"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
 fi
-(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-1.0.so.0.1.0" "libusb-1.0.so.0")
-(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-1.0.so.0.1.0" "libusb-1.0.so")
 
-if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64" ]
+ILIB=$(find "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib"* -type f -name 'libusb-0.1.so.*.*' -print)
+if [ ! -z "${ILIB}" ]
 then
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb-0.1.so.4.4.4" \
+  ILIB_BASE="$(basename ${ILIB})"
+  /usr/bin/install -v -c -m 644 "${ILIB}" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-else
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.so.4.4.4" \
-  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2.\3/')"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2/')"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
 fi
-(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb-0.1.so.4")
-(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libusb-0.1.so.4.4.4" "libusb-0.1.so")
 
-if [ -d "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64" ]
+ILIB=$(find "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib"* -type f -name 'libftdi1.so.*.*' -print)
+if [ ! -z "${ILIB}" ]
 then
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.so.2.2.0" \
+  ILIB_BASE="$(basename ${ILIB})"
+  /usr/bin/install -v -c -m 644 "${ILIB}" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-else
-  /usr/bin/install -c -m 644 "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.so.2.2.0" \
-  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2.\3/')"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2/')"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
 fi
-(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so.2")
-(cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libftdi1.so.2.2.0" "libftdi1.so")
 
-# For packages built on Debian, libudev.0 is used, but other distributions
-# include only libudev.1, so we add libudev.0 locally.
-if [ -f "/usr/lib/x86_64-linux-gnu/libgudev-1.0.so.0.1.1" ]
+if [ $(false) ]
 then
-  /usr/bin/install -c -m 644 "/lib/x86_64-linux-gnu/libudev.so.0.13.0" \
+
+# Add libudev.so locally.
+ILIB=$(find /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu -type f -name 'libudev.so.*.*' -print)
+if [ ! -z "${ILIB}" ]
+then
+  ILIB_BASE="$(basename ${ILIB})"
+  /usr/bin/install -v -c -m 644 "${ILIB}" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libudev.so.0.13.0" "libudev.so.0")
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "libudev.so.0.13.0" "libudev.so")
+  ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2.\3/')"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2/')"
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
 else
-  echo "WARNING: libudev.so not copied locally!"
+  echo 'WARNING: libudev.so not copied locally!'
+  exit 1
 fi
 
 # Add librt.so.1 locally, to be sure it is available always.
 if [ -f "/lib/x86_64-linux-gnu/librt.so.1" ]
 then
-  /usr/bin/install -c -m 644 "/lib/x86_64-linux-gnu/librt.so.1" \
+  /usr/bin/install -v -c -m 644 "/lib/x86_64-linux-gnu/librt.so.1" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
   (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "librt.so.1" "librt.so")
 else
+  echo
   echo "WARNING: librt.so not copied locally!"
 fi
 
+fi
+
 # Copy the license files.
+echo
+echo "copy license files..."
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/AUTHORS" \
+/usr/bin/install -v -c -m 644 "${OPENOCD_GIT_FOLDER}/AUTHORS" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/COPYING" \
+/usr/bin/install -v -c -m 644 "${OPENOCD_GIT_FOLDER}/COPYING" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/"NEWS* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_GIT_FOLDER}/"NEWS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/"README* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_GIT_FOLDER}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"AUTHORS* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"AUTHORS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"LICENSE* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"LICENSE* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"README* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"AUTHORS* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"AUTHORS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"COPYING* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"COPYING* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"LICENSE* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"LICENSE* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"README* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"AUTHORS* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"AUTHORS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"COPYING* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"COPYING* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"NEWS* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"NEWS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"README* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"AUTHORS* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"AUTHORS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"COPYING* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"COPYING* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"LICENSE* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"LICENSE* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"NEWS* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"NEWS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"README* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
 
 # Copy the GNU ARM Eclipse info files.
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-linux.txt" \
+echo
+echo "copy info files..."
+
+/usr/bin/install -v -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-linux.txt" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/BUILD-linux.txt" \
+/usr/bin/install -v -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/BUILD-linux.txt" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/BUILD.txt"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/CHANGES.txt" \
+/usr/bin/install -v -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/CHANGES.txt" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-debian.sh" \
+/usr/bin/install -v -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-debian.sh" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
 
 # Create the distribution archive.
@@ -546,6 +656,9 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
 mkdir -p "${OPENOCD_OUTPUT}"
 
 OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}.tgz"
+
+echo
+echo "create tgz archive..."
 
 cd "${OPENOCD_INSTALL_FOLDER}"
 tar czf "${OPENOCD_ARCHIVE}" --owner root --group root openocd
@@ -572,3 +685,4 @@ else
 fi
 
 exit 0
+
