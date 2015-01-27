@@ -106,7 +106,7 @@ SetOutPath "$INSTDIR"
 File "${INSTALL_FOLDER}\INFO.txt"
 
 SetOutPath "$INSTDIR\gnuarmeclipse"
-File "${INSTALL_FOLDER}\gnuarmeclipse\build-openocd-w32-cross-debian.sh"
+File "${INSTALL_FOLDER}\gnuarmeclipse\build-openocd-w32-cross-linux.sh"
 File "${INSTALL_FOLDER}\gnuarmeclipse\BUILD.txt"
 File "${INSTALL_FOLDER}\gnuarmeclipse\CHANGES.txt"
 

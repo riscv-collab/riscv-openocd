@@ -364,7 +364,7 @@ if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
 then
   cd "${OPENOCD_WORK}"
 
-  if [ "$(whoami)" == "ilg" ]
+  if [ "$(USER)" == "ilg" ]
   then
     # Shortcut for ilg, who has full access to the repo.
     echo
@@ -389,7 +389,10 @@ else
   if [ "${ACTION_PULL}" == "pull" ]
   then
     echo
-    echo "Enter SourceForge password for git pull"
+    if [ "${USER}" == "ilg" ]
+    then
+      echo "Enter SourceForge password for git pull"
+    fi
     cd "${OPENOCD_GIT_FOLDER}"
     git pull
 
