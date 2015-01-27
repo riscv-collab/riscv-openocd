@@ -163,62 +163,10 @@ then
   make clean install
 fi
 
-if $(false)
-then
-
-# https://sourceforge.net/projects/libusb-win32/
-
-# Download the old USB library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0}.tar.bz2" ]
-then
-  mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-  cd "${OPENOCD_DOWNLOAD_FOLDER}"
-
-  "${WGET}" http://sourceforge.net/projects/libusb/files/libusb-compat-0.1/${LIBUSB0}/${LIBUSB0}.tar.bz2 \
-  "${WGET_OUT}" "${LIBUSB0}.tar.bz2"
-fi
-
-# Unpack the old USB library.
-if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBUSB0}" ]
-then
-  cd "${OPENOCD_WORK_FOLDER}"
-  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0}.tar.bz2"
-fi
-
-# Build and install the old USB library.
-if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb.a" -o \
-          -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb.a" \) ]
-then
-  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
-  mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
-  cd "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
-
-  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
-  mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
-  cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
-
-  # Configure
-  # The unusual CFLAGS were needed because MinGW-w64 does not include these old 
-  # BDS definitions.
-  PKG_CONFIG_PATH=\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig" \
-  CFLAGS="-Du_int8_t=uint8_t -Du_int16_t=uint16_t -Du_int32_t=uint32_t -DENODATA=EINVAL" \
-  \
-  "${OPENOCD_WORK_FOLDER}/${LIBUSB0}/configure" \
-  --host="${CROSS_COMPILE_PREFIX}" \
-  --prefix="${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
-
-  # Build
-  make clean install
-fi
-
-else
-
-# http://www.libusb.org
+# http://sourceforge.net/projects/libusb-win32
 
 # Download the old Win32 USB library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0}.tar.bz2" ]
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB_W32}.zip" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
@@ -235,8 +183,6 @@ then
 
   cd "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32}/include"
   cp -v lusb0_usb.h usb.h
-fi
-
 fi
 
 # Build the FTDI library.
@@ -339,32 +285,6 @@ then
   ar -r  "libhid.a" "${HIDAPI_OBJECT}"
 fi
 
-if $(false)
-then
-
-# To simplify the build, we do not build the libraries, but use them form 
-# the open source picusb related project, which includes a version of OpenOCD.
-# https://sourceforge.net/projects/picusb/
-# From this archive the binary DLLs will be directly copied to the setup, 
-# and the headers and libraries will be referred during the build.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${INPUT_ZIP}" ]
-then
-  mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-  cd "${OPENOCD_DOWNLOAD_FOLDER}"
-
-  "${WGET}" "http://sourceforge.net/projects/picusb/files/${INPUT_ZIP}" \
-  "${WGET_OUT}" "${INPUT_ZIP}"
-fi
-
-if [ ! -d "${OPENOCD_INSTALL_FOLDER}/${INPUT_ZIP_FOLDER}" ]
-then
-  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
-  cd "${OPENOCD_INSTALL_FOLDER}"
-  unzip "${OPENOCD_DOWNLOAD_FOLDER}/${INPUT_ZIP}"
-fi
-
-fi
-
 # Get the GNU ARM Eclipse OpenOCD git repository.
 
 # The custom OpenOCD branch is available from the dedicated Git repository
@@ -453,6 +373,8 @@ HIDAPI_LIBS="-L${OPENOCD_WORK_FOLDER}/${HIDAPI}/${HIDAPI_TARGET} -lhid -lsetupap
 \
 PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig" \
+\
+PKG_CONFIG_PREFIX="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}" \
 \
 "${OPENOCD_GIT_FOLDER}/configure" \
 --build="$(uname -m)-linux-gnu" \
