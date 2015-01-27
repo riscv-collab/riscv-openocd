@@ -385,7 +385,6 @@ PKG_CONFIG_PREFIX="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}" \
 --localedir="${OPENOCD_INSTALL_FOLDER}/openocd/locale"  \
 --mandir="${OPENOCD_INSTALL_FOLDER}/openocd/man"  \
 --docdir="${OPENOCD_INSTALL_FOLDER}/openocd/doc"  \
---enable-static \
 --enable-aice \
 --enable-amtjtagaccel \
 --enable-armjtagew \
