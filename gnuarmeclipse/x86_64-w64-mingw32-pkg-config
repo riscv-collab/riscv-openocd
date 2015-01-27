@@ -1,9 +1,0 @@
-#! /bin/sh
-# pkg-config wrapper for cross-building
-# Sets pkg-config search path to target arch path only.
-
-triplet=`basename $0 | sed -e 's:-pkg-config::'`
-# TODO: check if PKG_CONFIG_LIBDIR is needed if PKG_CONFIG_PATH is defined
-# Is PKG_CONFIG_LIBDIR a single folder or a path?
-PKG_CONFIG_PATH=${PKG_CONFIG_PATH}:/usr/lib/${triplet}/pkgconfig:/usr/${triplet}/lib/pkgconfig \
-pkg-config --define-variable=prefix=$PKG_CONFIG_PREFIX $@
