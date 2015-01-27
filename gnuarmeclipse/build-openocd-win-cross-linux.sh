@@ -2,10 +2,10 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Script to cross build the 32-bit Windows version of OpenOCD with MinGW-w64
-# on GNU/Linux.
+# Script to cross build the 32/64-bit Windows version of OpenOCD with 
+# MinGW-w64 on GNU/Linux.
 # Developed on Ubuntu 14.04 LTS.
-# Also tested on Debian 7, Manjaro 0.8.11.
+# Also tested on Debian 7, Manjaro 0.8.11 and Fedora.
 
 # Prerequisites:
 #
@@ -13,7 +13,7 @@ IFS=$'\n\t'
 # sudo apt-get install doxygen texinfo texlive dos2unix
 # sudo apt-get install mingw-w64 mingw-w64-tools mingw-w64-dev
 
-# Parse actions 
+# Parse actions. 
 ACTION_CLEAN=""
 ACTION_PULL=""
 TARGET_BITS="32"
@@ -58,7 +58,7 @@ NDATE=${NDATE:-$(date -u +%Y%m%d%H%M)}
 
 # ----- Local variables -----
 
-# Increment the revision with each new release
+# Increment the revision with each new release.
 OUTFILE_VERSION="0.8.0-2"
 
 # For updates, please check the corresponding pages.
@@ -66,10 +66,12 @@ OUTFILE_VERSION="0.8.0-2"
 # http://www.intra2net.com/en/developer/libftdi/download.php
 LIBFTDI="libftdi1-1.2"
 
-# https://sourceforge.net/projects/libusb/files/libusb-compat-0.1/
-LIBUSB0="libusb-compat-0.1.5"
-
-LIBUSB_W32="libusb-win32-bin-1.2.6.0"
+# https://sourceforge.net/projects/libusb-win32/files/libusb-win32-releases/
+LIBUSB_W32_PREFIX="libusb-win32"
+LIBUSB_W32_VERSION="1.2.6.0"
+LIBUSB_W32="${LIBUSB_W32_PREFIX}-${LIBUSB_W32_VERSION}"
+LIBUSB_W32_FOLDER="${LIBUSB_W32_PREFIX}-src-${LIBUSB_W32_VERSION}"
+LIBUSB_W32_ARCHIVE="${LIBUSB_W32_FOLDER}.zip"
 
 # https://sourceforge.net/projects/libusb/files/libusb-1.0/
 LIBUSB1="libusb-1.0.19"
@@ -77,10 +79,11 @@ LIBUSB1="libusb-1.0.19"
 # https://github.com/signal11/hidapi/downloads
 HIDAPI="hidapi-0.7.0"
 
-OPENOCD_TARGET="win${TARGET_BITS}"
-
 HIDAPI_TARGET="windows"
 HIDAPI_OBJECT="hid.o"
+
+# OpenOCD build defs
+OPENOCD_TARGET="win${TARGET_BITS}"
 
 OPENOCD_GIT_FOLDER="${OPENOCD_WORK_FOLDER}/gnuarmeclipse-openocd.git"
 OPENOCD_DOWNLOAD_FOLDER="${OPENOCD_WORK_FOLDER}/download"
@@ -88,6 +91,10 @@ OPENOCD_BUILD_FOLDER="${OPENOCD_WORK_FOLDER}/build/${OPENOCD_TARGET}"
 OPENOCD_INSTALL_FOLDER="${OPENOCD_WORK_FOLDER}/install/${OPENOCD_TARGET}"
 OPENOCD_OUTPUT="${OPENOCD_WORK_FOLDER}/output"
 
+WGET="wget"
+WGET_OUT="-O"
+
+# Decide which toolchain to use.
 if [ ${TARGET_BITS} == "32" ]
 then
   CROSS_COMPILE_PREFIX="i686-w64-mingw32"
@@ -95,10 +102,7 @@ else
   CROSS_COMPILE_PREFIX="x86_64-w64-mingw32"
 fi
 
-WGET="wget"
-WGET_OUT="-O"
-
-# Test if various tools are present
+# Test if various tools are present.
 echo
 echo "Test tools..."
 echo
@@ -110,7 +114,7 @@ makensis -VERSION >/dev/null
 
 if [ "${ACTION_CLEAN}" == "clean" ]
 then
-  # Remove most build and temporary folders
+  # Remove most build and temporary folders.
   echo
   echo "Remove most build folders..."
 
@@ -199,47 +203,60 @@ then
   --prefix="${OPENOCD_INSTALL_FOLDER}"
   make clean install
 
-  # Remove DLLs to force static link for final executable
+  # Remove DLLs to force static link for final executable.
   rm -f "${OPENOCD_INSTALL_FOLDER}/bin/libusb-1.0.dll"
   rm -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.dll.a"
   rm -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.la"
 fi
 
-
 # http://sourceforge.net/projects/libusb-win32
 
 # Download the old Win32 USB library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB_W32}.zip" ]
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB_W32_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" http://sourceforge.net/projects/libusb-win32/files/libusb-win32-releases/1.2.6.0/${LIBUSB_W32}.zip \
-  "${WGET_OUT}" "${LIBUSB_W32}.zip"
+  "${WGET}" "http://sourceforge.net/projects/libusb-win32/files/libusb-win32-releases/${LIBUSB_W32_VERSION}/${LIBUSB_W32_ARCHIVE}" \
+  "${WGET_OUT}" "${LIBUSB_W32_ARCHIVE}"
 fi
 
 # Unpack the old Win32 USB library.
-if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32}" ]
+if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32_FOLDER}" ]
 then
   cd "${OPENOCD_WORK_FOLDER}"
-  unzip "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB_W32}.zip"
+  unzip "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB_W32_ARCHIVE}"
+fi
+
+# Build and install the old Win32 USB library.
+if [ !  \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb.a" -o \
+           -f "${OPENOCD_INSTALL_FOLDER}/lib64/libusb.a" \)  ]
+then
+  mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
+  cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
+
+  echo
+  echo "make libusb-win32..."
+
+  cp -r "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32_FOLDER}/"* \
+    "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
+
+  cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
+  # Patch from:
+  # https://gitorious.org/jtag-tools/openocd-mingw-build-scripts
+  patch -p1 < "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/patches/libusb-win32-src-1.2.6.0-mingw-w64.patch"
+  make host_prefix=${CROSS_COMPILE_PREFIX} host_prefix_x86=i686-w64-mingw32 dll
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/bin"
-  if [ "${TARGET_BITS}" == "32" ]
-  then
-    cp -v "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32}/bin/x86/libusb0_x86.dll" \
-       "${OPENOCD_INSTALL_FOLDER}/bin/libusb0.dll"
-  else
-    cp -v "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32}/bin/amd64/libusb0.dll" \
-       "${OPENOCD_INSTALL_FOLDER}/bin/libusb0.dll"
-  fi
+  cp -v "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}/libusb0.dll" \
+     "${OPENOCD_INSTALL_FOLDER}/bin"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib"
-  cp -v "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32}/lib/gcc/libusb.a" \
+  cp -v "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}/libusb.a" \
      "${OPENOCD_INSTALL_FOLDER}/lib"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/include/libusb"
-  cp -v "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32}/include/lusb0_usb.h" \
+  cp -v "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}/src/lusb0_usb.h" \
      "${OPENOCD_INSTALL_FOLDER}/include/libusb/usb.h"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig"
@@ -301,13 +318,12 @@ then
   # Build
   make clean install
 
-  # Remove DLLs to force static link for final executable
+  # Remove DLLs to force static link for final executable.
   rm -f "${OPENOCD_INSTALL_FOLDER}/bin/libftdi1.dll"
   rm -f "${OPENOCD_INSTALL_FOLDER}/bin/libftdi1-config"
   rm -f "${OPENOCD_INSTALL_FOLDER}/lib/libftdi1.dll.a"
   rm -f "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/libftdipp1.pc"
 fi
-
 
 # Build the HDI library.
 
@@ -333,9 +349,18 @@ then
 fi
 
 # Build the new HDI library.
-if [ ! -f "${OPENOCD_WORK_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}/libhid.a" ]
+if [ ! -f "${OPENOCD_INSTALL_FOLDER}/lib/libhid.a" ]
 then
-  cd "${OPENOCD_WORK_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
+  rm -rfv "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
+  mkdir -p "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
+
+  echo
+  echo "make libhid..."
+
+  cp -r "${OPENOCD_WORK_FOLDER}/${HIDAPI}/"* \
+    "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
+
+  cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
 
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
@@ -409,58 +434,46 @@ then
 
   cd "${OPENOCD_BUILD_FOLDER}/openocd"
 
-# LIBFTDI_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/include/libftdi1" \
-# LIBFTDI_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib -lftdi1" \
-# \
-# LIBUSB1_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/include/libusb-1.0" \
-# LIBUSB1_LIBS="-L${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib -lusb-1.0" \
-# \
-# HIDAPI_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/include/hidapi" \
-# HIDAPI_LIBS="-L${OPENOCD_INSTALL_FOLDER}/lib -lhid -lsetupapi" \
-# \
-# LIBUSB0_CFLAGS="-I${OPENOCD_INSTALL_FOLDER}/include" \
-# LIBUSB0_LIBS="-L${OPENOCD_INSTALL_FOLDER}/lib -lusb" \
-
-OUTPUT_DIR="${OPENOCD_BUILD_FOLDER}" \
-\
-PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/cross-pkg-config" \
-PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig" \
-PKG_CONFIG_PREFIX="${OPENOCD_INSTALL_FOLDER}" \
-\
-"${OPENOCD_GIT_FOLDER}/configure" \
---build="$(uname -m)-linux-gnu" \
---host="${CROSS_COMPILE_PREFIX}" \
---prefix="${OPENOCD_INSTALL_FOLDER}/openocd"  \
---datarootdir="${OPENOCD_INSTALL_FOLDER}" \
---infodir="${OPENOCD_INSTALL_FOLDER}/openocd/info"  \
---localedir="${OPENOCD_INSTALL_FOLDER}/openocd/locale"  \
---mandir="${OPENOCD_INSTALL_FOLDER}/openocd/man"  \
---docdir="${OPENOCD_INSTALL_FOLDER}/openocd/doc"  \
---enable-aice \
---enable-amtjtagaccel \
---enable-armjtagew \
---enable-cmsis-dap \
---enable-ftdi \
---enable-gw16012 \
---enable-jlink \
---enable-jtag_vpi \
---enable-opendous \
---enable-openjtag_ftdi \
---enable-osbdm \
---enable-legacy-ft2232_libftdi \
---enable-parport \
---disable-parport-ppdev \
---enable-parport-giveio \
---enable-presto_libftdi \
---enable-remote-bitbang \
---enable-rlink \
---enable-stlink \
---enable-ti-icdi \
---enable-ulink \
---enable-usb-blaster-2 \
---enable-usb_blaster_libftdi \
---enable-usbprog \
---enable-vsllink
+  OUTPUT_DIR="${OPENOCD_BUILD_FOLDER}" \
+  \
+  PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/cross-pkg-config" \
+  PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig" \
+  PKG_CONFIG_PREFIX="${OPENOCD_INSTALL_FOLDER}" \
+  \
+  "${OPENOCD_GIT_FOLDER}/configure" \
+  --build="$(uname -m)-linux-gnu" \
+  --host="${CROSS_COMPILE_PREFIX}" \
+  --prefix="${OPENOCD_INSTALL_FOLDER}/openocd"  \
+  --datarootdir="${OPENOCD_INSTALL_FOLDER}" \
+  --infodir="${OPENOCD_INSTALL_FOLDER}/openocd/info"  \
+  --localedir="${OPENOCD_INSTALL_FOLDER}/openocd/locale"  \
+  --mandir="${OPENOCD_INSTALL_FOLDER}/openocd/man"  \
+  --docdir="${OPENOCD_INSTALL_FOLDER}/openocd/doc"  \
+  --enable-aice \
+  --enable-amtjtagaccel \
+  --enable-armjtagew \
+  --enable-cmsis-dap \
+  --enable-ftdi \
+  --enable-gw16012 \
+  --enable-jlink \
+  --enable-jtag_vpi \
+  --enable-opendous \
+  --enable-openjtag_ftdi \
+  --enable-osbdm \
+  --enable-legacy-ft2232_libftdi \
+  --enable-parport \
+  --disable-parport-ppdev \
+  --enable-parport-giveio \
+  --enable-presto_libftdi \
+  --enable-remote-bitbang \
+  --enable-rlink \
+  --enable-stlink \
+  --enable-ti-icdi \
+  --enable-ulink \
+  --enable-usb-blaster-2 \
+  --enable-usb_blaster_libftdi \
+  --enable-usbprog \
+  --enable-vsllink
 
 fi
 
@@ -512,8 +525,8 @@ else
   cp -v "${PTHREAD_PATH}" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 fi
 
-cp -v "${OPENOCD_INSTALL_FOLDER}/bin/"*.dll \
-  "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+# Copy possible DLLs
+cp -rv "${OPENOCD_INSTALL_FOLDER}/bin/" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 
 # Copy the license files.
 echo
@@ -558,15 +571,15 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB_W32}"
-/usr/bin/install -v -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32}/"AUTHORS* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32_FOLDER}/"AUTHORS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB_W32}"
-/usr/bin/install -v -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32}/"COPYING* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32_FOLDER}/"COPYING* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB_W32}"
-/usr/bin/install -v -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32}/"README* \
+/usr/bin/install -v -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32_FOLDER}/"README.txt \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB_W32}"
 
 find "${OPENOCD_INSTALL_FOLDER}/openocd/license" -type f \
--exec unix2dos {} \;
+  -exec unix2dos {} \;
 
 # Copy the GNU ARM Eclipse info files.
 echo
@@ -602,10 +615,10 @@ OPENOCD_SETUP="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFI
 
 cd "${OPENOCD_BUILD_FOLDER}"
 makensis -V4 -NOCD \
--DINSTALL_FOLDER="${OPENOCD_INSTALL_FOLDER}/openocd" \
--DNSIS_FOLDER="${NSIS_FOLDER}" \
--DOUTFILE="${OPENOCD_SETUP}" \
-"${NSIS_FILE}"
+  -DINSTALL_FOLDER="${OPENOCD_INSTALL_FOLDER}/openocd" \
+  -DNSIS_FOLDER="${NSIS_FOLDER}" \
+  -DOUTFILE="${OPENOCD_SETUP}" \
+  "${NSIS_FILE}"
 RESULT="$?"
 
 # Display some information about the created application.
