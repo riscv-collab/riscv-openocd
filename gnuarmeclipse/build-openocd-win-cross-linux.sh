@@ -5,7 +5,7 @@ IFS=$'\n\t'
 # Script to cross build the 32/64-bit Windows version of OpenOCD with 
 # MinGW-w64 on GNU/Linux.
 # Developed on Ubuntu 14.04 LTS.
-# Also tested on Debian 7, Manjaro 0.8.11 and Fedora.
+# Also tested on Debian 7, Manjaro 0.8.11 and Fedora 21.
 
 # Prerequisites:
 #
@@ -33,7 +33,7 @@ do
   then
     TARGET_BITS="64"
   else
-    echo "Unknown action $1"
+    echo "Unknown action/option $1"
     exit 1
   fi
 
@@ -49,6 +49,9 @@ done
 if [ -d /media/${USER}/Work ]
 then
   OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-"/media/${USER}/Work/openocd"}
+elif [ -d /media/Work ]
+then
+  OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-"/media/Work/openocd"}
 else
   OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-${HOME}/Work/openocd}
 fi
@@ -58,8 +61,6 @@ NDATE=${NDATE:-$(date -u +%Y%m%d%H%M)}
 
 # ----- Local variables -----
 
-# Increment the revision with each new release.
-OUTFILE_VERSION="0.8.0-2"
 
 # For updates, please check the corresponding pages.
 
@@ -91,6 +92,9 @@ OPENOCD_BUILD_FOLDER="${OPENOCD_WORK_FOLDER}/build/${OPENOCD_TARGET}"
 OPENOCD_INSTALL_FOLDER="${OPENOCD_WORK_FOLDER}/install/${OPENOCD_TARGET}"
 OPENOCD_OUTPUT="${OPENOCD_WORK_FOLDER}/output"
 
+# Increment the revision with each new release.
+OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION.in")
+
 WGET="wget"
 WGET_OUT="-O"
 
@@ -111,6 +115,8 @@ unix2dos --version >/dev/null 2>/dev/null
 git --version >/dev/null
 automake --version >/dev/null
 makensis -VERSION >/dev/null
+
+# Process actions.
 
 if [ "${ACTION_CLEAN}" == "clean" ]
 then
@@ -159,6 +165,8 @@ then
     exit 1
   fi
 fi
+
+# ----- Begin of common part ---------------------------------------------------
 
 # Create the work folders.
 mkdir -p "${OPENOCD_WORK_FOLDER}"
@@ -367,16 +375,16 @@ then
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
   make -f Makefile.mingw \
-  CC="${CROSS_COMPILE_PREFIX}-gcc" \
+  CC=${CROSS_COMPILE_PREFIX}-gcc \
   "${HIDAPI_OBJECT}"
 
   # Make just compiles the file. Create the archive and convert it to library.
   # No dynamic/shared libs involved.
-  ar -r  "libhid.a" "${HIDAPI_OBJECT}"
-  "${CROSS_COMPILE_PREFIX}-ranlib" "libhid.a"
+  ar -r  libhid.a "${HIDAPI_OBJECT}"
+  ${CROSS_COMPILE_PREFIX}-ranlib libhid.a
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib"
-  cp -v "libhid.a" \
+  cp -v libhid.a \
      "${OPENOCD_INSTALL_FOLDER}/lib"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig"
@@ -425,11 +433,14 @@ fi
 # On first run, create the build folder.
 mkdir -p "${OPENOCD_BUILD_FOLDER}/openocd"
 
+# ----- End of common part ----------------------------------------------------
+
 # Configure OpenOCD. Use the same options as Freddie Chopin.
 
 if [ ! -f "${OPENOCD_BUILD_FOLDER}/openocd/config.h" ]
 then
 
+  echo
   echo "configure..."
 
   cd "${OPENOCD_BUILD_FOLDER}/openocd"
@@ -490,7 +501,7 @@ echo "remove install..."
 
 rm -rf "${OPENOCD_INSTALL_FOLDER}/openocd"
 
-# Install, including documentation.
+# Full install, including documentation.
 echo
 echo "make install..."
 
@@ -499,34 +510,43 @@ make install-strip install-pdf install-html
 
 # Copy DLLs to the install bin folder. First try Ubuntu specific locations,
 # then do a long full search.
-CROSS_GCC_VERSION=$(${CROSS_COMPILE_PREFIX}-gcc --version | grep 'gcc' | sed -e 's/.*\s\([0-9]*\)[.]\([0-9]*\)[.]\([0-9]*\).*/\1.\2.\3/')
-CROSS_GCC_VERSION_SHORT=$(echo $CROSS_GCC_VERSION | sed -e 's/\([0-9]*\)[.]\([0-9]*\)[.]\([0-9]*\).*/\1.\2/')
-if [ -f "/usr/lib/gcc/${CROSS_COMPILE_PREFIX}/${CROSS_GCC_VERSION}/libgcc_s_sjlj-1.dll" ]
+
+echo
+echo "copy dynamic libs..."
+
+if [ "${TARGET_BITS}" == "32" ]
 then
-  cp -v "/usr/lib/gcc/${CROSS_COMPILE_PREFIX}/${CROSS_GCC_VERSION}/libgcc_s_sjlj-1.dll" \
-    "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-elif [ -f "/usr/lib/gcc/${CROSS_COMPILE_PREFIX}/${CROSS_GCC_VERSION_SHORT}/libgcc_s_sjlj-1.dll" ]
-then
-  cp -v "/usr/lib/gcc/${CROSS_COMPILE_PREFIX}/${CROSS_GCC_VERSION_SHORT}/libgcc_s_sjlj-1.dll" \
-    "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-else
-  echo "Searching /usr for libgcc_s_sjlj-1.dll..."
-  SJLJ_PATH=$(find /usr \! -readable -prune -o -name 'libgcc_s_sjlj-1.dll' -print | grep ${CROSS_COMPILE_PREFIX})
-  cp -v ${SJLJ_PATH} "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+
+  CROSS_GCC_VERSION=$(${CROSS_COMPILE_PREFIX}-gcc --version | grep 'gcc' | sed -e 's/.*\s\([0-9]*\)[.]\([0-9]*\)[.]\([0-9]*\).*/\1.\2.\3/')
+  CROSS_GCC_VERSION_SHORT=$(echo $CROSS_GCC_VERSION | sed -e 's/\([0-9]*\)[.]\([0-9]*\)[.]\([0-9]*\).*/\1.\2/')
+  if [ -f "/usr/lib/gcc/${CROSS_COMPILE_PREFIX}/${CROSS_GCC_VERSION}/libgcc_s_sjlj-1.dll" ]
+  then
+    cp -v "/usr/lib/gcc/${CROSS_COMPILE_PREFIX}/${CROSS_GCC_VERSION}/libgcc_s_sjlj-1.dll" \
+      "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  elif [ -f "/usr/lib/gcc/${CROSS_COMPILE_PREFIX}/${CROSS_GCC_VERSION_SHORT}/libgcc_s_sjlj-1.dll" ]
+  then
+    cp -v "/usr/lib/gcc/${CROSS_COMPILE_PREFIX}/${CROSS_GCC_VERSION_SHORT}/libgcc_s_sjlj-1.dll" \
+      "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  else
+    echo "Searching /usr for libgcc_s_sjlj-1.dll..."
+    SJLJ_PATH=$(find /usr \! -readable -prune -o -name 'libgcc_s_sjlj-1.dll' -print | grep ${CROSS_COMPILE_PREFIX})
+    cp -v ${SJLJ_PATH} "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  fi
+
+  if [ -f "/usr/${CROSS_COMPILE_PREFIX}/lib/libwinpthread-1.dll" ]
+  then
+    cp "/usr/${CROSS_COMPILE_PREFIX}/lib/libwinpthread-1.dll" \
+      "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  else
+    echo "Searching /usr for libwinpthread-1.dll..."
+    PTHREAD_PATH=$(find /usr \! -readable -prune -o -name 'libwinpthread-1.dll' -print | grep ${CROSS_COMPILE_PREFIX})
+    cp -v "${PTHREAD_PATH}" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+  fi
+
 fi
 
-if [ -f "/usr/${CROSS_COMPILE_PREFIX}/lib/libwinpthread-1.dll" ]
-then
-  cp "/usr/${CROSS_COMPILE_PREFIX}/lib/libwinpthread-1.dll" \
-    "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-else
-  echo "Searching /usr for libwinpthread-1.dll..."
-  PTHREAD_PATH=$(find /usr \! -readable -prune -o -name 'libwinpthread-1.dll' -print | grep ${CROSS_COMPILE_PREFIX})
-  cp -v "${PTHREAD_PATH}" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-fi
-
-# Copy possible DLLs
-cp -rv "${OPENOCD_INSTALL_FOLDER}/bin/" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+# Copy possible DLLs.
+cp -v "${OPENOCD_INSTALL_FOLDER}/bin/"*.dll "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 
 # Copy the license files.
 echo
@@ -586,9 +606,9 @@ echo
 echo "copy info files..."
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
-cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-w32-cross-linux.sh" \
+cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/$(basename $0)" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
-unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/build-openocd-w32-cross-linux.sh"
+unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/$(basename $0)"
 cp "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-w32.txt" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
 unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
@@ -618,6 +638,7 @@ makensis -V4 -NOCD \
   -DINSTALL_FOLDER="${OPENOCD_INSTALL_FOLDER}/openocd" \
   -DNSIS_FOLDER="${NSIS_FOLDER}" \
   -DOUTFILE="${OPENOCD_SETUP}" \
+  -DW${TARGET_BITS} \
   "${NSIS_FILE}"
 RESULT="$?"
 

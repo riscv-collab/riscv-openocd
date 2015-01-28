@@ -21,6 +21,10 @@
 
 ; NSIS_WIN32_MAKENSIS
 
+!include LogicLib.nsh
+!include "x64.nsh"
+!include "MUI2.nsh"
+
 !define PRODNAME "OpenOCD"
 !define PRODLCNAME "openocd"
 !define PRODUCT "GNU ARM Eclipse\${PRODNAME}"
@@ -33,8 +37,6 @@
 
 ; Use maximum compression.
 SetCompressor /SOLID lzma
-
-!include "MUI2.nsh"
 
 ; The name of the installer.
 Name "GNU ARM Eclipse ${PRODNAME}"
@@ -106,7 +108,7 @@ SetOutPath "$INSTDIR"
 File "${INSTALL_FOLDER}\INFO.txt"
 
 SetOutPath "$INSTDIR\gnuarmeclipse"
-File "${INSTALL_FOLDER}\gnuarmeclipse\build-openocd-w32-cross-linux.sh"
+File "${INSTALL_FOLDER}\gnuarmeclipse\build-openocd-win-cross-linux.sh"
 File "${INSTALL_FOLDER}\gnuarmeclipse\BUILD.txt"
 File "${INSTALL_FOLDER}\gnuarmeclipse\CHANGES.txt"
 
@@ -205,5 +207,12 @@ SectionEnd
 ; Functions.
 
 Function .onInit
+!ifdef W64
+  ${IfNot} ${RunningX64}
+    MessageBox MB_OK|MB_ICONEXCLAMATION "This setup can only be run on 64-bit Windows" 
+ 	Abort   
+  ${EndIf}
+!endif
 !insertmacro MUI_LANGDLL_DISPLAY
 FunctionEnd
+
