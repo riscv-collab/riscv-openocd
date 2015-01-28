@@ -117,7 +117,7 @@ HIDAPI_TARGET="linux"
 HIDAPI_OBJECT="hid-libusb.o"
 
 # OpenOCD build defs
-OPENOCD_TARGET="${DISTRO_NAME}${DISTRO_BITS}"
+OPENOCD_TARGET="${DISTRO_NAME}${TARGET_BITS}"
 
 OPENOCD_GIT_FOLDER="${OPENOCD_WORK_FOLDER}/gnuarmeclipse-openocd.git"
 OPENOCD_DOWNLOAD_FOLDER="${OPENOCD_WORK_FOLDER}/download"
@@ -200,8 +200,10 @@ then
   cd "${OPENOCD_INSTALL_FOLDER}"
   tar c -z --owner root --group root -f - openocd | tar x -z -f - -C "${INSTALL_FOLDER}"
 
-  # Display some information about the resulted application.
-  readelf -d "${INSTALL_FOLDER}/openocd/bin/openocd"
+  # Display some information about the created application.
+  echo
+  echo "Libraries:"
+  readelf -d "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd" | grep -i 'library'
 
   # Check if the application starts (if all dynamic libraries are available).
   echo
@@ -258,7 +260,7 @@ then
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
-  CFLAGS="-Wno-non-literal-null-conversion" \
+  CFLAGS="-Wno-non-literal-null-conversion -m${TARGET_BITS}" \
   "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/configure" \
   --prefix="${OPENOCD_INSTALL_FOLDER}"
   make clean install
@@ -292,6 +294,7 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
 
   # Configure
+  CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig":\
@@ -339,6 +342,7 @@ then
   echo "cmake libftdi..."
 
   # Configure
+  CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig":\
@@ -392,6 +396,7 @@ then
 
   cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
 
+  CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig":\
@@ -470,6 +475,7 @@ then
   # All variables below are passed on the command line before 'configure'.
   # Be sure all these lines end in '\' to ensure lines are concatenated.
   # On some machines libftdi ends in lib64, so we refer both lib & lib64
+  CFLAGS="-m${TARGET_BITS}" \
   HIDAPI_CFLAGS="-I${OPENOCD_WORK_FOLDER}/${HIDAPI}/hidapi" \
   HIDAPI_LIBS="-L${OPENOCD_WORK_FOLDER}/${HIDAPI}/${HIDAPI_TARGET} -lhid" \
   \
