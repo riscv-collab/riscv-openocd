@@ -3,8 +3,8 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # Script to build the GNU/Linux version of OpenOCD.
-# Developed on Ubuntu 14.04 LTS.
-# Also tested on Debian 7, Manjaro 0.8.11 and Fedora 21.
+# Developed on Debian 7.
+# Also tested on Ubuntu 14.04 LTS, Manjaro 0.8.11 and Fedora 21.
 
 # Prerequisites:
 #
@@ -550,69 +550,80 @@ echo "copy shared libs..."
 ILIB=$(find "${OPENOCD_INSTALL_FOLDER}/lib"* -type f -name 'libusb-1.0.so.*.*' -print)
 if [ ! -z "${ILIB}" ]
 then
+  echo "Found ${ILIB}"
   ILIB_BASE="$(basename ${ILIB})"
   /usr/bin/install -v -c -m 644 "${ILIB}" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
   ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2.\3/')"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "${ILIB_SHORT}")
   ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2/')"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "${ILIB_SHORT}")
 fi
 
 ILIB=$(find "${OPENOCD_INSTALL_FOLDER}/lib"* -type f -name 'libusb-0.1.so.*.*' -print)
 if [ ! -z "${ILIB}" ]
 then
+  echo "Found ${ILIB}"
   ILIB_BASE="$(basename ${ILIB})"
   /usr/bin/install -v -c -m 644 "${ILIB}" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
   ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2.\3/')"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "${ILIB_SHORT}")
   ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2/')"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "${ILIB_SHORT}")
 fi
 
 ILIB=$(find "${OPENOCD_INSTALL_FOLDER}/lib"* -type f -name 'libftdi1.so.*.*' -print)
 if [ ! -z "${ILIB}" ]
 then
+  echo "Found ${ILIB}"
   ILIB_BASE="$(basename ${ILIB})"
   /usr/bin/install -v -c -m 644 "${ILIB}" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
   ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2.\3/')"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "${ILIB_SHORT}")
   ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2/')"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "${ILIB_SHORT}")
 fi
-
-if [ $(false) ]
-then
 
 # Add libudev.so locally.
 ILIB=$(find /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu -type f -name 'libudev.so.*.*' -print)
 if [ ! -z "${ILIB}" ]
 then
+  echo "Found ${ILIB}"
   ILIB_BASE="$(basename ${ILIB})"
   /usr/bin/install -v -c -m 644 "${ILIB}" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
   ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2.\3/')"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "${ILIB_SHORT}")
   ILIB_SHORT="$(echo $ILIB_BASE | sed -e 's/\([[:alnum:]]*\)[.]\([[:alnum:]]*\)[.]\([[:digit:]]*\)[.].*/\1.\2/')"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "$(basename ${ILIB})" "${ILIB_SHORT}")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "${ILIB_SHORT}")
 else
+  echo
   echo 'WARNING: libudev.so not copied locally!'
-  exit 1
+  if [ "${USER}" == "ilg" ]
+  then
+    exit 1
+  fi
 fi
 
 # Add librt.so.1 locally, to be sure it is available always.
-if [ -f "/lib/x86_64-linux-gnu/librt.so.1" ]
+ILIB=$(find /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu -type f -name 'librt-*.so' -print)
+if [ ! -z "${ILIB}" ]
 then
-  /usr/bin/install -v -c -m 644 "/lib/x86_64-linux-gnu/librt.so.1" \
+  echo "Found ${ILIB}"
+  ILIB_BASE="$(basename ${ILIB})"
+  /usr/bin/install -v -c -m 644 "${ILIB}" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -s "librt.so.1" "librt.so")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "librt.so.1")
+  (cd "${OPENOCD_INSTALL_FOLDER}/openocd/bin"; ln -sv "${ILIB_BASE}" "librt.so")
 else
   echo
   echo "WARNING: librt.so not copied locally!"
-fi
-
+  if [ "${USER}" == "ilg" ]
+  then
+    exit 1
+  fi
 fi
 
 # Copy the license files.
