@@ -31,9 +31,11 @@ fi
 if [ "$(uname -m)" == "x86_64" ]
 then
   DISTRO_BITS="64"
+  DISTRO_MACHINE="x86_64"
 elif [ "$(uname -m)" == "i686" ]
 then
   DISTRO_BITS="32"
+  DISTRO_MACHINE="i386"
 else
   echo "Unknown uname -m $(uname -m)"
   exit 1
@@ -124,9 +126,6 @@ OPENOCD_DOWNLOAD_FOLDER="${OPENOCD_WORK_FOLDER}/download"
 OPENOCD_BUILD_FOLDER="${OPENOCD_WORK_FOLDER}/build/${OPENOCD_TARGET}"
 OPENOCD_INSTALL_FOLDER="${OPENOCD_WORK_FOLDER}/install/${OPENOCD_TARGET}"
 OPENOCD_OUTPUT="${OPENOCD_WORK_FOLDER}/output"
-
-# Increment the revision with each new release.
-OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
 
 WGET="wget"
 WGET_OUT="-O"
@@ -221,12 +220,45 @@ then
   exit 0
 fi
 
-
 # ----- Begin of common part --------------------------------------------------
 
 # Create the work folder.
 mkdir -p "${OPENOCD_WORK_FOLDER}"
-mkdir -p "${OPENOCD_INSTALL_FOLDER}"
+
+# Get the GNU ARM Eclipse OpenOCD git repository.
+
+# The custom OpenOCD branch is available from the dedicated Git repository
+# which is part of the GNU ARM Eclipse project hosted on SourceForge.
+# Generally this branch follows the official OpenOCD master branch, 
+# with updates after every OpenOCD public release.
+
+if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
+then
+  cd "${OPENOCD_WORK_FOLDER}"
+
+  if [ "${USER}" == "ilg" ]
+  then
+    # Shortcut for ilg, who has full access to the repo.
+    echo
+    echo "Enter SourceForge password for git clone"
+    git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
+  else
+    # For regular read/only access, use the git url.
+    git clone http://git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
+  fi
+
+  # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
+  cd "${OPENOCD_GIT_FOLDER}"
+  git checkout gnuarmeclipse
+
+  # Prepare autotools.
+  echo
+  echo "bootstrap..."
+
+  cd "${OPENOCD_GIT_FOLDER}"
+  ./bootstrap
+fi
+
 
 # Build the USB libraries.
 
@@ -260,6 +292,7 @@ then
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
   CFLAGS="-Wno-non-literal-null-conversion -m${TARGET_BITS}" \
   "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/configure" \
   --prefix="${OPENOCD_INSTALL_FOLDER}"
@@ -293,6 +326,7 @@ then
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
 
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
   # Configure
   CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
@@ -341,6 +375,7 @@ then
   echo
   echo "cmake libftdi..."
 
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
   # Configure
   CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
@@ -421,40 +456,6 @@ then
   cp -v "${OPENOCD_WORK_FOLDER}/${HIDAPI}/hidapi/hidapi.h" \
      "${OPENOCD_INSTALL_FOLDER}/include/hidapi"
 
-fi
-
-# Get the GNU ARM Eclipse OpenOCD git repository.
-
-# The custom OpenOCD branch is available from the dedicated Git repository
-# which is part of the GNU ARM Eclipse project hosted on SourceForge.
-# Generally this branch follows the official OpenOCD master branch, 
-# with updates after every OpenOCD public release.
-
-if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
-then
-  cd "${OPENOCD_WORK_FOLDER}"
-
-  if [ "${USER}" == "ilg" ]
-  then
-    # Shortcut for ilg, who has full access to the repo.
-    echo
-    echo "Enter SourceForge password for git clone"
-    git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
-  else
-    # For regular read/only access, use the git url.
-    git clone http://git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
-  fi
-
-  # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
-  cd "${OPENOCD_GIT_FOLDER}"
-  git checkout gnuarmeclipse
-
-  # Prepare autotools.
-  echo
-  echo "bootstrap..."
-
-  cd "${OPENOCD_GIT_FOLDER}"
-  ./bootstrap
 fi
 
 # On first run, create the build folder.
@@ -596,7 +597,7 @@ then
 fi
 
 # Add libudev.so locally.
-ILIB=$(find /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu -type f -name 'libudev.so.*.*' -print)
+ILIB=$(find /lib/${DISTRO_MACHINE}-linux-gnu /usr/lib/${DISTRO_MACHINE}-linux-gnu -type f -name 'libudev.so.*.*' -print)
 if [ ! -z "${ILIB}" ]
 then
   echo "Found ${ILIB}"
@@ -617,7 +618,7 @@ else
 fi
 
 # Add librt.so.1 locally, to be sure it is available always.
-ILIB=$(find /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu -type f -name 'librt-*.so' -print)
+ILIB=$(find /lib/${DISTRO_MACHINE}-linux-gnu /usr/lib/${DISTRO_MACHINE}-linux-gnu -type f -name 'librt-*.so' -print | grep -v i686)
 if [ ! -z "${ILIB}" ]
 then
   echo "Found ${ILIB}"
@@ -706,6 +707,9 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
 # Create the distribution archive.
 
 mkdir -p "${OPENOCD_OUTPUT}"
+
+# Increment the revision with each new release.
+OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
 
 OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}.tgz"
 
