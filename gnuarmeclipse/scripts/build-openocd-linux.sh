@@ -41,7 +41,6 @@ else
   exit 1
 fi
 
-
 # Parse actions.
 ACTION_CLEAN=""
 ACTION_PULL=""
@@ -59,12 +58,6 @@ do
   elif [ "$1" == "install" ]
   then
     ACTION_INSTALL="$1"
-  elif [ "$1" == "-32" ]
-  then
-    TARGET_BITS="32"
-  elif [ "$1" == "-64" ]
-  then
-    TARGET_BITS="64"
   else
     echo "Unknown action/option $1"
     exit 1
@@ -88,9 +81,6 @@ else
   OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-${HOME}/Work/openocd}
 fi
 
-# The UTC date part in the name of the archive. 
-NDATE=${NDATE:-$(date -u +%Y%m%d%H%M)}
-
 # The folder where OpenOCD is installed.
 # If you prefer to install in different location, like in your home folder,
 # define it before invoking the script.
@@ -98,6 +88,8 @@ INSTALL_FOLDER=${INSTALL_FOLDER:-"/opt/gnuarmeclipse"}
 
 PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-""}
+
+MAKE_JOBS=${MAKE_JOBS:-"-j4"}
 
 # ----- Local variables -----
 
@@ -296,7 +288,7 @@ then
   CFLAGS="-Wno-non-literal-null-conversion -m${TARGET_BITS}" \
   "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/configure" \
   --prefix="${OPENOCD_INSTALL_FOLDER}"
-  make clean install
+  make ${MAKE_JOBS} clean install
 fi
 
 # http://www.libusb.org
@@ -338,7 +330,7 @@ then
   --prefix="${OPENOCD_INSTALL_FOLDER}"
 
   # Build
-  make clean install
+  make ${MAKE_JOBS} clean install
 fi
 
 # Build the FTDI library.
@@ -392,7 +384,7 @@ then
   "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
 
   # Build
-  make clean install
+  make ${MAKE_JOBS} clean install
 fi
 
 # Build the HDI library.
@@ -533,12 +525,12 @@ then
 
 fi
 
-# Do a full build, with documentation.
+# Full build, with documentation.
 
 # The bindir and pkgdatadir are required to configure bin and scripts folders
 # at the same level in the hierarchy.
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
-make bindir="bin" pkgdatadir="" all pdf html
+make ${MAKE_JOBS} bindir="bin" pkgdatadir="" all pdf html
 
 # Always clear the destination folder, to have a consistent package.
 echo
@@ -710,8 +702,10 @@ mkdir -p "${OPENOCD_OUTPUT}"
 
 # Increment the revision with each new release.
 OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
+# The UTC date part in the name of the archive. 
+OUTFILE_DATE=${OUTFILE_DATE:-$(date -u +%Y%m%d%H%M)}
 
-OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}.tgz"
+OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${OUTFILE_DATE}.tgz"
 
 echo
 echo "create tgz archive..."

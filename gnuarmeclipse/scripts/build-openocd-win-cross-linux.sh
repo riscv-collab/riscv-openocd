@@ -6,7 +6,8 @@ IFS=$'\n\t'
 # MinGW-w64 on GNU/Linux.
 # Developed on Ubuntu 14.04 LTS.
 # Also tested on Manjaro 0.8.11 and Fedora 21.
-# Does not work on Debian 7 (incomplete MinGW-w64, missing 32-bit libwinpthread-1.dll).
+# Does not work properly on Debian 7 (incomplete MinGW-w64, missing 
+# 32-bit libwinpthread-1.dll).
 
 # Prerequisites:
 #
@@ -27,10 +28,10 @@ do
   elif [ "$1" == "pull" ]
   then
     ACTION_PULL="$1"
-  elif [ "$1" == "-32" ]
+  elif [ "$1" == "-32" -o "$1" == "-m32" -o "$1" == "-w32" ]
   then
     TARGET_BITS="32"
-  elif [ "$1" == "-64" ]
+  elif [ "$1" == "-64" -o "$1" == "-m64" -o "$1" == "-w64" ]
   then
     TARGET_BITS="64"
   else
@@ -40,7 +41,6 @@ do
 
   shift
 done
-
 
 # ----- Externally configurable variables -----
 
@@ -57,11 +57,9 @@ else
   OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-${HOME}/Work/openocd}
 fi
 
-# The UTC date part in the name of the archive. 
-NDATE=${NDATE:-$(date -u +%Y%m%d%H%M)}
+MAKE_JOBS=${MAKE_JOBS:-"-j4"}
 
 # ----- Local variables -----
-
 
 # For updates, please check the corresponding pages.
 
@@ -91,10 +89,7 @@ OPENOCD_GIT_FOLDER="${OPENOCD_WORK_FOLDER}/gnuarmeclipse-openocd.git"
 OPENOCD_DOWNLOAD_FOLDER="${OPENOCD_WORK_FOLDER}/download"
 OPENOCD_BUILD_FOLDER="${OPENOCD_WORK_FOLDER}/build/${OPENOCD_TARGET}"
 OPENOCD_INSTALL_FOLDER="${OPENOCD_WORK_FOLDER}/install/${OPENOCD_TARGET}"
-OPENOCD_OUTPUT="${OPENOCD_WORK_FOLDER}/output"
-
-# Increment the revision with each new release.
-OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
+OPENOCD_OUTPUT_FOLDER="${OPENOCD_WORK_FOLDER}/output"
 
 WGET="wget"
 WGET_OUT="-O"
@@ -171,7 +166,40 @@ fi
 
 # Create the work folders.
 mkdir -p "${OPENOCD_WORK_FOLDER}"
-mkdir -p "${OPENOCD_INSTALL_FOLDER}"
+
+# Get the GNU ARM Eclipse OpenOCD git repository.
+
+# The custom OpenOCD branch is available from the dedicated Git repository
+# which is part of the GNU ARM Eclipse project hosted on SourceForge.
+# Generally this branch follows the official OpenOCD master branch, 
+# with updates after every OpenOCD public release.
+
+if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
+then
+  cd "${OPENOCD_WORK_FOLDER}"
+
+  if [ "${USER}" == "ilg" ]
+  then
+    # Shortcut for ilg, who has full access to the repo.
+    echo
+    echo "Enter SourceForge password for git clone"
+    git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
+  else
+    # For regular read/only access, use the git url.
+    git clone http://git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
+  fi
+
+  # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
+  cd "${OPENOCD_GIT_FOLDER}"
+  git checkout gnuarmeclipse
+
+  # Prepare autotools.
+  echo
+  echo "bootstrap..."
+
+  cd "${OPENOCD_GIT_FOLDER}"
+  ./bootstrap
+fi
 
 # Build the USB libraries.
 
@@ -205,12 +233,13 @@ then
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
   CFLAGS="-Wno-non-literal-null-conversion" \
   PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/cross-pkg-config" \
   "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/configure" \
   --host="${CROSS_COMPILE_PREFIX}" \
   --prefix="${OPENOCD_INSTALL_FOLDER}"
-  make clean install
+  make ${MAKE_JOBS} clean install
 
   # Remove DLLs to force static link for final executable.
   rm -f "${OPENOCD_INSTALL_FOLDER}/bin/libusb-1.0.dll"
@@ -307,6 +336,7 @@ then
   echo
   echo "cmake libftdi..."
 
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
   # Configure
   PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/cross-pkg-config" \
   PKG_CONFIG_PATH=\
@@ -325,7 +355,7 @@ then
   "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
 
   # Build
-  make clean install
+  make ${MAKE_JOBS} clean install
 
   # Remove DLLs to force static link for final executable.
   rm -f "${OPENOCD_INSTALL_FOLDER}/bin/libftdi1.dll"
@@ -397,40 +427,6 @@ then
      "${OPENOCD_INSTALL_FOLDER}/include/hidapi"
 fi
 
-# Get the GNU ARM Eclipse OpenOCD git repository.
-
-# The custom OpenOCD branch is available from the dedicated Git repository
-# which is part of the GNU ARM Eclipse project hosted on SourceForge.
-# Generally this branch follows the official OpenOCD master branch, 
-# with updates after every OpenOCD public release.
-
-if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
-then
-  cd "${OPENOCD_WORK_FOLDER}"
-
-  if [ "${USER}" == "ilg" ]
-  then
-    # Shortcut for ilg, who has full access to the repo.
-    echo
-    echo "Enter SourceForge password for git clone"
-    git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
-  else
-    # For regular read/only access, use the git url.
-    git clone http://git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
-  fi
-
-  # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
-  cd "${OPENOCD_GIT_FOLDER}"
-  git checkout gnuarmeclipse
-
-  # Prepare autotools.
-  echo
-  echo "bootstrap..."
-
-  cd "${OPENOCD_GIT_FOLDER}"
-  ./bootstrap
-fi
-
 # On first run, create the build folder.
 mkdir -p "${OPENOCD_BUILD_FOLDER}/openocd"
 
@@ -446,6 +442,8 @@ then
 
   cd "${OPENOCD_BUILD_FOLDER}/openocd"
 
+  # All variables below are passed on the command line before 'configure'.
+  # Be sure all these lines end in '\' to ensure lines are concatenated.
   OUTPUT_DIR="${OPENOCD_BUILD_FOLDER}" \
   \
   PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/cross-pkg-config" \
@@ -489,12 +487,12 @@ then
 
 fi
 
-# Do a full build, with documentation.
+# Full build, with documentation.
 
 # The bindir and pkgdatadir are required to configure bin and scripts folders
 # at the same level in the hierarchy.
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
-make bindir="bin" pkgdatadir="" all pdf html
+make ${MAKE_JOBS} bindir="bin" pkgdatadir="" all pdf html
 
 # Always clear the destination folder, to have a consistent package.
 echo
@@ -546,7 +544,8 @@ then
 
 fi
 
-# Copy possible DLLs.
+# Copy possible DLLs. Currently only libusb0.dll is dynamic, all other 
+# are also compiled as static.
 cp -v "${OPENOCD_INSTALL_FOLDER}/bin/"*.dll "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 
 # Copy the license files.
@@ -627,12 +626,17 @@ unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/COPYING"
 
 # Create the distribution setup.
 
-mkdir -p "${OPENOCD_OUTPUT}"
+mkdir -p "${OPENOCD_OUTPUT_FOLDER}"
 
 NSIS_FOLDER="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/nsis"
 NSIS_FILE="${NSIS_FOLDER}/gnuarmeclipse-openocd.nsi"
 
-OPENOCD_SETUP="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}-setup.exe"
+# Increment the revision with each new release.
+OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
+# The UTC date part in the name of the archive. 
+OUTFILE_DATE=${OUTFILE_DATE:-$(date -u +%Y%m%d%H%M)}
+
+OPENOCD_SETUP="${OPENOCD_OUTPUT_FOLDER}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${OUTFILE_DATE}-setup.exe"
 
 cd "${OPENOCD_BUILD_FOLDER}"
 makensis -V4 -NOCD \
