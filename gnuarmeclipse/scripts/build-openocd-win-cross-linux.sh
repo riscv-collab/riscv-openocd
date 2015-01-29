@@ -209,24 +209,26 @@ fi
 # 	https://sourceforge.net/projects/libusb/files
 
 # Download the new USB library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2" ]
+LIBUSB1_ARCHIVE="${LIBUSB1}.tar.bz2"
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" http://sourceforge.net/projects/libusb/files/libusb-1.0/${LIBUSB1}/${LIBUSB1}.tar.bz2 \
-  "${WGET_OUT}" "${LIBUSB1}.tar.bz2"
+  "${WGET}" "http://sourceforge.net/projects/libusb/files/libusb-1.0/${LIBUSB1}/${LIBUSB1_ARCHIVE}" \
+  "${WGET_OUT}" "${LIBUSB1_ARCHIVE}"
 fi
 
 # Unpack the new USB library.
 if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBUSB1}" ]
 then
   cd "${OPENOCD_WORK_FOLDER}"
-  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2"
+  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1_ARCHIVE}"
 fi
 
 # Build and install the new USB library.
-if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.a" -o \
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.a" -o \
           -f "${OPENOCD_INSTALL_FOLDER}/lib64/libusb-1.0.a" \) ]
 then
   rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
@@ -234,11 +236,14 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}"
-  CFLAGS="-Wno-non-literal-null-conversion" \
+  # Configure
+  CFLAGS="-Wno-non-literal-null-conversion -m${TARGET_BITS}" \
   PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/cross-pkg-config" \
   "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/configure" \
   --host="${CROSS_COMPILE_PREFIX}" \
   --prefix="${OPENOCD_INSTALL_FOLDER}"
+
+  # Build
   make ${MAKE_JOBS} clean install
 
   # Remove DLLs to force static link for final executable.
@@ -267,7 +272,8 @@ then
 fi
 
 # Build and install the old Win32 USB library.
-if [ !  \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb.a" -o \
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb.a" -o \
            -f "${OPENOCD_INSTALL_FOLDER}/lib64/libusb.a" \)  ]
 then
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
@@ -282,7 +288,10 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
   # Patch from:
   # https://gitorious.org/jtag-tools/openocd-mingw-build-scripts
-  patch -p1 < "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/patches/libusb-win32-src-1.2.6.0-mingw-w64.patch"
+  patch -p1 < "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/patches/${LIBUSB_W32}-mingw-w64.patch"
+
+  # Build
+  CFLAGS="-m${TARGET_BITS}" \
   make host_prefix=${CROSS_COMPILE_PREFIX} host_prefix_x86=i686-w64-mingw32 dll
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/bin"
@@ -298,8 +307,10 @@ then
      "${OPENOCD_INSTALL_FOLDER}/include/libusb/usb.h"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig"
-  cp -v "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/pkgconfig/${LIBUSB_W32}.pc" \
-     "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/libusb.pc"
+  sed -e "s|XXX|${OPENOCD_INSTALL_FOLDER}|" \
+    "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/pkgconfig/${LIBUSB_W32}.pc" \
+    > "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/libusb.pc"
+
 fi
 
 # Build the FTDI library.
@@ -309,24 +320,30 @@ fi
 #	http://www.intra2net.com/en/developer/libftdi/
 
 # Download the FTDI library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI}.tar.bz2" ]
+LIBFTDI_ARCHIVE="${LIBFTDI}.tar.bz2"
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" http://www.intra2net.com/en/developer/libftdi/download/${LIBFTDI}.tar.bz2 \
-  "${WGET_OUT}" "${LIBFTDI}.tar.bz2"
+  "${WGET}" "http://www.intra2net.com/en/developer/libftdi/download/${LIBFTDI_ARCHIVE}" \
+  "${WGET_OUT}" "${LIBFTDI_ARCHIVE}"
 fi
 
 # Unpack the FTDI library.
 if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBFTDI}" ]
 then
   cd "${OPENOCD_WORK_FOLDER}"
-  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI}.tar.bz2"
+  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI_ARCHIVE}"
+
+  cd "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
+  # Patch to prevent the use of system libraries and force the use of local ones.
+  patch -p0 < "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/patches/${LIBFTDI}-cmake-FindUSB1.patch"
 fi
 
 # Build and install the FTDI library.
-if [ !  \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libftdi1.a" -o \
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libftdi1.a" -o \
            -f "${OPENOCD_INSTALL_FOLDER}/lib64/libftdi1.a" \)  ]
 then
   rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
@@ -338,6 +355,7 @@ then
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}"
   # Configure
+  CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/cross-pkg-config" \
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
@@ -348,10 +366,13 @@ then
   -DCMAKE_INSTALL_PREFIX="${OPENOCD_INSTALL_FOLDER}" \
   -DLIBUSB_INCLUDE_DIR="${OPENOCD_INSTALL_FOLDER}/include/libusb-1.0" \
   -DLIBUSB_LIBRARIES="${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.a" \
+  -DBUILD_TESTS:BOOL=off \
   -DFTDIPP:BOOL=off \
   -DPYTHON_BINDINGS:BOOL=off \
   -DEXAMPLES:BOOL=off \
   -DDOCUMENTATION:BOOL=off \
+  -DFTDI_EEPROM:BOOL=off \
+  -DLINK_PYTHON_LIBRARY:BOOL=off \
   "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
 
   # Build
@@ -376,7 +397,7 @@ then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" https://github.com/downloads/signal11/hidapi/${HIDAPI_ARCHIVE} \
+  "${WGET}" "https://github.com/downloads/signal11/hidapi/${HIDAPI_ARCHIVE}" \
   "${WGET_OUT}" "${HIDAPI_ARCHIVE}"
 fi
 
@@ -401,6 +422,7 @@ then
 
   cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
 
+  CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
@@ -419,8 +441,9 @@ then
      "${OPENOCD_INSTALL_FOLDER}/lib"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig"
-  cp -v "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/pkgconfig/${HIDAPI}.pc" \
-     "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/hidapi.pc"
+  sed -e "s|XXX|${OPENOCD_INSTALL_FOLDER}|" \
+    "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/pkgconfig/${HIDAPI}-${HIDAPI_TARGET}.pc" \
+    > "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/hidapi.pc"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/include/hidapi"
   cp -v "${OPENOCD_WORK_FOLDER}/${HIDAPI}/hidapi/hidapi.h" \
@@ -434,7 +457,8 @@ mkdir -p "${OPENOCD_BUILD_FOLDER}/openocd"
 
 # Configure OpenOCD. Use the same options as Freddie Chopin.
 
-if [ ! -f "${OPENOCD_BUILD_FOLDER}/openocd/config.h" ]
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/openocd" \) -o \
+     ! \( -f "${OPENOCD_BUILD_FOLDER}/openocd/config.h" \) ]
 then
 
   echo
@@ -446,6 +470,7 @@ then
   # Be sure all these lines end in '\' to ensure lines are concatenated.
   OUTPUT_DIR="${OPENOCD_BUILD_FOLDER}" \
   \
+  CPPFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/cross-pkg-config" \
   PKG_CONFIG_PATH="${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig" \
   PKG_CONFIG_PREFIX="${OPENOCD_INSTALL_FOLDER}" \

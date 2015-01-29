@@ -23,23 +23,38 @@ then
   exit 1
 fi
 
-# ----- Externally configurable variables -----
+# Parse actions.
+ACTION_CLEAN=""
+ACTION_PULL=""
+TARGET_BITS="64"
 
-# Define it externally to "y"
-DEBUG=${DEBUG:-"n"}
+while [ $# -gt 0 ]
+do
+  if [ "$1" == "clean" ]
+  then
+    ACTION_CLEAN="$1"
+  elif [ "$1" == "pull" ]
+  then
+    ACTION_PULL="$1"
+  else
+    echo "Unknown action/option $1"
+    exit 1
+  fi
+
+  shift
+done
+
+# ----- Externally configurable variables -----
 
 # The folder where the entire build procedure will run.
 # If you prefer to build in a separate folder, define it before invoking
 # the script.
 if [ -d /media/Work ]
 then
-  OPENOCD_WORK=${OPENOCD_WORK:-"/media/Work/openocd"}
+  OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-"/media/Work/openocd"}
 else
-  OPENOCD_WORK=${OPENOCD_WORK:-${HOME}/Work/openocd}
+  OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-${HOME}/Work/openocd}
 fi
-
-# The UTC date part in the name of the archive.
-NDATE=${NDATE:-$(date -u +%Y%m%d%H%M)}
 
 # The folder where OpenOCD will be installed.
 INSTALL_FOLDER=${INSTALL_FOLDER:-"/Applications/GNU ARM Eclipse/OpenOCD"}
@@ -47,9 +62,9 @@ INSTALL_FOLDER=${INSTALL_FOLDER:-"/Applications/GNU ARM Eclipse/OpenOCD"}
 PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
 DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-""}
 
-# ----- Local variables -----
+MAKE_JOBS=${MAKE_JOBS:-"-j8"}
 
-OUTFILE_VERSION="0.8.0"
+# ----- Local variables -----
 
 # For updates, please check the corresponding pages.
 
@@ -65,44 +80,114 @@ LIBUSB1="libusb-1.0.19"
 # https://github.com/signal11/hidapi/downloads
 HIDAPI="hidapi-0.7.0"
 
-OPENOCD_TARGET="osx"
-
 HIDAPI_TARGET="mac"
 HIDAPI_OBJECT="hid.o"
 
-OPENOCD_GIT_FOLDER="${OPENOCD_WORK}/gnuarmeclipse-openocd.git"
-OPENOCD_DOWNLOAD_FOLDER="${OPENOCD_WORK}/download"
-OPENOCD_BUILD_FOLDER="${OPENOCD_WORK}/build/${OPENOCD_TARGET}"
-OPENOCD_INSTALL_FOLDER="${OPENOCD_WORK}/install/${OPENOCD_TARGET}"
-OPENOCD_OUTPUT="${OPENOCD_WORK}/output"
+OPENOCD_TARGET="osx"
+
+OPENOCD_GIT_FOLDER="${OPENOCD_WORK_FOLDER}/gnuarmeclipse-openocd.git"
+OPENOCD_DOWNLOAD_FOLDER="${OPENOCD_WORK_FOLDER}/download"
+OPENOCD_BUILD_FOLDER="${OPENOCD_WORK_FOLDER}/build/${OPENOCD_TARGET}"
+OPENOCD_INSTALL_FOLDER="${OPENOCD_WORK_FOLDER}/install/${OPENOCD_TARGET}"
+OPENOCD_OUTPUT="${OPENOCD_WORK_FOLDER}/output"
 
 WGET="wget"
 WGET_OUT="-O"
 
-ACTION=${1:-}
+# Test if various tools are present.
+gcc --version
+git --version >/dev/null
+automake --version >/dev/null
+cmake --version >/dev/null
 
-if [ $# > 0 ]
+# Process actions.
+
+if [ "${ACTION_CLEAN}" == "clean" ]
 then
-  if [ "${ACTION}" == "clean" ]
-  then
-    # Remove most build and temporary folders
-    rm -rfv "${OPENOCD_BUILD_FOLDER}"
-    rm -rfv "${OPENOCD_INSTALL_FOLDER}"
-    #rm -rfv "${OPENOCD_PKG_FOLDER}"
-    rm -rfv "${OPENOCD_WORK}/${LIBFTDI}"
-    rm -rfv "${OPENOCD_WORK}/${LIBUSB0}"
-    rm -rfv "${OPENOCD_WORK}/${LIBUSB1}"
-    rm -rfv "${OPENOCD_WORK}/${HIDAPI}"
+  # Remove most build and temporary folders
+  echo
+  echo "Remove most build folders..."
 
-    # exit 0
-    # Continue with build
+  rm -rf "${OPENOCD_BUILD_FOLDER}"
+  rm -rf "${OPENOCD_INSTALL_FOLDER}"
+  rm -rf "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
+  rm -rf "${OPENOCD_WORK_FOLDER}/${LIBUSB0}"
+  rm -rf "${OPENOCD_WORK_FOLDER}/${LIBUSB1}"
+  rm -rf "${OPENOCD_WORK_FOLDER}/${HIDAPI}"
+
+  echo
+  echo "Clean completed. Proceed with a regular build."
+  exit 0
+fi
+
+if [ "${ACTION_PULL}" == "pull" ]
+then
+  if [ -d "${OPENOCD_GIT_FOLDER}" ]
+  then
+    echo
+    if [ "${USER}" == "ilg" ]
+    then
+      echo "Enter SourceForge password for git pull"
+    fi
+    cd "${OPENOCD_GIT_FOLDER}"
+    git pull
+
+    rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
+
+    # Prepare autotools.
+    echo
+    echo "bootstrap..."
+
+    cd "${OPENOCD_GIT_FOLDER}"
+    ./bootstrap
+
+    echo
+    echo "Pull completed. Proceed with a regular build."
+    exit 0
+  else
+	echo "No git folder."
+    exit 1
   fi
 fi
 
 # ----- Begin of common part --------------------------------------------------
 
 # Create the work folder.
-mkdir -p "${OPENOCD_WORK}"
+mkdir -p "${OPENOCD_WORK_FOLDER}"
+
+# Get the GNU ARM Eclipse OpenOCD git repository.
+
+# The custom OpenOCD branch is available from the dedicated Git repository
+# which is part of the GNU ARM Eclipse project hosted on SourceForge.
+# Generally this branch follows the official OpenOCD master branch, 
+# with updates after every OpenOCD public release.
+
+if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
+then
+  cd "${OPENOCD_WORK_FOLDER}"
+
+  if [ "${USER}" == "ilg" ]
+  then
+    # Shortcut for ilg, who has full access to the repo.
+    echo
+    echo "Enter SourceForge password for git clone"
+    git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
+  else
+    # For regular read/only access, use the git url.
+    git clone http://git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
+  fi
+
+  # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
+  cd "${OPENOCD_GIT_FOLDER}"
+  git checkout gnuarmeclipse
+
+  # Prepare autotools.
+  echo
+  echo "bootstrap..."
+
+  cd "${OPENOCD_GIT_FOLDER}"
+  ./bootstrap
+fi
 
 # Build the USB libraries.
 
@@ -112,82 +197,83 @@ mkdir -p "${OPENOCD_WORK}"
 # 	https://sourceforge.net/projects/libusb/files
 
 # Download the new USB library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2" ]
+LIBUSB1_ARCHIVE="${LIBUSB1}.tar.bz2"
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" http://sourceforge.net/projects/libusb/files/libusb-1.0/${LIBUSB1}/${LIBUSB1}.tar.bz2 \
-  "${WGET_OUT}" "${LIBUSB1}.tar.bz2"
+  "${WGET}" "http://sourceforge.net/projects/libusb/files/libusb-1.0/${LIBUSB1}/${LIBUSB1_ARCHIVE}" \
+  "${WGET_OUT}" "${LIBUSB1_ARCHIVE}"
 fi
 
 # Unpack the new USB library.
-if [ ! -d "${OPENOCD_WORK}/${LIBUSB1}" ]
+if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBUSB1}" ]
 then
-  cd "${OPENOCD_WORK}"
-  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2"
+  cd "${OPENOCD_WORK_FOLDER}"
+  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1_ARCHIVE}"
 fi
 
 # Build and install the new USB library.
-if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.a" -o \
-          -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/libusb-1.0.a" \) ]
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.a" -o \
+          -f "${OPENOCD_INSTALL_FOLDER}/lib64/libusb-1.0.a" \) ]
 then
-  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
-  mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
-  cd "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
-
-  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
+  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
-  CFLAGS="-Wno-non-literal-null-conversion" \
-  "${OPENOCD_WORK}/${LIBUSB1}/configure" \
-  --prefix="${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}"
-  make clean install
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
+  # Configure
+  CFLAGS="-Wno-non-literal-null-conversion -m${TARGET_BITS}" \
+  "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/configure" \
+  --prefix="${OPENOCD_INSTALL_FOLDER}"
+
+  # Build
+  make ${MAKE_JOBS} clean install
 fi
 
 # http://www.libusb.org
 
 # Download the old USB library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0}.tar.bz2" ]
+LIBUSB0_ARCHIVE="${LIBUSB0}.tar.bz2"
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" http://sourceforge.net/projects/libusb/files/libusb-compat-0.1/${LIBUSB0}/${LIBUSB0}.tar.bz2 \
-  "${WGET_OUT}" "${LIBUSB0}.tar.bz2"
+  "${WGET}" "http://sourceforge.net/projects/libusb/files/libusb-compat-0.1/${LIBUSB0}/${LIBUSB0_ARCHIVE}" \
+  "${WGET_OUT}" "${LIBUSB0_ARCHIVE}"
 fi
 
 # Unpack the old USB library.
-if [ ! -d "${OPENOCD_WORK}/${LIBUSB0}" ]
+if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBUSB0}" ]
 then
-  cd "${OPENOCD_WORK}"
-  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0}.tar.bz2"
+  cd "${OPENOCD_WORK_FOLDER}"
+  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0_ARCHIVE}"
 fi
 
 # Build and install the old USB library.
-if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb.a" -o \
-          -f "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/libusb.a" \) ]
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb.a" -o \
+          -f "${OPENOCD_INSTALL_FOLDER}/lib64/libusb.a" \) ]
 then
-  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
-  mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
-  cd "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
-
-  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
+  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
 
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
   # Configure
+  CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig":\
-"${PKG_CONFIG_PATH}" \
+"${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
+"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
-  "${OPENOCD_WORK}/${LIBUSB0}/configure" \
-  --prefix="${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}"
+  "${OPENOCD_WORK_FOLDER}/${LIBUSB0}/configure" \
+  --prefix="${OPENOCD_INSTALL_FOLDER}"
 
   # Build
-  make clean install
+  make ${MAKE_JOBS} clean install
 fi
 
 # Build the FTDI library.
@@ -197,48 +283,60 @@ fi
 #	http://www.intra2net.com/en/developer/libftdi/
 
 # Download the FTDI library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI}.tar.bz2" ]
+LIBFTDI_ARCHIVE="${LIBFTDI}.tar.bz2"
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" http://www.intra2net.com/en/developer/libftdi/download/${LIBFTDI}.tar.bz2 \
-  "${WGET_OUT}" "${LIBFTDI}.tar.bz2"
+  "${WGET}" "http://www.intra2net.com/en/developer/libftdi/download/${LIBFTDI_ARCHIVE}" \
+  "${WGET_OUT}" "${LIBFTDI_ARCHIVE}"
 fi
 
 # Unpack the FTDI library.
-if [ ! -d "${OPENOCD_WORK}/${LIBFTDI}" ]
+if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBFTDI}" ]
 then
-  cd "${OPENOCD_WORK}"
-  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI}.tar.bz2"
+  cd "${OPENOCD_WORK_FOLDER}"
+  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI_ARCHIVE}"
+
+  cd "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
+  # Patch to prevent the use of system libraries and force the use of local ones.
+  patch -p0 < "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/patches/${LIBFTDI}-cmake-FindUSB1.patch"
 fi
 
 # Build and install the FTDI library.
-if [ !  \( -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.a" -o \
-           -f "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/libftdi1.a" \)  ]
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libftdi1.a" -o \
+           -f "${OPENOCD_INSTALL_FOLDER}/lib64/libftdi1.a" \)  ]
 then
-  rm -rfv "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
-  mkdir -p "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
-  cd "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}"
-
-  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
+  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
 
+  echo
+  echo "cmake libftdi..."
+
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
   # Configure
+  CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig":\
-"${PKG_CONFIG_PATH}" \
+"${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
+"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
   cmake \
-  -DCMAKE_INSTALL_PREFIX="${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}" \
-  "${OPENOCD_WORK}/${LIBFTDI}"
+  -DCMAKE_INSTALL_PREFIX="${OPENOCD_INSTALL_FOLDER}" \
+  -DBUILD_TESTS:BOOL=off \
+  -DFTDIPP:BOOL=off \
+  -DPYTHON_BINDINGS:BOOL=off \
+  -DEXAMPLES:BOOL=off \
+  -DDOCUMENTATION:BOOL=off \
+  -DFTDI_EEPROM:BOOL=off \
+  -DLINK_PYTHON_LIBRARY:BOOL=off \
+  "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
 
   # Build
-  make clean install
+  make ${MAKE_JOBS} clean install
 fi
-
 
 # Build the HDI library.
 
@@ -252,210 +350,176 @@ then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" https://github.com/downloads/signal11/hidapi/${HIDAPI_ARCHIVE} \
+  "${WGET}" "https://github.com/downloads/signal11/hidapi/${HIDAPI_ARCHIVE}" \
   "${WGET_OUT}" "${HIDAPI_ARCHIVE}"
 fi
 
 # Unpack the HDI library.
-if [ ! -d "${OPENOCD_WORK}/${HIDAPI}" ]
+if [ ! -d "${OPENOCD_WORK_FOLDER}/${HIDAPI}" ]
 then
-  cd "${OPENOCD_WORK}"
+  cd "${OPENOCD_WORK_FOLDER}"
   unzip "${OPENOCD_DOWNLOAD_FOLDER}/${HIDAPI_ARCHIVE}"
 fi
 
-# Build the new HDI library.
-if [ ! -f "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}/libhid.a" ]
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${HIDAPI}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libhid.a" \) ]
 then
-  cd "${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET}"
+  rm -rf "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
+  mkdir -p "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
 
+  echo
+  echo "make libhid..."
+
+  cp -r "${OPENOCD_WORK_FOLDER}/${HIDAPI}/"* \
+    "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
+
+  cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
+
+  CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig":\
-"${PKG_CONFIG_PATH}" \
+"${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
+"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
   make clean "${HIDAPI_OBJECT}"
 
   # Make just compiles the file. Create the archive.
   # No dynamic/shared libs involved.
-  ar -r  "libhid.a" "${HIDAPI_OBJECT}"
-fi
+  ar -r libhid.a ${HIDAPI_OBJECT}
+  ranlib libhid.a
 
-# Get the GNU ARM Eclipse OpenOCD git repository.
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib"
+  cp -v libhid.a \
+     "${OPENOCD_INSTALL_FOLDER}/lib"
 
-# The custom OpenOCD branch is available from the dedicated Git repository
-# which is part of the GNU ARM Eclipse project hosted on SourceForge.
-# Generally this branch follows the official OpenOCD master branch, 
-# with updates after every OpenOCD public release.
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig"
+  sed -e "s|XXX|${OPENOCD_INSTALL_FOLDER}|" \
+    "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/pkgconfig/${HIDAPI}-${HIDAPI_TARGET}.pc" \
+    > "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/hidapi.pc"
 
-if [ ! -d "${OPENOCD_GIT_FOLDER}" ]
-then
-  cd "${OPENOCD_WORK}"
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}/include/hidapi"
+  cp -v "${OPENOCD_WORK_FOLDER}/${HIDAPI}/hidapi/hidapi.h" \
+     "${OPENOCD_INSTALL_FOLDER}/include/hidapi"
 
-  if [ "$(whoami)" == "ilg" ]
-  then
-    # Shortcut for ilg, who has full access to the repo.
-    git clone ssh://ilg-ul@git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
-  else
-    # For regular read/only access, use the git url.
-    git clone http://git.code.sf.net/p/gnuarmeclipse/openocd gnuarmeclipse-openocd.git
-  fi
-
-  # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
-  cd "${OPENOCD_GIT_FOLDER}"
-  git checkout gnuarmeclipse
-
-  # Prepare autotools.
-  cd "${OPENOCD_GIT_FOLDER}"
-  ./bootstrap
 fi
 
 # On first run, create the build folder.
 mkdir -p "${OPENOCD_BUILD_FOLDER}/openocd"
 
-# On subsequent runs, clear it to always force a configure.
-if [ -f "${OPENOCD_BUILD_FOLDER}/openocd/config.h" ]
-then
-  cd "${OPENOCD_BUILD_FOLDER}/openocd"
-
-  make distclean
-fi
-
 # ----- End of common part ----------------------------------------------------
-
-if [ "${DEBUG}" == "y" ]
-then
-  export CFLAGS="-g"
-fi
-export
 
 # Configure OpenOCD. Use (more or less) the same options as Freddie Chopin.
 
-mkdir -p "${OPENOCD_BUILD_FOLDER}/openocd"
-cd "${OPENOCD_BUILD_FOLDER}/openocd"
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/openocd" \) -o \
+     ! \( -f "${OPENOCD_BUILD_FOLDER}/openocd/config.h" \) ]
+then
 
-# All variables below are passed on the command line before 'configure'.
-# Be sure all these lines end in '\' to ensure lines are concatenated.
-# On some machines libftdi ends in lib64, so we refer both lib & lib64
-HIDAPI_CFLAGS="-I${OPENOCD_WORK}/${HIDAPI}/hidapi" \
-HIDAPI_LIBS="-L${OPENOCD_WORK}/${HIDAPI}/${HIDAPI_TARGET} -lhid" \
-\
-LDFLAGS="-L/opt/local/lib" \
-CPPFLAGS="-I/opt/local/include" \
-LIBS="-framework IOKit -framework CoreFoundation" \
-PKG_CONFIG_PATH=\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64/pkgconfig":\
+  echo
+  echo "configure..."
+
+  mkdir -p "${OPENOCD_BUILD_FOLDER}/openocd"
+  cd "${OPENOCD_BUILD_FOLDER}/openocd"
+
+  # All variables below are passed on the command line before 'configure'.
+  # Be sure all these lines end in '\' to ensure lines are concatenated.
+  CCPFLAGS="-m${TARGET_BITS}" \
+  PKG_CONFIG_PATH=\
+"${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${PKG_CONFIG_PATH}" \
-DYLD_LIBRARY_PATH=\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib64":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib64":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib":\
-"${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib64":\
+  DYLD_LIBRARY_PATH=\
+"${OPENOCD_INSTALL_FOLDER}/lib":\
 "${DYLD_LIBRARY_PATH}" \
-\
-"${OPENOCD_GIT_FOLDER}/configure" \
---prefix="${OPENOCD_INSTALL_FOLDER}/openocd"  \
---datarootdir="${OPENOCD_INSTALL_FOLDER}" \
---infodir="${OPENOCD_INSTALL_FOLDER}/openocd/info"  \
---localedir="${OPENOCD_INSTALL_FOLDER}/openocd/locale"  \
---mandir="${OPENOCD_INSTALL_FOLDER}/openocd/man"  \
---docdir="${OPENOCD_INSTALL_FOLDER}/openocd/doc"  \
---enable-aice \
---disable-amtjtagaccel \
---enable-armjtagew \
---enable-cmsis-dap \
---enable-ftdi \
---disable-gw16012 \
---enable-jlink \
---disable-jtag_vpi \
---enable-opendous \
---enable-openjtag_ftdi \
---enable-osbdm \
---enable-legacy-ft2232_libftdi \
---disable-parport \
---disable-parport-ppdev \
---disable-parport-giveio \
---enable-presto_libftdi \
---enable-remote-bitbang \
---enable-rlink \
---enable-stlink \
---enable-ti-icdi \
---enable-ulink \
---enable-usb-blaster-2 \
---enable-usb_blaster_libftdi \
---enable-usbprog \
---enable-vsllink
+  \
+  "${OPENOCD_GIT_FOLDER}/configure" \
+  --prefix="${OPENOCD_INSTALL_FOLDER}/openocd"  \
+  --datarootdir="${OPENOCD_INSTALL_FOLDER}" \
+  --infodir="${OPENOCD_INSTALL_FOLDER}/openocd/info"  \
+  --localedir="${OPENOCD_INSTALL_FOLDER}/openocd/locale"  \
+  --mandir="${OPENOCD_INSTALL_FOLDER}/openocd/man"  \
+  --docdir="${OPENOCD_INSTALL_FOLDER}/openocd/doc"  \
+  --enable-aice \
+  --disable-amtjtagaccel \
+  --enable-armjtagew \
+  --enable-cmsis-dap \
+  --enable-ftdi \
+  --disable-gw16012 \
+  --enable-jlink \
+  --disable-jtag_vpi \
+  --enable-opendous \
+  --enable-openjtag_ftdi \
+  --enable-osbdm \
+  --enable-legacy-ft2232_libftdi \
+  --disable-parport \
+  --disable-parport-ppdev \
+  --disable-parport-giveio \
+  --enable-presto_libftdi \
+  --enable-remote-bitbang \
+  --enable-rlink \
+  --enable-stlink \
+  --enable-ti-icdi \
+  --enable-ulink \
+  --enable-usb-blaster-2 \
+  --enable-usb_blaster_libftdi \
+  --enable-usbprog \
+  --enable-vsllink
 
-# Do a clean build, with documentation.
+fi
+
+# Full build, with documentation.
 
 # The bindir and pkgdatadir are required to configure bin and scripts folders
 # at the same level in the hierarchy.
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
-make bindir="bin" pkgdatadir="" clean all pdf html
-if [ "${DEBUG}" != "y" ]
-then
-  strip src/openocd
-fi
+make ${MAKE_JOBS} bindir="bin" pkgdatadir="" all pdf html
 
 # Always clear the destination folder, to have a consistent package.
-rm -rfv "${OPENOCD_INSTALL_FOLDER}/openocd"
+echo
+echo "remove install..."
 
-# Exhaustive install, including documentation.
+rm -rf "${OPENOCD_INSTALL_FOLDER}/openocd"
+
+# Full install, including documentation.
+echo
+echo "make install..."
 
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
-make install install-pdf install-html install-man
+make install-strip install-pdf install-html install-man
 
 # Copy the dynamic libraries to the same folder where the application file is.
 # Post-process dynamic libraries paths to be relative to executable folder.
 
 # otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
 install_name_tool -change "libftdi1.2.dylib" "@executable_path/libftdi1.2.dylib" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
-"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
-install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" "@executable_path/libusb-1.0.0.dylib" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.4.dylib" \
-"@executable_path/libusb-0.1.4.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
-install_name_tool -change "/opt/local/lib/libusb-0.1.4.dylib" \
-"@executable_path/libusb-0.1.4.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.0.dylib" \
+  "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
+install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/lib/libusb-0.1.4.dylib" \
+  "@executable_path/libusb-0.1.4.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
 otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
 
-cp "${OPENOCD_INSTALL_FOLDER}/${LIBFTDI}/lib/libftdi1.2.2.0.dylib" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
-# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
-install_name_tool -id libftdi1.2.dylib "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
-"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
-install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" \
-"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
-otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libftdi1.2.dylib"
+DLIB="libftdi1.2.dylib"
+cp "${OPENOCD_INSTALL_FOLDER}/lib/libftdi1.2.2.0.dylib" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+install_name_tool -id "${DLIB}" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.0.dylib" \
+  "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
 
-cp "${OPENOCD_INSTALL_FOLDER}/${LIBUSB0}/lib/libusb-0.1.4.dylib" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
-# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
-install_name_tool -id libusb-0.1.4.dylib "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
-"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
-install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" \
-"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
-otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-0.1.4.dylib"
+DLIB="libusb-0.1.4.dylib"
+cp "${OPENOCD_INSTALL_FOLDER}/lib/libusb-0.1.4.dylib" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+install_name_tool -id "${DLIB}" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.0.dylib" \
+  "@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
 
-cp "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
-"${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
-# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
-install_name_tool -id libusb-1.0.0.dylib "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
-install_name_tool -change "${OPENOCD_INSTALL_FOLDER}/${LIBUSB1}/lib/libusb-1.0.0.dylib" \
-"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
-install_name_tool -change "/opt/local/lib/libusb-1.0.0.dylib" \
-"@executable_path/libusb-1.0.0.dylib" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
-otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/libusb-1.0.0.dylib"
+DLIB="libusb-1.0.0.dylib"
+cp "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.0.dylib" \
+  "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+# otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+install_name_tool -id "${DLIB}" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
+otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
 
 # Copy the license files.
 
@@ -470,72 +534,83 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"AUTHORS* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${HIDAPI}/"AUTHORS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"LICENSE* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${HIDAPI}/"LICENSE* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${HIDAPI}/"README* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${HIDAPI}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${HIDAPI}"
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"AUTHORS* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBFTDI}/"AUTHORS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"COPYING* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBFTDI}/"COPYING* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"LICENSE* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBFTDI}/"LICENSE* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBFTDI}/"README* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBFTDI}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBFTDI}"
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"AUTHORS* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/"AUTHORS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"COPYING* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/"COPYING* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"NEWS* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/"NEWS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB1}/"README* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB1}"
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"AUTHORS* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB0}/"AUTHORS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"COPYING* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB0}/"COPYING* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"LICENSE* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB0}/"LICENSE* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"NEWS* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB0}/"NEWS* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
-/usr/bin/install -c -m 644 "${OPENOCD_WORK}/${LIBUSB0}/"README* \
+/usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB0}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
 
 # Copy the GNU ARM Eclipse info files.
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/INFO-osx.txt" \
+echo
+echo "copy info files..."
+
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/info/INFO-osx.txt" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/INFO.txt"
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/BUILD-osx.txt" \
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/info/BUILD-osx.txt" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/BUILD.txt"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/CHANGES.txt" \
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/info/CHANGES.txt" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
-/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/build-openocd-osx.sh" \
+/usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/build-openocd-osx.sh" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
 
 # Create the distribution installer.
 
 mkdir -p "${OPENOCD_OUTPUT}"
 
-OPENOCD_INSTALLER=${OPENOCD_WORK}/output/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${NDATE}.pkg
+# Increment the revision with each new release.
+OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
+# The UTC date part in the name of the archive.
+OUTFILE_DATE=${OUTFILE_DATE:-$(date -u +%Y%m%d%H%M)}
+
+OPENOCD_INSTALLER=${OPENOCD_WORK_FOLDER}/output/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${OUTFILE_DATE}.pkg
+
+echo
+echo "create installer package..."
 
 # Create the installer package, with content from the
 # ${OPENOCD_INSTALL_FOLDER}/openocd folder.
 # The "${INSTALL_FOLDER:1}" is a substring that skips first char.
-cd "${OPENOCD_WORK}"
+cd "${OPENOCD_WORK_FOLDER}"
 echo
 pkgbuild --identifier ilg.gnuarmeclipse.openocd \
---root "${OPENOCD_INSTALL_FOLDER}/openocd" \
---version "${OUTFILE_VERSION}" \
---install-location "${INSTALL_FOLDER:1}" \
-"${OPENOCD_INSTALLER}"
+  --root "${OPENOCD_INSTALL_FOLDER}/openocd" \
+  --version "${OUTFILE_VERSION}" \
+  --install-location "${INSTALL_FOLDER:1}" \
+  "${OPENOCD_INSTALLER}"
 
 echo
 ls -l "${OPENOCD_INSTALL_FOLDER}/openocd/bin"

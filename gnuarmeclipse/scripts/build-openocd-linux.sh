@@ -12,9 +12,9 @@ IFS=$'\n\t'
 # Prerequisites:
 #
 # sudo apt-get install git libtool autoconf automake autotools-dev pkg-config
-# sudo apt-get texinfo texlive doxygen
+# sudo apt-get install texinfo texlive doxygen
 # sudo apt-get install cmake libudev-dev 
-# sudo apt-get install libconfuse-dev g++ libboost1.49-dev swig2.0 python2.7-dev
+# sudo apt-get install libconfuse-dev g++ libboost1.49-dev
 
 set +e
 DISTRO_NAME=$(lsb_release -si | tr "[:upper:]" "[:lower:]")
@@ -251,7 +251,6 @@ then
   ./bootstrap
 fi
 
-
 # Build the USB libraries.
 
 # Both USB libraries are available from a single project LIBUSB
@@ -260,61 +259,68 @@ fi
 # 	https://sourceforge.net/projects/libusb/files
 
 # Download the new USB library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2" ]
+LIBUSB1_ARCHIVE="${LIBUSB1}.tar.bz2"
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" http://sourceforge.net/projects/libusb/files/libusb-1.0/${LIBUSB1}/${LIBUSB1}.tar.bz2 \
-  "${WGET_OUT}" "${LIBUSB1}.tar.bz2"
+  "${WGET}" "http://sourceforge.net/projects/libusb/files/libusb-1.0/${LIBUSB1}/${LIBUSB1_ARCHIVE}" \
+  "${WGET_OUT}" "${LIBUSB1_ARCHIVE}"
 fi
 
 # Unpack the new USB library.
 if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBUSB1}" ]
 then
   cd "${OPENOCD_WORK_FOLDER}"
-  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1}.tar.bz2"
+  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1_ARCHIVE}"
 fi
 
 # Build and install the new USB library.
-if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.a" -o \
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.a" -o \
           -f "${OPENOCD_INSTALL_FOLDER}/lib64/libusb-1.0.a" \) ]
 then
-  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
+  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}"
+  # Configure
   CFLAGS="-Wno-non-literal-null-conversion -m${TARGET_BITS}" \
   "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/configure" \
   --prefix="${OPENOCD_INSTALL_FOLDER}"
+
+  # Build
   make ${MAKE_JOBS} clean install
 fi
 
 # http://www.libusb.org
 
 # Download the old USB library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0}.tar.bz2" ]
+LIBUSB0_ARCHIVE="${LIBUSB0}.tar.bz2"
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" http://sourceforge.net/projects/libusb/files/libusb-compat-0.1/${LIBUSB0}/${LIBUSB0}.tar.bz2 \
-  "${WGET_OUT}" "${LIBUSB0}.tar.bz2"
+  "${WGET}" "http://sourceforge.net/projects/libusb/files/libusb-compat-0.1/${LIBUSB0}/${LIBUSB0_ARCHIVE}" \
+  "${WGET_OUT}" "${LIBUSB0_ARCHIVE}"
 fi
 
 # Unpack the old USB library.
 if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBUSB0}" ]
 then
   cd "${OPENOCD_WORK_FOLDER}"
-  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0}.tar.bz2"
+  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0_ARCHIVE}"
 fi
 
 # Build and install the old USB library.
-if [ ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb.a" -o \
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libusb.a" -o \
           -f "${OPENOCD_INSTALL_FOLDER}/lib64/libusb.a" \) ]
 then
-  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
+  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
 
@@ -340,27 +346,33 @@ fi
 #	http://www.intra2net.com/en/developer/libftdi/
 
 # Download the FTDI library.
-if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI}.tar.bz2" ]
+LIBFTDI_ARCHIVE="${LIBFTDI}.tar.bz2"
+if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" http://www.intra2net.com/en/developer/libftdi/download/${LIBFTDI}.tar.bz2 \
-  "${WGET_OUT}" "${LIBFTDI}.tar.bz2"
+  "${WGET}" "http://www.intra2net.com/en/developer/libftdi/download/${LIBFTDI_ARCHIVE}" \
+  "${WGET_OUT}" "${LIBFTDI_ARCHIVE}"
 fi
 
 # Unpack the FTDI library.
 if [ ! -d "${OPENOCD_WORK_FOLDER}/${LIBFTDI}" ]
 then
   cd "${OPENOCD_WORK_FOLDER}"
-  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI}.tar.bz2"
+  tar -xjvf "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI_ARCHIVE}"
+
+  cd "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
+  # Patch to prevent the use of system libraries and force the use of local ones.
+  patch -p0 < "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/patches/${LIBFTDI}-cmake-FindUSB1.patch"
 fi
 
 # Build and install the FTDI library.
-if [ !  \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libftdi1.a" -o \
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libftdi1.a" -o \
            -f "${OPENOCD_INSTALL_FOLDER}/lib64/libftdi1.a" \)  ]
 then
-  rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
+  rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
 
@@ -376,11 +388,15 @@ then
 "${PKG_CONFIG_PATH}" \
   \
   cmake \
+  -DCMAKE_LIBRARY_PATH="" \
   -DCMAKE_INSTALL_PREFIX="${OPENOCD_INSTALL_FOLDER}" \
+  -DBUILD_TESTS:BOOL=off \
   -DFTDIPP:BOOL=off \
   -DPYTHON_BINDINGS:BOOL=off \
   -DEXAMPLES:BOOL=off \
   -DDOCUMENTATION:BOOL=off \
+  -DFTDI_EEPROM:BOOL=off \
+  -DLINK_PYTHON_LIBRARY:BOOL=off \
   "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
 
   # Build
@@ -399,7 +415,7 @@ then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
   cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
-  "${WGET}" https://github.com/downloads/signal11/hidapi/${HIDAPI_ARCHIVE} \
+  "${WGET}" "https://github.com/downloads/signal11/hidapi/${HIDAPI_ARCHIVE}" \
   "${WGET_OUT}" "${HIDAPI_ARCHIVE}"
 fi
 
@@ -410,9 +426,10 @@ then
   unzip "${OPENOCD_DOWNLOAD_FOLDER}/${HIDAPI_ARCHIVE}"
 fi
 
-if [ ! -f "${OPENOCD_INSTALL_FOLDER}/lib/libhid.a" ]
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${HIDAPI}" \) -o \
+     ! \( -f "${OPENOCD_INSTALL_FOLDER}/lib/libhid.a" \) ]
 then
-  rm -rfv "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
+  rm -rf "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
 
   echo
@@ -441,8 +458,9 @@ then
      "${OPENOCD_INSTALL_FOLDER}/lib"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig"
-  cp -v "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/pkgconfig/${HIDAPI}.pc" \
-     "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/hidapi.pc"
+  sed -e "s|XXX|${OPENOCD_INSTALL_FOLDER}|" \
+    "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/pkgconfig/${HIDAPI}-${HIDAPI_TARGET}.pc" \
+    > "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/hidapi.pc"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/include/hidapi"
   cp -v "${OPENOCD_WORK_FOLDER}/${HIDAPI}/hidapi/hidapi.h" \
@@ -457,7 +475,8 @@ mkdir -p "${OPENOCD_BUILD_FOLDER}/openocd"
 
 # Configure OpenOCD. Use the same options as Freddie Chopin.
 
-if [ ! -f "${OPENOCD_BUILD_FOLDER}/openocd/config.h" ]
+if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/openocd" \) -o \
+     ! \( -f "${OPENOCD_BUILD_FOLDER}/openocd/config.h" \) ]
 then
 
   echo
