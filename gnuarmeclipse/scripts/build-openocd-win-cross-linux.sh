@@ -356,12 +356,12 @@ then
   mkdir -p "${OPENOCD_INSTALL_FOLDER}"
   # Configure
   CFLAGS="-m${TARGET_BITS}" \
-  PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/cross-pkg-config" \
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
   cmake \
+  -DPKG_CONFIG_EXECUTABLE="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/cross-pkg-config" \
   -DCMAKE_TOOLCHAIN_FILE="${OPENOCD_WORK_FOLDER}/${LIBFTDI}/cmake/Toolchain-${CROSS_COMPILE_PREFIX}.cmake" \
   -DCMAKE_INSTALL_PREFIX="${OPENOCD_INSTALL_FOLDER}" \
   -DLIBUSB_INCLUDE_DIR="${OPENOCD_INSTALL_FOLDER}/include/libusb-1.0" \
@@ -372,7 +372,6 @@ then
   -DEXAMPLES:BOOL=off \
   -DDOCUMENTATION:BOOL=off \
   -DFTDI_EEPROM:BOOL=off \
-  -DLINK_PYTHON_LIBRARY:BOOL=off \
   "${OPENOCD_WORK_FOLDER}/${LIBFTDI}"
 
   # Build
