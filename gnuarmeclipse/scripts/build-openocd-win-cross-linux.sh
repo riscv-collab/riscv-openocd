@@ -15,7 +15,8 @@ IFS=$'\n\t'
 # sudo apt-get install doxygen texinfo texlive dos2unix
 # sudo apt-get install mingw-w64 mingw-w64-tools mingw-w64-dev
 
-# Parse actions. 
+# ----- Parse actions and command line options -----
+
 ACTION_CLEAN=""
 ACTION_PULL=""
 TARGET_BITS="32"
@@ -102,7 +103,8 @@ else
   CROSS_COMPILE_PREFIX="x86_64-w64-mingw32"
 fi
 
-# Test if various tools are present.
+# ----- Test if some tools are present -----
+
 echo
 echo "Test tools..."
 echo
@@ -201,7 +203,7 @@ then
   ./bootstrap
 fi
 
-# Build the USB libraries.
+# ----- Build the USB libraries -----
 
 # Both USB libraries are available from a single project LIBUSB
 # 	http://www.libusb.info
@@ -233,9 +235,10 @@ if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}" \) -o \
 then
   rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
-  cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}"
+
+  cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   # Configure
   CFLAGS="-Wno-non-literal-null-conversion -m${TARGET_BITS}" \
   PKG_CONFIG="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/cross-pkg-config" \
@@ -279,11 +282,11 @@ then
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
 
-  echo
-  echo "make libusb-win32..."
-
   cp -r "${OPENOCD_WORK_FOLDER}/${LIBUSB_W32_FOLDER}/"* \
     "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
+
+  echo
+  echo "make libusb-win32..."
 
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}"
   # Patch from:
@@ -302,18 +305,18 @@ then
   cp -v "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}/libusb.a" \
      "${OPENOCD_INSTALL_FOLDER}/lib"
 
-  mkdir -p "${OPENOCD_INSTALL_FOLDER}/include/libusb"
-  cp -v "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}/src/lusb0_usb.h" \
-     "${OPENOCD_INSTALL_FOLDER}/include/libusb/usb.h"
-
   mkdir -p "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig"
   sed -e "s|XXX|${OPENOCD_INSTALL_FOLDER}|" \
     "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/pkgconfig/${LIBUSB_W32}.pc" \
     > "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/libusb.pc"
 
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}/include/libusb"
+  cp -v "${OPENOCD_BUILD_FOLDER}/${LIBUSB_W32}/src/lusb0_usb.h" \
+     "${OPENOCD_INSTALL_FOLDER}/include/libusb/usb.h"
+
 fi
 
-# Build the FTDI library.
+# ----- Build the FTDI library -----
 
 # There are two versions of the FDDI library; we recommend using the 
 # open source one, available from intra2net.
@@ -348,12 +351,13 @@ if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}" \) -o \
 then
   rm -rfv "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
-  cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
+
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
 
   echo
   echo "cmake libftdi..."
 
-  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
+  cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   # Configure
   CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
@@ -384,7 +388,7 @@ then
   rm -f "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig/libftdipp1.pc"
 fi
 
-# Build the HDI library.
+# ----- Build the HDI library -----
 
 # This is just a simple wrapper over libusb.
 # http://www.signal11.us/oss/hidapi/
@@ -413,11 +417,11 @@ then
   rm -rfv "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
 
-  echo
-  echo "make libhid..."
-
   cp -r "${OPENOCD_WORK_FOLDER}/${HIDAPI}/"* \
     "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
+
+  echo
+  echo "make libhid..."
 
   cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
 
@@ -511,7 +515,7 @@ then
 
 fi
 
-# Full build, with documentation.
+# ----- Full build, with documentation -----
 
 # The bindir and pkgdatadir are required to configure bin and scripts folders
 # at the same level in the hierarchy.
@@ -524,14 +528,17 @@ echo "remove install..."
 
 rm -rf "${OPENOCD_INSTALL_FOLDER}/openocd"
 
-# Full install, including documentation.
+# ----- Full install, including documentation -----
+
 echo
 echo "make install..."
 
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
 make install-strip install-pdf install-html
 
-# Copy DLLs to the install bin folder. First try Ubuntu specific locations,
+# ----- Copy dynamic libraries to the install bin folder -----
+
+# First try Ubuntu specific locations,
 # then do a long full search.
 
 echo
@@ -572,7 +579,8 @@ fi
 # are also compiled as static.
 cp -v "${OPENOCD_INSTALL_FOLDER}/bin/"*.dll "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
 
-# Copy the license files.
+# ----- Copy the license files -----
+
 echo
 echo "copy license files..."
 
@@ -625,7 +633,8 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB_W32}"
 find "${OPENOCD_INSTALL_FOLDER}/openocd/license" -type f \
   -exec unix2dos {} \;
 
-# Copy the GNU ARM Eclipse info files.
+# ----- Copy the GNU ARM Eclipse info files -----
+
 echo
 echo "copy info files..."
 
@@ -648,19 +657,24 @@ cp "${OPENOCD_GIT_FOLDER}/COPYING" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/COPYING"
 unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/COPYING"
 
-# Create the distribution setup.
+# ----- Create the distribution setup -----
 
 mkdir -p "${OPENOCD_OUTPUT_FOLDER}"
-
-NSIS_FOLDER="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/nsis"
-NSIS_FILE="${NSIS_FOLDER}/gnuarmeclipse-openocd.nsi"
 
 # Increment the revision with each new release.
 OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
 # The UTC date part in the name of the archive. 
 OUTFILE_DATE=${OUTFILE_DATE:-$(date -u +%Y%m%d%H%M)}
 
-OPENOCD_SETUP="${OPENOCD_OUTPUT_FOLDER}/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${OUTFILE_DATE}-setup.exe"
+OPENOCD_SETUP="${OPENOCD_OUTPUT_FOLDER}/gnuarmeclipse-openocd-\
+${OPENOCD_TARGET}-${OUTFILE_VERSION}-${OUTFILE_DATE}-setup.exe"
+
+echo
+echo "create setup..."
+echo
+
+NSIS_FOLDER="${OPENOCD_GIT_FOLDER}/gnuarmeclipse/nsis"
+NSIS_FILE="${NSIS_FOLDER}/gnuarmeclipse-openocd.nsi"
 
 cd "${OPENOCD_BUILD_FOLDER}"
 makensis -V4 -NOCD \

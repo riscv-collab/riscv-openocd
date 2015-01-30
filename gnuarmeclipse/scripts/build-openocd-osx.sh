@@ -13,7 +13,7 @@ IFS=$'\n\t'
 # sudo port install cmake boost libconfuse swig-python
 # sudo port install texinfo texlive
 
-# Prepare MacPorts environment.
+# ----- Prepare MacPorts environment -----
 
 export PATH=/opt/local/bin:/opt/local/sbin:$PATH
 port version >/dev/null
@@ -23,7 +23,8 @@ then
   exit 1
 fi
 
-# Parse actions.
+# ----- Parse actions and command line options -----
+
 ACTION_CLEAN=""
 ACTION_PULL=""
 TARGET_BITS="64"
@@ -94,7 +95,8 @@ OPENOCD_OUTPUT="${OPENOCD_WORK_FOLDER}/output"
 WGET="wget"
 WGET_OUT="-O"
 
-# Test if various tools are present.
+# ----- Test if some tools are present -----
+
 gcc --version
 git --version >/dev/null
 automake --version >/dev/null
@@ -155,7 +157,7 @@ fi
 # Create the work folder.
 mkdir -p "${OPENOCD_WORK_FOLDER}"
 
-# Get the GNU ARM Eclipse OpenOCD git repository.
+# ----- Get the GNU ARM Eclipse OpenOCD git repository -----
 
 # The custom OpenOCD branch is available from the dedicated Git repository
 # which is part of the GNU ARM Eclipse project hosted on SourceForge.
@@ -181,7 +183,7 @@ then
   cd "${OPENOCD_GIT_FOLDER}"
   git checkout gnuarmeclipse
 
-  # Prepare autotools.
+  # ---- Prepare autotools -----
   echo
   echo "bootstrap..."
 
@@ -189,7 +191,7 @@ then
   ./bootstrap
 fi
 
-# Build the USB libraries.
+# ----- Build the USB libraries -----
 
 # Both USB libraries are available from a single project LIBUSB
 # 	http://www.libusb.info
@@ -221,9 +223,10 @@ if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}" \) -o \
 then
   rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
-  cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}"
+
+  cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB1}"
   # Configure
   CFLAGS="-Wno-non-literal-null-conversion -m${TARGET_BITS}" \
   "${OPENOCD_WORK_FOLDER}/${LIBUSB1}/configure" \
@@ -260,9 +263,10 @@ if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}" \) -o \
 then
   rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
-  cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
 
   mkdir -p "${OPENOCD_INSTALL_FOLDER}"
+
+  cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   # Configure
   CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
@@ -276,7 +280,7 @@ then
   make ${MAKE_JOBS} clean install
 fi
 
-# Build the FTDI library.
+# ----- Build the FTDI library -----
 
 # There are two versions of the FDDI library; we recommend using the 
 # open source one, available from intra2net.
@@ -311,13 +315,14 @@ if [ ! \( -d "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}" \) -o \
 then
   rm -rf "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
-  cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
+
+  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
 
   echo
   echo "cmake libftdi..."
 
-  mkdir -p "${OPENOCD_INSTALL_FOLDER}"
-  # Configure
+  cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
+  # cmake
   CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
@@ -337,7 +342,7 @@ then
   make ${MAKE_JOBS} clean install
 fi
 
-# Build the HDI library.
+# ----- Build the HDI library -----
 
 # This is just a simple wrapper over libusb.
 # http://www.signal11.us/oss/hidapi/
@@ -366,18 +371,19 @@ then
   rm -rf "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
   mkdir -p "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
 
-  echo
-  echo "make libhid..."
-
   cp -r "${OPENOCD_WORK_FOLDER}/${HIDAPI}/"* \
     "${OPENOCD_BUILD_FOLDER}/${HIDAPI}"
+
+  echo
+  echo "make libhid..."
 
   cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
 
   CFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
+"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig":\
+"${PKG_CONFIG_PATH}" \
   \
   make clean "${HIDAPI_OBJECT}"
 
@@ -420,7 +426,7 @@ then
 
   # All variables below are passed on the command line before 'configure'.
   # Be sure all these lines end in '\' to ensure lines are concatenated.
-  CCPFLAGS="-m${TARGET_BITS}" \
+  CPPFLAGS="-m${TARGET_BITS}" \
   PKG_CONFIG_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${PKG_CONFIG_PATH}" \
@@ -463,7 +469,7 @@ then
 
 fi
 
-# Full build, with documentation.
+# ----- Full build, with documentation -----
 
 # The bindir and pkgdatadir are required to configure bin and scripts folders
 # at the same level in the hierarchy.
@@ -476,14 +482,16 @@ echo "remove install..."
 
 rm -rf "${OPENOCD_INSTALL_FOLDER}/openocd"
 
-# Full install, including documentation.
+# ----- Full install, including documentation -----
+
 echo
 echo "make install..."
 
 cd "${OPENOCD_BUILD_FOLDER}/openocd"
 make install-strip install-pdf install-html install-man
 
-# Copy the dynamic libraries to the same folder where the application file is.
+# ----- Copy dynamic libraries to the install bin folder -----
+
 # Post-process dynamic libraries paths to be relative to executable folder.
 
 # otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd"
@@ -520,7 +528,10 @@ cp "${OPENOCD_INSTALL_FOLDER}/lib/libusb-1.0.0.dylib" \
 install_name_tool -id "${DLIB}" "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
 otool -L "${OPENOCD_INSTALL_FOLDER}/openocd/bin/${DLIB}"
 
-# Copy the license files.
+# ----- Copy the license files -----
+
+echo
+echo "copy license files..."
 
 mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/openocd"
 /usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/AUTHORS" \
@@ -572,7 +583,8 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
 /usr/bin/install -c -m 644 "${OPENOCD_WORK_FOLDER}/${LIBUSB0}/"README* \
   "${OPENOCD_INSTALL_FOLDER}/openocd/license/${LIBUSB0}"
 
-# Copy the GNU ARM Eclipse info files.
+# ----- Copy the GNU ARM Eclipse info files -----
+
 echo
 echo "copy info files..."
 
@@ -586,7 +598,7 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
 /usr/bin/install -c -m 644 "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/scripts/build-openocd-osx.sh" \
   "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse/"
 
-# Create the distribution installer.
+# ----- Create the distribution installer -----
 
 mkdir -p "${OPENOCD_OUTPUT}"
 
@@ -595,16 +607,17 @@ OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
 # The UTC date part in the name of the archive.
 OUTFILE_DATE=${OUTFILE_DATE:-$(date -u +%Y%m%d%H%M)}
 
-OPENOCD_INSTALLER=${OPENOCD_WORK_FOLDER}/output/gnuarmeclipse-openocd-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${OUTFILE_DATE}.pkg
+OPENOCD_INSTALLER="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-\
+${OPENOCD_TARGET}-${OUTFILE_VERSION}-${OUTFILE_DATE}.pkg"
 
 echo
 echo "create installer package..."
+echo
 
 # Create the installer package, with content from the
 # ${OPENOCD_INSTALL_FOLDER}/openocd folder.
 # The "${INSTALL_FOLDER:1}" is a substring that skips first char.
 cd "${OPENOCD_WORK_FOLDER}"
-echo
 pkgbuild --identifier ilg.gnuarmeclipse.openocd \
   --root "${OPENOCD_INSTALL_FOLDER}/openocd" \
   --version "${OUTFILE_VERSION}" \
@@ -623,6 +636,7 @@ echo
 if [ "${RESULT}" == "0" ]
 then
   echo "Build completed."
+  echo "File ${OPENOCD_INSTALLER} created."
 else
   echo "Buld failed."
 fi
