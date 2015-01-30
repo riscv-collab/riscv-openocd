@@ -1,5 +1,5 @@
 
-This is the GNU ARM Eclipse version of OpenOCD for 32-bit Windows.
+This is the GNU ARM Eclipse version of OpenOCD for Windows.
 
 If generally follows the official releases.
 

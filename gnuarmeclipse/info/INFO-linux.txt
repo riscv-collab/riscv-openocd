@@ -1,6 +1,7 @@
 
-This is the GNU ARM Eclipse version of OpenOCD for 64-bit Debian and
-most other GNU/Linux distributions.
+This is the GNU ARM Eclipse version of OpenOCD for GNU/Linux.
+It was built on Debian 7, but most run on most GNU/Linux 
+distributions.
 
 If generally follows the official releases.
 

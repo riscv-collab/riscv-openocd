@@ -13,7 +13,7 @@ folder.
 
 To build the latest version of the package please use the script from:
 
-  wget https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/build-openocd-debian.sh?format=raw \
+  wget https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/scripts/build-openocd-debian.sh?format=raw \
   -O ~/Downloads/build-openocd-debian.sh
 
   bash ~/Downloads/build-openocd-debian.sh

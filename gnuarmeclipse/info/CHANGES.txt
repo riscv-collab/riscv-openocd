@@ -1,6 +1,18 @@
 
 The following changes were applied to the OpenOCD master branch:
 
+[2015-01-30]
+
+- gnuarmeclipse
+
+All GNU ARM Eclipse OpenOCD build related files were grouped under this folder.
+
+- README.md
+
+Markdown files were added in all new folders, to improve the look when browsed
+in the SourceForge Git web browser.
+
+
 [2015-01-12]
 
 - src/openocd.c

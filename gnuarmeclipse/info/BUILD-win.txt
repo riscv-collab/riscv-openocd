@@ -1,24 +1,23 @@
 
-This package was build on a Debian x64 machine, using the script provided in
+This package was build on a Ubuntu x64 machine, using the script provided in
 
-  GNU ARM Eclipse/build-openocd-w32-cross-debian.sh
+  GNU ARM Eclipse/build-openocd-win-cross-linux.sh
 
 To run it, first be sure the the packages required in the Prerequisites 
 section are installed, then copy the script and execute it with bash:
 
-  bash build-openocd-w32-cross-debian.sh
+  bash build-openocd-win-cross-linux.sh
 
-The output of the build script is a setup file in the ${OPENOCD_WORK}/output 
-folder.
+The output of the build script is a setup file in the Work/output folder.
 
 To build the latest version of the package please use the script from:
 
-  wget https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/build-openocd-w32-cross-debian.sh?format=raw \
-  -O ~/Downloads/build-openocd-w32-cross-debian.sh
+  wget https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/build-openocd-win-cross-linux.sh?format=raw \
+  -O ~/Downloads/build-openocd-win-cross-linux.sh
 
-  bash ~/Downloads/build-openocd-w32-cross-debian.sh
+  bash ~/Downloads/build-openocd-win-cross-linux.sh
 
-The script was developped on Debian x64. Running it on other GNU/Linux
+The script was developped on Ubuntu x64. Running it on other GNU/Linux
 distributions is possible, but might require some adjustments.
 
 Up-to-date build informations are available in the GNU ARM Eclipse project wiki:
