@@ -47,8 +47,17 @@
 #include <strings.h>
 #endif
 
-#define OPENOCD_VERSION	\
-	"GNU ARM Eclipse Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
+#define OPENOCD_BRANDING "GNU ARM Eclipse "
+#if INTPTR_MAX == INT32_MAX
+#define OPENOCD_WORDSIZE "32-bit "
+#elif INTPTR_MAX == INT64_MAX
+#define OPENOCD_WORDSIZE "64-bit "
+#else
+#define OPENOCD_WORDSIZE ""
+#endif
+
+#define OPENOCD_VERSION	OPENOCD_BRANDING OPENOCD_WORDSIZE \
+    "Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
 
 /* Give scripts and TELNET a way to find out what version this is */
 static int jim_version_command(Jim_Interp *interp, int argc,
