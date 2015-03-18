@@ -733,20 +733,20 @@ unix2dos "${OPENOCD_INSTALL_FOLDER}/openocd/COPYING"
 
 mkdir -p "${OPENOCD_OUTPUT_FOLDER}"
 
-# Warning: Be sure to increment the revision with each new release.
-if [ "${OPENOCD_GIT_HEAD}" == "gnuarmeclipse" ]
-then
-  OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
-elif [ "${OPENOCD_GIT_HEAD}" == "gnuarmeclipse-dev" ]
-then
-  OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION-dev")
-fi
-
 # The UTC date part in the name of the archive. 
 OUTFILE_DATE=${OUTFILE_DATE:-$(date -u +%Y%m%d%H%M)}
 
+# Warning: Be sure to increment the revision with each new release.
+if [ "${OPENOCD_GIT_HEAD}" == "gnuarmeclipse" ]
+then
+  OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")-${OUTFILE_DATE}
+elif [ "${OPENOCD_GIT_HEAD}" == "gnuarmeclipse-dev" ]
+then
+  OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION-dev")-${OUTFILE_DATE}-dev
+fi
+
 OPENOCD_SETUP="${OPENOCD_OUTPUT_FOLDER}/gnuarmeclipse-openocd-\
-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${OUTFILE_DATE}-setup.exe"
+${OPENOCD_TARGET}-${OUTFILE_VERSION}-setup.exe"
 
 echo
 echo "create setup..."
@@ -761,6 +761,8 @@ makensis -V4 -NOCD \
   -DNSIS_FOLDER="${NSIS_FOLDER}" \
   -DOUTFILE="${OPENOCD_SETUP}" \
   -DW${TARGET_BITS} \
+  -DBITS=${TARGET_BITS} \
+  -DVERSION=${OUTFILE_VERSION} \
   "${NSIS_FILE}"
 RESULT="$?"
 

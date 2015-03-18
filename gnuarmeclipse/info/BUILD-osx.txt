@@ -13,7 +13,7 @@ folder.
 
 To build the latest version of the package please use the script from:
 
-  wget https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/scripts/build-openocd-osx.sh?format=raw \
+  wget http://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/scripts/build-openocd-osx.sh?format=raw \
   -O ~/Downloads/build-openocd-osx.sh
 
   bash ~/Downloads/build-openocd-debian.sh
@@ -21,7 +21,7 @@ To build the latest version of the package please use the script from:
 The script was developped on OS X 10.9.5 with MacPorts 2.3.2. Running it on other 
 versions is possible, but might require some adjustments.
 
-Up-to-date build informations are available in the GNU ARM Eclipse project wiki:
+Up-to-date build information is available in the GNU ARM Eclipse project wiki:
 
   http://gnuarmeclipse.livius.net/wiki/
 

@@ -1,6 +1,18 @@
 
 The following changes were applied to the OpenOCD master branch:
 
+[2015-03-18]
+
+- the build scripts were extended to generate both the stable and the 
+development version.
+
+- multiple versions of the package can be installed in separate folders, 
+named using the version.
+
+- for Windows, more accurate keys were stored, so remember separate locations 
+for 32/64-bit versions.
+
+
 [2015-01-30]
 
 - gnuarmeclipse

@@ -30,10 +30,18 @@
 !define PRODUCT "GNU ARM Eclipse\${PRODNAME}"
 !define URL     "http://gnuarmeclipse.livius.net"
 
-!define UNINST_EXE "$INSTDIR\${PRODLCNAME}-uninstall.exe"
-!define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT}"
+!define UNINST_EXE "$INSTDIR\${VERSION}\${PRODLCNAME}-uninstall.exe"
+!define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT} ${BITS} ${VERSION}"
+!define PERSISTENT_KEY "SOFTWARE\GNU ARM Eclipse\Persistent\${PRODLCNAME}-${BITS}"
 
 !define INSTALL_LOCATION_KEY "InstallFolder"
+!define VERSION_KEY "Version"
+
+!define AUTHOR_KEY "Author"
+!define AUTHOR_VALUE "Liviu Ionescu <ilg@livius.net>"
+
+!define URL_KEY "URL"
+!define URL_VALUE "${URL}"
 
 ; Use maximum compression.
 SetCompressor /SOLID lzma
@@ -53,11 +61,7 @@ InstallDir "$PROGRAMFILES\GNU ARM Eclipse\${PRODNAME}"
 
 ; Registry key to check for directory (so if you install again, it will
 ; overwrite the old one automatically)
-!ifdef W64
-InstallDirRegKey HKLM "Software\${PRODLCNAME}64-gnuarmeclipse" "${INSTALL_LOCATION_KEY}"
-!else
-InstallDirRegKey HKLM "Software\${PRODLCNAME}32-gnuarmeclipse" "${INSTALL_LOCATION_KEY}"
-!endif
+InstallDirRegKey HKLM "${PERSISTENT_KEY}" "${INSTALL_LOCATION_KEY}"
 
 ; Request administrator privileges for Windows Vista.
 RequestExecutionLevel admin
@@ -98,54 +102,64 @@ Section "${PRODNAME} (required)"
 SectionIn RO
 
 ; Set output path to the installation directory.
-SetOutPath "$INSTDIR\bin"
+SetOutPath "$INSTDIR\${VERSION}\bin"
 File "${INSTALL_FOLDER}\bin\openocd.exe"
 
-SetOutPath "$INSTDIR\license"
+SetOutPath "$INSTDIR\${VERSION}\license"
 File /r "${INSTALL_FOLDER}\license\*"
 
-SetOutPath "$INSTDIR"
+SetOutPath "$INSTDIR\${VERSION}"
 File "${INSTALL_FOLDER}\INFO.txt"
 
-SetOutPath "$INSTDIR\gnuarmeclipse"
+SetOutPath "$INSTDIR\${VERSION}\gnuarmeclipse"
 File "${INSTALL_FOLDER}\gnuarmeclipse\build-openocd-win-cross-linux.sh"
 File "${INSTALL_FOLDER}\gnuarmeclipse\BUILD.txt"
 File "${INSTALL_FOLDER}\gnuarmeclipse\CHANGES.txt"
+
+; Write the uninstaller file
+WriteUninstaller "${UNINST_EXE}"
 
 !ifdef W64
 SetRegView 64
 !endif
 
-; Write the installation path into the registry
-WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${INSTALL_LOCATION_KEY}" "$INSTDIR"
+; Write the installation path into the registry.
+; 32/64 will overwrite each other, the last one will survive.
+WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${INSTALL_LOCATION_KEY}" "$INSTDIR\${VERSION}"
+WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${VERSION_KEY}" "${VERSION}"
+WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${AUTHOR_KEY}" "${AUTHOR_VALUE}"
+WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${URL_KEY}" "${URL_VALUE}"
+
+; Write the installation path into the registry persistent storage.
+; 32/64 are different, will not overwrite eachother.
+WriteRegStr HKLM "${PERSISTENT_KEY}" "${INSTALL_LOCATION_KEY}" "$INSTDIR"
 
 ; Write the uninstall keys for Windows
 WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "GNU ARM Eclipse ${PRODNAME}"
 WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" '"${UNINST_EXE}"'
 WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
 WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
-WriteUninstaller "${PRODLCNAME}-uninstall.exe"
 
 SectionEnd
 
 
 Section "Scripts" SectionScripts
 
-SetOutPath "$INSTDIR\scripts"
+SetOutPath "$INSTDIR\${VERSION}\scripts"
 File /r "${INSTALL_FOLDER}\scripts\*" 
 
 SectionEnd
 
 Section "Libraries (DLL)" SectionDll
 
-SetOutPath "$INSTDIR\bin"
+SetOutPath "$INSTDIR\${VERSION}\bin"
 File "${INSTALL_FOLDER}\bin\*.dll"
 
 SectionEnd
 
 Section "Documentation" SectionDoc
 
-SetOutPath "$INSTDIR\doc"
+SetOutPath "$INSTDIR\${VERSION}\doc"
 File "${INSTALL_FOLDER}\doc\openocd.pdf"
 File /r "${INSTALL_FOLDER}\doc\openocd.html"
 
@@ -153,10 +167,10 @@ SectionEnd
 
 Section "Contributed" SectionContrib
 
-SetOutPath "$INSTDIR\contrib"
+SetOutPath "$INSTDIR\${VERSION}\contrib"
 File /r "${INSTALL_FOLDER}\contrib\*" 
 
-SetOutPath "$INSTDIR\OpenULINK"
+SetOutPath "$INSTDIR\${VERSION}\OpenULINK"
 File /r "${INSTALL_FOLDER}\OpenULINK\*" 
 
 SectionEnd
@@ -172,22 +186,30 @@ SectionEnd
 ; Uninstaller
 
 Section "Uninstall"
-; Remove registry keys
+
 !ifdef W64
 SetRegView 64
 !endif
+
+; Remove the uninstall key.
 DeleteRegKey HKLM "${UNINST_KEY}"
+
+; Remove the entire group of keys.
 DeleteRegKey HKLM "SOFTWARE\${PRODUCT}"
 
-; Remove shortcuts, if any
+; Remove shortcuts, if any.
 Delete "$SMPROGRAMS\${PRODUCT}\Uninstall.lnk"
 RMDir "$SMPROGRAMS\${PRODUCT}"
 
-; Remove uninstaller
+; As the name implies, the PERSISTENT_KEY must NOT be removed.
+
+; Remove uninstaller executable.
 Delete "${UNINST_EXE}"
 
-; Remove files and directories used
+; Remove files and directories used. Do not append version here, since is
+; already present in the variable, it was remembered from te setup.
 RMDir /r "$INSTDIR"
+
 SectionEnd
 
 ;--------------------------------
@@ -207,6 +229,7 @@ SectionEnd
 ; Functions.
 
 Function .onInit
+
 !ifdef W64
   ${IfNot} ${RunningX64}
     MessageBox MB_OK|MB_ICONEXCLAMATION "This setup can only be run on 64-bit Windows" 
@@ -214,5 +237,6 @@ Function .onInit
   ${EndIf}
 !endif
 !insertmacro MUI_LANGDLL_DISPLAY
+
 FunctionEnd
 
