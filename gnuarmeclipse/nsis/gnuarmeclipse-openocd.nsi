@@ -21,7 +21,8 @@
 
 ; NSIS_WIN32_MAKENSIS
 
-!include LogicLib.nsh
+!include "LogicLib.nsh"
+!include "FileFunc.nsh"
 !include "x64.nsh"
 !include "MUI2.nsh"
 
@@ -30,12 +31,14 @@
 !define PRODUCT "GNU ARM Eclipse\${PRODNAME}"
 !define URL     "http://gnuarmeclipse.livius.net"
 
-!define UNINST_EXE "$INSTDIR\${VERSION}\${PRODLCNAME}-uninstall.exe"
+!define UNINST_EXE "$INSTDIR\${PRODLCNAME}-uninstall.exe"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT} ${BITS} ${VERSION}"
 !define PERSISTENT_KEY "SOFTWARE\GNU ARM Eclipse\Persistent\${PRODLCNAME}-${BITS}"
 
 !define INSTALL_LOCATION_KEY "InstallFolder"
+
 !define VERSION_KEY "Version"
+!define VERSION_VALUE "${VERSION}"
 
 !define AUTHOR_KEY "Author"
 !define AUTHOR_VALUE "Liviu Ionescu <ilg@livius.net>"
@@ -52,16 +55,8 @@ Name "GNU ARM Eclipse ${PRODNAME}"
 ; The file to write
 OutFile "${OUTFILE}"
 
-; The default installation directory.
-!ifdef W64
-InstallDir "$PROGRAMFILES64\GNU ARM Eclipse\${PRODNAME}"
-!else
-InstallDir "$PROGRAMFILES\GNU ARM Eclipse\${PRODNAME}"
-!endif
-
-; Registry key to check for directory (so if you install again, it will
-; overwrite the old one automatically)
-InstallDirRegKey HKLM "${PERSISTENT_KEY}" "${INSTALL_LOCATION_KEY}"
+; Preserve the parent of the install folder. Set in .onInit.
+Var Parent.INSTDIR
 
 ; Request administrator privileges for Windows Vista.
 RequestExecutionLevel admin
@@ -101,17 +96,20 @@ Section "${PRODNAME} (required)"
 
 SectionIn RO
 
+; Preserve the parent of the install folder, without version.
+${GetParent} "$INSTDIR" $Parent.INSTDIR
+
 ; Set output path to the installation directory.
-SetOutPath "$INSTDIR\${VERSION}\bin"
+SetOutPath "$INSTDIR\bin"
 File "${INSTALL_FOLDER}\bin\openocd.exe"
 
-SetOutPath "$INSTDIR\${VERSION}\license"
+SetOutPath "$INSTDIR\license"
 File /r "${INSTALL_FOLDER}\license\*"
 
-SetOutPath "$INSTDIR\${VERSION}"
+SetOutPath "$INSTDIR"
 File "${INSTALL_FOLDER}\INFO.txt"
 
-SetOutPath "$INSTDIR\${VERSION}\gnuarmeclipse"
+SetOutPath "$INSTDIR\gnuarmeclipse"
 File "${INSTALL_FOLDER}\gnuarmeclipse\build-openocd-win-cross-linux.sh"
 File "${INSTALL_FOLDER}\gnuarmeclipse\BUILD.txt"
 File "${INSTALL_FOLDER}\gnuarmeclipse\CHANGES.txt"
@@ -125,14 +123,14 @@ SetRegView 64
 
 ; Write the installation path into the registry.
 ; 32/64 will overwrite each other, the last one will survive.
-WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${INSTALL_LOCATION_KEY}" "$INSTDIR\${VERSION}"
-WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${VERSION_KEY}" "${VERSION}"
+WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${INSTALL_LOCATION_KEY}" "$INSTDIR"
+WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${VERSION_KEY}" "${VERSION_VALUE}"
 WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${AUTHOR_KEY}" "${AUTHOR_VALUE}"
 WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${URL_KEY}" "${URL_VALUE}"
 
-; Write the installation path into the registry persistent storage.
-; 32/64 are different, will not overwrite eachother.
-WriteRegStr HKLM "${PERSISTENT_KEY}" "${INSTALL_LOCATION_KEY}" "$INSTDIR"
+; Write the parent installation path into the registry persistent storage.
+; 32/64 are different, will not overwrite each other.
+WriteRegStr HKLM "${PERSISTENT_KEY}" "${INSTALL_LOCATION_KEY}" "$Parent.INSTDIR"
 
 ; Write the uninstall keys for Windows
 WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "GNU ARM Eclipse ${PRODNAME}"
@@ -145,21 +143,21 @@ SectionEnd
 
 Section "Scripts" SectionScripts
 
-SetOutPath "$INSTDIR\${VERSION}\scripts"
+SetOutPath "$INSTDIR\scripts"
 File /r "${INSTALL_FOLDER}\scripts\*" 
 
 SectionEnd
 
 Section "Libraries (DLL)" SectionDll
 
-SetOutPath "$INSTDIR\${VERSION}\bin"
+SetOutPath "$INSTDIR\bin"
 File "${INSTALL_FOLDER}\bin\*.dll"
 
 SectionEnd
 
 Section "Documentation" SectionDoc
 
-SetOutPath "$INSTDIR\${VERSION}\doc"
+SetOutPath "$INSTDIR\doc"
 File "${INSTALL_FOLDER}\doc\openocd.pdf"
 File /r "${INSTALL_FOLDER}\doc\openocd.html"
 
@@ -167,10 +165,10 @@ SectionEnd
 
 Section "Contributed" SectionContrib
 
-SetOutPath "$INSTDIR\${VERSION}\contrib"
+SetOutPath "$INSTDIR\contrib"
 File /r "${INSTALL_FOLDER}\contrib\*" 
 
-SetOutPath "$INSTDIR\${VERSION}\OpenULINK"
+SetOutPath "$INSTDIR\OpenULINK"
 File /r "${INSTALL_FOLDER}\OpenULINK\*" 
 
 SectionEnd
@@ -238,5 +236,22 @@ Function .onInit
 !endif
 !insertmacro MUI_LANGDLL_DISPLAY
 
+
+; Check registry key for previous folder. The key is distinct for 32/64-bit.
+ReadRegStr $INSTDIR HKLM "${PERSISTENT_KEY}" "${INSTALL_LOCATION_KEY}"
+
+${if} $INSTDIR == ""
+  ; The default installation folder, if the key was not found.
+  !ifdef W64
+    StrCpy $INSTDIR "$PROGRAMFILES64\GNU ARM Eclipse\${PRODNAME}"
+  !else
+    StrCpy $INSTDIR "$PROGRAMFILES\GNU ARM Eclipse\${PRODNAME}"
+  !endif
+${endif}
+
+; Append the version, to be seen in the wizard. 
+StrCpy $INSTDIR "$INSTDIR\${VERSION}"
+
 FunctionEnd
+
 
