@@ -26,7 +26,7 @@ fi
 # ----- Parse actions and command line options -----
 
 ACTION_CLEAN=""
-ACTION_PULL=""
+ACTION_GIT=""
 TARGET_BITS="64"
 
 while [ $# -gt 0 ]
@@ -36,7 +36,13 @@ do
     ACTION_CLEAN="$1"
   elif [ "$1" == "pull" ]
   then
-    ACTION_PULL="$1"
+    ACTION_GIT="$1"
+  elif [ "$1" == "checkout-dev" ]
+  then
+    ACTION_GIT="$1"
+  elif [ "$1" == "checkout-stable" ]
+  then
+    ACTION_GIT="$1"
   else
     echo "Unknown action/option $1"
     exit 1
@@ -60,7 +66,8 @@ fi
 # The folder where OpenOCD will be installed.
 INSTALL_FOLDER=${INSTALL_FOLDER:-"/Applications/GNU ARM Eclipse/OpenOCD"}
 
-PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
+# PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
+PKG_CONFIG_LIBDIR=${PKG_CONFIG_LIBDIR:-""}
 DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-""}
 
 MAKE_JOBS=${MAKE_JOBS:-"-j8"}
@@ -97,10 +104,13 @@ WGET_OUT="-O"
 
 # ----- Test if some tools are present -----
 
+echo
+echo "Test tools..."
+echo
 gcc --version
-git --version >/dev/null
-automake --version >/dev/null
-cmake --version >/dev/null
+git --version
+automake --version
+cmake --version
 
 # Process actions.
 
@@ -122,7 +132,7 @@ then
   exit 0
 fi
 
-if [ "${ACTION_PULL}" == "pull" ]
+if [ "${ACTION_GIT}" == "pull" ]
 then
   if [ -d "${OPENOCD_GIT_FOLDER}" ]
   then
@@ -133,6 +143,68 @@ then
     fi
     cd "${OPENOCD_GIT_FOLDER}"
     git pull
+
+    rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
+
+    # Prepare autotools.
+    echo
+    echo "bootstrap..."
+
+    cd "${OPENOCD_GIT_FOLDER}"
+    ./bootstrap
+
+    echo
+    echo "Pull completed. Proceed with a regular build."
+    exit 0
+  else
+	echo "No git folder."
+    exit 1
+  fi
+fi
+
+if [ "${ACTION_GIT}" == "checkout-dev" ]
+then
+  if [ -d "${OPENOCD_GIT_FOLDER}" ]
+  then
+    echo
+    if [ "${USER}" == "ilg" ]
+    then
+      echo "Enter SourceForge password for git pull"
+    fi
+    cd "${OPENOCD_GIT_FOLDER}"
+    git pull
+    git checkout gnuarmeclipse-dev
+
+    rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
+
+    # Prepare autotools.
+    echo
+    echo "bootstrap..."
+
+    cd "${OPENOCD_GIT_FOLDER}"
+    ./bootstrap
+
+    echo
+    echo "Pull completed. Proceed with a regular build."
+    exit 0
+  else
+	echo "No git folder."
+    exit 1
+  fi
+fi
+
+if [ "${ACTION_GIT}" == "checkout-stable" ]
+then
+  if [ -d "${OPENOCD_GIT_FOLDER}" ]
+  then
+    echo
+    if [ "${USER}" == "ilg" ]
+    then
+      echo "Enter SourceForge password for git pull"
+    fi
+    cd "${OPENOCD_GIT_FOLDER}"
+    git pull
+    git checkout gnuarmeclipse
 
     rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
 
@@ -181,7 +253,7 @@ then
 
   # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
   cd "${OPENOCD_GIT_FOLDER}"
-  git checkout gnuarmeclipse
+  git checkout gnuarmeclipse-dev
 
   # ---- Prepare autotools -----
   echo
@@ -190,6 +262,11 @@ then
   cd "${OPENOCD_GIT_FOLDER}"
   ./bootstrap
 fi
+
+# Get the current Git branch name, to know if we are building the stable or
+# the development release.
+cd "${OPENOCD_GIT_FOLDER}"
+OPENOCD_GIT_HEAD=$(git symbolic-ref -q --short HEAD)
 
 # ----- Build the USB libraries -----
 
@@ -269,7 +346,7 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   # Configure
   CFLAGS="-m${TARGET_BITS}" \
-  PKG_CONFIG_PATH=\
+  PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
@@ -324,7 +401,7 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   # cmake
   CFLAGS="-m${TARGET_BITS}" \
-  PKG_CONFIG_PATH=\
+  PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
@@ -380,10 +457,10 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
 
   CFLAGS="-m${TARGET_BITS}" \
-  PKG_CONFIG_PATH=\
+  PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig":\
-"${PKG_CONFIG_PATH}" \
+"${PKG_CONFIG_LIBDIR}" \
   \
   make clean "${HIDAPI_OBJECT}"
 
@@ -427,9 +504,9 @@ then
   # All variables below are passed on the command line before 'configure'.
   # Be sure all these lines end in '\' to ensure lines are concatenated.
   CPPFLAGS="-m${TARGET_BITS}" \
-  PKG_CONFIG_PATH=\
+  PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
-"${PKG_CONFIG_PATH}" \
+"${PKG_CONFIG_LIBDIR}" \
   DYLD_LIBRARY_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib":\
 "${DYLD_LIBRARY_PATH}" \
@@ -602,8 +679,15 @@ mkdir -p "${OPENOCD_INSTALL_FOLDER}/openocd/gnuarmeclipse"
 
 mkdir -p "${OPENOCD_OUTPUT}"
 
-# Increment the revision with each new release.
-OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
+# Warning: Be sure to increment the revision with each new release.
+if [ "${OPENOCD_GIT_HEAD}" == "gnuarmeclipse" ]
+then
+  OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
+elif [ "${OPENOCD_GIT_HEAD}" == "gnuarmeclipse-dev" ]
+then
+  OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION-dev")
+fi
+
 # The UTC date part in the name of the archive.
 OUTFILE_DATE=${OUTFILE_DATE:-$(date -u +%Y%m%d%H%M)}
 
@@ -621,7 +705,7 @@ cd "${OPENOCD_WORK_FOLDER}"
 pkgbuild --identifier ilg.gnuarmeclipse.openocd \
   --root "${OPENOCD_INSTALL_FOLDER}/openocd" \
   --version "${OUTFILE_VERSION}" \
-  --install-location "${INSTALL_FOLDER:1}" \
+  --install-location "${INSTALL_FOLDER:1}/${OUTFILE_VERSION}" \
   "${OPENOCD_INSTALLER}"
 
 echo
