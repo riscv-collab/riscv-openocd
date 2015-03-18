@@ -2099,7 +2099,7 @@ static int aice_usb_open(struct aice_port_param_s *param)
 	const uint16_t pids[] = { param->pid, 0 };
 	struct jtag_libusb_device_handle *devh;
 
-	if (jtag_libusb_open(vids, pids, &devh) != ERROR_OK)
+	if (jtag_libusb_open(vids, pids, NULL, &devh) != ERROR_OK)
 		return ERROR_FAIL;
 
 	/* BE ***VERY CAREFUL*** ABOUT MAKING CHANGES IN THIS
@@ -2123,7 +2123,7 @@ static int aice_usb_open(struct aice_port_param_s *param)
 	/* reopen jlink after usb_reset
 	 * on win32 this may take a second or two to re-enumerate */
 	int retval;
-	while ((retval = jtag_libusb_open(vids, pids, &devh)) != ERROR_OK) {
+	while ((retval = jtag_libusb_open(vids, pids, NULL, &devh)) != ERROR_OK) {
 		usleep(1000);
 		timeout--;
 		if (!timeout)
@@ -2136,13 +2136,11 @@ static int aice_usb_open(struct aice_port_param_s *param)
 #endif
 
 	/* usb_set_configuration required under win32 */
-	struct jtag_libusb_device *udev = jtag_libusb_get_device(devh);
 	jtag_libusb_set_configuration(devh, 0);
-	jtag_libusb_claim_interface(devh, 0);
 
 	unsigned int aice_read_ep;
 	unsigned int aice_write_ep;
-	jtag_libusb_get_endpoints(udev, &aice_read_ep, &aice_write_ep);
+	jtag_libusb_choose_interface(devh, &aice_read_ep, &aice_write_ep, -1, -1, -1);
 
 	aice_handler.usb_read_ep = aice_read_ep;
 	aice_handler.usb_write_ep = aice_write_ep;

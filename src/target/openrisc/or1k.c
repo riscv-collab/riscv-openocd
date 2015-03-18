@@ -18,11 +18,6 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -34,6 +29,7 @@
 #include <target/target.h>
 #include <target/breakpoints.h>
 #include <target/target_type.h>
+#include <helper/time_support.h>
 #include <helper/fileio.h>
 #include "or1k_tap.h"
 #include "or1k.h"
@@ -50,7 +46,7 @@ static int or1k_write_core_reg(struct target *target, int num);
 
 static struct or1k_core_reg *or1k_core_reg_list_arch_info;
 
-struct or1k_core_reg_init or1k_init_reg_list[] = {
+static const struct or1k_core_reg_init or1k_init_reg_list[] = {
 	{"r0"       , GROUP0 + 1024, "org.gnu.gdb.or1k.group0", NULL},
 	{"r1"       , GROUP0 + 1025, "org.gnu.gdb.or1k.group0", NULL},
 	{"r2"       , GROUP0 + 1026, "org.gnu.gdb.or1k.group0", NULL},
@@ -950,12 +946,13 @@ static int or1k_add_breakpoint(struct target *target,
 	memcpy(breakpoint->orig_instr, &data, breakpoint->length);
 
 	/* Sub in the OR1K trap instruction */
-	uint32_t or1k_trap_insn = OR1K_TRAP_INSTR;
+	uint8_t or1k_trap_insn[4];
+	target_buffer_set_u32(target, or1k_trap_insn, OR1K_TRAP_INSTR);
 	retval = du_core->or1k_jtag_write_memory(&or1k->jtag,
 					  breakpoint->address,
 					  4,
 					  1,
-					  (uint8_t *)&or1k_trap_insn);
+					  or1k_trap_insn);
 
 	if (retval != ERROR_OK) {
 		LOG_ERROR("Error while writing OR1K_TRAP_INSTR at 0x%08" PRIx32,
@@ -1050,38 +1047,7 @@ static int or1k_read_memory(struct target *target, uint32_t address,
 		return ERROR_TARGET_UNALIGNED_ACCESS;
 	}
 
-	/* or1k_read_memory with size 4/2 returns uint32_t/uint16_t in host   */
-	/* endianness, but byte array should represent target endianness      */
-
-	void *t = NULL;
-	if (size > 1) {
-		t = malloc(count * size * sizeof(uint8_t));
-		if (t == NULL) {
-			LOG_ERROR("Out of memory");
-			return ERROR_FAIL;
-		}
-	} else
-		t = buffer;
-
-
-	int retval = du_core->or1k_jtag_read_memory(&or1k->jtag, address,
-						    size, count, t);
-
-	if (retval == ERROR_OK) {
-		switch (size) {
-		case 4:
-			target_buffer_set_u32_array(target, buffer, count, t);
-			break;
-		case 2:
-			target_buffer_set_u16_array(target, buffer, count, t);
-			break;
-		}
-	}
-
-	if ((size > 1) && (t != NULL))
-		free(t);
-
-	return ERROR_OK;
+	return du_core->or1k_jtag_read_memory(&or1k->jtag, address, size, count, buffer);
 }
 
 static int or1k_write_memory(struct target *target, uint32_t address,
@@ -1108,37 +1074,7 @@ static int or1k_write_memory(struct target *target, uint32_t address,
 		return ERROR_TARGET_UNALIGNED_ACCESS;
 	}
 
-	/* or1k_write_memory with size 4/2 requires uint32_t/uint16_t in host */
-	/* endianness, but byte array represents target endianness            */
-
-	void *t = NULL;
-	if (size > 1) {
-		t = malloc(count * size * sizeof(uint8_t));
-		if (t == NULL) {
-			LOG_ERROR("Out of memory");
-			return ERROR_FAIL;
-		}
-
-		switch (size) {
-		case 4:
-			target_buffer_get_u32_array(target, buffer, count, (uint32_t *)t);
-			break;
-		case 2:
-			target_buffer_get_u16_array(target, buffer, count, (uint16_t *)t);
-			break;
-		}
-		buffer = t;
-	}
-
-	int retval = du_core->or1k_jtag_write_memory(&or1k->jtag, address, size, count, buffer);
-
-	if (t != NULL)
-		free(t);
-
-	if (retval != ERROR_OK)
-		return retval;
-
-	return ERROR_OK;
+	return du_core->or1k_jtag_write_memory(&or1k->jtag, address, size, count, buffer);
 }
 
 static int or1k_init_target(struct command_context *cmd_ctx,
@@ -1161,6 +1097,7 @@ static int or1k_init_target(struct command_context *cmd_ctx,
 	or1k->jtag.tap = target->tap;
 	or1k->jtag.or1k_jtag_inited = 0;
 	or1k->jtag.or1k_jtag_module_selected = -1;
+	or1k->jtag.target = target;
 
 	or1k_build_reg_cache(target);
 
@@ -1267,6 +1204,53 @@ static int or1k_checksum_memory(struct target *target, uint32_t address,
 		uint32_t count, uint32_t *checksum) {
 
 	return ERROR_FAIL;
+}
+
+static int or1k_profiling(struct target *target, uint32_t *samples,
+		uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
+{
+	struct timeval timeout, now;
+	struct or1k_common *or1k = target_to_or1k(target);
+	struct or1k_du *du_core = or1k_to_du(or1k);
+	int retval = ERROR_OK;
+
+	gettimeofday(&timeout, NULL);
+	timeval_add_time(&timeout, seconds, 0);
+
+	LOG_INFO("Starting or1k profiling. Sampling npc as fast as we can...");
+
+	/* Make sure the target is running */
+	target_poll(target);
+	if (target->state == TARGET_HALTED)
+		retval = target_resume(target, 1, 0, 0, 0);
+
+	if (retval != ERROR_OK) {
+		LOG_ERROR("Error while resuming target");
+		return retval;
+	}
+
+	uint32_t sample_count = 0;
+
+	for (;;) {
+		uint32_t reg_value;
+		retval = du_core->or1k_jtag_read_cpu(&or1k->jtag, GROUP0 + 16 /* NPC */, 1, &reg_value);
+		if (retval != ERROR_OK) {
+			LOG_ERROR("Error while reading NPC");
+			return retval;
+		}
+
+		samples[sample_count++] = reg_value;
+
+		gettimeofday(&now, NULL);
+		if ((sample_count >= max_num_samples) ||
+			((now.tv_sec >= timeout.tv_sec) && (now.tv_usec >= timeout.tv_usec))) {
+			LOG_INFO("Profiling completed. %" PRIu32 " samples.", sample_count);
+			break;
+		}
+	}
+
+	*num_samples = sample_count;
+	return retval;
 }
 
 COMMAND_HANDLER(or1k_tap_select_command_handler)
@@ -1470,4 +1454,6 @@ struct target_type or1k_target = {
 	.examine = or1k_examine,
 
 	.get_gdb_fileio_info = or1k_get_gdb_fileio_info,
+
+	.profiling = or1k_profiling,
 };

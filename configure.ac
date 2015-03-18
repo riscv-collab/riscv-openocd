@@ -1,9 +1,17 @@
 AC_PREREQ(2.64)
-AC_INIT([openocd], [0.8.0],
+AC_INIT([openocd], [0.9.0-dev],
   [OpenOCD Mailing List <openocd-devel@lists.sourceforge.net>])
 AC_CONFIG_SRCDIR([src/openocd.c])
 
 m4_include([config_subdir.m4])dnl
+
+# check for makeinfo before calling AM_INIT_AUTOMAKE
+AC_CHECK_PROG([MAKEINFO], [makeinfo], [makeinfo])
+if test "x$MAKEINFO" = "x"; then
+  MAKEINFO='echo makeinfo missing; true'
+  AC_MSG_WARN([Info documentation will not be built.])
+fi
+AC_SUBST([MAKEINFO])
 
 AM_INIT_AUTOMAKE([-Wall -Wno-portability dist-bzip2 dist-zip subdir-objects])
 
@@ -196,7 +204,8 @@ m4_define([USB1_ADAPTERS],
 	[[stlink], [ST-Link JTAG Programmer], [HLADAPTER_STLINK]],
 	[[ti_icdi], [TI ICDI JTAG Programmer], [HLADAPTER_ICDI]],
 	[[ulink], [Keil ULINK JTAG Programmer], [ULINK]],
-	[[usb_blaster_2], [Altera USB-Blaster II Compatible], [USB_BLASTER_2]]])
+	[[usb_blaster_2], [Altera USB-Blaster II Compatible], [USB_BLASTER_2]],
+	[[vsllink], [Versaloon-Link JTAG Programmer], [VSLLINK]]])
 
 m4_define([USB_ADAPTERS],
 	[[[jlink], [Segger J-Link JTAG Programmer], [JLINK]],
@@ -205,8 +214,7 @@ m4_define([USB_ADAPTERS],
 	[[aice], [Andes JTAG Programmer], [AICE]]])
 
 m4_define([USB0_ADAPTERS],
-	[[[vsllink], [Versaloon-Link JTAG Programmer], [VSLLINK]],
-	[[usbprog], [USBProg JTAG Programmer], [USBPROG]],
+	[[[usbprog], [USBProg JTAG Programmer], [USBPROG]],
 	[[rlink], [Raisonance RLink JTAG Programmer], [RLINK]],
 	[[armjtagew], [Olimex ARM-JTAG-EW Programmer], [ARMJTAGEW]]])
 
@@ -614,6 +622,10 @@ case $host in
     AC_DEFINE([IS_DARWIN], [0], [0 if not building for Darwin.])
     ;;
 esac
+
+if test $is_win32 = yes; then
+    AC_DEFINE([WIN32_LEAN_AND_MEAN], [1], [1 to exclude old conflicting definitions when building on Windows])
+fi
 
 if test $build_parport = yes; then
   build_bitbang=yes
@@ -1174,7 +1186,7 @@ AM_CONDITIONAL([FT2232_DRIVER], [test $build_ft2232_ftd2xx = yes -o $build_ft223
 AM_CONDITIONAL([USB_BLASTER_LIBFTDI], [test $build_usb_blaster_libftdi = yes])
 AM_CONDITIONAL([USB_BLASTER_FTD2XX], [test $build_usb_blaster_ftd2xx = yes])
 AM_CONDITIONAL([JTAG_VPI], [test $build_jtag_vpi = yes -o $build_jtag_vpi = yes])
-AM_CONDITIONAL([USB_BLASTER_DRIVER], [test $build_usb_blaster_ftd2xx = yes -o $build_usb_blaster_libftdi = yes -o $use_libusb1 = yes])
+AM_CONDITIONAL([USB_BLASTER_DRIVER], [test $build_usb_blaster_ftd2xx = yes -o $build_usb_blaster_libftdi = yes -o $enable_usb_blaster_2 != no])
 AM_CONDITIONAL([AMTJTAGACCEL], [test $build_amtjtagaccel = yes])
 AM_CONDITIONAL([GW16012], [test $build_gw16012 = yes])
 AM_CONDITIONAL([PRESTO_LIBFTDI], [test $build_presto_libftdi = yes])
@@ -1248,47 +1260,6 @@ if test $gcc_warnings = yes; then
   CFLAGS="$CFLAGS $GCC_WARNINGS"
 fi
 
-# Setup for compiling build tools
-AC_MSG_CHECKING([for a C compiler for build tools])
-if test $cross_compiling = yes; then
-  AC_CHECK_PROGS(CC_FOR_BUILD, gcc cc)
-  CFLAGS_FOR_BUILD="-g -O2 $GCC_WARNINGS"
-else
-  CC_FOR_BUILD=$CC
-  CFLAGS_FOR_BUILD=$CFLAGS
-fi
-
-AC_MSG_RESULT([$CC_FOR_BUILD])
-AC_SUBST([CC_FOR_BUILD])
-AC_SUBST([CFLAGS_FOR_BUILD])
-
-AC_MSG_CHECKING([for suffix of executable build tools])
-if test $cross_compiling = yes; then
-  cat >conftest.c <<\_______EOF
-int main ()
-{
-  exit (0);
-}
-_______EOF
-  for i in .exe ""; do
-    compile="$CC_FOR_BUILD conftest.c -o conftest$i"
-    if AC_TRY_EVAL(compile); then
-      if (./conftest) 2>&AC_FD_CC; then
-        EXEEXT_FOR_BUILD=$i
-        break
-      fi
-    fi
-  done
-  rm -f conftest*
-  if test "${EXEEXT_FOR_BUILD+set}" != set; then
-    AC_MSG_ERROR([Cannot determine suffix of executable build tools])
-  fi
-else
-  EXEEXT_FOR_BUILD=$EXEEXT
-fi
-AC_MSG_RESULT([$EXEEXT_FOR_BUILD])
-AC_SUBST([EXEEXT_FOR_BUILD])
-
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
@@ -1318,16 +1289,16 @@ echo
 echo OpenOCD configuration summary
 echo --------------------------------------------------
 m4_foreach([adapter], [USB1_ADAPTERS, USB_ADAPTERS, USB0_ADAPTERS, HIDAPI_ADAPTERS],
-	[echo -n m4_format(["%-40s"], ADAPTER_DESC([adapter]))
+	[s=m4_format(["%-40s"], ADAPTER_DESC([adapter]))
 	case $ADAPTER_VAR([adapter]) in
 		auto)
-			echo yes '(auto)'
+			echo "$s"yes '(auto)'
 			;;
 		yes)
-			echo yes
+			echo "$s"yes
 			;;
 		no)
-			echo no
+			echo "$s"no
 			;;
 	esac
 ])

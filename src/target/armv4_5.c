@@ -555,8 +555,10 @@ static int armv4_5_set_core_reg(struct reg *reg, uint8_t *buf)
 			LOG_DEBUG("changing ARM core mode to '%s'",
 				arm_mode_name(value & 0x1f));
 			value &= ~((1 << 24) | (1 << 5));
+			uint8_t t[4];
+			buf_set_u32(t, 0, 32, value);
 			armv4_5_target->write_core_reg(target, reg,
-				16, ARM_MODE_ANY, value);
+				16, ARM_MODE_ANY, t);
 		}
 	} else {
 		buf_set_u32(reg->value, 0, 32, value);
@@ -605,10 +607,10 @@ struct reg_cache *arm_build_reg_cache(struct target *target, struct arm *arm)
 		reg_arch_info[i].target = target;
 		reg_arch_info[i].arm = arm;
 
-		reg_list[i].name = (char *) arm_core_regs[i].name;
+		reg_list[i].name = arm_core_regs[i].name;
 		reg_list[i].number = arm_core_regs[i].gdb_index;
 		reg_list[i].size = 32;
-		reg_list[i].value = &reg_arch_info[i].value;
+		reg_list[i].value = reg_arch_info[i].value;
 		reg_list[i].type = &arm_reg_type;
 		reg_list[i].arch_info = &reg_arch_info[i];
 		reg_list[i].exist = true;

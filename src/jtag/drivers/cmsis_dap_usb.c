@@ -60,6 +60,8 @@
 /* vid = pid = 0 marks the end of the list */
 static uint16_t cmsis_dap_vid[MAX_USB_IDS + 1] = { 0 };
 static uint16_t cmsis_dap_pid[MAX_USB_IDS + 1] = { 0 };
+static wchar_t *cmsis_dap_serial;
+static bool swd_mode;
 
 #define PACKET_SIZE       (64 + 1)	/* 64 bytes plus report id */
 #define USB_TIMEOUT       1000
@@ -136,7 +138,7 @@ static uint16_t cmsis_dap_pid[MAX_USB_IDS + 1] = { 0 };
 /* CMSIS-DAP Vendor Commands
  * None as yet... */
 
-static char *info_caps_str[] = {
+static const char * const info_caps_str[] = {
 	"SWD  Supported",
 	"JTAG Supported"
 };
@@ -161,15 +163,19 @@ static int cmsis_dap_usb_open(void)
 	int i;
 	struct hid_device_info *devs, *cur_dev;
 	unsigned short target_vid, target_pid;
+	wchar_t *target_serial = NULL;
+
+	bool found = false;
+	bool serial_found = false;
 
 	target_vid = 0;
 	target_pid = 0;
 
 	/*
-	The CMSIS-DAP specification stipulates:
-	"The Product String must contain "CMSIS-DAP" somewhere in the string. This is used by the
-	debuggers to idenify a CMSIS-DAP compliant Debug Unit that is connected to a host computer."
-	*/
+	 * The CMSIS-DAP specification stipulates:
+	 * "The Product String must contain "CMSIS-DAP" somewhere in the string. This is used by the
+	 * debuggers to identify a CMSIS-DAP compliant Debug Unit that is connected to a host computer."
+	 */
 	devs = hid_enumerate(0x0, 0x0);
 	cur_dev = devs;
 	while (NULL != cur_dev) {
@@ -178,21 +184,34 @@ static int cmsis_dap_usb_open(void)
 				LOG_DEBUG("Cannot read product string of device 0x%x:0x%x",
 					  cur_dev->vendor_id, cur_dev->product_id);
 			} else {
-				if (wcsstr(cur_dev->product_string, L"CMSIS-DAP"))
-					/*
-					if the user hasn't specified VID:PID *and*
-					product string contains "CMSIS-DAP", pick it
-					*/
-					break;
+				if (wcsstr(cur_dev->product_string, L"CMSIS-DAP")) {
+					/* if the user hasn't specified VID:PID *and*
+					 * product string contains "CMSIS-DAP", pick it
+					 */
+					found = true;
+				}
 			}
 		} else {
-			/*
-			otherwise, exhaustively compare against all VID:PID in list
-			*/
+			/* otherwise, exhaustively compare against all VID:PID in list */
 			for (i = 0; cmsis_dap_vid[i] || cmsis_dap_pid[i]; i++) {
 				if ((cmsis_dap_vid[i] == cur_dev->vendor_id) && (cmsis_dap_pid[i] == cur_dev->product_id))
-					break;
+					found = true;
 			}
+
+			if (cmsis_dap_vid[i] || cmsis_dap_pid[i])
+				found = true;
+		}
+
+		if (found) {
+			/* we have found an adapter, so exit further checks */
+			/* check serial number matches if given */
+			if (cmsis_dap_serial != NULL) {
+				if (wcscmp(cmsis_dap_serial, cur_dev->serial_number) == 0) {
+					serial_found = true;
+					break;
+				}
+			} else
+				break;
 		}
 
 		cur_dev = cur_dev->next;
@@ -201,16 +220,23 @@ static int cmsis_dap_usb_open(void)
 	if (NULL != cur_dev) {
 		target_vid = cur_dev->vendor_id;
 		target_pid = cur_dev->product_id;
+		if (serial_found)
+			target_serial = cmsis_dap_serial;
 	}
 
 	hid_free_enumeration(devs);
+
+	if (target_vid == 0 && target_pid == 0) {
+		LOG_ERROR("unable to find CMSIS-DAP device");
+		return ERROR_FAIL;
+	}
 
 	if (hid_init() != 0) {
 		LOG_ERROR("unable to open HIDAPI");
 		return ERROR_FAIL;
 	}
 
-	dev = hid_open(target_vid, target_pid, NULL);
+	dev = hid_open(target_vid, target_pid, target_serial);
 
 	if (dev == NULL) {
 		LOG_ERROR("unable to open CMSIS-DAP device");
@@ -262,6 +288,11 @@ static void cmsis_dap_usb_close(struct cmsis_dap *dap)
 	if (cmsis_dap_handle) {
 		free(cmsis_dap_handle);
 		cmsis_dap_handle = NULL;
+	}
+
+	if (cmsis_dap_serial) {
+		free(cmsis_dap_serial);
+		cmsis_dap_serial = NULL;
 	}
 
 	return;
@@ -479,8 +510,13 @@ static int cmsis_dap_cmd_DAP_Delay(uint16_t delay_us)
 }
 #endif
 
-static int cmsis_dap_swd_read_reg(uint8_t cmd, uint32_t *value)
+static int queued_retval;
+
+static void cmsis_dap_swd_read_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t *value)
 {
+	if (queued_retval != ERROR_OK)
+		return;
+
 	uint8_t *buffer = cmsis_dap_handle->packet_buffer;
 	int retval;
 	uint32_t val;
@@ -497,7 +533,8 @@ static int cmsis_dap_swd_read_reg(uint8_t cmd, uint32_t *value)
 	/* TODO - need better response checking */
 	if (retval != ERROR_OK || buffer[1] != 0x01) {
 		LOG_ERROR("CMSIS-DAP: Read Error (0x%02" PRIx8 ")", buffer[2]);
-		return buffer[2];
+		queued_retval = buffer[2];
+		return;
 	}
 
 	val = le_to_h_u32(&buffer[3]);
@@ -506,11 +543,14 @@ static int cmsis_dap_swd_read_reg(uint8_t cmd, uint32_t *value)
 	if (value)
 		*value = val;
 
-	return retval;
+	queued_retval = retval;
 }
 
-static int cmsis_dap_swd_write_reg(uint8_t cmd, uint32_t value)
+static void cmsis_dap_swd_write_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t value)
 {
+	if (queued_retval != ERROR_OK)
+		return;
+
 	uint8_t *buffer = cmsis_dap_handle->packet_buffer;
 
 	DEBUG_IO("CMSIS-DAP: Write Reg 0x%02" PRIx8 " 0x%08" PRIx32, cmd, value);
@@ -531,46 +571,13 @@ static int cmsis_dap_swd_write_reg(uint8_t cmd, uint32_t value)
 		retval = buffer[2];
 	}
 
-	return retval;
+	queued_retval = retval;
 }
 
-static int cmsis_dap_swd_read_block(uint8_t cmd, uint32_t blocksize, uint8_t *dest_buf)
+static int cmsis_dap_swd_run(struct adiv5_dap *dap)
 {
-	uint8_t *buffer;
-	int tfer_sz;
-	int retval = ERROR_OK;
-	uint16_t read_count;
-
-	DEBUG_IO("CMSIS-DAP: Read Block 0x%02" PRIx8 " %" PRIu32, cmd, blocksize);
-
-	while (blocksize) {
-
-		buffer = cmsis_dap_handle->packet_buffer;
-		tfer_sz = blocksize;
-		if (tfer_sz > 15)
-			tfer_sz = 8;
-
-		buffer[0] = 0;	/* report number */
-		buffer[1] = CMD_DAP_TFER_BLOCK;
-		buffer[2] = 0x00;
-		buffer[3] = tfer_sz;
-		buffer[4] = 0x00;
-		buffer[5] = cmd;
-		retval = cmsis_dap_usb_xfer(cmsis_dap_handle, 6);
-
-		read_count = le_to_h_u16(&buffer[1]);
-		if (read_count != tfer_sz) {
-			LOG_ERROR("CMSIS-DAP: Block Read Error (0x%02" PRIx8 ")", buffer[3]);
-			retval = buffer[3];
-		}
-
-		read_count *= 4;
-		memcpy(dest_buf, &buffer[4], read_count);
-
-		dest_buf += read_count;
-		blocksize -= tfer_sz;
-	}
-
+	int retval = queued_retval;
+	queued_retval = ERROR_OK;
 	return retval;
 }
 
@@ -742,10 +749,49 @@ static int cmsis_dap_reset_link(void)
 	return retval;
 }
 
+static int cmsis_dap_swd_open(void)
+{
+	int retval;
+
+	DEBUG_IO("CMSIS-DAP: cmsis_dap_swd_open");
+
+	if (cmsis_dap_handle == NULL) {
+
+		/* SWD init */
+		retval = cmsis_dap_usb_open();
+		if (retval != ERROR_OK)
+			return retval;
+
+		retval = cmsis_dap_get_caps_info();
+		if (retval != ERROR_OK)
+			return retval;
+	}
+
+	if (!(cmsis_dap_handle->caps & INFO_CAPS_SWD)) {
+		LOG_ERROR("CMSIS-DAP: SWD not supported");
+		return ERROR_JTAG_DEVICE_ERROR;
+	}
+
+	retval = cmsis_dap_cmd_DAP_Connect(CONNECT_SWD);
+	if (retval != ERROR_OK)
+		return retval;
+
+	/* Add more setup here.??... */
+
+	LOG_INFO("CMSIS-DAP: Interface Initialised (SWD)");
+	return ERROR_OK;
+}
+
 static int cmsis_dap_init(void)
 {
 	int retval;
 	uint8_t *data;
+
+	if (swd_mode) {
+		retval = cmsis_dap_swd_open();
+		if (retval != ERROR_OK)
+			return retval;
+	}
 
 	if (cmsis_dap_handle == NULL) {
 
@@ -852,36 +898,9 @@ static int cmsis_dap_init(void)
 	return ERROR_OK;
 }
 
-static int cmsis_dap_swd_init(uint8_t trn)
+static int cmsis_dap_swd_init(void)
 {
-	int retval;
-
-	DEBUG_IO("CMSIS-DAP: cmsis_dap_swd_init");
-
-	if (cmsis_dap_handle == NULL) {
-
-		/* SWD init */
-		retval = cmsis_dap_usb_open();
-		if (retval != ERROR_OK)
-			return retval;
-
-		retval = cmsis_dap_get_caps_info();
-		if (retval != ERROR_OK)
-			return retval;
-	}
-
-	if (!(cmsis_dap_handle->caps & INFO_CAPS_SWD)) {
-		LOG_ERROR("CMSIS-DAP: SWD not supported");
-		return ERROR_JTAG_DEVICE_ERROR;
-	}
-
-	retval = cmsis_dap_cmd_DAP_Connect(CONNECT_SWD);
-	if (retval != ERROR_OK)
-		return retval;
-
-	/* Add more setup here.??... */
-
-	LOG_INFO("CMSIS-DAP: Interface Initialised (SWD)");
+	swd_mode = true;
 	return ERROR_OK;
 }
 
@@ -1004,6 +1023,27 @@ COMMAND_HANDLER(cmsis_dap_handle_vid_pid_command)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(cmsis_dap_handle_serial_command)
+{
+	if (CMD_ARGC == 1) {
+		size_t len = mbstowcs(NULL, CMD_ARGV[0], 0);
+		cmsis_dap_serial = calloc(len + 1, sizeof(wchar_t));
+		if (cmsis_dap_serial == NULL) {
+			LOG_ERROR("unable to allocate memory");
+			return ERROR_OK;
+		}
+		if (mbstowcs(cmsis_dap_serial, CMD_ARGV[0], len + 1) == (size_t)-1) {
+			free(cmsis_dap_serial);
+			cmsis_dap_serial = NULL;
+			LOG_ERROR("unable to convert serial");
+		}
+	} else {
+		LOG_ERROR("expected exactly one argument to cmsis_dap_serial <serial-number>");
+	}
+
+	return ERROR_OK;
+}
+
 static const struct command_registration cmsis_dap_subcommand_handlers[] = {
 	{
 		.name = "info",
@@ -1013,73 +1053,6 @@ static const struct command_registration cmsis_dap_subcommand_handlers[] = {
 		.help = "show cmsis-dap info",
 	},
 	COMMAND_REGISTRATION_DONE
-};
-
-COMMAND_HANDLER(cmsis_dap_reset_command)
-{
-	LOG_DEBUG("cmsis_dap_reset_command");
-	return ERROR_OK;
-}
-
-COMMAND_HANDLER(cmsis_dap_jtag_command)
-{
-	LOG_DEBUG("cmsis_dap_jtag_command");
-	return ERROR_OK;
-}
-
-static const struct command_registration cmsis_dap_jtag_subcommand_handlers[] = {
-	{
-		.name = "init",
-		.mode = COMMAND_ANY,
-		.handler = cmsis_dap_jtag_command,
-		.usage = ""
-	 },
-	{
-		.name = "arp_init",
-		.mode = COMMAND_ANY,
-		.handler = cmsis_dap_jtag_command,
-		.usage = ""
-	 },
-	{
-		.name = "arp_init-reset",
-		.mode = COMMAND_ANY,
-		.handler = cmsis_dap_reset_command,
-		.usage = ""
-	 },
-	{
-		.name = "tapisenabled",
-		.mode = COMMAND_EXEC,
-		.jim_handler = jim_jtag_tap_enabler,
-	 },
-	{
-		.name = "tapenable",
-		.mode = COMMAND_EXEC,
-		.jim_handler = jim_jtag_tap_enabler,
-	 },
-	{
-		.name = "tapdisable",
-		.mode = COMMAND_EXEC,
-		.handler = cmsis_dap_jtag_command,
-		.usage = "",
-	 },
-	{
-		.name = "configure",
-		.mode = COMMAND_EXEC,
-		.handler = cmsis_dap_jtag_command,
-		.usage = "",
-	 },
-	{
-		.name = "cget",
-		.mode = COMMAND_EXEC,
-		.jim_handler = jim_jtag_configure,
-	 },
-	{
-		.name = "names",
-		.mode = COMMAND_ANY,
-		.handler = cmsis_dap_jtag_command,
-		.usage = "",
-	 },
-	 COMMAND_REGISTRATION_DONE
 };
 
 static const struct command_registration cmsis_dap_command_handlers[] = {
@@ -1098,21 +1071,20 @@ static const struct command_registration cmsis_dap_command_handlers[] = {
 		.usage = "(vid pid)* ",
 	},
 	{
-		/* this is currently a nasty hack so we get
-		 * reset working with non jtag interfaces */
-		.name = "jtag",
-		.mode = COMMAND_ANY,
-		.usage = "",
-		.chain = cmsis_dap_jtag_subcommand_handlers,
+		.name = "cmsis_dap_serial",
+		.handler = &cmsis_dap_handle_serial_command,
+		.mode = COMMAND_CONFIG,
+		.help = "set the serial number of the adapter",
+		.usage = "serial_string",
 	},
 	COMMAND_REGISTRATION_DONE
 };
 
 static const struct swd_driver cmsis_dap_swd_driver = {
-	.init       = cmsis_dap_swd_init,
-	.read_reg   = cmsis_dap_swd_read_reg,
-	.write_reg  = cmsis_dap_swd_write_reg,
-	.read_block = cmsis_dap_swd_read_block
+	.init = cmsis_dap_swd_init,
+	.read_reg = cmsis_dap_swd_read_reg,
+	.write_reg = cmsis_dap_swd_write_reg,
+	.run = cmsis_dap_swd_run,
 };
 
 const char *cmsis_dap_transport[] = {"cmsis-dap", NULL};

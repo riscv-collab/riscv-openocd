@@ -40,52 +40,54 @@
 #define JTAG_DP_APACC		0xB
 
 /* three-bit ACK values for SWD access (sent LSB first) */
-#define SWD_ACK_OK		0x4
-#define SWD_ACK_WAIT		0x2
-#define SWD_ACK_FAULT		0x1
+#define SWD_ACK_OK    0x1
+#define SWD_ACK_WAIT  0x2
+#define SWD_ACK_FAULT 0x4
 
 #define DPAP_WRITE		0
 #define DPAP_READ		1
+
+#define BANK_REG(bank, reg)	(((bank) << 4) | (reg))
 
 /* A[3:0] for DP registers; A[1:0] are always zero.
  * - JTAG accesses all of these via JTAG_DP_DPACC, except for
  *   IDCODE (JTAG_DP_IDCODE) and ABORT (JTAG_DP_ABORT).
  * - SWD accesses these directly, sometimes needing SELECT.CTRLSEL
  */
-#define DP_IDCODE		0		/* SWD: read */
-#define DP_ABORT		0		/* SWD: write */
-#define DP_CTRL_STAT		0x4		/* r/w */
-#define DP_WCR			0x4		/* SWD: r/w (mux CTRLSEL) */
-#define DP_RESEND		0x8		/* SWD: read */
-#define DP_SELECT		0x8		/* JTAG: r/w; SWD: write */
-#define DP_RDBUFF		0xC		/* read-only */
+#define DP_IDCODE		BANK_REG(0x0, 0x0)	/* SWD: read */
+#define DP_ABORT		BANK_REG(0x0, 0x0)	/* SWD: write */
+#define DP_CTRL_STAT		BANK_REG(0x0, 0x4)	/* r/w */
+#define DP_RESEND		BANK_REG(0x0, 0x8)	/* SWD: read */
+#define DP_SELECT		BANK_REG(0x0, 0x8)	/* JTAG: r/w; SWD: write */
+#define DP_RDBUFF		BANK_REG(0x0, 0xC)	/* read-only */
+#define DP_WCR			BANK_REG(0x1, 0x4)	/* SWD: r/w */
 
 #define WCR_TO_TRN(wcr) ((uint32_t)(1 + (3 & ((wcr)) >> 8)))	/* 1..4 clocks */
 #define WCR_TO_PRESCALE(wcr) ((uint32_t)(7 & ((wcr))))		/* impl defined */
 
 /* Fields of the DP's AP ABORT register */
-#define DAPABORT		(1 << 0)
-#define STKCMPCLR		(1 << 1)	/* SWD-only */
-#define STKERRCLR		(1 << 2)	/* SWD-only */
-#define WDERRCLR		(1 << 3)	/* SWD-only */
-#define ORUNERRCLR		(1 << 4)	/* SWD-only */
+#define DAPABORT        (1UL << 0)
+#define STKCMPCLR       (1UL << 1) /* SWD-only */
+#define STKERRCLR       (1UL << 2) /* SWD-only */
+#define WDERRCLR        (1UL << 3) /* SWD-only */
+#define ORUNERRCLR      (1UL << 4) /* SWD-only */
 
 /* Fields of the DP's CTRL/STAT register */
-#define CORUNDETECT		(1 << 0)
-#define SSTICKYORUN		(1 << 1)
+#define CORUNDETECT     (1UL << 0)
+#define SSTICKYORUN     (1UL << 1)
 /* 3:2 - transaction mode (e.g. pushed compare) */
-#define SSTICKYCMP		(1 << 4)
-#define SSTICKYERR		(1 << 5)
-#define READOK			(1 << 6)	/* SWD-only */
-#define WDATAERR		(1 << 7)	/* SWD-only */
+#define SSTICKYCMP      (1UL << 4)
+#define SSTICKYERR      (1UL << 5)
+#define READOK          (1UL << 6) /* SWD-only */
+#define WDATAERR        (1UL << 7) /* SWD-only */
 /* 11:8 - mask lanes for pushed compare or verify ops */
 /* 21:12 - transaction counter */
-#define CDBGRSTREQ		(1 << 26)
-#define CDBGRSTACK		(1 << 27)
-#define CDBGPWRUPREQ	(1 << 28)
-#define CDBGPWRUPACK	(1 << 29)
-#define CSYSPWRUPREQ	(1 << 30)
-#define CSYSPWRUPACK	(1 << 31)
+#define CDBGRSTREQ      (1UL << 26)
+#define CDBGRSTACK      (1UL << 27)
+#define CDBGPWRUPREQ    (1UL << 28)
+#define CDBGPWRUPACK    (1UL << 29)
+#define CSYSPWRUPREQ    (1UL << 30)
+#define CSYSPWRUPACK    (1UL << 31)
 
 /* MEM-AP register addresses */
 /* TODO: rename as MEM_AP_REG_* */
@@ -106,18 +108,18 @@
 #define CSW_8BIT		0
 #define CSW_16BIT		1
 #define CSW_32BIT		2
-#define CSW_ADDRINC_MASK	(3 << 4)
-#define CSW_ADDRINC_OFF		0
-#define CSW_ADDRINC_SINGLE	(1 << 4)
-#define CSW_ADDRINC_PACKED	(2 << 4)
-#define CSW_DEVICE_EN		(1 << 6)
-#define CSW_TRIN_PROG		(1 << 7)
-#define CSW_SPIDEN			(1 << 23)
+#define CSW_ADDRINC_MASK    (3UL << 4)
+#define CSW_ADDRINC_OFF     0UL
+#define CSW_ADDRINC_SINGLE  (1UL << 4)
+#define CSW_ADDRINC_PACKED  (2UL << 4)
+#define CSW_DEVICE_EN       (1UL << 6)
+#define CSW_TRIN_PROG       (1UL << 7)
+#define CSW_SPIDEN          (1UL << 23)
 /* 30:24 - implementation-defined! */
-#define CSW_HPROT			(1 << 25)		/* ? */
-#define CSW_MASTER_DEBUG	(1 << 29)		/* ? */
-#define CSW_SPROT (1 << 30)
-#define CSW_DBGSWENABLE		(1 << 31)
+#define CSW_HPROT           (1UL << 25) /* ? */
+#define CSW_MASTER_DEBUG    (1UL << 29) /* ? */
+#define CSW_SPROT           (1UL << 30)
+#define CSW_DBGSWENABLE     (1UL << 31)
 
 /**
  * This represents an ARM Debug Interface (v5) Debug Access Port (DAP).
@@ -162,6 +164,13 @@ struct adiv5_dap {
 	uint32_t ap_bank_value;
 
 	/**
+	 * Cache for DP_SELECT bits identifying the current four-word DP
+	 * register bank.  This caches DP register addresss bits 7:4; JTAG
+	 * and SWD access primitves pass address bits 3:2; bits 1:0 are zero.
+	 */
+	uint32_t dp_bank_value;
+
+	/**
 	 * Cache for (MEM-AP) AP_REG_CSW register value.  This is written to
 	 * configure an access mode, such as autoincrementing AP_REG_TAR during
 	 * word access.  "-1" indicates no cached value.
@@ -177,6 +186,12 @@ struct adiv5_dap {
 
 	/* information about current pending SWjDP-AHBAP transaction */
 	uint8_t  ack;
+
+	/**
+	 * Holds the pointer to the destination word for the last queued read,
+	 * for use with posted AP read sequence optimization.
+	 */
+	uint32_t *last_read;
 
 	/**
 	 * Configures how many extra tck clocks are added after starting a
@@ -198,6 +213,12 @@ struct adiv5_dap {
 	 * the AHB-AP has strange byte ordering these processors, and we need to
 	 * swizzle appropriately. */
 	bool ti_be_32_quirks;
+
+	/**
+	 * Signals that an attempt to reestablish communication afresh
+	 * should be performed before the next access.
+	 */
+	bool do_reconnect;
 };
 
 /**
@@ -205,17 +226,13 @@ struct adiv5_dap {
  * both JTAG and SWD transports.  All submitted transactions are logically
  * queued, until the queue is executed by run().  Some implementations might
  * execute transactions as soon as they're submitted, but no status is made
- * availablue until run().
+ * available until run().
  */
 struct dap_ops {
 	/** If the DAP transport isn't SWD, it must be JTAG.  Upper level
 	 * code may need to care about the difference in some cases.
 	 */
 	bool	is_swd;
-
-	/** Reads the DAP's IDCODe register. */
-	int (*queue_idcode_read)(struct adiv5_dap *dap,
-			uint8_t *ack, uint32_t *data);
 
 	/** DP register read. */
 	int (*queue_dp_read)(struct adiv5_dap *dap, unsigned reg,
@@ -230,9 +247,6 @@ struct dap_ops {
 	/** AP register write. */
 	int (*queue_ap_write)(struct adiv5_dap *dap, unsigned reg,
 			uint32_t data);
-	/** AP read block. */
-	int (*queue_ap_read_block)(struct adiv5_dap *dap, unsigned reg,
-			uint32_t blocksize, uint8_t *buffer);
 
 	/** AP operation abort. */
 	int (*queue_ap_abort)(struct adiv5_dap *dap, uint8_t *ack);
@@ -249,24 +263,6 @@ enum ap_type {
 	AP_TYPE_APB_AP  = 0x02,  /* APB Memory-AP */
 	AP_TYPE_JTAG_AP = 0x10   /* JTAG-AP - JTAG master for controlling other JTAG devices */
 };
-
-/**
- * Queue an IDCODE register read.  This is primarily useful for SWD
- * transports, where it is required as part of link initialization.
- * (For JTAG, this register is read as part of scan chain setup.)
- *
- * @param dap The DAP used for reading.
- * @param ack Pointer to where transaction status will be stored.
- * @param data Pointer saying where to store the IDCODE value.
- *
- * @return ERROR_OK for success, else a fault code.
- */
-static inline int dap_queue_idcode_read(struct adiv5_dap *dap,
-		uint8_t *ack, uint32_t *data)
-{
-	assert(dap->ops != NULL);
-	return dap->ops->queue_idcode_read(dap, ack, data);
-}
 
 /**
  * Queue a DP register read.
@@ -339,24 +335,6 @@ static inline int dap_queue_ap_write(struct adiv5_dap *dap,
 }
 
 /**
- * Queue an AP block read.
- *
- * @param dap The DAP used for reading.
- * @param reg The number of the AP register being read.
- * @param blocksize The number of the AP register being read.
- * @param buffer Pointer saying where to store the data
- * (in host endianness).
- *
- * @return ERROR_OK for success, else a fault code.
- */
-static inline int dap_queue_ap_read_block(struct adiv5_dap *dap,
-		unsigned reg, unsigned blocksize, uint8_t *buffer)
-{
-	assert(dap->ops != NULL);
-	return dap->ops->queue_ap_read_block(dap, reg, blocksize, buffer);
-}
-
-/**
  * Queue an AP abort operation.  The current AP transaction is aborted,
  * including any update of the transaction counter.  The AP is left in
  * an unknown state (so it must be re-initialized).  For use only after
@@ -387,6 +365,47 @@ static inline int dap_run(struct adiv5_dap *dap)
 {
 	assert(dap->ops != NULL);
 	return dap->ops->run(dap);
+}
+
+static inline int dap_dp_read_atomic(struct adiv5_dap *dap, unsigned reg,
+				     uint32_t *value)
+{
+	int retval;
+
+	retval = dap_queue_dp_read(dap, reg, value);
+	if (retval != ERROR_OK)
+		return retval;
+
+	return dap_run(dap);
+}
+
+static inline int dap_dp_poll_register(struct adiv5_dap *dap, unsigned reg,
+				       uint32_t mask, uint32_t value, int timeout)
+{
+	assert(timeout > 0);
+	assert((value & mask) == value);
+
+	int ret;
+	uint32_t regval;
+	LOG_DEBUG("DAP: poll %x, mask 0x08%" PRIx32 ", value 0x%08" PRIx32,
+		  reg, mask, value);
+	do {
+		ret = dap_dp_read_atomic(dap, reg, &regval);
+		if (ret != ERROR_OK)
+			return ret;
+
+		if ((regval & mask) == value)
+			break;
+
+		alive_sleep(10);
+	} while (--timeout);
+
+	if (!timeout) {
+		LOG_DEBUG("DAP: poll %x timeout", reg);
+		return ERROR_FAIL;
+	} else {
+		return ERROR_OK;
+	}
 }
 
 /** Accessor for currently selected DAP-AP number (0..255) */
@@ -457,7 +476,7 @@ int dap_find_ap(struct adiv5_dap *dap,
 
 /* Lookup CoreSight component */
 int dap_lookup_cs_component(struct adiv5_dap *dap, int ap,
-			uint32_t dbgbase, uint8_t type, uint32_t *addr);
+			uint32_t dbgbase, uint8_t type, uint32_t *addr, int32_t *idx);
 
 struct target;
 

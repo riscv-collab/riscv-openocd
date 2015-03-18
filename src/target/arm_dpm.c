@@ -571,7 +571,7 @@ fail:
 }
 
 static int arm_dpm_write_core_reg(struct target *target, struct reg *r,
-	int regnum, enum arm_mode mode, uint32_t value)
+	int regnum, enum arm_mode mode, uint8_t *value)
 {
 	struct arm_dpm *dpm = target_to_arm(target)->dpm;
 	int retval;
@@ -648,14 +648,15 @@ static int arm_dpm_full_context(struct target *target)
 				did_read = true;
 				mode = r->mode;
 
-				/* For R8..R12 when we've entered debug
-				 * state in FIQ mode... patch mode.
+				/* For regular (ARM_MODE_ANY) R8..R12
+				 * in case we've entered debug state
+				 * in FIQ mode we need to patch mode.
 				 */
-				if (mode == ARM_MODE_ANY)
-					mode = ARM_MODE_USR;
+				if (mode != ARM_MODE_ANY)
+					retval = dpm_modeswitch(dpm, mode);
+				else
+					retval = dpm_modeswitch(dpm, ARM_MODE_USR);
 
-				/* REVISIT error checks */
-				retval = dpm_modeswitch(dpm, mode);
 				if (retval != ERROR_OK)
 					goto done;
 			}

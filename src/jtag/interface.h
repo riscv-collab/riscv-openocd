@@ -198,7 +198,7 @@ static inline tap_state_t jtag_debug_state_machine(const void *tms_buf,
  */
 struct jtag_interface {
 	/** The name of the JTAG interface driver. */
-	char *name;
+	const char * const name;
 
 	/**
 	 * Bit vector listing capabilities exposed by this driver.
@@ -207,7 +207,7 @@ struct jtag_interface {
 #define DEBUG_CAP_TMS_SEQ	(1 << 0)
 
 	/** transports supported in C code (NULL terminated vector) */
-	const char **transports;
+	const char * const *transports;
 
 	const struct swd_driver *swd;
 
@@ -300,7 +300,7 @@ struct jtag_interface {
 	int (*srst_asserted)(int *srst_asserted);
 };
 
-extern const char *jtag_only[];
+extern const char * const jtag_only[];
 
 void adapter_assert_reset(void);
 void adapter_deassert_reset(void);

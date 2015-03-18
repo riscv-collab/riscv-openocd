@@ -894,10 +894,18 @@ static int stm32x_probe(struct flash_bank *bank)
 		stm32x_info->ppage_size = 4;
 		max_flash_size_in_kb = 128;
 		break;
-	case 0x422: /* stm32f30x */
+	case 0x422: /* stm32f302/3xb/c */
 		page_size = 2048;
 		stm32x_info->ppage_size = 2;
 		max_flash_size_in_kb = 256;
+		stm32x_info->user_data_offset = 16;
+		stm32x_info->option_offset = 6;
+		stm32x_info->default_rdp = 0x55AA;
+		break;
+	case 0x446: /* stm32f303xD/E */
+		page_size = 2048;
+		stm32x_info->ppage_size = 2;
+		max_flash_size_in_kb = 512;
 		stm32x_info->user_data_offset = 16;
 		stm32x_info->option_offset = 6;
 		stm32x_info->default_rdp = 0x55AA;
@@ -921,8 +929,18 @@ static int stm32x_probe(struct flash_bank *bank)
 		stm32x_info->option_offset = 6;
 		stm32x_info->default_rdp = 0x55AA;
 		break;
+	case 0x438: /* stm32f33x */
+	case 0x439: /* stm32f302x6/8 */
+		page_size = 2048;
+		stm32x_info->ppage_size = 2;
+		max_flash_size_in_kb = 64;
+		stm32x_info->user_data_offset = 16;
+		stm32x_info->option_offset = 6;
+		stm32x_info->default_rdp = 0x55AA;
+		break;
 	case 0x440: /* stm32f05x */
 	case 0x444: /* stm32f03x */
+	case 0x445: /* stm32f04x */
 		page_size = 1024;
 		stm32x_info->ppage_size = 4;
 		max_flash_size_in_kb = 64;
@@ -931,9 +949,10 @@ static int stm32x_probe(struct flash_bank *bank)
 		stm32x_info->default_rdp = 0x55AA;
 		break;
 	case 0x448: /* stm32f07x */
+	case 0x442: /* stm32f09x */
 		page_size = 2048;
 		stm32x_info->ppage_size = 4;
-		max_flash_size_in_kb = 128;
+		max_flash_size_in_kb = 256;
 		stm32x_info->user_data_offset = 16;
 		stm32x_info->option_offset = 6;
 		stm32x_info->default_rdp = 0x55AA;
@@ -1021,6 +1040,21 @@ COMMAND_HANDLER(stm32x_handle_part_id_command)
 	return ERROR_OK;
 }
 #endif
+
+static const char *get_stm32f0_revision(uint16_t rev_id)
+{
+	const char *rev_str = NULL;
+
+	switch (rev_id) {
+	case 0x1000:
+		rev_str = "1.0";
+		break;
+	case 0x2000:
+		rev_str = "2.0";
+		break;
+	}
+	return rev_str;
+}
 
 static int get_stm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 {
@@ -1116,7 +1150,7 @@ static int get_stm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 		break;
 
 	case 0x422:
-		device_str = "STM32F30x";
+		device_str = "STM32F302xB/C";
 
 		switch (rev_id) {
 		case 0x1000:
@@ -1175,46 +1209,62 @@ static int get_stm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 		}
 		break;
 
-	case 0x444:
-		device_str = "STM32F03x";
+	case 0x438:
+		device_str = "STM32F33x";
 
 		switch (rev_id) {
 		case 0x1000:
-			rev_str = "1.0";
-			break;
-
-		case 0x2000:
-			rev_str = "2.0";
+			rev_str = "A";
 			break;
 		}
 		break;
 
-	case 0x440:
-		device_str = "STM32F05x";
+	case 0x439:
+		device_str = "STM32F302x6/8";
 
 		switch (rev_id) {
 		case 0x1000:
-			rev_str = "1.0";
+			rev_str = "A";
 			break;
 
-		case 0x2000:
-			rev_str = "2.0";
+		case 0x1001:
+			rev_str = "Z";
+			break;
+		}
+		break;
+
+	case 0x444:
+		device_str = "STM32F03x";
+		rev_str = get_stm32f0_revision(rev_id);
+		break;
+
+	case 0x440:
+		device_str = "STM32F05x";
+		rev_str = get_stm32f0_revision(rev_id);
+		break;
+
+	case 0x445:
+		device_str = "STM32F04x";
+		rev_str = get_stm32f0_revision(rev_id);
+		break;
+
+	case 0x446:
+		device_str = "STM32F303xD/E";
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
 			break;
 		}
 		break;
 
 	case 0x448:
 		device_str = "STM32F07x";
+		rev_str = get_stm32f0_revision(rev_id);
+		break;
 
-		switch (rev_id) {
-		case 0x1000:
-			rev_str = "1.0";
-			break;
-
-		case 0x2000:
-			rev_str = "2.0";
-			break;
-		}
+	case 0x442:
+		device_str = "STM32F09x";
+		rev_str = get_stm32f0_revision(rev_id);
 		break;
 
 	default:

@@ -27,7 +27,7 @@
 #include "etb.h"
 #include "register.h"
 
-static char *etb_reg_list[] = {
+static const char * const etb_reg_list[] = {
 	"ETB_identification",
 	"ETB_ram_depth",
 	"ETB_ram_width",
@@ -308,7 +308,7 @@ static int etb_write_reg(struct reg *reg, uint32_t value)
 	fields[0].num_bits = 32;
 	uint8_t temp0[4];
 	fields[0].out_value = temp0;
-	buf_set_u32(&temp0, 0, 32, value);
+	buf_set_u32(temp0, 0, 32, value);
 	fields[0].in_value = NULL;
 
 	fields[1].num_bits = 7;

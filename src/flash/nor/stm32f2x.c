@@ -344,8 +344,8 @@ static int stm32x_write_options(struct flash_bank *bank)
 
 	/* rebuild option data */
 	optiondata = stm32x_info->option_bytes.user_options;
-	buf_set_u32(&optiondata, 8, 8, stm32x_info->option_bytes.RDP);
-	buf_set_u32(&optiondata, 16, 12, stm32x_info->option_bytes.protection);
+	optiondata |= stm32x_info->option_bytes.RDP << 8;
+	optiondata |= (stm32x_info->option_bytes.protection & 0x0fff) << 16;
 
 	/* program options */
 	retval = target_write_u32(target, STM32_FLASH_OPTCR, optiondata);
@@ -355,7 +355,7 @@ static int stm32x_write_options(struct flash_bank *bank)
 	if (stm32x_info->has_large_mem) {
 
 		uint32_t optiondata2 = 0;
-		buf_set_u32(&optiondata2, 16, 12, stm32x_info->option_bytes.protection >> 12);
+		optiondata2 |= (stm32x_info->option_bytes.protection & 0x00fff000) << 4;
 		retval = target_write_u32(target, STM32_FLASH_OPTCR1, optiondata2);
 		if (retval != ERROR_OK)
 			return retval;
@@ -372,7 +372,7 @@ static int stm32x_write_options(struct flash_bank *bank)
 		return retval;
 
 	/* relock registers */
-	retval = target_write_u32(target, STM32_FLASH_OPTCR, OPT_LOCK);
+	retval = target_write_u32(target, STM32_FLASH_OPTCR, optiondata | OPT_LOCK);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -779,7 +779,9 @@ static int stm32x_probe(struct flash_bank *bank)
 	case 0x423:
 		max_flash_size_in_kb = 256;
 		break;
+	case 0x431:
 	case 0x433:
+	case 0x421:
 		max_flash_size_in_kb = 512;
 		break;
 	default:
@@ -926,10 +928,27 @@ static int get_stm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 		case 0x1003:
 			rev_str = "Y";
 			break;
+
+		case 0x1007:
+			rev_str = "1";
+			break;
+
+		case 0x2001:
+			rev_str = "3";
+			break;
 		}
 		break;
+	case 0x421:
+		device_str = "STM32F446";
 
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
+			break;
+		}
+		break;
 	case 0x423:
+	case 0x431:
 	case 0x433:
 		device_str = "STM32F4xx (Low Power)";
 

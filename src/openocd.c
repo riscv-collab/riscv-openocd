@@ -59,6 +59,11 @@
 #define OPENOCD_VERSION	OPENOCD_BRANDING OPENOCD_WORDSIZE \
     "Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
 
+static const char openocd_startup_tcl[] = {
+#include "startup_tcl.inc"
+0 /* Terminate with zero */
+};
+
 /* Give scripts and TELNET a way to find out what version this is */
 static int jim_version_command(Jim_Interp *interp, int argc,
 	Jim_Obj * const *argv)
@@ -237,8 +242,7 @@ struct command_context *setup_command_handler(Jim_Interp *interp)
 	log_init();
 	LOG_DEBUG("log_init: complete");
 
-	const char *startup = openocd_startup_tcl;
-	struct command_context *cmd_ctx = command_init(startup, interp);
+	struct command_context *cmd_ctx = command_init(openocd_startup_tcl, interp);
 
 	/* register subsystem commands */
 	typedef int (*command_registrant_t)(struct command_context *cmd_ctx_value);
@@ -282,30 +286,28 @@ static int openocd_thread(int argc, char *argv[], struct command_context *cmd_ct
 	int ret;
 
 	if (parse_cmdline_args(cmd_ctx, argc, argv) != ERROR_OK)
-		return EXIT_FAILURE;
+		return ERROR_FAIL;
 
 	if (server_preinit() != ERROR_OK)
-		return EXIT_FAILURE;
+		return ERROR_FAIL;
 
 	ret = parse_config_file(cmd_ctx);
 	if (ret != ERROR_OK)
-		return EXIT_FAILURE;
+		return ERROR_FAIL;
 
 	ret = server_init(cmd_ctx);
 	if (ERROR_OK != ret)
-		return EXIT_FAILURE;
+		return ERROR_FAIL;
 
 	if (init_at_startup) {
 		ret = command_run_line(cmd_ctx, "init");
 		if (ERROR_OK != ret)
-			return EXIT_FAILURE;
+			return ERROR_FAIL;
 	}
 
 	server_loop(cmd_ctx);
 
-	server_quit();
-
-	return ret;
+	return server_quit();
 }
 
 /* normally this is the main() function entry, but if OpenOCD is linked
@@ -342,6 +344,11 @@ int openocd_main(int argc, char *argv[])
 	command_done(cmd_ctx);
 
 	adapter_quit();
+
+	if (ERROR_FAIL == ret)
+		return EXIT_FAILURE;
+	else if (ERROR_OK != ret)
+		exit_on_signal(ret);
 
 	return ret;
 }

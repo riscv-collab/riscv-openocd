@@ -48,7 +48,7 @@ struct FreeRTOS_params {
 	const struct rtos_register_stacking *stacking_info;
 };
 
-const struct FreeRTOS_params FreeRTOS_params_list[] = {
+static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	{
 	"cortex_m",			/* target_name */
 	4,						/* thread_count_width; */
@@ -119,7 +119,7 @@ enum FreeRTOS_symbol_values {
 	FreeRTOS_VAL_uxTopUsedPriority = 10,
 };
 
-static char *FreeRTOS_symbol_list[] = {
+static const char * const FreeRTOS_symbol_list[] = {
 	"pxCurrentTCB",
 	"pxReadyTasksLists",
 	"xDelayedTaskList1",
@@ -390,8 +390,8 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, int64_t thread_id, ch
 static int FreeRTOS_get_symbol_list_to_lookup(symbol_table_elem_t *symbol_list[])
 {
 	unsigned int i;
-	*symbol_list = malloc(
-			sizeof(symbol_table_elem_t) * ARRAY_SIZE(FreeRTOS_symbol_list));
+	*symbol_list = calloc(
+			ARRAY_SIZE(FreeRTOS_symbol_list), sizeof(symbol_table_elem_t));
 
 	for (i = 0; i < ARRAY_SIZE(FreeRTOS_symbol_list); i++)
 		(*symbol_list)[i].symbol_name = FreeRTOS_symbol_list[i];
