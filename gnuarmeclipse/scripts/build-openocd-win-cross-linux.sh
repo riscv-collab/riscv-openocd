@@ -151,6 +151,7 @@ then
     fi
     cd "${OPENOCD_GIT_FOLDER}"
     git pull
+    git submodule update
 
     rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
 
@@ -182,6 +183,7 @@ then
     cd "${OPENOCD_GIT_FOLDER}"
     git pull
     git checkout gnuarmeclipse-dev
+    git submodule update
 
     rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
 
@@ -213,6 +215,7 @@ then
     cd "${OPENOCD_GIT_FOLDER}"
     git pull
     git checkout gnuarmeclipse
+    git submodule update
 
     rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
 
@@ -263,6 +266,7 @@ then
   # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
   cd "${OPENOCD_GIT_FOLDER}"
   git checkout gnuarmeclipse
+  git submodule update
 
   # Prepare autotools.
   echo
