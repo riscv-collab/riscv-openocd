@@ -314,7 +314,7 @@ then
 
   # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
   cd "${OPENOCD_GIT_FOLDER}"
-  git checkout gnuarmeclipse-dev
+  git checkout gnuarmeclipse
 
   # ---- Prepare autotools -----
   echo

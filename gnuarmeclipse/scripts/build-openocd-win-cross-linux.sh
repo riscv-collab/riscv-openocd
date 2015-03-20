@@ -434,6 +434,7 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   # Configure
   CFLAGS="-m${TARGET_BITS}" \
+  \
   PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
@@ -499,6 +500,7 @@ then
 
   cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
   CFLAGS="-m${TARGET_BITS}" \
+  \
   PKG_CONFIG_=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
