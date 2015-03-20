@@ -46,7 +46,7 @@ fi
 # ----- Parse actions and command line options -----
 
 ACTION_CLEAN=""
-ACTION_PULL=""
+ACTION_GIT=""
 ACTION_INSTALL=""
 TARGET_BITS="${DISTRO_BITS}"
 
@@ -57,10 +57,16 @@ do
     ACTION_CLEAN="$1"
   elif [ "$1" == "pull" ]
   then
-    ACTION_PULL="$1"
+    ACTION_GIT="$1"
   elif [ "$1" == "install" ]
   then
     ACTION_INSTALL="$1"
+  elif [ "$1" == "checkout-dev" ]
+  then
+    ACTION_GIT="$1"
+  elif [ "$1" == "checkout-stable" ]
+  then
+    ACTION_GIT="$1"
   else
     echo "Unknown action/option $1"
     exit 1
@@ -89,7 +95,8 @@ fi
 # define it before invoking the script.
 SYSTEM_INSTALL_FOLDER=${SYSTEM_INSTALL_FOLDER:-"/opt/gnuarmeclipse"}
 
-PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
+# PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-""}
+PKG_CONFIG_LIBDIR=${PKG_CONFIG_LIBDIR:-""}
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-""}
 
 MAKE_JOBS=${MAKE_JOBS:-"-j4"}
@@ -153,7 +160,7 @@ then
   exit 0
 fi
 
-if [ "${ACTION_PULL}" == "pull" ]
+if [ "${ACTION_GIT}" == "pull" ]
 then
   if [ -d "${OPENOCD_GIT_FOLDER}" ]
   then
@@ -216,6 +223,68 @@ then
   exit 0
 fi
 
+if [ "${ACTION_GIT}" == "checkout-dev" ]
+then
+  if [ -d "${OPENOCD_GIT_FOLDER}" ]
+  then
+    echo
+    if [ "${USER}" == "ilg" ]
+    then
+      echo "Enter SourceForge password for git pull"
+    fi
+    cd "${OPENOCD_GIT_FOLDER}"
+    git pull
+    git checkout gnuarmeclipse-dev
+
+    rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
+
+    # Prepare autotools.
+    echo
+    echo "bootstrap..."
+
+    cd "${OPENOCD_GIT_FOLDER}"
+    ./bootstrap
+
+    echo
+    echo "Pull completed. Proceed with a regular build."
+    exit 0
+  else
+	echo "No git folder."
+    exit 1
+  fi
+fi
+
+if [ "${ACTION_GIT}" == "checkout-stable" ]
+then
+  if [ -d "${OPENOCD_GIT_FOLDER}" ]
+  then
+    echo
+    if [ "${USER}" == "ilg" ]
+    then
+      echo "Enter SourceForge password for git pull"
+    fi
+    cd "${OPENOCD_GIT_FOLDER}"
+    git pull
+    git checkout gnuarmeclipse
+
+    rm -rf "${OPENOCD_BUILD_FOLDER}/openocd"
+
+    # Prepare autotools.
+    echo
+    echo "bootstrap..."
+
+    cd "${OPENOCD_GIT_FOLDER}"
+    ./bootstrap
+
+    echo
+    echo "Pull completed. Proceed with a regular build."
+    exit 0
+  else
+	echo "No git folder."
+    exit 1
+  fi
+fi
+
 # ----- Begin of common part --------------------------------------------------
 
 # Create the work folder.
@@ -245,7 +314,7 @@ then
 
   # Change to the gnuarmeclipse branch. On subsequent runs use "git pull".
   cd "${OPENOCD_GIT_FOLDER}"
-  git checkout gnuarmeclipse
+  git checkout gnuarmeclipse-dev
 
   # ---- Prepare autotools -----
   echo
@@ -254,6 +323,11 @@ then
   cd "${OPENOCD_GIT_FOLDER}"
   ./bootstrap
 fi
+
+# Get the current Git branch name, to know if we are building the stable or
+# the development release.
+cd "${OPENOCD_GIT_FOLDER}"
+OPENOCD_GIT_HEAD=$(git symbolic-ref -q --short HEAD)
 
 # ----- Build the USB libraries -----
 
@@ -267,8 +341,8 @@ LIBUSB1_ARCHIVE="${LIBUSB1}.tar.bz2"
 if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-  cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
+  cd "${OPENOCD_DOWNLOAD_FOLDER}"
   "${WGET}" "http://sourceforge.net/projects/libusb/files/libusb-1.0/${LIBUSB1}/${LIBUSB1_ARCHIVE}" \
   "${WGET_OUT}" "${LIBUSB1_ARCHIVE}"
 fi
@@ -307,8 +381,8 @@ LIBUSB0_ARCHIVE="${LIBUSB0}.tar.bz2"
 if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-  cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
+  cd "${OPENOCD_DOWNLOAD_FOLDER}"
   "${WGET}" "http://sourceforge.net/projects/libusb/files/libusb-compat-0.1/${LIBUSB0}/${LIBUSB0_ARCHIVE}" \
   "${WGET_OUT}" "${LIBUSB0_ARCHIVE}"
 fi
@@ -333,7 +407,8 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   # Configure
   CFLAGS="-m${TARGET_BITS}" \
-  PKG_CONFIG_PATH=\
+  \
+  PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
@@ -355,8 +430,8 @@ LIBFTDI_ARCHIVE="${LIBFTDI}.tar.bz2"
 if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-  cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
+  cd "${OPENOCD_DOWNLOAD_FOLDER}"
   "${WGET}" "http://www.intra2net.com/en/developer/libftdi/download/${LIBFTDI_ARCHIVE}" \
   "${WGET_OUT}" "${LIBFTDI_ARCHIVE}"
 fi
@@ -388,7 +463,8 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   # cmake
   CFLAGS="-m${TARGET_BITS}" \
-  PKG_CONFIG_PATH=\
+  \
+  PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
@@ -416,8 +492,8 @@ HIDAPI_ARCHIVE="${HIDAPI}.zip"
 if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${HIDAPI_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-  cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
+  cd "${OPENOCD_DOWNLOAD_FOLDER}"
   "${WGET}" "https://github.com/downloads/signal11/hidapi/${HIDAPI_ARCHIVE}" \
   "${WGET_OUT}" "${HIDAPI_ARCHIVE}"
 fi
@@ -442,12 +518,11 @@ then
   echo "make libhid..."
 
   cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
-
   CFLAGS="-m${TARGET_BITS}" \
-  PKG_CONFIG_PATH=\
+  \
+  PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig":\
-"${PKG_CONFIG_PATH}" \
+"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
   make clean "${HIDAPI_OBJECT}"
 
@@ -493,7 +568,7 @@ then
   CPPFLAGS="-m${TARGET_BITS}" \
   LDFLAGS='-Wl,-rpath=\$$ORIGIN -lpthread' \
   \
-  PKG_CONFIG_PATH=\
+  PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
   \
@@ -727,27 +802,38 @@ OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")
 # The UTC date part in the name of the archive. 
 OUTFILE_DATE=${OUTFILE_DATE:-$(date -u +%Y%m%d%H%M)}
 
+if [ "${OPENOCD_GIT_HEAD}" == "gnuarmeclipse" ]
+then
+  OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")-${OUTFILE_DATE}
+elif [ "${OPENOCD_GIT_HEAD}" == "gnuarmeclipse-dev" ]
+then
+  OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION-dev")-${OUTFILE_DATE}-dev
+fi
+
 OPENOCD_ARCHIVE="${OPENOCD_OUTPUT}/gnuarmeclipse-openocd-\
-${OPENOCD_TARGET}-${OUTFILE_VERSION}-${OUTFILE_DATE}.tgz"
+${OPENOCD_TARGET}-${OUTFILE_VERSION}.tgz"
 
 echo
 echo "create tgz archive..."
 echo
 
 cd "${OPENOCD_INSTALL_FOLDER}"
+mkdir ${OUTFILE_VERSION}
+mv openocd/* ${OUTFILE_VERSION}
+mv ${OUTFILE_VERSION} openocd
 tar czf "${OPENOCD_ARCHIVE}" --owner root --group root openocd
 
 # Display some information about the created application.
 echo
 echo "Libraries:"
-readelf -d "${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd" | grep -i 'library'
+readelf -d "${OPENOCD_INSTALL_FOLDER}/openocd/${OUTFILE_VERSION}/bin/openocd" | grep -i 'library'
 
 echo
-ls -l "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
+ls -l "${OPENOCD_INSTALL_FOLDER}/openocd/${OUTFILE_VERSION}/bin"
 
 # Check if the application starts (if all dynamic libraries are available).
 echo
-"${OPENOCD_INSTALL_FOLDER}/openocd/bin/openocd" --version
+"${OPENOCD_INSTALL_FOLDER}/openocd/${OUTFILE_VERSION}/bin/openocd" --version
 RESULT="$?"
 
 echo

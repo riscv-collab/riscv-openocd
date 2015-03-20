@@ -280,8 +280,8 @@ LIBUSB1_ARCHIVE="${LIBUSB1}.tar.bz2"
 if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB1_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-  cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
+  cd "${OPENOCD_DOWNLOAD_FOLDER}"
   "${WGET}" "http://sourceforge.net/projects/libusb/files/libusb-1.0/${LIBUSB1}/${LIBUSB1_ARCHIVE}" \
   "${WGET_OUT}" "${LIBUSB1_ARCHIVE}"
 fi
@@ -320,8 +320,8 @@ LIBUSB0_ARCHIVE="${LIBUSB0}.tar.bz2"
 if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBUSB0_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-  cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
+  cd "${OPENOCD_DOWNLOAD_FOLDER}"
   "${WGET}" "http://sourceforge.net/projects/libusb/files/libusb-compat-0.1/${LIBUSB0}/${LIBUSB0_ARCHIVE}" \
   "${WGET_OUT}" "${LIBUSB0_ARCHIVE}"
 fi
@@ -346,6 +346,7 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBUSB0}"
   # Configure
   CFLAGS="-m${TARGET_BITS}" \
+  \
   PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
@@ -368,8 +369,8 @@ LIBFTDI_ARCHIVE="${LIBFTDI}.tar.bz2"
 if [ ! -f "${OPENOCD_DOWNLOAD_FOLDER}/${LIBFTDI_ARCHIVE}" ]
 then
   mkdir -p "${OPENOCD_DOWNLOAD_FOLDER}"
-  cd "${OPENOCD_DOWNLOAD_FOLDER}"
 
+  cd "${OPENOCD_DOWNLOAD_FOLDER}"
   "${WGET}" "http://www.intra2net.com/en/developer/libftdi/download/${LIBFTDI_ARCHIVE}" \
   "${WGET_OUT}" "${LIBFTDI_ARCHIVE}"
 fi
@@ -401,6 +402,7 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${LIBFTDI}"
   # cmake
   CFLAGS="-m${TARGET_BITS}" \
+  \
   PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
 "${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
@@ -457,10 +459,10 @@ then
   cd "${OPENOCD_BUILD_FOLDER}/${HIDAPI}/${HIDAPI_TARGET}"
 
   CFLAGS="-m${TARGET_BITS}" \
+  \
   PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
-"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig":\
-"${PKG_CONFIG_LIBDIR}" \
+"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig": \
   \
   make clean "${HIDAPI_OBJECT}"
 
@@ -504,9 +506,11 @@ then
   # All variables below are passed on the command line before 'configure'.
   # Be sure all these lines end in '\' to ensure lines are concatenated.
   CPPFLAGS="-m${TARGET_BITS}" \
+  \
   PKG_CONFIG_LIBDIR=\
 "${OPENOCD_INSTALL_FOLDER}/lib/pkgconfig":\
-"${PKG_CONFIG_LIBDIR}" \
+"${OPENOCD_INSTALL_FOLDER}/lib64/pkgconfig" \
+  \
   DYLD_LIBRARY_PATH=\
 "${OPENOCD_INSTALL_FOLDER}/lib":\
 "${DYLD_LIBRARY_PATH}" \
@@ -682,7 +686,6 @@ mkdir -p "${OPENOCD_OUTPUT}"
 # The UTC date part in the name of the archive.
 OUTFILE_DATE=${OUTFILE_DATE:-$(date -u +%Y%m%d%H%M)}
 
-# Warning: Be sure to increment the revision with each new release.
 if [ "${OPENOCD_GIT_HEAD}" == "gnuarmeclipse" ]
 then
   OUTFILE_VERSION=$(cat "${OPENOCD_GIT_FOLDER}/gnuarmeclipse/VERSION")-${OUTFILE_DATE}
