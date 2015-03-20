@@ -26,31 +26,49 @@
 !include "x64.nsh"
 !include "MUI2.nsh"
 
-!define PRODNAME "OpenOCD"
-!define PRODLCNAME "openocd"
-!define PRODUCT "GNU ARM Eclipse\${PRODNAME}"
-!define URL     "http://gnuarmeclipse.livius.net"
+!define PUBLISHER 			"GNU ARM Eclipse"
+!define PRODUCT 			"OpenOCD"
+!define PRODUCTLOWERCASE 	"openocd"
+!define URL     			"http://gnuarmeclipse.livius.net"
 
-!define UNINST_EXE "$INSTDIR\${PRODLCNAME}-uninstall.exe"
-!define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT} ${BITS} ${VERSION}"
-!define PERSISTENT_KEY "SOFTWARE\GNU ARM Eclipse\Persistent\${PRODLCNAME}-${BITS}"
+; Single instance, each new install will overwrite the values
+!define INSTALL_KEY_FOLDER "SOFTWARE\${PUBLISHER}\${PRODUCT}"
 
-!define INSTALL_LOCATION_KEY "InstallFolder"
+; Unique for each 32/64-bits.
+!define PERSISTENT_KEY_FOLDER "SOFTWARE\${PUBLISHER}\Persistent\${PRODUCT} ${BITS}"
 
-!define VERSION_KEY "Version"
+; https://msdn.microsoft.com/en-us/library/aa372105(v=vs.85).aspx
+; Instead of GUID, use a long key, unique for each version
+!define UNINSTALL_KEY_FOLDER "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PUBLISHER} ${PRODUCT} ${BITS} ${VERSION}"
+
+!define UNINSTALL_KEY_NAME "UninstallString"
+!define UNINSTALL_EXE "$INSTDIR\${PRODUCTLOWERCASE}-uninstall.exe"
+
+!define INSTALL_LOCATION_KEY_NAME "InstallLocation"
+
+!define DISPLAY_KEY_NAME "DisplayName"
+!define DISPLAY_VALUE "${PUBLISHER} ${PRODUCT}"
+
+!define VERSION_KEY_NAME "Version"
 !define VERSION_VALUE "${VERSION}"
 
-!define AUTHOR_KEY "Author"
-!define AUTHOR_VALUE "Liviu Ionescu <ilg@livius.net>"
+!define CONTACT_KEY_NAME "Contact"
+!define CONTACT_VALUE "Liviu Ionescu <ilg@livius.net>"
 
-!define URL_KEY "URL"
+!define URL_KEY_NAME "URLInfoAbout"
 !define URL_VALUE "${URL}"
+
+
+; Sub-folder in $SMPROGRAMS where to store links.
+; Dont't know if still in use by current Windows.
+!define LINK_FOLDER "${PUBLISHER}\${PRODUCT}"
+
 
 ; Use maximum compression.
 SetCompressor /SOLID lzma
 
 ; The name of the installer.
-Name "GNU ARM Eclipse ${PRODNAME}"
+Name "${PUBLISHER} ${PRODUCT}"
 
 ; The file to write
 OutFile "${OUTFILE}"
@@ -63,9 +81,9 @@ RequestExecutionLevel admin
 
 ;--------------------------------
 ; Interface Settings.
-!define MUI_ICON "${NSIS_FOLDER}\${PRODLCNAME}-nsis.ico"
-!define MUI_UNICON "${NSIS_FOLDER}\${PRODLCNAME}-nsis.ico"
-!define MUI_WELCOMEFINISHPAGE_BITMAP "${NSIS_FOLDER}\${PRODLCNAME}-nsis.bmp"
+!define MUI_ICON "${NSIS_FOLDER}\${PRODUCTLOWERCASE}-nsis.ico"
+!define MUI_UNICON "${NSIS_FOLDER}\${PRODUCTLOWERCASE}-nsis.ico"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "${NSIS_FOLDER}\${PRODUCTLOWERCASE}-nsis.bmp"
 
 ;--------------------------------
 ; Pages.
@@ -75,7 +93,7 @@ RequestExecutionLevel admin
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_LINK "Visit the GNU ARM Eclipse site!"
+!define MUI_FINISHPAGE_LINK "Visit the ${PUBLISHER} site!"
 !define MUI_FINISHPAGE_LINK_LOCATION "${URL}"
 !insertmacro MUI_PAGE_FINISH
 
@@ -92,7 +110,7 @@ RequestExecutionLevel admin
 ;--------------------------------
 
 ; The stuff to install.
-Section "${PRODNAME} (required)"
+Section "${PRODUCT} (required)"
 
 SectionIn RO
 
@@ -115,7 +133,7 @@ File "${INSTALL_FOLDER}\gnuarmeclipse\BUILD.txt"
 File "${INSTALL_FOLDER}\gnuarmeclipse\CHANGES.txt"
 
 ; Write the uninstaller file
-WriteUninstaller "${UNINST_EXE}"
+WriteUninstaller "${UNINSTALL_EXE}"
 
 !ifdef W64
 SetRegView 64
@@ -123,20 +141,24 @@ SetRegView 64
 
 ; Write the installation path into the registry.
 ; 32/64 will overwrite each other, the last one will survive.
-WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${INSTALL_LOCATION_KEY}" "$INSTDIR"
-WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${VERSION_KEY}" "${VERSION_VALUE}"
-WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${AUTHOR_KEY}" "${AUTHOR_VALUE}"
-WriteRegStr HKLM "SOFTWARE\${PRODUCT}" "${URL_KEY}" "${URL_VALUE}"
+WriteRegStr HKLM "${INSTALL_KEY_FOLDER}" "${INSTALL_LOCATION_KEY_NAME}" "$INSTDIR"
+WriteRegStr HKLM "${INSTALL_KEY_FOLDER}" "${DISPLAY_KEY_NAME}" "${DISPLAY_VALUE}"
+WriteRegStr HKLM "${INSTALL_KEY_FOLDER}" "${VERSION_KEY_NAME}" "${VERSION_VALUE}"
+WriteRegStr HKLM "${INSTALL_KEY_FOLDER}" "${CONTACT_KEY_NAME}" "${CONTACT_VALUE}"
+WriteRegStr HKLM "${INSTALL_KEY_FOLDER}" "${URL_KEY_NAME}" "${URL_VALUE}"
 
 ; Write the parent installation path into the registry persistent storage.
 ; 32/64 are different, will not overwrite each other.
-WriteRegStr HKLM "${PERSISTENT_KEY}" "${INSTALL_LOCATION_KEY}" "$Parent.INSTDIR"
+WriteRegStr HKLM "${PERSISTENT_KEY_FOLDER}" "${INSTALL_LOCATION_KEY_NAME}" "$Parent.INSTDIR"
 
 ; Write the uninstall keys for Windows
-WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "GNU ARM Eclipse ${PRODNAME}"
-WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" '"${UNINST_EXE}"'
-WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
-WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
+WriteRegStr HKLM "${UNINSTALL_KEY_FOLDER}" "${DISPLAY_KEY_NAME}" "${DISPLAY_VALUE}"
+WriteRegStr HKLM "${UNINSTALL_KEY_FOLDER}" "${VERSION_KEY_NAME}" "${VERSION_VALUE}"
+WriteRegStr HKLM "${UNINSTALL_KEY_FOLDER}" "${CONTACT_KEY_NAME}" "${CONTACT_VALUE}"
+WriteRegStr HKLM "${UNINSTALL_KEY_FOLDER}" "${URL_KEY_NAME}" "${URL_VALUE}"
+WriteRegStr HKLM "${UNINSTALL_KEY_FOLDER}" "${UNINSTALL_KEY_NAME}" '"${UNINSTALL_EXE}"'
+WriteRegDWORD HKLM "${UNINSTALL_KEY_FOLDER}" "NoModify" 1
+WriteRegDWORD HKLM "${UNINSTALL_KEY_FOLDER}" "NoRepair" 1
 
 SectionEnd
 
@@ -175,8 +197,8 @@ SectionEnd
 
 ; Optional section (can be disabled by the user)
 Section "Start Menu Shortcuts" SectionMenu
-CreateDirectory "$SMPROGRAMS\${PRODUCT}"
-CreateShortCut "$SMPROGRAMS\${PRODUCT}\Uninstall.lnk" "${UNINST_EXE}" "" "${UNINST_EXE}" 0
+CreateDirectory "$SMPROGRAMS\${LINK_FOLDER}"
+CreateShortCut "$SMPROGRAMS\${LINK_FOLDER}\Uninstall.lnk" "${UNINSTALL_EXE}" "" "${UNINSTALL_EXE}" 0
 SectionEnd
 
 ;--------------------------------
@@ -189,20 +211,20 @@ Section "Uninstall"
 SetRegView 64
 !endif
 
-; Remove the uninstall key.
-DeleteRegKey HKLM "${UNINST_KEY}"
+; Remove the entire group of uninstall key.
+DeleteRegKey HKLM "${UNINSTALL_KEY_FOLDER}"
 
-; Remove the entire group of keys.
-DeleteRegKey HKLM "SOFTWARE\${PRODUCT}"
+; Remove the entire group of install keys.
+DeleteRegKey HKLM "${INSTALL_KEY_FOLDER}"
 
 ; Remove shortcuts, if any.
-Delete "$SMPROGRAMS\${PRODUCT}\Uninstall.lnk"
-RMDir "$SMPROGRAMS\${PRODUCT}"
+Delete "$SMPROGRAMS\${LINK_FOLDER}\Uninstall.lnk"
+RMDir "$SMPROGRAMS\${LINK_FOLDER}"
 
-; As the name implies, the PERSISTENT_KEY must NOT be removed.
+; As the name implies, the PERSISTENT_KEY_FOLDER must NOT be removed.
 
 ; Remove uninstaller executable.
-Delete "${UNINST_EXE}"
+Delete "${UNINSTALL_EXE}"
 
 ; Remove files and directories used. Do not append version here, since is
 ; already present in the variable, it was remembered from te setup.
@@ -238,14 +260,14 @@ Function .onInit
 
 
 ; Check registry key for previous folder. The key is distinct for 32/64-bit.
-ReadRegStr $INSTDIR HKLM "${PERSISTENT_KEY}" "${INSTALL_LOCATION_KEY}"
+ReadRegStr $INSTDIR HKLM "${PERSISTENT_KEY_FOLDER}" "${INSTALL_LOCATION_KEY_NAME}"
 
 ${if} $INSTDIR == ""
   ; The default installation folder, if the key was not found.
   !ifdef W64
-    StrCpy $INSTDIR "$PROGRAMFILES64\GNU ARM Eclipse\${PRODNAME}"
+    StrCpy $INSTDIR "$PROGRAMFILES64\${PUBLISHER}\${PRODUCT}"
   !else
-    StrCpy $INSTDIR "$PROGRAMFILES\GNU ARM Eclipse\${PRODNAME}"
+    StrCpy $INSTDIR "$PROGRAMFILES\${PUBLISHER}\${PRODUCT}"
   !endif
 ${endif}
 
