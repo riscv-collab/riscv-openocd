@@ -211,7 +211,7 @@ Section "Uninstall"
 SetRegView 64
 !endif
 
-; Remove the entire group of uninstall key.
+; Remove the entire group of uninstall keys.
 DeleteRegKey HKLM "${UNINSTALL_KEY_FOLDER}"
 
 ; Remove the entire group of install keys.
