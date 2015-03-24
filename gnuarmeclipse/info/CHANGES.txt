@@ -1,6 +1,12 @@
 
 The following changes were applied to the OpenOCD master branch:
 
+[2015-03-22]
+
+- the NSIS script was fixed to prevent removing the keys when 
+uninstalling an older version.
+
+
 [2015-03-18]
 
 - the build scripts were extended to generate both the stable and the 
