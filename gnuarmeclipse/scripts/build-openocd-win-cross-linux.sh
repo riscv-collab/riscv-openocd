@@ -641,15 +641,7 @@ then
     cp -v ${SJLJ_PATH} "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
   fi
 
-  if [ -f "/usr/${CROSS_COMPILE_PREFIX}/lib/libwinpthread-1.dll" ]
-  then
-    cp "/usr/${CROSS_COMPILE_PREFIX}/lib/libwinpthread-1.dll" \
-      "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  else
-    echo "Searching /usr for libwinpthread-1.dll..."
-    PTHREAD_PATH=$(find /usr \! -readable -prune -o -name 'libwinpthread-1.dll' -print | grep ${CROSS_COMPILE_PREFIX})
-    cp -v "${PTHREAD_PATH}" "${OPENOCD_INSTALL_FOLDER}/openocd/bin"
-  fi
+
 
 fi
 
