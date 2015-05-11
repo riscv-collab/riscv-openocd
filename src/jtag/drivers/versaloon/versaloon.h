@@ -20,6 +20,8 @@
 #ifndef __VERSALOON_H_INCLUDED__
 #define __VERSALOON_H_INCLUDED__
 
+#include <libusb.h>
+
 struct usart_status_t {
 	uint32_t tx_buff_avail;
 	uint32_t tx_buff_size;
@@ -59,7 +61,8 @@ struct interface_swd_t {
 	RESULT(*fini)(uint8_t interface_index);
 	RESULT(*config)(uint8_t interface_index, uint8_t trn, uint16_t retry,
 		uint16_t dly);
-	RESULT(*seqout)(uint8_t interface_index, uint8_t *data, uint16_t bitlen);
+	RESULT(*seqout)(uint8_t interface_index, const uint8_t *data,
+			uint16_t bitlen);
 	RESULT(*seqin)(uint8_t interface_index, uint8_t *data, uint16_t bitlen);
 	RESULT(*transact)(uint8_t interface_index, uint8_t request,
 		uint32_t *data, uint8_t *ack);
@@ -106,7 +109,7 @@ struct versaloon_interface_t {
 };
 
 extern struct versaloon_interface_t versaloon_interface;
-extern usb_dev_handle *versaloon_usb_device_handle;
+extern libusb_device_handle *versaloon_usb_device_handle;
 
 #endif /* __VERSALOON_H_INCLUDED__ */
 

@@ -40,7 +40,7 @@
 #define MAX_THREADS 200
 /*  specific task  */
 struct linux_os {
-	char *name;
+	const char *name;
 	uint32_t init_task_addr;
 	int thread_count;
 	int threadid_count;
@@ -320,7 +320,7 @@ static int linux_os_detect(struct target *target)
 static int linux_os_smp_init(struct target *target);
 static int linux_os_clean(struct target *target);
 #define INIT_TASK 0
-static char *linux_symbol_list[] = {
+static const char * const linux_symbol_list[] = {
 	"init_task",
 	NULL
 };
@@ -329,7 +329,7 @@ static int linux_get_symbol_list_to_lookup(symbol_table_elem_t *symbol_list[])
 {
 	unsigned int i;
 	*symbol_list = (symbol_table_elem_t *)
-		malloc(sizeof(symbol_table_elem_t) * ARRAY_SIZE(linux_symbol_list));
+		calloc(ARRAY_SIZE(linux_symbol_list), sizeof(symbol_table_elem_t));
 
 	for (i = 0; i < ARRAY_SIZE(linux_symbol_list); i++)
 		(*symbol_list)[i].symbol_name = linux_symbol_list[i];
@@ -1149,6 +1149,7 @@ int linux_gdb_thread_packet(struct target *target,
 	}
 
 	gdb_put_packet(connection, out_str, strlen(out_str));
+	free(out_str);
 	return ERROR_OK;
 }
 

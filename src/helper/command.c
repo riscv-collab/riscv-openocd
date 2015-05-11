@@ -365,7 +365,7 @@ static int register_command_handler(struct command_context *cmd_ctx,
 
 	LOG_DEBUG("registering '%s'...", ocd_name);
 
-	Jim_CmdProc func = c->handler ? &script_command : &command_unknown;
+	Jim_CmdProc *func = c->handler ? &script_command : &command_unknown;
 	int retval = Jim_CreateCommand(interp, ocd_name, func, c, NULL);
 	free(ocd_name);
 	if (JIM_OK != retval)
@@ -1070,8 +1070,10 @@ static int jim_command_type(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 		Jim_SetResultString(interp, "native", -1);
 	else if (c->handler)
 		Jim_SetResultString(interp, "simple", -1);
-	else
+	else if (remaining == 0)
 		Jim_SetResultString(interp, "group", -1);
+	else
+		Jim_SetResultString(interp, "unknown", -1);
 
 	return JIM_OK;
 }

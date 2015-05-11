@@ -57,33 +57,37 @@ static int mips_m4k_examine_debug_reason(struct target *target)
 	int retval;
 
 	if ((target->debug_reason != DBG_REASON_DBGRQ)
-		&& (target->debug_reason != DBG_REASON_SINGLESTEP)) {
-		/* get info about inst breakpoint support */
-		retval = target_read_u32(target,
-			ejtag_info->ejtag_ibs_addr, &break_status);
-		if (retval != ERROR_OK)
-			return retval;
-		if (break_status & 0x1f) {
-			/* we have halted on a  breakpoint */
-			retval = target_write_u32(target,
-				ejtag_info->ejtag_ibs_addr, 0);
+			&& (target->debug_reason != DBG_REASON_SINGLESTEP)) {
+		if (ejtag_info->debug_caps & EJTAG_DCR_IB) {
+			/* get info about inst breakpoint support */
+			retval = target_read_u32(target,
+				ejtag_info->ejtag_ibs_addr, &break_status);
 			if (retval != ERROR_OK)
 				return retval;
-			target->debug_reason = DBG_REASON_BREAKPOINT;
+			if (break_status & 0x1f) {
+				/* we have halted on a  breakpoint */
+				retval = target_write_u32(target,
+					ejtag_info->ejtag_ibs_addr, 0);
+				if (retval != ERROR_OK)
+					return retval;
+				target->debug_reason = DBG_REASON_BREAKPOINT;
+			}
 		}
 
-		/* get info about data breakpoint support */
-		retval = target_read_u32(target,
-			ejtag_info->ejtag_dbs_addr, &break_status);
-		if (retval != ERROR_OK)
-			return retval;
-		if (break_status & 0x1f) {
-			/* we have halted on a  breakpoint */
-			retval = target_write_u32(target,
-				ejtag_info->ejtag_dbs_addr, 0);
+		if (ejtag_info->debug_caps & EJTAG_DCR_DB) {
+			/* get info about data breakpoint support */
+			retval = target_read_u32(target,
+				ejtag_info->ejtag_dbs_addr, &break_status);
 			if (retval != ERROR_OK)
 				return retval;
-			target->debug_reason = DBG_REASON_WATCHPOINT;
+			if (break_status & 0x1f) {
+				/* we have halted on a  breakpoint */
+				retval = target_write_u32(target,
+					ejtag_info->ejtag_dbs_addr, 0);
+				if (retval != ERROR_OK)
+					return retval;
+				target->debug_reason = DBG_REASON_WATCHPOINT;
+			}
 		}
 	}
 
@@ -314,11 +318,15 @@ static int mips_m4k_assert_reset(struct target *target)
 		srst_asserted = true;
 	}
 
-	if (target->reset_halt) {
-		/* use hardware to catch reset */
-		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_EJTAGBOOT);
-	} else
-		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_NORMALBOOT);
+
+	/* EJTAG before v2.5/2.6 does not support EJTAGBOOT or NORMALBOOT */
+	if (ejtag_info->ejtag_version != EJTAG_VERSION_20) {
+		if (target->reset_halt) {
+			/* use hardware to catch reset */
+			mips_ejtag_set_instr(ejtag_info, EJTAG_INST_EJTAGBOOT);
+		} else
+			mips_ejtag_set_instr(ejtag_info, EJTAG_INST_NORMALBOOT);
+	}
 
 	if (jtag_reset_config & RESET_HAS_SRST) {
 		/* here we should issue a srst only, but we may have to assert trst as well */
@@ -1131,6 +1139,7 @@ static int mips_m4k_bulk_write_memory(struct target *target, uint32_t address,
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+	struct working_area *fast_data_area;
 	int retval;
 	int write_t = 1;
 
@@ -1155,6 +1164,17 @@ static int mips_m4k_bulk_write_memory(struct target *target, uint32_t address,
 
 		/* reset fastadata state so the algo get reloaded */
 		ejtag_info->fast_access_save = -1;
+	}
+
+	fast_data_area = mips32->fast_data_area;
+
+	if (address <= fast_data_area->address + fast_data_area->size &&
+			fast_data_area->address <= address + count) {
+		LOG_ERROR("fast_data (0x%8.8" PRIx32 ") is within write area "
+			  "(0x%8.8" PRIx32 "-0x%8.8" PRIx32 ").",
+			  fast_data_area->address, address, address + count);
+		LOG_ERROR("Change work-area-phys or load_image address!");
+		return ERROR_FAIL;
 	}
 
 	/* mips32_pracc_fastdata_xfer requires uint32_t in host endianness, */

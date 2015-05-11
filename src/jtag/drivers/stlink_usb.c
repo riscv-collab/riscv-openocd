@@ -66,6 +66,11 @@
  * 8bit read/writes to max 64 bytes. */
 #define STLINK_MAX_RW8		(64)
 
+/* "WAIT" responses will be retried (with exponential backoff) at
+ * most this many times before failing to caller.
+ */
+#define MAX_WAIT_RETRIES 8
+
 enum stlink_jtag_api_version {
 	STLINK_JTAG_API_V1 = 1,
 	STLINK_JTAG_API_V2,
@@ -126,6 +131,9 @@ struct stlink_usb_handle_s {
 		/** trace module clock prescaler */
 		uint32_t prescale;
 	} trace;
+	/** reconnect is needed next time we try to query the
+	 * status */
+	bool reconnect_pending;
 };
 
 #define STLINK_DEBUG_ERR_OK            0x80
@@ -196,6 +204,7 @@ struct stlink_usb_handle_s {
 #define STLINK_DEBUG_APIV2_START_TRACE_RX  0x40
 #define STLINK_DEBUG_APIV2_STOP_TRACE_RX   0x41
 #define STLINK_DEBUG_APIV2_GET_TRACE_NB    0x42
+#define STLINK_DEBUG_APIV2_SWD_SET_FREQ    0x43
 
 #define STLINK_DEBUG_APIV2_DRIVE_NRST_LOW   0x00
 #define STLINK_DEBUG_APIV2_DRIVE_NRST_HIGH  0x01
@@ -217,6 +226,24 @@ enum stlink_mode {
 
 #define REQUEST_SENSE        0x03
 #define REQUEST_SENSE_LENGTH 18
+
+static const struct {
+	int speed;
+	int speed_divisor;
+} stlink_khz_to_speed_map[] = {
+	{4000, 0},
+	{1800, 1}, /* default */
+	{1200, 2},
+	{950,  3},
+	{480,  7},
+	{240, 15},
+	{125, 31},
+	{100, 40},
+	{50,  79},
+	{25, 158},
+	{15, 265},
+	{5,  798}
+};
 
 static void stlink_usb_init_buffer(void *handle, uint8_t direction, uint32_t size);
 
@@ -340,6 +367,64 @@ static int stlink_usb_xfer(void *handle, const uint8_t *buf, int size)
 	return ERROR_OK;
 }
 
+
+/**
+    Converts an STLINK status code held in the first byte of a response
+    to an openocd error, logs any error/wait status as debug output.
+*/
+static int stlink_usb_error_check(void *handle)
+{
+	struct stlink_usb_handle_s *h = handle;
+
+	assert(handle != NULL);
+
+	/* TODO: no error checking yet on api V1 */
+	if (h->jtag_api == STLINK_JTAG_API_V1)
+		h->databuf[0] = STLINK_DEBUG_ERR_OK;
+
+	switch (h->databuf[0]) {
+		case STLINK_DEBUG_ERR_OK:
+			return ERROR_OK;
+		case STLINK_DEBUG_ERR_FAULT:
+			LOG_DEBUG("SWD fault response (0x%x)", STLINK_DEBUG_ERR_FAULT);
+			return ERROR_FAIL;
+		case STLINK_SWD_AP_WAIT:
+			LOG_DEBUG("wait status SWD_AP_WAIT (0x%x)", STLINK_SWD_AP_WAIT);
+			return ERROR_WAIT;
+		case STLINK_SWD_DP_WAIT:
+			LOG_DEBUG("wait status SWD_DP_WAIT (0x%x)", STLINK_SWD_AP_WAIT);
+			return ERROR_WAIT;
+		default:
+			LOG_DEBUG("unknown/unexpected STLINK status code 0x%x", h->databuf[0]);
+			return ERROR_FAIL;
+	}
+}
+
+
+/** Issue an STLINK command via USB transfer, with retries on any wait status responses.
+
+    Works for commands where the STLINK_DEBUG status is returned in the first
+    byte of the response packet.
+
+    Returns an openocd result code.
+*/
+static int stlink_cmd_allow_retry(void *handle, const uint8_t *buf, int size)
+{
+	int retries = 0;
+	int res;
+	while (1) {
+		res = stlink_usb_xfer(handle, buf, size);
+		if (res != ERROR_OK)
+			return res;
+		res = stlink_usb_error_check(handle);
+		if (res == ERROR_WAIT && retries < MAX_WAIT_RETRIES) {
+			usleep((1<<retries++) * 1000);
+			continue;
+		}
+		return res;
+	}
+}
+
 /** */
 static int stlink_usb_read_trace(void *handle, const uint8_t *buf, int size)
 {
@@ -389,40 +474,6 @@ static void stlink_usb_init_buffer(void *handle, uint8_t direction, uint32_t siz
 
 	if (h->version.stlink == 1)
 		stlink_usb_xfer_v1_create_cmd(handle, direction, size);
-}
-
-static const char * const stlink_usb_error_msg[] = {
-	"unknown"
-};
-
-/** */
-static int stlink_usb_error_check(void *handle)
-{
-	int res;
-	const char *err_msg = 0;
-	struct stlink_usb_handle_s *h = handle;
-
-	assert(handle != NULL);
-
-	/* TODO: no error checking yet on api V1 */
-	if (h->jtag_api == STLINK_JTAG_API_V1)
-		h->databuf[0] = STLINK_DEBUG_ERR_OK;
-
-	switch (h->databuf[0]) {
-		case STLINK_DEBUG_ERR_OK:
-			res = ERROR_OK;
-			break;
-		case STLINK_DEBUG_ERR_FAULT:
-		default:
-			err_msg = stlink_usb_error_msg[0];
-			res = ERROR_FAIL;
-			break;
-	}
-
-	if (res != ERROR_OK)
-		LOG_DEBUG("status error: %d ('%s')", h->databuf[0], err_msg);
-
-	return res;
 }
 
 /** */
@@ -502,6 +553,31 @@ static int stlink_usb_check_voltage(void *handle, float *target_voltage)
 	return ERROR_OK;
 }
 
+static int stlink_usb_set_swdclk(void *handle, uint16_t clk_divisor)
+{
+	struct stlink_usb_handle_s *h = handle;
+
+	assert(handle != NULL);
+
+	/* only supported by stlink/v2 and for firmware >= 22 */
+	if (h->version.stlink == 1 || h->version.jtag < 22)
+		return ERROR_COMMAND_NOTFOUND;
+
+	stlink_usb_init_buffer(handle, h->rx_ep, 2);
+
+	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_COMMAND;
+	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_APIV2_SWD_SET_FREQ;
+	h_u16_to_le(h->cmdbuf+h->cmdidx, clk_divisor);
+	h->cmdidx += 2;
+
+	int result = stlink_cmd_allow_retry(handle, h->databuf, 2);
+
+	if (result != ERROR_OK)
+		return result;
+
+	return ERROR_OK;
+}
+
 /** */
 static int stlink_usb_current_mode(void *handle, uint8_t *mode)
 {
@@ -527,7 +603,6 @@ static int stlink_usb_current_mode(void *handle, uint8_t *mode)
 /** */
 static int stlink_usb_mode_enter(void *handle, enum stlink_mode type)
 {
-	int res;
 	int rx_size = 0;
 	struct stlink_usb_handle_s *h = handle;
 
@@ -569,14 +644,7 @@ static int stlink_usb_mode_enter(void *handle, enum stlink_mode type)
 			return ERROR_FAIL;
 	}
 
-	res = stlink_usb_xfer(handle, h->databuf, rx_size);
-
-	if (res != ERROR_OK)
-		return res;
-
-	res = stlink_usb_error_check(h);
-
-	return res;
+	return stlink_cmd_allow_retry(handle, h->databuf, rx_size);
 }
 
 /** */
@@ -617,6 +685,20 @@ static int stlink_usb_mode_leave(void *handle, enum stlink_mode type)
 }
 
 static int stlink_usb_assert_srst(void *handle, int srst);
+
+static enum stlink_mode stlink_get_mode(enum hl_transports t)
+{
+	switch (t) {
+	case HL_TRANSPORT_SWD:
+		return STLINK_MODE_DEBUG_SWD;
+	case HL_TRANSPORT_JTAG:
+		return STLINK_MODE_DEBUG_JTAG;
+	case HL_TRANSPORT_SWIM:
+		return STLINK_MODE_DEBUG_SWIM;
+	default:
+		return STLINK_MODE_UNKNOWN;
+	}
+}
 
 /** */
 static int stlink_usb_init_mode(void *handle, bool connect_under_reset)
@@ -691,20 +773,7 @@ static int stlink_usb_init_mode(void *handle, bool connect_under_reset)
 	LOG_DEBUG("MODE: 0x%02X", mode);
 
 	/* set selected mode */
-	switch (h->transport) {
-		case HL_TRANSPORT_SWD:
-			emode = STLINK_MODE_DEBUG_SWD;
-			break;
-		case HL_TRANSPORT_JTAG:
-			emode = STLINK_MODE_DEBUG_JTAG;
-			break;
-		case HL_TRANSPORT_SWIM:
-			emode = STLINK_MODE_DEBUG_SWIM;
-			break;
-		default:
-			emode = STLINK_MODE_UNKNOWN;
-			break;
-	}
+	emode = stlink_get_mode(h->transport);
 
 	if (emode == STLINK_MODE_UNKNOWN) {
 		LOG_ERROR("selected mode (transport) not supported");
@@ -771,19 +840,16 @@ static int stlink_usb_v2_read_debug_reg(void *handle, uint32_t addr, uint32_t *v
 	h_u32_to_le(h->cmdbuf+h->cmdidx, addr);
 	h->cmdidx += 4;
 
-	res = stlink_usb_xfer(handle, h->databuf, 8);
-
+	res = stlink_cmd_allow_retry(handle, h->databuf, 8);
 	if (res != ERROR_OK)
 		return res;
 
 	*val = le_to_h_u32(h->databuf + 4);
-
-	return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : ERROR_FAIL;
+	return ERROR_OK;
 }
 
 static int stlink_usb_write_debug_reg(void *handle, uint32_t addr, uint32_t val)
 {
-	int res;
 	struct stlink_usb_handle_s *h = handle;
 
 	assert(handle != NULL);
@@ -800,12 +866,7 @@ static int stlink_usb_write_debug_reg(void *handle, uint32_t addr, uint32_t val)
 	h_u32_to_le(h->cmdbuf+h->cmdidx, val);
 	h->cmdidx += 4;
 
-	res = stlink_usb_xfer(handle, h->databuf, 2);
-
-	if (res != ERROR_OK)
-		return res;
-
-	return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : ERROR_FAIL;
+	return stlink_cmd_allow_retry(handle, h->databuf, 2);
 }
 
 /** */
@@ -877,8 +938,22 @@ static enum target_state stlink_usb_state(void *handle)
 
 	assert(handle != NULL);
 
-	if (h->jtag_api == STLINK_JTAG_API_V2)
-		return stlink_usb_v2_get_status(handle);
+	if (h->reconnect_pending) {
+		LOG_INFO("Previous state query failed, trying to reconnect");
+		res = stlink_usb_mode_enter(handle, stlink_get_mode(h->transport));
+
+		if (res != ERROR_OK)
+			return TARGET_UNKNOWN;
+
+		h->reconnect_pending = false;
+	}
+
+	if (h->jtag_api == STLINK_JTAG_API_V2) {
+		res = stlink_usb_v2_get_status(handle);
+		if (res == TARGET_UNKNOWN)
+			h->reconnect_pending = true;
+		return res;
+	}
 
 	stlink_usb_init_buffer(handle, h->rx_ep, 2);
 
@@ -895,13 +970,14 @@ static enum target_state stlink_usb_state(void *handle)
 	if (h->databuf[0] == STLINK_CORE_HALTED)
 		return TARGET_HALTED;
 
+	h->reconnect_pending = true;
+
 	return TARGET_UNKNOWN;
 }
 
 /** */
 static int stlink_usb_reset(void *handle)
 {
-	int res;
 	struct stlink_usb_handle_s *h = handle;
 
 	assert(handle != NULL);
@@ -915,23 +991,11 @@ static int stlink_usb_reset(void *handle)
 	else
 		h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_APIV2_RESETSYS;
 
-	res = stlink_usb_xfer(handle, h->databuf, 2);
-
-	if (res != ERROR_OK)
-		return res;
-
-	LOG_DEBUG("RESET: 0x%08X", h->databuf[0]);
-
-	/* the following is not a error under swd (using hardware srst), so return success */
-	if (h->databuf[0] == STLINK_SWD_AP_WAIT || h->databuf[0] == STLINK_SWD_DP_WAIT)
-		return ERROR_OK;
-
-	return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : ERROR_FAIL;
+	return stlink_cmd_allow_retry(handle, h->databuf, 2);
 }
 
 static int stlink_usb_assert_srst(void *handle, int srst)
 {
-	int res;
 	struct stlink_usb_handle_s *h = handle;
 
 	assert(handle != NULL);
@@ -945,12 +1009,7 @@ static int stlink_usb_assert_srst(void *handle, int srst)
 	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_APIV2_DRIVE_NRST;
 	h->cmdbuf[h->cmdidx++] = srst;
 
-	res = stlink_usb_xfer(handle, h->databuf, 2);
-
-	if (res != ERROR_OK)
-		return res;
-
-	return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : ERROR_FAIL;
+	return stlink_cmd_allow_retry(handle, h->databuf, 2);
 }
 
 /** */
@@ -1019,7 +1078,7 @@ static void stlink_usb_trace_disable(void *handle)
 
 	assert(h->version.jtag >= STLINK_TRACE_MIN_VERSION);
 
-	LOG_DEBUG("Tracing: disable\n");
+	LOG_DEBUG("Tracing: disable");
 
 	stlink_usb_init_buffer(handle, h->rx_ep, 2);
 	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_COMMAND;
@@ -1046,7 +1105,7 @@ static int stlink_usb_trace_enable(void *handle)
 
 		res = stlink_configure_target_trace_port(handle);
 		if (res != ERROR_OK)
-			LOG_ERROR("Unable to configure tracing on target\n");
+			LOG_ERROR("Unable to configure tracing on target");
 
 		trace_hz = h->trace.prescale > 0 ?
 			h->trace.source_hz / (h->trace.prescale + 1) :
@@ -1065,7 +1124,7 @@ static int stlink_usb_trace_enable(void *handle)
 
 		if (res == ERROR_OK)  {
 			h->trace.enabled = true;
-			LOG_DEBUG("Tracing: recording at %" PRIu32 "Hz\n", trace_hz);
+			LOG_DEBUG("Tracing: recording at %" PRIu32 "Hz", trace_hz);
 			/* We need the trace read function to be called at a
 			 * high-enough frequency to ensure reasonable
 			 * "timeliness" in processing ITM/DWT data.
@@ -1097,9 +1156,9 @@ static int stlink_usb_run(void *handle)
 		/* Try to start tracing, if requested */
 		if (res == ERROR_OK && h->trace.source_hz && !h->trace.enabled) {
 			if (stlink_usb_trace_enable(handle) == ERROR_OK)
-				LOG_DEBUG("Tracing: enabled\n");
+				LOG_DEBUG("Tracing: enabled");
 			else
-				LOG_ERROR("Tracing: enable failed\n");
+				LOG_ERROR("Tracing: enable failed");
 		}
 
 		return res;
@@ -1110,12 +1169,7 @@ static int stlink_usb_run(void *handle)
 	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_COMMAND;
 	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_RUNCORE;
 
-	res = stlink_usb_xfer(handle, h->databuf, 2);
-
-	if (res != ERROR_OK)
-		return res;
-
-	return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : ERROR_FAIL;
+	return stlink_cmd_allow_retry(handle, h->databuf, 2);
 }
 
 /** */
@@ -1140,18 +1194,12 @@ static int stlink_usb_halt(void *handle)
 	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_COMMAND;
 	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_FORCEDEBUG;
 
-	res = stlink_usb_xfer(handle, h->databuf, 2);
-
-	if (res != ERROR_OK)
-		return res;
-
-	return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : ERROR_FAIL;
+	return stlink_cmd_allow_retry(handle, h->databuf, 2);
 }
 
 /** */
 static int stlink_usb_step(void *handle)
 {
-	int res;
 	struct stlink_usb_handle_s *h = handle;
 
 	assert(handle != NULL);
@@ -1169,12 +1217,7 @@ static int stlink_usb_step(void *handle)
 	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_COMMAND;
 	h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_STEPCORE;
 
-	res = stlink_usb_xfer(handle, h->databuf, 2);
-
-	if (res != ERROR_OK)
-		return res;
-
-	return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : ERROR_FAIL;
+	return stlink_cmd_allow_retry(handle, h->databuf, 2);
 }
 
 /** */
@@ -1218,25 +1261,24 @@ static int stlink_usb_read_reg(void *handle, int num, uint32_t *val)
 		h->cmdbuf[h->cmdidx++] = STLINK_DEBUG_APIV2_READREG;
 	h->cmdbuf[h->cmdidx++] = num;
 
-	res = stlink_usb_xfer(handle, h->databuf, h->jtag_api == STLINK_JTAG_API_V1 ? 4 : 8);
-
-	if (res != ERROR_OK)
-		return res;
-
-	if (h->jtag_api == STLINK_JTAG_API_V1)
+	if (h->jtag_api == STLINK_JTAG_API_V1) {
+		res = stlink_usb_xfer(handle, h->databuf, 4);
+		if (res != ERROR_OK)
+			return res;
 		*val = le_to_h_u32(h->databuf);
-	else {
+		return ERROR_OK;
+	} else {
+		res = stlink_cmd_allow_retry(handle, h->databuf, 8);
+		if (res != ERROR_OK)
+			return res;
 		*val = le_to_h_u32(h->databuf + 4);
-		return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : ERROR_FAIL;
+		return ERROR_OK;
 	}
-
-	return ERROR_OK;
 }
 
 /** */
 static int stlink_usb_write_reg(void *handle, int num, uint32_t val)
 {
-	int res;
 	struct stlink_usb_handle_s *h = handle;
 
 	assert(handle != NULL);
@@ -1252,12 +1294,7 @@ static int stlink_usb_write_reg(void *handle, int num, uint32_t val)
 	h_u32_to_le(h->cmdbuf+h->cmdidx, val);
 	h->cmdidx += 4;
 
-	res = stlink_usb_xfer(handle, h->databuf, 2);
-
-	if (res != ERROR_OK)
-		return res;
-
-	return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : ERROR_FAIL;
+	return stlink_cmd_allow_retry(handle, h->databuf, 2);
 }
 
 static int stlink_usb_get_rw_status(void *handle)
@@ -1280,7 +1317,7 @@ static int stlink_usb_get_rw_status(void *handle)
 	if (res != ERROR_OK)
 		return res;
 
-	return h->databuf[0] == STLINK_DEBUG_ERR_OK ? ERROR_OK : res;
+	return stlink_usb_error_check(h);
 }
 
 /** */
@@ -1433,6 +1470,7 @@ static int stlink_usb_read_mem(void *handle, uint32_t addr, uint32_t size,
 {
 	int retval = ERROR_OK;
 	uint32_t bytes_remaining;
+	int retries = 0;
 	struct stlink_usb_handle_s *h = handle;
 
 	/* calculate byte count */
@@ -1463,6 +1501,10 @@ static int stlink_usb_read_mem(void *handle, uint32_t addr, uint32_t size,
 
 				uint32_t head_bytes = 4 - (addr % 4);
 				retval = stlink_usb_read_mem8(handle, addr, head_bytes, buffer);
+				if (retval == ERROR_WAIT && retries < MAX_WAIT_RETRIES) {
+					usleep((1<<retries++) * 1000);
+					continue;
+				}
 				if (retval != ERROR_OK)
 					return retval;
 				buffer += head_bytes;
@@ -1478,6 +1520,10 @@ static int stlink_usb_read_mem(void *handle, uint32_t addr, uint32_t size,
 		} else
 			retval = stlink_usb_read_mem8(handle, addr, bytes_remaining, buffer);
 
+		if (retval == ERROR_WAIT && retries < MAX_WAIT_RETRIES) {
+			usleep((1<<retries++) * 1000);
+			continue;
+		}
 		if (retval != ERROR_OK)
 			return retval;
 
@@ -1494,6 +1540,7 @@ static int stlink_usb_write_mem(void *handle, uint32_t addr, uint32_t size,
 {
 	int retval = ERROR_OK;
 	uint32_t bytes_remaining;
+	int retries = 0;
 	struct stlink_usb_handle_s *h = handle;
 
 	/* calculate byte count */
@@ -1524,6 +1571,10 @@ static int stlink_usb_write_mem(void *handle, uint32_t addr, uint32_t size,
 
 				uint32_t head_bytes = 4 - (addr % 4);
 				retval = stlink_usb_write_mem8(handle, addr, head_bytes, buffer);
+				if (retval == ERROR_WAIT && retries < MAX_WAIT_RETRIES) {
+					usleep((1<<retries++) * 1000);
+					continue;
+				}
 				if (retval != ERROR_OK)
 					return retval;
 				buffer += head_bytes;
@@ -1539,6 +1590,10 @@ static int stlink_usb_write_mem(void *handle, uint32_t addr, uint32_t size,
 
 		} else
 			retval = stlink_usb_write_mem8(handle, addr, bytes_remaining, buffer);
+		if (retval == ERROR_WAIT && retries < MAX_WAIT_RETRIES) {
+			usleep((1<<retries++) * 1000);
+			continue;
+		}
 		if (retval != ERROR_OK)
 			return retval;
 
@@ -1551,14 +1606,72 @@ static int stlink_usb_write_mem(void *handle, uint32_t addr, uint32_t size,
 }
 
 /** */
-static int stlink_usb_close(void *fd)
+static int stlink_usb_override_target(const char *targetname)
 {
-	struct stlink_usb_handle_s *h = fd;
+	return !strcmp(targetname, "cortex_m");
+}
 
-	if (h->fd)
+static int stlink_speed(void *handle, int khz, bool query)
+{
+	unsigned i;
+	int speed_index = -1;
+	int speed_diff = INT_MAX;
+	struct stlink_usb_handle_s *h = handle;
+
+	/* only supported by stlink/v2 and for firmware >= 22 */
+	if (h && (h->version.stlink == 1 || h->version.jtag < 22))
+		return khz;
+
+	for (i = 0; i < ARRAY_SIZE(stlink_khz_to_speed_map); i++) {
+		if (khz == stlink_khz_to_speed_map[i].speed) {
+			speed_index = i;
+			break;
+		} else {
+			int current_diff = khz - stlink_khz_to_speed_map[i].speed;
+			/* get abs value for comparison */
+			current_diff = (current_diff > 0) ? current_diff : -current_diff;
+			if ((current_diff < speed_diff) && khz >= stlink_khz_to_speed_map[i].speed) {
+				speed_diff = current_diff;
+				speed_index = i;
+			}
+		}
+	}
+
+	bool match = true;
+
+	if (speed_index == -1) {
+		/* this will only be here if we cannot match the slow speed.
+		 * use the slowest speed we support.*/
+		speed_index = ARRAY_SIZE(stlink_khz_to_speed_map) - 1;
+		match = false;
+	} else if (i == ARRAY_SIZE(stlink_khz_to_speed_map))
+		match = false;
+
+	if (!match && query) {
+		LOG_INFO("Unable to match requested speed %d kHz, using %d kHz", \
+				khz, stlink_khz_to_speed_map[speed_index].speed);
+	}
+
+	if (h && !query) {
+		int result = stlink_usb_set_swdclk(h, stlink_khz_to_speed_map[speed_index].speed_divisor);
+		if (result != ERROR_OK) {
+			LOG_ERROR("Unable to set adapter speed");
+			return khz;
+		}
+	}
+
+	return stlink_khz_to_speed_map[speed_index].speed;
+}
+
+/** */
+static int stlink_usb_close(void *handle)
+{
+	struct stlink_usb_handle_s *h = handle;
+
+	if (h && h->fd)
 		jtag_libusb_close(h->fd);
 
-	free(fd);
+	free(h);
 
 	return ERROR_OK;
 }
@@ -1583,9 +1696,11 @@ static int stlink_usb_open(struct hl_interface_param_s *param, void **fd)
 
 	const uint16_t vids[] = { param->vid, 0 };
 	const uint16_t pids[] = { param->pid, 0 };
+	const char *serial = param->serial;
 
-	LOG_DEBUG("transport: %d vid: 0x%04x pid: 0x%04x", param->transport,
-		param->vid, param->pid);
+	LOG_DEBUG("transport: %d vid: 0x%04x pid: 0x%04x serial: %s",
+			param->transport, param->vid, param->pid,
+			param->serial ? param->serial : "");
 
 	/*
 	  On certain host USB configurations(e.g. MacBook Air)
@@ -1597,7 +1712,7 @@ static int stlink_usb_open(struct hl_interface_param_s *param, void **fd)
 	  in order to become operational.
 	 */
 	do {
-		if (jtag_libusb_open(vids, pids, &h->fd) != ERROR_OK) {
+		if (jtag_libusb_open(vids, pids, serial, &h->fd) != ERROR_OK) {
 			LOG_ERROR("open failed");
 			goto error_open;
 		}
@@ -1716,8 +1831,18 @@ static int stlink_usb_open(struct hl_interface_param_s *param, void **fd)
 	err = stlink_usb_init_mode(h, param->connect_under_reset);
 
 	if (err != ERROR_OK) {
-		LOG_ERROR("init mode failed");
+		LOG_ERROR("init mode failed (unable to connect to the target)");
 		goto error_open;
+	}
+
+	/* clock speed only supported by stlink/v2 and for firmware >= 22 */
+	if (h->version.stlink >= 2 && h->version.jtag >= 22) {
+		LOG_DEBUG("Supported clock speeds are:");
+
+		for (unsigned i = 0; i < ARRAY_SIZE(stlink_khz_to_speed_map); i++)
+			LOG_DEBUG("%d kHz", stlink_khz_to_speed_map[i].speed);
+
+		stlink_speed(h, param->initial_interface_speed, false);
 	}
 
 	/* get cpuid, so we can determine the max page size
@@ -1778,5 +1903,9 @@ struct hl_layout_api_s stlink_usb_layout_api = {
 	/** */
 	.write_mem = stlink_usb_write_mem,
 	/** */
-	.write_debug_reg = stlink_usb_write_debug_reg
+	.write_debug_reg = stlink_usb_write_debug_reg,
+	/** */
+	.override_target = stlink_usb_override_target,
+	/** */
+	.speed = stlink_speed,
 };

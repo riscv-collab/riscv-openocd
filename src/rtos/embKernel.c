@@ -58,7 +58,7 @@ enum {
 	SYMBOL_ID_sCurrentTaskCount = 5,
 };
 
-static char *embKernel_symbol_list[] = {
+static const char * const embKernel_symbol_list[] = {
 		"Rtos::sCurrentTask",
 		"Rtos::sListReady",
 		"Rtos::sListSleep",
@@ -81,7 +81,7 @@ struct embKernel_params {
 	const struct rtos_register_stacking *stacking_info;
 };
 
-struct embKernel_params embKernel_params_list[] = {
+static const struct embKernel_params embKernel_params_list[] = {
 		{
 			"cortex_m", /* target_name */
 			4, /* pointer_width */
@@ -131,7 +131,7 @@ static int embKernel_create(struct target *target)
 		return -1;
 	}
 
-	target->rtos->rtos_specific_params = &embKernel_params_list[i];
+	target->rtos->rtos_specific_params = (void *) &embKernel_params_list[i];
 	return 0;
 }
 
@@ -335,7 +335,7 @@ static int embKernel_get_thread_reg_list(struct rtos *rtos, int64_t thread_id, c
 static int embKernel_get_symbol_list_to_lookup(symbol_table_elem_t *symbol_list[])
 {
 	unsigned int i;
-	*symbol_list = malloc(sizeof(symbol_table_elem_t) * ARRAY_SIZE(embKernel_symbol_list));
+	*symbol_list = calloc(ARRAY_SIZE(embKernel_symbol_list), sizeof(symbol_table_elem_t));
 
 	for (i = 0; i < ARRAY_SIZE(embKernel_symbol_list); i++)
 		(*symbol_list)[i].symbol_name = embKernel_symbol_list[i];

@@ -11,11 +11,6 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
 #ifndef OR1K_DU
@@ -72,6 +67,10 @@ static inline struct or1k_du *or1k_to_du(struct or1k_common *or1k)
 	struct or1k_jtag *jtag = &or1k->jtag;
 	return (struct or1k_du *)jtag->du_core;
 }
+
+int or1k_adv_jtag_jsp_xfer(struct or1k_jtag *jtag_info,
+				  int *out_len, unsigned char *out_buffer,
+				  int *in_len, unsigned char *in_buffer);
 
 #endif
 

@@ -137,6 +137,9 @@ File "${INSTALL_FOLDER}\gnuarmeclipse\*"
 ; Write the uninstaller file
 WriteUninstaller "${UNINSTALL_EXE}"
 
+; Write the uninstaller file
+WriteUninstaller "${UNINSTALL_EXE}"
+
 !ifdef W64
   SetRegView 64
 !endif
