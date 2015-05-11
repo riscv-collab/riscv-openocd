@@ -649,6 +649,12 @@ void swd_add_reset(int req_srst)
 			if (adapter_nsrst_delay)
 				jtag_add_sleep(adapter_nsrst_delay * 1000);
 		}
+
+		retval = jtag_execute_queue();
+		if (retval != ERROR_OK) {
+			LOG_ERROR("SRST timings error");
+			return;
+		}
 	}
 }
 
@@ -1801,8 +1807,6 @@ void adapter_assert_reset(void)
 			jtag_add_reset(0, 1);
 	} else if (transport_is_swd())
 		swd_add_reset(1);
-	else if (transport_is_cmsis_dap())
-		swd_add_reset(1);  /* FIXME */
 	else if (get_current_transport() != NULL)
 		LOG_ERROR("reset is not supported on %s",
 			get_current_transport()->name);
@@ -1816,11 +1820,31 @@ void adapter_deassert_reset(void)
 		jtag_add_reset(0, 0);
 	else if (transport_is_swd())
 		swd_add_reset(0);
-	else if (transport_is_cmsis_dap())
-		swd_add_reset(0);  /* FIXME */
 	else if (get_current_transport() != NULL)
 		LOG_ERROR("reset is not supported on %s",
 			get_current_transport()->name);
 	else
 		LOG_ERROR("transport is not selected");
+}
+
+int adapter_config_trace(bool enabled, enum tpio_pin_protocol pin_protocol,
+			 uint32_t port_size, unsigned int *trace_freq)
+{
+	if (jtag->config_trace)
+		return jtag->config_trace(enabled, pin_protocol, port_size,
+					  trace_freq);
+	else if (enabled) {
+		LOG_ERROR("The selected interface does not support tracing");
+		return ERROR_FAIL;
+	}
+
+	return ERROR_OK;
+}
+
+int adapter_poll_trace(uint8_t *buf, size_t *size)
+{
+	if (jtag->poll_trace)
+		return jtag->poll_trace(buf, size);
+
+	return ERROR_FAIL;
 }

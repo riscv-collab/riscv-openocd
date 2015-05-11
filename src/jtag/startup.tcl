@@ -81,16 +81,16 @@ proc srst_asserted {} {
 # measure actual JTAG clock
 proc measure_clk {} {
 	set start_time [ms];
-	runtest 10000000; 
-	echo "Running at more than [expr 10000.0 / ([ms]-$start_time)] kHz";
+        set iterations 10000000;
+	runtest $iterations;
+	echo "Running at more than [expr $iterations.0 / ([ms]-$start_time)] kHz";
 }
 
 add_help_text measure_clk "Runs a test to measure the JTAG clk. Useful with RCLK / RTCK."
 
 proc default_to_jtag { f args } {
-	if [catch {transport select} current_transport] {
-		echo "Info : session transport was not selected, defaulting to JTAG"
-		transport select jtag
+	set current_transport [transport select]
+	if {[using_jtag]} {
 		eval $f $args
 	} {
 		error "session transport is \"$current_transport\" but your config requires JTAG"

@@ -1053,12 +1053,6 @@ static int cortex_m_assert_reset(struct target *target)
 		 * This has the disadvantage of not resetting the peripherals, so a
 		 * reset-init event handler is needed to perform any peripheral resets.
 		 */
-		retval = mem_ap_write_atomic_u32(swjdp, NVIC_AIRCR,
-				AIRCR_VECTKEY | ((reset_config == CORTEX_M_RESET_SYSRESETREQ)
-				? AIRCR_SYSRESETREQ : AIRCR_VECTRESET));
-		if (retval != ERROR_OK)
-			return retval;
-
 		LOG_DEBUG("Using Cortex-M %s", (reset_config == CORTEX_M_RESET_SYSRESETREQ)
 			? "SYSRESETREQ" : "VECTRESET");
 
@@ -1067,17 +1061,16 @@ static int cortex_m_assert_reset(struct target *target)
 				"handler to reset any peripherals or configure hardware srst support.");
 		}
 
-		/*
-		  SAM4L needs to execute security initalization
-		  startup sequence before AP access would be enabled.
-		  During the intialization CDBGPWRUPACK is pulled low and we
-		  need to wait for it to be set to 1 again.
-		*/
-		retval = dap_dp_poll_register(swjdp, DP_CTRL_STAT,
-					      CDBGPWRUPACK, CDBGPWRUPACK, 100);
+		retval = mem_ap_write_atomic_u32(swjdp, NVIC_AIRCR,
+				AIRCR_VECTKEY | ((reset_config == CORTEX_M_RESET_SYSRESETREQ)
+				? AIRCR_SYSRESETREQ : AIRCR_VECTRESET));
+		if (retval != ERROR_OK)
+			LOG_DEBUG("Ignoring AP write error right after reset");
+
+		retval = ahbap_debugport_init(swjdp);
 		if (retval != ERROR_OK) {
-			LOG_ERROR("Failed waitnig for CDBGPWRUPACK");
-			return ERROR_FAIL;
+			LOG_ERROR("DP initialisation failed");
+			return retval;
 		}
 
 		{
@@ -1113,6 +1106,17 @@ static int cortex_m_deassert_reset(struct target *target)
 
 	/* deassert reset lines */
 	adapter_deassert_reset();
+
+	enum reset_types jtag_reset_config = jtag_get_reset_config();
+
+	if ((jtag_reset_config & RESET_HAS_SRST) &&
+	    !(jtag_reset_config & RESET_SRST_NO_GATING)) {
+		int retval = ahbap_debugport_init(target_to_cm(target)->armv7m.arm.dap);
+		if (retval != ERROR_OK) {
+			LOG_ERROR("DP initialisation failed");
+			return retval;
+		}
+	}
 
 	return ERROR_OK;
 }
@@ -1932,6 +1936,16 @@ int cortex_m_examine(struct target *target)
 			armv7m->dap.tar_autoincr_block = (1 << 12);
 		}
 
+		/* Configure trace modules */
+		retval = target_write_u32(target, DCB_DEMCR, TRCENA | armv7m->demcr);
+		if (retval != ERROR_OK)
+			return retval;
+
+		if (armv7m->trace_config.config_type != DISABLED) {
+			armv7m_trace_tpiu_config(target);
+			armv7m_trace_itm_config(target);
+		}
+
 		/* NOTE: FPB and DWT are both optional. */
 
 		/* Setup FPB */
@@ -2323,6 +2337,9 @@ static const struct command_registration cortex_m_exec_command_handlers[] = {
 static const struct command_registration cortex_m_command_handlers[] = {
 	{
 		.chain = armv7m_command_handlers,
+	},
+	{
+		.chain = armv7m_trace_command_handlers,
 	},
 	{
 		.name = "cortex_m",

@@ -170,7 +170,7 @@ controllers (LPC3180, Orion, S3C24xx, more) is included.
 
 The OpenOCD web site provides the latest public news from the community:
 
-@uref{http://openocd.sourceforge.net/}
+@uref{http://openocd.org/}
 
 @section Latest User's Guide:
 
@@ -178,11 +178,11 @@ The user's guide you are now reading may not be the latest one
 available. A version for more recent code may be available.
 Its HTML form is published regularly at:
 
-@uref{http://openocd.sourceforge.net/doc/html/index.html}
+@uref{http://openocd.org/doc/html/index.html}
 
 PDF form is likewise published at:
 
-@uref{http://openocd.sourceforge.net/doc/pdf/openocd.pdf}
+@uref{http://openocd.org/doc/pdf/openocd.pdf}
 
 @section OpenOCD User's Forum
 
@@ -256,7 +256,7 @@ providing a Doxygen reference manual. This document contains more
 technical information about the software internals, development
 processes, and similar documentation:
 
-@uref{http://openocd.sourceforge.net/doc/doxygen/html/index.html}
+@uref{http://openocd.org/doc/doxygen/html/index.html}
 
 This document is a work-in-progress, but contributions would be welcome
 to fill in the gaps. All of the source files are provided in-tree,
@@ -292,7 +292,7 @@ communication between developers:
 
 The OpenOCD Bug Tracker is hosted on SourceForge:
 
-@uref{https://sourceforge.net/p/openocd/tickets/}
+@uref{http://bugs.openocd.org/}
 
 
 @node Debug Adapter Hardware
@@ -735,7 +735,7 @@ If all goes well you'll see output something like
 @example
 Open On-Chip Debugger 0.4.0 (2010-01-14-15:06)
 For bug reports, read
-        http://openocd.sourceforge.net/doc/doxygen/bugs.html
+        http://openocd.org/doc/doxygen/bugs.html
 Info : JTAG tap: lm3s.cpu tap/device found: 0x3ba00477
        (mfg: 0x23b, part: 0xba00, ver: 0x3)
 @end example
@@ -3088,6 +3088,7 @@ which are not currently documented here.
 @end quotation
 @end deffn
 
+@anchor{hla_interface}
 @deffn {Interface Driver} {hla}
 This is a driver that supports multiple High Level Adapters.
 This type of adapter does not expose some of the lower level api's
@@ -3118,13 +3119,6 @@ The vendor ID and product ID of the device.
 @deffn {Command} {hla_command} command
 Execute a custom adapter-specific command. The @var{command} string is
 passed as is to the underlying adapter layout handler.
-@end deffn
-
-@deffn {Config Command} {trace} source_clock_hz [output_file_path]
-Enable SWO tracing (if supported). The source clock rate for the
-trace port must be specified, this is typically the CPU clock rate. If
-the optional output file is specified then raw trace data is appended
-to the file, and the file is created if it does not exist.
 @end deffn
 @end deffn
 
@@ -3177,11 +3171,20 @@ displays the names of the transports supported by this
 version of OpenOCD.
 @end deffn
 
-@deffn Command {transport select} transport_name
+@deffn Command {transport select} @option{transport_name}
 Select which of the supported transports to use in this OpenOCD session.
-The transport must be supported by the debug adapter hardware and by the
-version of OpenOCD you are using (including the adapter's driver).
-No arguments: returns name of session's selected transport.
+
+When invoked with @option{transport_name}, attempts to select the named
+transport.  The transport must be supported by the debug adapter
+hardware and by the version of OpenOCD you are using (including the
+adapter's driver).
+
+If no transport has been selected and no @option{transport_name} is
+provided, @command{transport select} auto-selects the first transport
+supported by the debug adapter.
+
+@command{transport select} always returns the name of the session's selected
+transport, if any.
 @end deffn
 
 @subsection JTAG Transport
@@ -3192,6 +3195,12 @@ JTAG transports expose a chain of one or more Test Access Points (TAPs),
 each of which must be explicitly declared.
 JTAG supports both debugging and boundary scan testing.
 Flash programming support is built on top of debug support.
+
+JTAG transport is selected with the command @command{transport select
+jtag}. Unless your adapter uses @ref{hla_interface,the hla interface
+driver}, in which case the command is @command{transport select
+hla_jtag}.
+
 @subsection SWD Transport
 @cindex SWD
 @cindex Serial Wire Debug
@@ -3201,6 +3210,12 @@ Debug Access Point (DAP, which must be explicitly declared.
 SWD is debug-oriented, and does not support boundary scan testing.
 Flash programming support is built on top of debug support.
 (Some processors support both JTAG and SWD.)
+
+SWD transport is selected with the command @command{transport select
+swd}. Unless your adapter uses @ref{hla_interface,the hla interface
+driver}, in which case the command is @command{transport select
+hla_swd}.
+
 @deffn Command {swd newdap} ...
 Declares a single DAP which uses SWD transport.
 Parameters are currently the same as "jtag newtap" but this is
@@ -3211,11 +3226,6 @@ Updates TRN (turnaraound delay) and prescaling.fields of the
 Wire Control Register (WCR).
 No parameters: displays current settings.
 @end deffn
-
-@subsection CMSIS-DAP Transport
-@cindex CMSIS-DAP
-CMSIS-DAP is an ARM-specific transport that is used to connect to
-compilant debuggers.
 
 @subsection SPI Transport
 @cindex SPI
@@ -4359,7 +4369,7 @@ The value should normally correspond to a static mapping for the
 @anchor{rtostype}
 @item @code{-rtos} @var{rtos_type} -- enable rtos support for target,
 @var{rtos_type} can be one of @option{auto}|@option{eCos}|@option{ThreadX}|
-@option{FreeRTOS}|@option{linux}|@option{ChibiOS}|@option{embKernel}
+@option{FreeRTOS}|@option{linux}|@option{ChibiOS}|@option{embKernel}|@option{mqx}
 @xref{gdbrtossupport,,RTOS Support}.
 
 @end itemize
@@ -4641,6 +4651,8 @@ when reset disables PLLs needed to use a fast clock.
 @* After all targets have resumed
 @item @b{resumed}
 @* Target has resumed
+@item @b{trace-config}
+@* After target hardware trace configuration was changed
 @end itemize
 
 @node Flash Commands
@@ -5138,6 +5150,20 @@ This command shows/sets the slow clock frequency used in the
 All members of the AT91SAM4 microcontroller family from
 Atmel include internal flash and use ARM's Cortex-M4 core.
 This driver uses the same cmd names/syntax as @xref{at91sam3}.
+@end deffn
+
+@deffn {Flash Driver} at91sam4l
+@cindex at91sam4l
+All members of the AT91SAM4L microcontroller family from
+Atmel include internal flash and use ARM's Cortex-M4 core.
+This driver uses the same cmd names/syntax as @xref{at91sam3}.
+
+The AT91SAM4L driver adds some additional commands:
+@deffn Command {at91sam4l smap_reset_deassert}
+This command releases internal reset held by SMAP
+and prepares reset vector catch in case of reset halt.
+Command is used internally in event event reset-deassert-post.
+@end deffn
 @end deffn
 
 @deffn {Flash Driver} at91sam7
@@ -5833,13 +5859,44 @@ works only for chips that do not have factory pre-programmed region 0
 code.
 @end deffn
 
+@end deffn
+
 @deffn {Flash Driver} mrvlqspi
 This driver supports QSPI flash controller of Marvell's Wireless
 Microcontroller platform.
 
 The flash size is autodetected based on the table of known JEDEC IDs
 hardcoded in the OpenOCD sources.
+
+@example
+flash bank $_FLASHNAME mrvlqspi 0x0 0 0 0 $_TARGETNAME 0x46010000
+@end example
+
 @end deffn
+
+@deffn {Flash Driver} mdr
+This drivers handles the integrated NOR flash on Milandr Cortex-M
+based controllers. A known limitation is that the Info memory can't be
+read or verified as it's not memory mapped.
+
+@example
+flash bank <name> mdr <base> <size> 0 0 <target#> @var{type} @var{page_count} @var{sec_count}
+@end example
+
+@itemize @bullet
+@item @var{type} - 0 for main memory, 1 for info memory
+@item @var{page_count} - total number of pages
+@item @var{sec_count} - number of sector per page count
+@end itemize
+
+Example usage:
+@example
+if @{ [info exists IMEMORY] && [string equal $IMEMORY true] @} @{
+   flash bank $@{_CHIPNAME@}_info.flash mdr 0x00000000 0x01000 0 0 $_TARGETNAME 1 1 4
+@} else @{
+   flash bank $_CHIPNAME.flash mdr 0x00000000 0x20000 0 0 $_TARGETNAME 0 32 4
+@}
+@end example
 @end deffn
 
 @section mFlash
@@ -6474,8 +6531,10 @@ Useful in connection with script files
 (@command{script} command and @command{target_name} configuration).
 @end deffn
 
-@deffn Command shutdown
-Close the OpenOCD daemon, disconnecting all clients (GDB, telnet, other).
+@deffn Command shutdown [@option{error}]
+Close the OpenOCD daemon, disconnecting all clients (GDB, telnet,
+other). If option @option{error} is used, OpenOCD will return a
+non-zero exit code to the parent process.
 @end deffn
 
 @anchor{debuglevel}
@@ -7636,6 +7695,93 @@ fix CSW_SPROT from register AP_REG_CSW on selected dap.
 Defaulting to 0.
 @end deffn
 
+@subsection ARMv7-M specific commands
+@cindex tracing
+@cindex SWO
+@cindex SWV
+@cindex TPIU
+@cindex ITM
+@cindex ETM
+
+@deffn Command {tpiu config} (@option{disable} | ((@option{external} | @option{internal @var{filename}}) @
+               (@option{sync @var{port_width}} | ((@option{manchester} | @option{uart}) @var{formatter_enable})) @
+               @var{TRACECLKIN_freq} [@var{trace_freq}]))
+
+ARMv7-M architecture provides several modules to generate debugging
+information internally (ITM, DWT and ETM). Their output is directed
+through TPIU to be captured externally either on an SWO pin (this
+configuration is called SWV) or on a synchronous parallel trace port.
+
+This command configures the TPIU module of the target and, if internal
+capture mode is selected, starts to capture trace output by using the
+debugger adapter features.
+
+Some targets require additional actions to be performed in the
+@b{trace-config} handler for trace port to be activated.
+
+Command options:
+@itemize @minus
+@item @option{disable} disable TPIU handling;
+@item @option{external} configure TPIU to let user capture trace
+output externally (with an additional UART or logic analyzer hardware);
+@item @option{internal @var{filename}} configure TPIU and debug adapter to
+gather trace data and append it to @var{filename} (which can be
+either a regular file or a named pipe);
+@item @option{sync @var{port_width}} use synchronous parallel trace output
+mode, and set port width to @var{port_width};
+@item @option{manchester} use asynchronous SWO mode with Manchester
+coding;
+@item @option{uart} use asynchronous SWO mode with NRZ (same as
+regular UART 8N1) coding;
+@item @var{formatter_enable} is @option{on} or @option{off} to enable
+or disable TPIU formatter which needs to be used when both ITM and ETM
+data is to be output via SWO;
+@item @var{TRACECLKIN_freq} this should be specified to match target's
+current TRACECLKIN frequency (usually the same as HCLK);
+@item @var{trace_freq} trace port frequency. Can be omitted in
+internal mode to let the adapter driver select the maximum supported
+rate automatically.
+@end itemize
+
+Example usage:
+@enumerate
+@item STM32L152 board is programmed with an application that configures
+PLL to provide core clock with 24MHz frequency; to use ITM output it's
+enough to:
+@example
+#include <libopencm3/cm3/itm.h>
+    ...
+    	ITM_STIM8(0) = c;
+    ...
+@end example
+(the most obvious way is to use the first stimulus port for printf,
+for that this ITM_STIM8 assignment can be used inside _write(); to make it
+blocking to avoid data loss, add @code{while (!(ITM_STIM8(0) &
+ITM_STIM_FIFOREADY));});
+@item An FT2232H UART is connected to the SWO pin of the board;
+@item Commands to configure UART for 12MHz baud rate:
+@example
+$ setserial /dev/ttyUSB1 spd_cust divisor 5
+$ stty -F /dev/ttyUSB1 38400
+@end example
+(FT2232H's base frequency is 60MHz, spd_cust allows to alias 38400
+baud with our custom divisor to get 12MHz)
+@item @code{itmdump -f /dev/ttyUSB1 -d1}
+@item @code{openocd -f interface/stlink-v2-1.cfg -c "transport select
+hla_swd" -f target/stm32l1.cfg -c "tpiu config external uart off
+24000000 12000000"}
+@end enumerate
+@end deffn
+
+@deffn Command {itm port} @var{port} (@option{0}|@option{1}|@option{on}|@option{off})
+Enable or disable trace output for ITM stimulus @var{port} (counting
+from 0). Port 0 is enabled on target creation automatically.
+@end deffn
+
+@deffn Command {itm ports} (@option{0}|@option{1}|@option{on}|@option{off})
+Enable or disable trace output for all ITM stimulus ports.
+@end deffn
+
 @subsection Cortex-M specific commands
 @cindex Cortex-M
 
@@ -8486,6 +8632,7 @@ Currently supported rtos's include:
 @item @option{linux}
 @item @option{ChibiOS}
 @item @option{embKernel}
+@item @option{mqx}
 @end itemize
 
 @quotation Note
@@ -8501,7 +8648,7 @@ _tx_thread_current_ptr, _tx_thread_created_ptr, _tx_thread_created_count.
 @item FreeRTOS symbols
 pxCurrentTCB, pxReadyTasksLists, xDelayedTaskList1, xDelayedTaskList2,
 pxDelayedTaskList, pxOverflowDelayedTaskList, xPendingReadyList,
-xTasksWaitingTermination, xSuspendedTaskList, uxCurrentNumberOfTasks, uxTopUsedPriority.
+uxCurrentNumberOfTasks, uxTopUsedPriority.
 @item linux symbols
 init_task.
 @item ChibiOS symbols
@@ -8509,11 +8656,20 @@ rlist, ch_debug, chSysInit.
 @item embKernel symbols
 Rtos::sCurrentTask, Rtos::sListReady, Rtos::sListSleep,
 Rtos::sListSuspended, Rtos::sMaxPriorities, Rtos::sCurrentTaskCount.
+@item mqx symbols
+_mqx_kernel_data, MQX_init_struct.
 @end table
 
 For most RTOS supported the above symbols will be exported by default. However for
-some, eg. FreeRTOS @option{xTasksWaitingTermination} is only exported
-if @option{INCLUDE_vTaskDelete} is defined during the build.
+some, eg. FreeRTOS, extra steps must be taken.
+
+These RTOSes may require additional OpenOCD-specific file to be linked
+along with the project:
+
+@table @code
+@item FreeRTOS
+contrib/rtos-helpers/FreeRTOS-openocd.c
+@end table
 
 @node Tcl Scripting API
 @chapter Tcl Scripting API

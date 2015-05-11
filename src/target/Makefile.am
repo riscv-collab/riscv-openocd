@@ -79,6 +79,7 @@ ARMV6_SRC = \
 
 ARMV7_SRC = \
 	armv7m.c \
+	armv7m_trace.c \
 	cortex_m.c \
 	armv7a.c \
 	cortex_a.c
@@ -92,7 +93,6 @@ ARM_DEBUG_SRC = \
 	arm_adi_v5.c \
 	adi_v5_jtag.c \
 	adi_v5_swd.c \
-	adi_v5_cmsis_dap.c \
 	embeddedice.c \
 	trace.c \
 	etb.c \
@@ -155,6 +155,7 @@ noinst_HEADERS = \
 	armv4_5_cache.h \
 	armv7a.h \
 	armv7m.h \
+	armv7m_trace.h \
 	avrt.h \
 	dsp563xx.h \
 	dsp563xx_once.h \

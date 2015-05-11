@@ -276,9 +276,6 @@ struct lpc2000_flash_bank {
 	lpc2000_variant variant;
 	uint32_t cclk;
 	int cmd51_dst_boundary;
-	int cmd51_can_64b;
-	int cmd51_can_256b;
-	int cmd51_can_8192b;
 	int calc_checksum;
 	uint32_t cmd51_max_buffer;
 	int checksum_vector;
@@ -323,9 +320,6 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 
 	if (lpc2000_info->variant == lpc2000_v1) {
 		lpc2000_info->cmd51_dst_boundary = 512;
-		lpc2000_info->cmd51_can_64b = 0;
-		lpc2000_info->cmd51_can_256b = 0;
-		lpc2000_info->cmd51_can_8192b = 1;
 		lpc2000_info->checksum_vector = 5;
 		lpc2000_info->iap_max_stack = 128;
 
@@ -371,9 +365,6 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 		}
 	} else if (lpc2000_info->variant == lpc2000_v2) {
 		lpc2000_info->cmd51_dst_boundary = 256;
-		lpc2000_info->cmd51_can_64b = 0;
-		lpc2000_info->cmd51_can_256b = 1;
-		lpc2000_info->cmd51_can_8192b = 0;
 		lpc2000_info->checksum_vector = 5;
 		lpc2000_info->iap_max_stack = 128;
 
@@ -440,9 +431,6 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 		}
 	} else if (lpc2000_info->variant == lpc1700) {
 		lpc2000_info->cmd51_dst_boundary = 256;
-		lpc2000_info->cmd51_can_64b = 0;
-		lpc2000_info->cmd51_can_256b = 1;
-		lpc2000_info->cmd51_can_8192b = 0;
 		lpc2000_info->checksum_vector = 7;
 		lpc2000_info->iap_max_stack = 128;
 
@@ -492,9 +480,6 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 		}
 	} else if (lpc2000_info->variant == lpc4300) {
 		lpc2000_info->cmd51_dst_boundary = 512;
-		lpc2000_info->cmd51_can_64b = 0;
-		lpc2000_info->cmd51_can_256b = 0;
-		lpc2000_info->cmd51_can_8192b = 0;
 		lpc2000_info->checksum_vector = 7;
 		lpc2000_info->iap_max_stack = 208;
 
@@ -526,9 +511,6 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 
 	} else if (lpc2000_info->variant == lpc800) {
 		lpc2000_info->cmd51_dst_boundary = 64;
-		lpc2000_info->cmd51_can_64b = 1;
-		lpc2000_info->cmd51_can_256b = 0;
-		lpc2000_info->cmd51_can_8192b = 0;
 		lpc2000_info->checksum_vector = 7;
 		lpc2000_info->iap_max_stack = 208;		/* 148byte for LPC81x,208byte for LPC82x. */
 		lpc2000_info->cmd51_max_buffer = 256;	/* smallest MCU in the series, LPC810, has 1 kB of SRAM */
@@ -565,9 +547,6 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 
 	} else if (lpc2000_info->variant == lpc1100) {
 		lpc2000_info->cmd51_dst_boundary = 256;
-		lpc2000_info->cmd51_can_64b = 0;
-		lpc2000_info->cmd51_can_256b = 1;
-		lpc2000_info->cmd51_can_8192b = 0;
 		lpc2000_info->checksum_vector = 7;
 		lpc2000_info->iap_max_stack = 128;
 
@@ -591,9 +570,6 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 
 	} else if (lpc2000_info->variant == lpc1500) {
 		lpc2000_info->cmd51_dst_boundary = 256;
-		lpc2000_info->cmd51_can_64b = 0;
-		lpc2000_info->cmd51_can_256b = 1;
-		lpc2000_info->cmd51_can_8192b = 0;
 		lpc2000_info->checksum_vector = 7;
 		lpc2000_info->iap_max_stack = 128;
 
@@ -625,9 +601,6 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 
 	} else if (lpc2000_info->variant == lpc54100) {
 		lpc2000_info->cmd51_dst_boundary = 256;
-		lpc2000_info->cmd51_can_64b = 0;
-		lpc2000_info->cmd51_can_256b = 1;
-		lpc2000_info->cmd51_can_8192b = 0;
 		lpc2000_info->checksum_vector = 7;
 		lpc2000_info->iap_max_stack = 128;
 
@@ -706,9 +679,11 @@ static int lpc2000_iap_working_area_init(struct flash_bank *bank, struct working
 	}
 
 	int retval = target_write_memory(target, (*iap_working_area)->address, 4, 2, jump_gate);
-	if (retval != ERROR_OK)
+	if (retval != ERROR_OK) {
 		LOG_ERROR("Write memory at address 0x%8.8" PRIx32 " failed (check work_area definition)",
 				(*iap_working_area)->address);
+		target_free_working_area(target, *iap_working_area);
+	}
 
 	return retval;
 }
@@ -1127,14 +1102,8 @@ static int lpc2000_write(struct flash_bank *bank, const uint8_t *buffer, uint32_
 		uint32_t thisrun_bytes;
 		if (bytes_remaining >= lpc2000_info->cmd51_max_buffer)
 			thisrun_bytes = lpc2000_info->cmd51_max_buffer;
-		else if (bytes_remaining >= 1024)
-			thisrun_bytes = 1024;
-		else if ((bytes_remaining >= 512) || (!lpc2000_info->cmd51_can_256b))
-			thisrun_bytes = 512;
-		else if ((bytes_remaining >= 256) || (!lpc2000_info->cmd51_can_64b))
-			thisrun_bytes = 256;
 		else
-			thisrun_bytes = 64;
+			thisrun_bytes = lpc2000_info->cmd51_dst_boundary;
 
 		/* Prepare sectors */
 		param_table[0] = first_sector;
@@ -1239,6 +1208,9 @@ static int get_lpc2000_part_id(struct flash_bank *bank, uint32_t *part_id)
 	/* The status seems to be bogus with the part ID command on some IAP
 	   firmwares, so ignore it. */
 	lpc2000_iap_call(bank, iap_working_area, 54, param_table, result_table);
+
+	struct target *target = bank->target;
+	target_free_working_area(target, iap_working_area);
 
 	/* If the result is zero, the command probably didn't work out. */
 	if (result_table[0] == 0)
@@ -1478,7 +1450,7 @@ static int lpc2000_auto_probe_flash(struct flash_bank *bank)
 			break;
 
 		default:
-			LOG_ERROR("BUG: unknown Part ID encountered: 0x%x", part_id);
+			LOG_ERROR("BUG: unknown Part ID encountered: 0x%" PRIx32, part_id);
 			exit(-1);
 	}
 
@@ -1500,7 +1472,7 @@ static int lpc2000_probe(struct flash_bank *bank)
 			status = get_lpc2000_part_id(bank, &part_id);
 			if (status == LPC2000_CMD_SUCCESS)
 				LOG_INFO("If auto-detection fails for this part, please email "
-					"openocd-devel@lists.sourceforge.net, citing part id 0x%x.\n", part_id);
+					"openocd-devel@lists.sourceforge.net, citing part id 0x%" PRIx32 ".\n", part_id);
 		}
 
 		lpc2000_build_sector_list(bank);

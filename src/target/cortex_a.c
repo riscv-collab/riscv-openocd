@@ -146,14 +146,14 @@ static int cortex_a_mmu_modify(struct target *target, int enable)
 					cortex_a->cp15_control_reg_curr);
 		}
 	} else {
-		if (cortex_a->cp15_control_reg_curr & 0x4U) {
-			/*  data cache is active */
-			cortex_a->cp15_control_reg_curr &= ~0x4U;
-			/* flush data cache armv7 function to be called */
-			if (armv7a->armv7a_mmu.armv7a_cache.flush_all_data_cache)
-				armv7a->armv7a_mmu.armv7a_cache.flush_all_data_cache(target);
-		}
 		if ((cortex_a->cp15_control_reg_curr & 0x1U)) {
+			if (cortex_a->cp15_control_reg_curr & 0x4U) {
+				/* data cache is active */
+				cortex_a->cp15_control_reg_curr &= ~0x4U;
+				/* flush data cache armv7 function to be called */
+				if (armv7a->armv7a_mmu.armv7a_cache.flush_all_data_cache)
+					armv7a->armv7a_mmu.armv7a_cache.flush_all_data_cache(target);
+			}
 			cortex_a->cp15_control_reg_curr &= ~0x1U;
 			retval = armv7a->arm.mcr(target, 15,
 					0, 0,	/* op1, op2 */
@@ -238,7 +238,7 @@ static int cortex_a_init_debug_access(struct target *target)
 	   the registers in the Core Power Domain */
 	retval = mem_ap_sel_read_atomic_u32(swjdp, armv7a->debug_ap,
 			armv7a->debug_base + CPUDBG_PRSR, &dbg_osreg);
-	LOG_DEBUG("target->coreid %d DBGPRSR  0x%x ", target->coreid, dbg_osreg);
+	LOG_DEBUG("target->coreid %" PRId32 " DBGPRSR  0x%" PRIx32, target->coreid, dbg_osreg);
 
 	if (retval != ERROR_OK)
 		return retval;
@@ -2871,8 +2871,11 @@ static int cortex_a_examine_first(struct target *target)
 		/* Lookup 0x15 -- Processor DAP */
 		retval = dap_lookup_cs_component(swjdp, 1, dbgbase, 0x15,
 				&armv7a->debug_base, &coreidx);
-		if (retval != ERROR_OK)
+		if (retval != ERROR_OK) {
+			LOG_ERROR("Can't detect %s's dbgbase from the ROM table; you need to specify it explicitly.",
+				  target->cmd_name);
 			return retval;
+		}
 		LOG_DEBUG("Detected core %" PRId32 " dbgbase: %08" PRIx32,
 			  coreidx, armv7a->debug_base);
 	} else
@@ -2951,7 +2954,7 @@ static int cortex_a_examine_first(struct target *target)
 	if (retval != ERROR_OK)
 		return retval;
 
-	LOG_DEBUG("target->coreid %d DBGPRSR  0x%" PRIx32, target->coreid, dbg_osreg);
+	LOG_DEBUG("target->coreid %" PRId32 " DBGPRSR  0x%" PRIx32, target->coreid, dbg_osreg);
 
 	armv7a->arm.core_type = ARM_MODE_MON;
 	retval = cortex_a_dpm_setup(cortex_a, didr);
@@ -2962,6 +2965,7 @@ static int cortex_a_examine_first(struct target *target)
 	cortex_a->brp_num = ((didr >> 24) & 0x0F) + 1;
 	cortex_a->brp_num_context = ((didr >> 20) & 0x0F) + 1;
 	cortex_a->brp_num_available = cortex_a->brp_num;
+	free(cortex_a->brp_list);
 	cortex_a->brp_list = calloc(cortex_a->brp_num, sizeof(struct cortex_a_brp));
 /*	cortex_a->brb_enabled = ????; */
 	for (i = 0; i < cortex_a->brp_num; i++) {
@@ -2985,9 +2989,8 @@ static int cortex_a_examine(struct target *target)
 {
 	int retval = ERROR_OK;
 
-	/* don't re-probe hardware after each reset */
-	if (!target_was_examined(target))
-		retval = cortex_a_examine_first(target);
+	/* Reestablish communication after target reset */
+	retval = cortex_a_examine_first(target);
 
 	/* Configure core debug access */
 	if (retval == ERROR_OK)

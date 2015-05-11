@@ -434,20 +434,15 @@ static int jim_newtap_expected_id(Jim_Nvp *n, Jim_GetOptInfo *goi,
 		return e;
 	}
 
-	unsigned expected_len = sizeof(uint32_t) * pTap->expected_ids_cnt;
-	uint32_t *new_expected_ids = malloc(expected_len + sizeof(uint32_t));
-	if (new_expected_ids == NULL) {
+	uint32_t *p = realloc(pTap->expected_ids,
+			      (pTap->expected_ids_cnt + 1) * sizeof(uint32_t));
+	if (!p) {
 		Jim_SetResultFormatted(goi->interp, "no memory");
 		return JIM_ERR;
 	}
 
-	memcpy(new_expected_ids, pTap->expected_ids, expected_len);
-
-	new_expected_ids[pTap->expected_ids_cnt] = w;
-
-	free(pTap->expected_ids);
-	pTap->expected_ids = new_expected_ids;
-	pTap->expected_ids_cnt++;
+	pTap->expected_ids = p;
+	pTap->expected_ids[pTap->expected_ids_cnt++] = w;
 
 	return JIM_OK;
 }
@@ -554,8 +549,7 @@ static int jim_newtap_cmd(Jim_GetOptInfo *goi)
 		pTap->chip, pTap->tapname, pTap->dotted_name, goi->argc);
 
 	if (!transport_is_jtag()) {
-		/* SWD or CMSIS-DAP (which is currently SWD-only) doesn't
-		   require any JTAG tap parameters */
+		/* SWD doesn't require any JTAG tap parameters */
 		pTap->enabled = true;
 		jtag_tap_init(pTap);
 		return JIM_OK;
