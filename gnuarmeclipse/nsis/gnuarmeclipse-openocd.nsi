@@ -132,9 +132,7 @@ SetOutPath "$INSTDIR"
 File "${INSTALL_FOLDER}\INFO.txt"
 
 SetOutPath "$INSTDIR\gnuarmeclipse"
-File "${INSTALL_FOLDER}\gnuarmeclipse\build-openocd-win-cross-linux.sh"
-File "${INSTALL_FOLDER}\gnuarmeclipse\BUILD.txt"
-File "${INSTALL_FOLDER}\gnuarmeclipse\CHANGES.txt"
+File "${INSTALL_FOLDER}\gnuarmeclipse\*"
 
 ; Write the uninstaller file
 WriteUninstaller "${UNINSTALL_EXE}"
