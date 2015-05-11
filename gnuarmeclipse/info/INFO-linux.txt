@@ -1,6 +1,7 @@
 
 This is the GNU ARM Eclipse version of OpenOCD for GNU/Linux.
-It was built on Debian 7, but most run on most GNU/Linux 
+
+It was built on Debian 7, but must run on most recent GNU/Linux 
 distributions.
 
 If generally follows the official releases.
@@ -10,31 +11,32 @@ procedure to generate the setup/install packages (CHANGES.txt).
 
 The program is configured to support the following devices:
 
---enable-aice \
---enable-amtjtagaccel \
---enable-armjtagew \
---enable-cmsis-dap \
---enable-ftdi \
---enable-gw16012 \
---enable-jlink \
---enable-jtag_vpi \
---enable-opendous \
---enable-openjtag_ftdi \
---enable-osbdm \
---enable-legacy-ft2232_libftdi \
---enable-parport \
---disable-parport-ppdev \
---enable-parport-giveio \
---enable-presto_libftdi \
---enable-remote-bitbang \
---enable-rlink \
---enable-stlink \
---enable-ti-icdi \
---enable-ulink \
---enable-usb-blaster-2 \
---enable-usb_blaster_libftdi \
---enable-usbprog \
---enable-vsllink
+    --enable-aice \
+    --enable-amtjtagaccel \
+    --enable-armjtagew \
+    --enable-cmsis-dap \
+    --enable-dummy \
+    --enable-ftdi \
+    --enable-gw16012 \
+    --enable-jlink \
+    --enable-jtag_vpi \
+    --enable-opendous \
+    --enable-openjtag_ftdi \
+    --enable-osbdm \
+    --enable-legacy-ft2232_libftdi \
+    --enable-parport \
+    --disable-parport-ppdev \
+    --enable-parport-giveio \
+    --enable-presto_libftdi \
+    --enable-remote-bitbang \
+    --enable-rlink \
+    --enable-stlink \
+    --enable-ti-icdi \
+    --enable-ulink \
+    --enable-usb-blaster-2 \
+    --enable-usb_blaster_libftdi \
+    --enable-usbprog \
+    --enable-vsllink \
 
 For more info and support, please read the GNU ARM Eclipe project pages from:
 

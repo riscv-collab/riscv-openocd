@@ -1,6 +1,14 @@
 
 The following changes were applied to the OpenOCD master branch:
 
+[2015-05-11]
+
+- the three separate build scripts were deprecated, and a single script,
+using Docker, was added to the main gnuarmeclipse-se.git/scripts.
+
+- the greeting shows 32-bits or 64-bits (plural for bits).
+
+
 [2015-03-22]
 
 - the NSIS script was fixed to prevent removing the keys when 

@@ -15,7 +15,7 @@ To keep the development repository in sync with the original OpenOCD repository:
 - pull from openocd master
 - checkout gnuarmeclipse-dev
 - merge master
-- add a tag like gae-0.9.0-2-dev after each public release
+- add a tag like gae-0.9.0-201505111122-dev after each public release
 
 ### The gnuarmeclipse branch
 
@@ -23,7 +23,7 @@ To keep the stable development in sync with the develomnet branch:
 
 - checkout gnuarmeclipse
 - merge gnuarmeclipse-dev
-- add a tag like gae-0.8.0-2 after each public release
+- add a tag like gae-0.8.0-201505111122 after each public release
 
 
 
