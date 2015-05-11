@@ -49,9 +49,9 @@
 
 #define OPENOCD_BRANDING "GNU ARM Eclipse "
 #if INTPTR_MAX == INT32_MAX
-#define OPENOCD_WORDSIZE "32-bit "
+#define OPENOCD_WORDSIZE "32-bits "
 #elif INTPTR_MAX == INT64_MAX
-#define OPENOCD_WORDSIZE "64-bit "
+#define OPENOCD_WORDSIZE "64-bits "
 #else
 #define OPENOCD_WORDSIZE ""
 #endif
