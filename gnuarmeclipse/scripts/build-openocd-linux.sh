@@ -80,7 +80,13 @@ done
 # The folder where the entire build procedure will run.
 # If you prefer to build in a separate folder, define it before invoking
 # the script.
-if [ -d /media/${USER}/Work ]
+if [ -d /root/Host/Work ]
+then
+  OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-"/root/Host/Work/openocd"}
+elif [ -d /media/psf/Home/Work ]
+then
+  OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-"/media/psf/Home/Work/openocd"}
+elif [ -d /media/${USER}/Work ]
 then
   OPENOCD_WORK_FOLDER=${OPENOCD_WORK_FOLDER:-"/media/${USER}/Work/openocd"}
 elif [ -d /media/Work ]
