@@ -1,25 +1,23 @@
 
-This package was build on a Debian x64 machine, using the script provided in
-
-  gnuarmeclipse/build-openocd-debian.sh
-
-To run it, first be sure the the packages required in the Prerequisites 
-section are installed, then copy the script and execute it with bash:
-
-  bash build-openocd-debian.sh
-
-The output of the build script is .tgz file in the ${OPENOCD_WORK}/output 
-folder.
+This package was build on a pair of Debian 7 32/64-bits Docker containers,  
+running on an OS X machine, using the script provided in the GNU ARM Eclipse 
+Second Edition git. 
 
 To build the latest version of the package please use the script from:
 
-  wget http://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse/tree/gnuarmeclipse/scripts/build-openocd-linux.sh?format=raw \
-  -O ~/Downloads/build-openocd-debian.sh
+  curl -L https://sourceforge.net/p/gnuarmeclipse/se/ci/develop/tree/scripts/build-openocd.sh?format=raw \
+    -o ~/Downloads/build-openocd.sh
 
-  bash ~/Downloads/build-openocd-debian.sh
+To run it, first be sure that the packages required in the Prerequisites 
+section are installed, then download the script and execute it with bash:
 
-The script was developped on Debian x64. Running it on other GNU/Linux
-distributions is possible, but might require some adjustments.
+  bash ~/Downloads/build-openocd.sh --debian32 --debian64
+
+The output of the build script are two .tgz files in the 
+${WORK_FOLDER}/output folder.
+
+The script was developed on OS X 10.10.3 with MacPorts 2.3.3, but also runs
+on most GNU/Linux distributions supporting Docker.
 
 Up-to-date build information is available in the GNU ARM Eclipse project wiki:
 
@@ -30,4 +28,3 @@ to this project.
 
 
 Liviu Ionescu
-

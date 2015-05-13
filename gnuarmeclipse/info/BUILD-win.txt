@@ -1,24 +1,23 @@
 
-This package was build on a Ubuntu x64 machine, using the script provided in
-
-  GNU ARM Eclipse/build-openocd-win-cross-linux.sh
-
-To run it, first be sure the the packages required in the Prerequisites 
-section are installed, then copy the script and execute it with bash:
-
-  bash build-openocd-win-cross-linux.sh
-
-The output of the build script is a setup file in the Work/output folder.
+This package was build with MinGW-w64 on a Debian 8 64-bits Docker container,  
+running on an OS X machine, using the script provided in the GNU ARM Eclipse 
+Second Edition git. 
 
 To build the latest version of the package please use the script from:
 
-  wget https://sourceforge.net/p/gnuarmeclipse/openocd/ci/gnuarmeclipse-dev/tree/gnuarmeclipse/scripts/build-openocd-win-cross-linux.sh?format=raw \
-  -O ~/Downloads/build-openocd-win-cross-linux.sh
+  curl -L https://sourceforge.net/p/gnuarmeclipse/se/ci/develop/tree/scripts/build-openocd.sh?format=raw \
+    -o ~/Downloads/build-openocd.sh
 
-  bash ~/Downloads/build-openocd-win-cross-linux.sh
+To run it, first be sure that the packages required in the Prerequisites 
+section are installed, then download the script and execute it with bash:
 
-The script was developped on Ubuntu x64. Running it on other GNU/Linux
-distributions is possible, but might require some adjustments.
+  bash ~/Downloads/build-openocd.sh --win32 --win64
+
+The output of the build script are two setup.exe files in the 
+${WORK_FOLDER}/output folder.
+
+The script was developed on OS X 10.10.3 with MacPorts 2.3.3, but also runs
+on most GNU/Linux distributions supporting Docker.
 
 Up-to-date build information is available in the GNU ARM Eclipse project wiki:
 
@@ -29,4 +28,3 @@ to this project.
 
 
 Liviu Ionescu
-

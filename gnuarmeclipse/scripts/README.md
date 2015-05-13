@@ -1,10 +1,12 @@
-These are the scripts used during the **GNU ARM Eclipse OpenOCD** build procedure.
+These were the scripts used during the **GNU ARM Eclipse OpenOCD** build procedure. Now they are deprecated, and a single script to build all distribution files was added to the gnuarmeclipse-se.git.
 
-The build scripts:
+The deprecated build scripts are:
 
 * build-openocd-linux.sh
 * build-openocd-osx.sh
 * build-openocd-win-cross-linux.sh
+
+Starting with May 2015, these scripts will no longer be maintained and will be removed at a later date.
 
 ## cross-pkg-config
 
