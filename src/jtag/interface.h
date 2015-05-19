@@ -28,6 +28,7 @@
 #define OPENOCD_JTAG_INTERFACE_H
 
 #include <jtag/jtag.h>
+#include <target/armv7m_trace.h>
 
 /* @file
  * The "Cable Helper API" is what the cable drivers can use to help
@@ -198,7 +199,7 @@ static inline tap_state_t jtag_debug_state_machine(const void *tms_buf,
  */
 struct jtag_interface {
 	/** The name of the JTAG interface driver. */
-	char *name;
+	const char * const name;
 
 	/**
 	 * Bit vector listing capabilities exposed by this driver.
@@ -207,7 +208,7 @@ struct jtag_interface {
 #define DEBUG_CAP_TMS_SEQ	(1 << 0)
 
 	/** transports supported in C code (NULL terminated vector) */
-	const char **transports;
+	const char * const *transports;
 
 	const struct swd_driver *swd;
 
@@ -298,11 +299,39 @@ struct jtag_interface {
 	 * @returns ERROR_OK on success, or an error code on failure.
 	 */
 	int (*srst_asserted)(int *srst_asserted);
+
+	/**
+	 * Configure trace parameters for the adapter
+	 *
+	 * @param enabled Whether to enable trace
+	 * @param pin_protocol Configured pin protocol
+	 * @param port_size Trace port width for sync mode
+	 * @param trace_freq A pointer to the configured trace
+	 * frequency; if it points to 0, the adapter driver must write
+	 * its maximum supported rate there
+	 * @returns ERROR_OK on success, an error code on failure.
+	 */
+	int (*config_trace)(bool enabled, enum tpio_pin_protocol pin_protocol,
+			    uint32_t port_size, unsigned int *trace_freq);
+
+	/**
+	 * Poll for new trace data
+	 *
+	 * @param buf A pointer to buffer to store received data
+	 * @param size A pointer to buffer size; must be filled with
+	 * the actual amount of bytes written
+	 *
+	 * @returns ERROR_OK on success, an error code on failure.
+	 */
+	int (*poll_trace)(uint8_t *buf, size_t *size);
 };
 
-extern const char *jtag_only[];
+extern const char * const jtag_only[];
 
 void adapter_assert_reset(void);
 void adapter_deassert_reset(void);
+int adapter_config_trace(bool enabled, enum tpio_pin_protocol pin_protocol,
+			 uint32_t port_size, unsigned int *trace_freq);
+int adapter_poll_trace(uint8_t *buf, size_t *size);
 
 #endif /* OPENOCD_JTAG_INTERFACE_H */

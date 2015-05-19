@@ -230,6 +230,7 @@ static uint8_t *svf_tdi_buffer, *svf_tdo_buffer, *svf_mask_buffer;
 static int svf_buffer_index, svf_buffer_size ;
 static int svf_quiet;
 static int svf_nil;
+static int svf_ignore_error;
 
 /* Targetting particular tap */
 static int svf_tap_is_specified;
@@ -240,6 +241,37 @@ static int svf_progress_enabled;
 static long svf_total_lines;
 static int svf_percentage;
 static int svf_last_printed_percentage = -1;
+
+/*
+ * macro is used to print the svf hex buffer at desired debug level
+ * DEBUG, INFO, ERROR, USER
+ */
+#define SVF_BUF_LOG(_lvl, _buf, _nbits, _desc)							\
+	svf_hexbuf_print(LOG_LVL_##_lvl ,  __FILE__, __LINE__, __func__, _buf, _nbits, _desc)
+
+static void svf_hexbuf_print(int dbg_lvl, const char *file, unsigned line,
+							 const char *function, const uint8_t *buf,
+							 int bit_len, const char *desc)
+{
+	int j, len = 0;
+	int byte_len = DIV_ROUND_UP(bit_len, 8);
+	int msbits = bit_len % 8;
+
+	/* allocate 2 bytes per hex digit */
+	char *prbuf = malloc((byte_len * 2) + 1);
+	if (!prbuf)
+		return;
+
+	/* print correct number of bytes, mask excess bits where applicable */
+	uint8_t msb = buf[byte_len - 1] & (msbits ? (1 << msbits) - 1 : 0xff);
+	len = sprintf(prbuf, msbits <= 4 ? "0x%01"PRIx8 : "0x%02"PRIx8, msb);
+	for (j = byte_len - 2; j >= 0; j--)
+		len += sprintf(prbuf + len, "%02"PRIx8, buf[j]);
+
+	log_printf_lf(dbg_lvl, file, line, function, "%8s = %s", desc ? desc : " ", prbuf);
+
+	free(prbuf);
+}
 
 static int svf_realloc_buffers(size_t len)
 {
@@ -285,20 +317,6 @@ static void svf_free_xxd_para(struct svf_xxr_para *para)
 			para->smask = NULL;
 		}
 	}
-}
-
-static unsigned svf_get_mask_u32(int bitlen)
-{
-	uint32_t bitmask;
-
-	if (bitlen < 0)
-		bitmask = 0;
-	else if (bitlen >= 32)
-		bitmask = 0xFFFFFFFF;
-	else
-		bitmask = (1 << bitlen) - 1;
-
-	return bitmask;
 }
 
 int svf_add_statemove(tap_state_t state_to)
@@ -356,6 +374,7 @@ COMMAND_HANDLER(handle_svf_command)
 	/* parse command line */
 	svf_quiet = 0;
 	svf_nil = 0;
+	svf_ignore_error = 0;
 	for (unsigned int i = 0; i < CMD_ARGC; i++) {
 		if (strcmp(CMD_ARGV[i], "-tap") == 0) {
 			tap = jtag_tap_by_string(CMD_ARGV[i+1]);
@@ -372,6 +391,9 @@ COMMAND_HANDLER(handle_svf_command)
 		else if ((strcmp(CMD_ARGV[i],
 				  "progress") == 0) || (strcmp(CMD_ARGV[i], "-progress") == 0))
 			svf_progress_enabled = 1;
+		else if ((strcmp(CMD_ARGV[i],
+				  "ignore_error") == 0) || (strcmp(CMD_ARGV[i], "-ignore_error") == 0))
+			svf_ignore_error = 1;
 		else {
 			svf_fd = fopen(CMD_ARGV[i], "r");
 			if (svf_fd == NULL) {
@@ -555,11 +577,14 @@ free_all:
 
 	if (ERROR_OK == ret)
 		command_print(CMD_CTX,
-			"svf file programmed successfully for %d commands",
-			command_num);
+			      "svf file programmed %s for %d commands with %d errors",
+			      (svf_ignore_error > 1) ? "unsuccessfully" : "successfully",
+			      command_num,
+			      (svf_ignore_error > 1) ? (svf_ignore_error - 1) : 0);
 	else
 		command_print(CMD_CTX, "svf file programmed failed");
 
+	svf_ignore_error = 0;
 	return ret;
 }
 
@@ -838,20 +863,16 @@ static int svf_check_tdo(void)
 		if ((svf_check_tdo_para[i].enabled)
 				&& buf_cmp_mask(&svf_tdi_buffer[index_var], &svf_tdo_buffer[index_var],
 				&svf_mask_buffer[index_var], len)) {
-			unsigned bitmask;
-			unsigned received, expected, tapmask;
-			bitmask = svf_get_mask_u32(svf_check_tdo_para[i].bit_len);
-
-			memcpy(&received, svf_tdi_buffer + index_var, sizeof(unsigned));
-			memcpy(&expected, svf_tdo_buffer + index_var, sizeof(unsigned));
-			memcpy(&tapmask, svf_mask_buffer + index_var, sizeof(unsigned));
 			LOG_ERROR("tdo check error at line %d",
 				svf_check_tdo_para[i].line_num);
-			LOG_ERROR("read = 0x%X, want = 0x%X, mask = 0x%X",
-				received & bitmask,
-				expected & bitmask,
-				tapmask & bitmask);
-			return ERROR_FAIL;
+			SVF_BUF_LOG(ERROR, &svf_tdi_buffer[index_var], len, "READ");
+			SVF_BUF_LOG(ERROR, &svf_tdo_buffer[index_var], len, "WANT");
+			SVF_BUF_LOG(ERROR, &svf_mask_buffer[index_var], len, "MASK");
+
+			if (svf_ignore_error == 0)
+				return ERROR_FAIL;
+			else
+				svf_ignore_error++;
 		}
 	}
 	svf_check_tdo_para_index = 0;
@@ -1045,8 +1066,7 @@ XXR_common:
 					LOG_ERROR("fail to parse hex value");
 					return ERROR_FAIL;
 				}
-				LOG_DEBUG("\t%s = 0x%X", argus[i],
-						(**(int **)pbuffer_tmp) & svf_get_mask_u32(xxr_para_tmp->len));
+				SVF_BUF_LOG(DEBUG, *pbuffer_tmp, xxr_para_tmp->len, argus[i]);
 			}
 			/* If a command changes the length of the last scan of the same type and the
 			 * MASK parameter is absent, */
@@ -1163,7 +1183,7 @@ XXR_common:
 					svf_add_check_para(0, svf_buffer_index, i);
 				field.num_bits = i;
 				field.out_value = &svf_tdi_buffer[svf_buffer_index];
-				field.in_value = &svf_tdi_buffer[svf_buffer_index];
+				field.in_value = (xxr_para_tmp->data_mask & XXR_TDO) ? &svf_tdi_buffer[svf_buffer_index] : NULL;
 				if (!svf_nil) {
 					/* NOTE:  doesn't use SVF-specified state paths */
 					jtag_add_plain_dr_scan(field.num_bits,
@@ -1253,7 +1273,7 @@ XXR_common:
 					svf_add_check_para(0, svf_buffer_index, i);
 				field.num_bits = i;
 				field.out_value = &svf_tdi_buffer[svf_buffer_index];
-				field.in_value = &svf_tdi_buffer[svf_buffer_index];
+				field.in_value = (xxr_para_tmp->data_mask & XXR_TDO) ? &svf_tdi_buffer[svf_buffer_index] : NULL;
 				if (!svf_nil) {
 					/* NOTE:  doesn't use SVF-specified state paths */
 					jtag_add_plain_ir_scan(field.num_bits,
@@ -1509,11 +1529,7 @@ XXR_common:
 
 			/* output debug info */
 			if ((SIR == command) || (SDR == command)) {
-				int read_value;
-				memcpy(&read_value, svf_tdi_buffer, sizeof(int));
-				/* in debug mode, data is from index 0 */
-				int read_mask = svf_get_mask_u32(svf_check_tdo_para[0].bit_len);
-				LOG_DEBUG("\tTDO read = 0x%X", read_value & read_mask);
+				SVF_BUF_LOG(DEBUG, svf_tdi_buffer, svf_check_tdo_para[0].bit_len, "TDO read");
 			}
 		}
 	} else {
@@ -1535,7 +1551,7 @@ static const struct command_registration svf_command_handlers[] = {
 		.handler = handle_svf_command,
 		.mode = COMMAND_EXEC,
 		.help = "Runs a SVF file.",
-		.usage = "svf [-tap device.tap] <file> [quiet] [nil] [progress]",
+		.usage = "svf [-tap device.tap] <file> [quiet] [nil] [progress] [ignore_error]",
 	},
 	COMMAND_REGISTRATION_DONE
 };

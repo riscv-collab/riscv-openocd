@@ -88,11 +88,50 @@ done:
 	/* (void) */ dpm->finish(dpm);
 }
 
+
+/*  retrieve main id register  */
+static int armv7a_read_midr(struct target *target)
+{
+	int retval = ERROR_FAIL;
+	struct armv7a_common *armv7a = target_to_armv7a(target);
+	struct arm_dpm *dpm = armv7a->arm.dpm;
+	uint32_t midr;
+	retval = dpm->prepare(dpm);
+	if (retval != ERROR_OK)
+		goto done;
+	/* MRC p15,0,<Rd>,c0,c0,0; read main id register*/
+
+	retval = dpm->instr_read_data_r0(dpm,
+			ARMV4_5_MRC(15, 0, 0, 0, 0, 0),
+			&midr);
+	if (retval != ERROR_OK)
+		goto done;
+
+	armv7a->rev = (midr & 0xf);
+	armv7a->partnum = (midr >> 4) & 0xfff;
+	armv7a->arch = (midr >> 16) & 0xf;
+	armv7a->variant = (midr >> 20) & 0xf;
+	armv7a->implementor = (midr >> 24) & 0xff;
+	LOG_INFO("%s rev %" PRIx32 ", partnum %" PRIx32 ", arch %" PRIx32
+			 ", variant %" PRIx32 ", implementor %" PRIx32,
+		 target->cmd_name,
+		 armv7a->rev,
+		 armv7a->partnum,
+		 armv7a->arch,
+		 armv7a->variant,
+		 armv7a->implementor);
+
+done:
+	dpm->finish(dpm);
+	return retval;
+}
+
 static int armv7a_read_ttbcr(struct target *target)
 {
 	struct armv7a_common *armv7a = target_to_armv7a(target);
 	struct arm_dpm *dpm = armv7a->arm.dpm;
 	uint32_t ttbcr;
+	uint32_t ttbr0, ttbr1;
 	int retval = dpm->prepare(dpm);
 	if (retval != ERROR_OK)
 		goto done;
@@ -102,26 +141,54 @@ static int armv7a_read_ttbcr(struct target *target)
 			&ttbcr);
 	if (retval != ERROR_OK)
 		goto done;
+
+	retval = dpm->instr_read_data_r0(dpm,
+			ARMV4_5_MRC(15, 0, 0, 2, 0, 0),
+			&ttbr0);
+	if (retval != ERROR_OK)
+		goto done;
+
+	retval = dpm->instr_read_data_r0(dpm,
+			ARMV4_5_MRC(15, 0, 0, 2, 0, 1),
+			&ttbr1);
+	if (retval != ERROR_OK)
+		goto done;
+
+	LOG_INFO("ttbcr %" PRIx32 "ttbr0 %" PRIx32 "ttbr1 %" PRIx32, ttbcr, ttbr0, ttbr1);
+
 	armv7a->armv7a_mmu.ttbr1_used = ((ttbcr & 0x7) != 0) ? 1 : 0;
-	armv7a->armv7a_mmu.ttbr0_mask  = 7 << (32 - ((ttbcr & 0x7)));
-#if 0
-	LOG_INFO("ttb1 %s ,ttb0_mask %x",
-		armv7a->armv7a_mmu.ttbr1_used ? "used" : "not used",
-		armv7a->armv7a_mmu.ttbr0_mask);
-#endif
-	if (armv7a->armv7a_mmu.ttbr1_used == 1) {
-		LOG_INFO("SVC access above %" PRIx32,
-			 (uint32_t)(0xffffffff & armv7a->armv7a_mmu.ttbr0_mask));
-		armv7a->armv7a_mmu.os_border = 0xffffffff & armv7a->armv7a_mmu.ttbr0_mask;
+	armv7a->armv7a_mmu.ttbr0_mask = 0;
+
+	retval = armv7a_read_midr(target);
+	if (retval != ERROR_OK)
+		goto done;
+
+	if (armv7a->partnum & 0xf) {
+		/*
+		 * ARM Architecture Reference Manual (ARMv7-A and ARMv7-Redition),
+		 * document # ARM DDI 0406C
+		 */
+		armv7a->armv7a_mmu.ttbr0_mask  = 1 << (14 - ((ttbcr & 0x7)));
 	} else {
+		/*  ARM DDI 0344H , ARM DDI 0407F */
+		armv7a->armv7a_mmu.ttbr0_mask  = 7 << (32 - ((ttbcr & 0x7)));
 		/*  fix me , default is hard coded LINUX border  */
 		armv7a->armv7a_mmu.os_border = 0xc0000000;
+	}
+
+	LOG_DEBUG("ttbr1 %s, ttbr0_mask %" PRIx32,
+		  armv7a->armv7a_mmu.ttbr1_used ? "used" : "not used",
+		  armv7a->armv7a_mmu.ttbr0_mask);
+
+	if (armv7a->armv7a_mmu.ttbr1_used == 1) {
+		LOG_INFO("SVC access above %" PRIx32,
+			(0xffffffff & armv7a->armv7a_mmu.ttbr0_mask));
+		armv7a->armv7a_mmu.os_border = 0xffffffff & armv7a->armv7a_mmu.ttbr0_mask;
 	}
 done:
 	dpm->finish(dpm);
 	return retval;
 }
-
 
 /*  method adapted to cortex A : reused arm v4 v5 method*/
 int armv7a_mmu_translate_va(struct target *target,  uint32_t va, uint32_t *val)
@@ -165,27 +232,26 @@ int armv7a_mmu_translate_va(struct target *target,  uint32_t va, uint32_t *val)
 	}
 
 
-	if ((first_lvl_descriptor & 0x3) == 2) {
+	if ((first_lvl_descriptor & 0x40002) == 2) {
 		/* section descriptor */
 		*val = (first_lvl_descriptor & 0xfff00000) | (va & 0x000fffff);
 		return ERROR_OK;
+	} else if ((first_lvl_descriptor & 0x40002) == 0x40002) {
+		/* supersection descriptor */
+		if (first_lvl_descriptor & 0x00f001e0) {
+			LOG_ERROR("Physical address does not fit into 32 bits");
+			return ERROR_TARGET_TRANSLATION_FAULT;
+		}
+		*val = (first_lvl_descriptor & 0xff000000) | (va & 0x00ffffff);
+		return ERROR_OK;
 	}
 
-	if ((first_lvl_descriptor & 0x3) == 1) {
-		/* coarse page table */
-		retval = armv7a->armv7a_mmu.read_physical_memory(target,
-				(first_lvl_descriptor & 0xfffffc00) | ((va & 0x000ff000) >> 10),
-				4, 1, (uint8_t *)&second_lvl_descriptor);
-		if (retval != ERROR_OK)
-			return retval;
-	} else if ((first_lvl_descriptor & 0x3) == 3)   {
-		/* fine page table */
-		retval = armv7a->armv7a_mmu.read_physical_memory(target,
-				(first_lvl_descriptor & 0xfffff000) | ((va & 0x000ffc00) >> 8),
-				4, 1, (uint8_t *)&second_lvl_descriptor);
-		if (retval != ERROR_OK)
-			return retval;
-	}
+	/* page table */
+	retval = armv7a->armv7a_mmu.read_physical_memory(target,
+			(first_lvl_descriptor & 0xfffffc00) | ((va & 0x000ff000) >> 10),
+			4, 1, (uint8_t *)&second_lvl_descriptor);
+	if (retval != ERROR_OK)
+		return retval;
 
 	second_lvl_descriptor = target_buffer_get_u32(target, (uint8_t *)
 			&second_lvl_descriptor);
@@ -200,23 +266,12 @@ int armv7a_mmu_translate_va(struct target *target,  uint32_t va, uint32_t *val)
 	if ((second_lvl_descriptor & 0x3) == 1) {
 		/* large page descriptor */
 		*val = (second_lvl_descriptor & 0xffff0000) | (va & 0x0000ffff);
-		return ERROR_OK;
-	}
-
-	if ((second_lvl_descriptor & 0x3) == 2) {
+	} else {
 		/* small page descriptor */
 		*val = (second_lvl_descriptor & 0xfffff000) | (va & 0x00000fff);
-		return ERROR_OK;
 	}
 
-	if ((second_lvl_descriptor & 0x3) == 3) {
-		*val = (second_lvl_descriptor & 0xfffffc00) | (va & 0x000003ff);
-		return ERROR_OK;
-	}
-
-	/* should not happen */
-	LOG_ERROR("Address translation failure");
-	return ERROR_TARGET_TRANSLATION_FAULT;
+	return ERROR_OK;
 
 done:
 	return retval;
@@ -497,21 +552,17 @@ COMMAND_HANDLER(handle_cache_l2x)
 {
 	struct target *target = get_current_target(CMD_CTX);
 	uint32_t base, way;
-	switch (CMD_ARGC) {
-		case 0:
-			return ERROR_COMMAND_SYNTAX_ERROR;
-			break;
-		case 2:
-			/* command_print(CMD_CTX, "%s %s", CMD_ARGV[0], CMD_ARGV[1]); */
-			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], base);
-			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], way);
 
-			/* AP address is in bits 31:24 of DP_SELECT */
-			armv7a_l2x_cache_init(target, base, way);
-			break;
-		default:
-			return ERROR_COMMAND_SYNTAX_ERROR;
-	}
+	if (CMD_ARGC != 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	/* command_print(CMD_CTX, "%s %s", CMD_ARGV[0], CMD_ARGV[1]); */
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], base);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], way);
+
+	/* AP address is in bits 31:24 of DP_SELECT */
+	armv7a_l2x_cache_init(target, base, way);
+
 	return ERROR_OK;
 }
 
@@ -545,6 +596,16 @@ static int armv7a_read_mpidr(struct target *target)
 			&mpidr);
 	if (retval != ERROR_OK)
 		goto done;
+
+	/* ARMv7R uses a different format for MPIDR.
+	 * When configured uniprocessor (most R cores) it reads as 0.
+	 * This will need to be implemented for multiprocessor ARMv7R cores. */
+	if (armv7a->is_armv7r) {
+		if (mpidr)
+			LOG_ERROR("MPIDR nonzero in ARMv7-R target");
+		goto done;
+	}
+
 	if (mpidr & 1<<31) {
 		armv7a->multi_processor_system = (mpidr >> 30) & 1;
 		armv7a->cluster_id = (mpidr >> 8) & 0xf;
@@ -555,7 +616,7 @@ static int armv7a_read_mpidr(struct target *target)
 			armv7a->multi_processor_system == 0 ? "multi core" : "mono core");
 
 	} else
-		LOG_ERROR("mpdir not in multiprocessor format");
+		LOG_ERROR("MPIDR not in multiprocessor format");
 
 done:
 	dpm->finish(dpm);
@@ -785,7 +846,7 @@ const struct command_registration l2x_cache_command_handlers[] = {
 	{
 		.name = "cache_config",
 		.mode = COMMAND_EXEC,
-		.help = "cache configuation for a target",
+		.help = "cache configuration for a target",
 		.usage = "",
 		.chain = l2_cache_commands,
 	},

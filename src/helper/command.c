@@ -121,7 +121,7 @@ static int command_retval_set(Jim_Interp *interp, int retval)
 	if (return_retval != NULL)
 		*return_retval = retval;
 
-	return (retval == ERROR_OK) ? JIM_OK : JIM_ERR;
+	return (retval == ERROR_OK) ? JIM_OK : retval;
 }
 
 extern struct command_context *global_cmd_ctx;
@@ -365,7 +365,7 @@ static int register_command_handler(struct command_context *cmd_ctx,
 
 	LOG_DEBUG("registering '%s'...", ocd_name);
 
-	Jim_CmdProc func = c->handler ? &script_command : &command_unknown;
+	Jim_CmdProc *func = c->handler ? &script_command : &command_unknown;
 	int retval = Jim_CreateCommand(interp, ocd_name, func, c, NULL);
 	free(ocd_name);
 	if (JIM_OK != retval)
@@ -659,21 +659,7 @@ int command_run_line(struct command_context *context, char *line)
 		}
 		Jim_DeleteAssocData(interp, "context");
 	}
-	if (retcode == JIM_ERR) {
-		if (retval != ERROR_COMMAND_CLOSE_CONNECTION) {
-			/* We do not print the connection closed error message */
-			Jim_MakeErrorMessage(interp);
-			LOG_USER("%s", Jim_GetString(Jim_GetResult(interp), NULL));
-		}
-		if (retval == ERROR_OK) {
-			/* It wasn't a low level OpenOCD command that failed */
-			return ERROR_FAIL;
-		}
-		return retval;
-	} else if (retcode == JIM_EXIT) {
-		/* ignore.
-		 * exit(Jim_GetExitCode(interp)); */
-	} else {
+	if (retcode == JIM_OK) {
 		const char *result;
 		int reslen;
 
@@ -693,7 +679,22 @@ int command_run_line(struct command_context *context, char *line)
 			LOG_USER_N("\n");
 		}
 		retval = ERROR_OK;
+	} else if (retcode == JIM_EXIT) {
+		/* ignore.
+		 * exit(Jim_GetExitCode(interp)); */
+	} else if (retcode == ERROR_COMMAND_CLOSE_CONNECTION) {
+		return retcode;
+	} else {
+		Jim_MakeErrorMessage(interp);
+		LOG_USER("%s", Jim_GetString(Jim_GetResult(interp), NULL));
+
+		if (retval == ERROR_OK) {
+			/* It wasn't a low level OpenOCD command that failed */
+			return ERROR_FAIL;
+		}
+		return retval;
 	}
+
 	return retval;
 }
 
@@ -1070,8 +1071,10 @@ static int jim_command_type(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 		Jim_SetResultString(interp, "native", -1);
 	else if (c->handler)
 		Jim_SetResultString(interp, "simple", -1);
-	else
+	else if (remaining == 0)
 		Jim_SetResultString(interp, "group", -1);
+	else
+		Jim_SetResultString(interp, "unknown", -1);
 
 	return JIM_OK;
 }

@@ -21,7 +21,9 @@ proc jtag_init {} {
 # startup (at OpenOCD server startup, when JTAG may not yet work); and
 # potentially more (for reset types like cold, warm, etc)
 proc init_reset { mode } {
-	jtag arp_init-reset
+	if {[using_jtag]} {
+		jtag arp_init-reset
+	}
 }
 
 #########
@@ -79,11 +81,37 @@ proc srst_asserted {} {
 # measure actual JTAG clock
 proc measure_clk {} {
 	set start_time [ms];
-	runtest 10000000; 
-	echo "Running at more than [expr 10000.0 / ([ms]-$start_time)] kHz";
+        set iterations 10000000;
+	runtest $iterations;
+	echo "Running at more than [expr $iterations.0 / ([ms]-$start_time)] kHz";
 }
 
 add_help_text measure_clk "Runs a test to measure the JTAG clk. Useful with RCLK / RTCK."
+
+proc default_to_jtag { f args } {
+	set current_transport [transport select]
+	if {[using_jtag]} {
+		eval $f $args
+	} {
+		error "session transport is \"$current_transport\" but your config requires JTAG"
+	}
+}
+
+proc jtag args {
+	eval default_to_jtag jtag $args
+}
+
+proc jtag_rclk args {
+	eval default_to_jtag jtag_rclk $args
+}
+
+proc jtag_ntrst_delay args {
+	eval default_to_jtag jtag_ntrst_delay $args
+}
+
+proc jtag_ntrst_assert_width args {
+	eval default_to_jtag jtag_ntrst_assert_width $args
+}
 
 # BEGIN MIGRATION AIDS ...  these adapter operations originally had
 # JTAG-specific names despite the fact that the operations were not

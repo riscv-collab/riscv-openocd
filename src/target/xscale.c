@@ -73,16 +73,12 @@ static int xscale_read_trace(struct target *);
 
 /* This XScale "debug handler" is loaded into the processor's
  * mini-ICache, which is 2K of code writable only via JTAG.
- *
- * FIXME  the OpenOCD "bin2char" utility currently doesn't handle
- * binary files cleanly.  It's string oriented, and terminates them
- * with a NUL character.  Better would be to generate the constants
- * and let other code decide names, scoping, and other housekeeping.
  */
-static	/* unsigned const char xscale_debug_handler[] = ... */
-#include "xscale_debug.h"
+static const uint8_t xscale_debug_handler[] = {
+#include "xscale_debug.inc"
+};
 
-static char *const xscale_reg_list[] = {
+static const char *const xscale_reg_list[] = {
 	"XSCALE_MAINID",		/* 0 */
 	"XSCALE_CACHETYPE",
 	"XSCALE_CTRL",
@@ -1549,7 +1545,7 @@ static int xscale_deassert_reset(struct target *target)
 		 * coprocessors, trace data, etc.
 		 */
 		address = xscale->handler_address;
-		for (unsigned binary_size = sizeof xscale_debug_handler - 1;
+		for (unsigned binary_size = sizeof xscale_debug_handler;
 			binary_size > 0;
 			binary_size -= buf_cnt, buffer += buf_cnt) {
 			uint32_t cache_line[8];
@@ -1625,7 +1621,7 @@ static int xscale_read_core_reg(struct target *target, struct reg *r,
 }
 
 static int xscale_write_core_reg(struct target *target, struct reg *r,
-	int num, enum arm_mode mode, uint32_t value)
+	int num, enum arm_mode mode, uint8_t *value)
 {
 	/** \todo add debug handler support for core register writes */
 	LOG_ERROR("not implemented");
@@ -2909,7 +2905,7 @@ static int xscale_init_target(struct command_context *cmd_ctx,
 }
 
 static int xscale_init_arch_info(struct target *target,
-	struct xscale_common *xscale, struct jtag_tap *tap, const char *variant)
+	struct xscale_common *xscale, struct jtag_tap *tap)
 {
 	struct arm *arm;
 	uint32_t high_reset_branch, low_reset_branch;
@@ -2920,33 +2916,7 @@ static int xscale_init_arch_info(struct target *target,
 	/* store architecture specfic data */
 	xscale->common_magic = XSCALE_COMMON_MAGIC;
 
-	/* we don't really *need* a variant param ... */
-	if (variant) {
-		int ir_length = 0;
-
-		if (strcmp(variant, "pxa250") == 0
-			|| strcmp(variant, "pxa255") == 0
-			|| strcmp(variant, "pxa26x") == 0)
-			ir_length = 5;
-		else if (strcmp(variant, "pxa27x") == 0
-			|| strcmp(variant, "ixp42x") == 0
-			|| strcmp(variant, "ixp45x") == 0
-			|| strcmp(variant, "ixp46x") == 0)
-			ir_length = 7;
-		else if (strcmp(variant, "pxa3xx") == 0)
-			ir_length = 11;
-		else
-			LOG_WARNING("%s: unrecognized variant %s",
-				tap->dotted_name, variant);
-
-		if (ir_length && ir_length != tap->ir_length) {
-			LOG_WARNING("%s: IR length for %s is %d; fixing",
-				tap->dotted_name, variant, ir_length);
-			tap->ir_length = ir_length;
-		}
-	}
-
-	/* PXA3xx shifts the JTAG instructions */
+	/* PXA3xx with 11 bit IR shifts the JTAG instructions */
 	if (tap->ir_length == 11)
 		xscale->xscale_variant = XSCALE_PXA3XX;
 	else
@@ -3028,7 +2998,7 @@ static int xscale_target_create(struct target *target, Jim_Interp *interp)
 {
 	struct xscale_common *xscale;
 
-	if (sizeof xscale_debug_handler - 1 > 0x800) {
+	if (sizeof xscale_debug_handler > 0x800) {
 		LOG_ERROR("debug_handler.bin: larger than 2kb");
 		return ERROR_FAIL;
 	}
@@ -3037,8 +3007,7 @@ static int xscale_target_create(struct target *target, Jim_Interp *interp)
 	if (!xscale)
 		return ERROR_FAIL;
 
-	return xscale_init_arch_info(target, xscale, target->tap,
-			target->variant);
+	return xscale_init_arch_info(target, xscale, target->tap);
 }
 
 COMMAND_HANDLER(xscale_handle_debug_handler_command)
@@ -3276,8 +3245,8 @@ COMMAND_HANDLER(xscale_handle_vector_catch_command)
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
 		}
-		*(uint32_t *)(dcsr_reg->value) &= ~DCSR_TRAP_MASK;
-		*(uint32_t *)(dcsr_reg->value) |= catch;
+		buf_set_u32(dcsr_reg->value, 0, 32,
+				(buf_get_u32(dcsr_reg->value, 0, 32) & ~DCSR_TRAP_MASK) | catch);
 		xscale_write_dcsr(target, -1, -1);
 	}
 

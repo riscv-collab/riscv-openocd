@@ -35,6 +35,7 @@ extern struct rtos_type eCos_rtos;
 extern struct rtos_type Linux_os;
 extern struct rtos_type ChibiOS_rtos;
 extern struct rtos_type embKernel_rtos;
+extern struct rtos_type mqx_rtos;
 
 static struct rtos_type *rtos_types[] = {
 	&ThreadX_rtos,
@@ -43,6 +44,7 @@ static struct rtos_type *rtos_types[] = {
 	&Linux_os,
 	&ChibiOS_rtos,
 	&embKernel_rtos,
+	&mqx_rtos,
 	NULL
 };
 
@@ -147,7 +149,7 @@ int gdb_thread_packet(struct connection *connection, char const *packet, int pac
 	return target->rtos->gdb_thread_packet(connection, packet, packet_size);
 }
 
-static char *next_symbol(struct rtos *os, char *cur_symbol, uint64_t cur_addr)
+static symbol_table_elem_t *next_symbol(struct rtos *os, char *cur_symbol, uint64_t cur_addr)
 {
 	symbol_table_elem_t *s;
 
@@ -155,16 +157,27 @@ static char *next_symbol(struct rtos *os, char *cur_symbol, uint64_t cur_addr)
 		os->type->get_symbol_list_to_lookup(&os->symbols);
 
 	if (!cur_symbol[0])
-		return os->symbols[0].symbol_name;
+		return &os->symbols[0];
 
 	for (s = os->symbols; s->symbol_name; s++)
 		if (!strcmp(s->symbol_name, cur_symbol)) {
 			s->address = cur_addr;
 			s++;
-			return s->symbol_name;
+			return s;
 		}
 
 	return NULL;
+}
+
+/* searches for 'symbol' in the lookup table for 'os' and returns TRUE,
+ * if 'symbol' is not declared optional */
+static bool is_symbol_mandatory(const struct rtos *os, const char *symbol)
+{
+	for (symbol_table_elem_t *s = os->symbols; s->symbol_name; ++s) {
+		if (!strcmp(s->symbol_name, symbol))
+			return !s->optional;
+	}
+	return false;
 }
 
 /* rtos_qsymbol() processes and replies to all qSymbol packets from GDB.
@@ -191,7 +204,8 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 	int rtos_detected = 0;
 	uint64_t addr = 0;
 	size_t reply_len;
-	char reply[GDB_BUFFER_SIZE], cur_sym[GDB_BUFFER_SIZE / 2] = "", *next_sym;
+	char reply[GDB_BUFFER_SIZE], cur_sym[GDB_BUFFER_SIZE / 2] = "";
+	symbol_table_elem_t *next_sym = NULL;
 	struct target *target = get_target_from_connection(connection);
 	struct rtos *os = target->rtos;
 
@@ -205,7 +219,9 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 	cur_sym[len] = 0;
 
 	if ((strcmp(packet, "qSymbol::") != 0) &&               /* GDB is not offering symbol lookup for the first time */
-	    (!sscanf(packet, "qSymbol:%" SCNx64 ":", &addr))) { /* GDB did not found an address for a symbol */
+	    (!sscanf(packet, "qSymbol:%" SCNx64 ":", &addr)) && /* GDB did not find an address for a symbol */
+	    is_symbol_mandatory(os, cur_sym)) {					/* the symbol is mandatory for this RTOS */
+
 		/* GDB could not find an address for the previous symbol */
 		if (!target->rtos_auto_detect) {
 			LOG_WARNING("RTOS %s not detected. (GDB could not find symbol \'%s\')", os->type->name, cur_sym);
@@ -223,7 +239,7 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 	}
 	next_sym = next_symbol(os, cur_sym, addr);
 
-	if (!next_sym) {
+	if (!next_sym->symbol_name) {
 		/* No more symbols need looking up */
 
 		if (!target->rtos_auto_detect) {
@@ -241,13 +257,13 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 		}
 	}
 
-	if (8 + (strlen(next_sym) * 2) + 1 > sizeof(reply)) {
-		LOG_ERROR("ERROR: RTOS symbol '%s' name is too long for GDB!", next_sym);
+	if (8 + (strlen(next_sym->symbol_name) * 2) + 1 > sizeof(reply)) {
+		LOG_ERROR("ERROR: RTOS symbol '%s' name is too long for GDB!", next_sym->symbol_name);
 		goto done;
 	}
 
 	reply_len = snprintf(reply, sizeof(reply), "qSymbol:");
-	reply_len += hexify(reply + reply_len, next_sym, 0, sizeof(reply) - reply_len);
+	reply_len += hexify(reply + reply_len, next_sym->symbol_name, 0, sizeof(reply) - reply_len);
 
 done:
 	gdb_put_packet(connection, reply, reply_len);
@@ -289,7 +305,7 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 			if (detail->extra_info_str != NULL)
 				str_size += strlen(detail->extra_info_str);
 
-			char *tmp_str = malloc(str_size + 7);
+			char *tmp_str = calloc(str_size + 7, sizeof(char));
 			char *tmp_str_ptr = tmp_str;
 
 			if (detail->display_str != NULL)
@@ -390,8 +406,11 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 		return ERROR_OK;
 	} else if (packet[0] == 'H') {	/* Set current thread ( 'c' for step and continue, 'g' for
 					 * all other operations ) */
-		if ((packet[1] == 'g') && (target->rtos != NULL))
+		if ((packet[1] == 'g') && (target->rtos != NULL)) {
 			sscanf(packet, "Hg%16" SCNx64, &target->rtos->current_threadid);
+			LOG_DEBUG("RTOS: GDB requested to set current thread to 0x%" PRIx64 "\r\n",
+										target->rtos->current_threadid);
+		}
 		gdb_put_packet(connection, "OK", 2);
 		return ERROR_OK;
 	}
@@ -408,6 +427,12 @@ int rtos_get_gdb_reg_list(struct connection *connection)
 			((current_threadid != target->rtos->current_thread) ||
 			(target->smp))) {	/* in smp several current thread are possible */
 		char *hex_reg_list;
+
+		LOG_DEBUG("RTOS: getting register list for thread 0x%" PRIx64
+				  ", target->rtos->current_thread=0x%" PRIx64 "\r\n",
+										current_threadid,
+										target->rtos->current_thread);
+
 		target->rtos->type->get_thread_reg_list(target->rtos,
 			current_threadid,
 			&hex_reg_list);
@@ -448,6 +473,8 @@ int rtos_generic_stack_read(struct target *target,
 		LOG_ERROR("Error reading stack frame from thread");
 		return retval;
 	}
+	LOG_DEBUG("RTOS: Read stack frame at 0x%" PRIx32, address);
+
 #if 0
 		LOG_OUTPUT("Stack Data :");
 		for (i = 0; i < stacking->stack_registers_size; i++)

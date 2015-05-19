@@ -9,19 +9,19 @@ endif
 SUBDIRS = openrisc
 libtarget_la_LIBADD = $(top_builddir)/src/target/openrisc/libopenrisc.la
 
-BIN2C		= $(top_builddir)/src/helper/bin2char$(EXEEXT_FOR_BUILD)
+BIN2C		= $(top_srcdir)/src/helper/bin2char.sh
 
 DEBUG_HANDLER	= $(srcdir)/xscale/debug_handler.bin
 EXTRA_DIST = \
 	startup.tcl \
 	$(wildcard $(srcdir)/xscale/*)
 
-DEBUG_HEADER	= xscale_debug.h
+DEBUG_HEADER	= xscale_debug.inc
 BUILT_SOURCES = $(DEBUG_HEADER)
 CLEANFILES = $(DEBUG_HEADER)
 
-$(DEBUG_HEADER): $(BIN2C) $(DEBUG_HANDLER)
-	$(BIN2C) < $(DEBUG_HANDLER) xscale_debug_handler > xscale_debug.h
+$(DEBUG_HEADER): $(DEBUG_HANDLER) $(BIN2C)
+	$(BIN2C) < $< > $@ || { rm -f $@; false; }
 
 METASOURCES = AUTO
 noinst_LTLIBRARIES = libtarget.la
@@ -79,6 +79,7 @@ ARMV6_SRC = \
 
 ARMV7_SRC = \
 	armv7m.c \
+	armv7m_trace.c \
 	cortex_m.c \
 	armv7a.c \
 	cortex_a.c
@@ -92,7 +93,6 @@ ARM_DEBUG_SRC = \
 	arm_adi_v5.c \
 	adi_v5_jtag.c \
 	adi_v5_swd.c \
-	adi_v5_cmsis_dap.c \
 	embeddedice.c \
 	trace.c \
 	etb.c \
@@ -155,6 +155,7 @@ noinst_HEADERS = \
 	armv4_5_cache.h \
 	armv7a.h \
 	armv7m.h \
+	armv7m_trace.h \
 	avrt.h \
 	dsp563xx.h \
 	dsp563xx_once.h \

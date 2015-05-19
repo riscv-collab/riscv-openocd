@@ -23,10 +23,14 @@
 #endif
 
 #include "imp.h"
+#include "helper/binarybuffer.h"
 
 #define SAMD_NUM_SECTORS	16
+#define SAMD_PAGE_SIZE_MAX	1024
 
-#define SAMD_FLASH			0x00000000	/* physical Flash memory */
+#define SAMD_FLASH			((uint32_t)0x00000000)	/* physical Flash memory */
+#define SAMD_USER_ROW		((uint32_t)0x00804000)	/* User Row of Flash */
+#define SAMD_PAC1			0x41000000	/* Peripheral Access Control 1 */
 #define SAMD_DSU			0x41002000	/* Device Service Unit */
 #define SAMD_NVMCTRL		0x41004000	/* Non-volatile memory controller */
 
@@ -59,14 +63,43 @@
 /* Known identifiers */
 #define SAMD_PROCESSOR_M0	0x01
 #define SAMD_FAMILY_D		0x00
+#define SAMD_FAMILY_L		0x01
 #define SAMD_SERIES_20		0x00
 #define SAMD_SERIES_21		0x01
+#define SAMD_SERIES_10		0x02
+#define SAMD_SERIES_11		0x03
 
 struct samd_part {
 	uint8_t id;
 	const char *name;
 	uint32_t flash_kb;
 	uint32_t ram_kb;
+};
+
+/* Known SAMD10 parts */
+static const struct samd_part samd10_parts[] = {
+	{ 0x0, "SAMD10D14AMU", 16, 4 },
+	{ 0x1, "SAMD10D13AMU", 8, 4 },
+	{ 0x2, "SAMD10D12AMU", 4, 4 },
+	{ 0x3, "SAMD10D14ASU", 16, 4 },
+	{ 0x4, "SAMD10D13ASU", 8, 4 },
+	{ 0x5, "SAMD10D12ASU", 4, 4 },
+	{ 0x6, "SAMD10C14A", 16, 4 },
+	{ 0x7, "SAMD10C13A", 8, 4 },
+	{ 0x8, "SAMD10C12A", 4, 4 },
+};
+
+/* Known SAMD11 parts */
+static const struct samd_part samd11_parts[] = {
+	{ 0x0, "SAMD11D14AMU", 16, 4 },
+	{ 0x1, "SAMD11D13AMU", 8, 4 },
+	{ 0x2, "SAMD11D12AMU", 4, 4 },
+	{ 0x3, "SAMD11D14ASU", 16, 4 },
+	{ 0x4, "SAMD11D13ASU", 8, 4 },
+	{ 0x5, "SAMD11D12ASU", 4, 4 },
+	{ 0x6, "SAMD11C14A", 16, 4 },
+	{ 0x7, "SAMD11C13A", 8, 4 },
+	{ 0x8, "SAMD11C12A", 4, 4 },
 };
 
 /* Known SAMD20 parts. See Table 12-8 in 42129F–SAM–10/2013 */
@@ -81,6 +114,7 @@ static const struct samd_part samd20_parts[] = {
 	{ 0x7, "SAMD20G16A", 64, 8 },
 	{ 0x8, "SAMD20G15A", 32, 4 },
 	{ 0x9, "SAMD20G14A", 16, 2 },
+	{ 0xA, "SAMD20E18A", 256, 32 },
 	{ 0xB, "SAMD20E17A", 128, 16 },
 	{ 0xC, "SAMD20E16A", 64, 8 },
 	{ 0xD, "SAMD20E15A", 32, 4 },
@@ -106,6 +140,30 @@ static const struct samd_part samd21_parts[] = {
 	{ 0xE, "SAMD21E14A", 16, 2 },
 };
 
+/* Known SAMR21 parts. */
+static const struct samd_part samr21_parts[] = {
+	{ 0x19, "SAMR21G18A", 256, 32 },
+	{ 0x1A, "SAMR21G17A", 128, 32 },
+	{ 0x1B, "SAMR21G16A",  64, 32 },
+	{ 0x1C, "SAMR21E18A", 256, 32 },
+	{ 0x1D, "SAMR21E17A", 128, 32 },
+	{ 0x1E, "SAMR21E16A",  64, 32 },
+};
+
+/* Known SAML21 parts. */
+static const struct samd_part saml21_parts[] = {
+	{ 0x00, "SAML21J18A", 256, 32 },
+	{ 0x01, "SAML21J17A", 128, 16 },
+	{ 0x02, "SAML21J16A", 64, 8 },
+	{ 0x05, "SAML21G18A", 256, 32 },
+	{ 0x06, "SAML21G17A", 128, 16 },
+	{ 0x07, "SAML21G16A", 64, 8 },
+	{ 0x0A, "SAML21E18A", 256, 32 },
+	{ 0x0B, "SAML21E17A", 128, 16 },
+	{ 0x0C, "SAML21E16A", 64, 8 },
+	{ 0x0D, "SAML21E15A", 32, 4 },
+};
+
 /* Each family of parts contains a parts table in the DEVSEL field of DID.  The
  * processor ID, family ID, and series ID are used to determine which exact
  * family this is and then we can use the corresponding table. */
@@ -123,6 +181,14 @@ static const struct samd_family samd_families[] = {
 		samd20_parts, ARRAY_SIZE(samd20_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_21,
 		samd21_parts, ARRAY_SIZE(samd21_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_21,
+		samr21_parts, ARRAY_SIZE(samr21_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_10,
+		samd10_parts, ARRAY_SIZE(samd10_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_11,
+		samd11_parts, ARRAY_SIZE(samd11_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_L, SAMD_SERIES_21,
+		saml21_parts, ARRAY_SIZE(saml21_parts) },
 };
 
 struct samd_info {
@@ -140,8 +206,8 @@ static struct samd_info *samd_chips;
 static const struct samd_part *samd_find_part(uint32_t id)
 {
 	uint8_t processor = (id >> 28);
-	uint8_t family = (id >> 24) & 0x0F;
-	uint8_t series = (id >> 16) & 0xFF;
+	uint8_t family = (id >> 23) & 0x1F;
+	uint8_t series = (id >> 16) & 0x3F;
 	uint8_t devsel = id & 0xFF;
 
 	for (unsigned i = 0; i < ARRAY_SIZE(samd_families); i++) {
@@ -175,9 +241,31 @@ static int samd_protect_check(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
+static int samd_get_flash_page_info(struct target *target,
+		uint32_t *sizep, int *nump)
+{
+	int res;
+	uint32_t param;
+
+	res = target_read_u32(target, SAMD_NVMCTRL + SAMD_NVMCTRL_PARAM, &param);
+	if (res == ERROR_OK) {
+		/* The PSZ field (bits 18:16) indicate the page size bytes as 2^(3+n)
+		 * so 0 is 8KB and 7 is 1024KB. */
+		if (sizep)
+			*sizep = (8 << ((param >> 16) & 0x7));
+		/* The NVMP field (bits 15:0) indicates the total number of pages */
+		if (nump)
+			*nump = param & 0xFFFF;
+	} else {
+		LOG_ERROR("Couldn't read NVM Parameters register");
+	}
+
+	return res;
+}
+
 static int samd_probe(struct flash_bank *bank)
 {
-	uint32_t id, param;
+	uint32_t id;
 	int res;
 	struct samd_info *chip = (struct samd_info *)bank->driver_priv;
 	const struct samd_part *part;
@@ -197,28 +285,22 @@ static int samd_probe(struct flash_bank *bank)
 		return ERROR_FAIL;
 	}
 
-	res = target_read_u32(bank->target,
-			SAMD_NVMCTRL + SAMD_NVMCTRL_PARAM, &param);
-	if (res != ERROR_OK) {
-		LOG_ERROR("Couldn't read NVM Parameters register");
-		return res;
-	}
-
 	bank->size = part->flash_kb * 1024;
 
 	chip->sector_size = bank->size / SAMD_NUM_SECTORS;
 
-	/* The PSZ field (bits 18:16) indicate the page size bytes as 2^(3+n) so
-	 * 0 is 8KB and 7 is 1024KB. */
-	chip->page_size = (8 << ((param >> 16) & 0x7));
-	/* The NVMP field (bits 15:0) indicates the total number of pages */
-	chip->num_pages = param & 0xFFFF;
+	res = samd_get_flash_page_info(bank->target, &chip->page_size,
+			&chip->num_pages);
+	if (res != ERROR_OK) {
+		LOG_ERROR("Couldn't determine Flash page size");
+		return res;
+	}
 
 	/* Sanity check: the total flash size in the DSU should match the page size
 	 * multiplied by the number of pages. */
 	if (bank->size != chip->num_pages * chip->page_size) {
 		LOG_WARNING("SAMD: bank size doesn't match NVM parameters. "
-				"Identified %uKB Flash but NVMCTRL reports %u %uB pages",
+				"Identified %" PRIu32 "KB Flash but NVMCTRL reports %u %" PRIu32 "B pages",
 				part->flash_kb, chip->num_pages, chip->page_size);
 	}
 
@@ -243,53 +325,19 @@ static int samd_probe(struct flash_bank *bank)
 	/* Done */
 	chip->probed = true;
 
-	LOG_INFO("SAMD MCU: %s (%uKB Flash, %uKB RAM)", part->name,
+	LOG_INFO("SAMD MCU: %s (%" PRIu32 "KB Flash, %" PRIu32 "KB RAM)", part->name,
 			part->flash_kb, part->ram_kb);
 
 	return ERROR_OK;
 }
 
-static int samd_protect(struct flash_bank *bank, int set, int first, int last)
-{
-	int res;
-	struct samd_info *chip = (struct samd_info *)bank->driver_priv;
-
-	res = ERROR_OK;
-
-	for (int s = first; s <= last; s++) {
-		if (set != bank->sectors[s].is_protected) {
-			/* Load an address that is within this sector (we use offset 0) */
-			res = target_write_u32(bank->target, SAMD_NVMCTRL + SAMD_NVMCTRL_ADDR,
-					       s * chip->sector_size);
-			if (res != ERROR_OK)
-				goto exit;
-
-			/* Tell the controller to lock that sector */
-
-			uint16_t cmd = (set) ?
-				SAMD_NVM_CMD(SAMD_NVM_CMD_LR) :
-				SAMD_NVM_CMD(SAMD_NVM_CMD_UR);
-
-			res = target_write_u16(bank->target,
-					       SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLA,
-					       cmd);
-			if (res != ERROR_OK)
-				goto exit;
-		}
-	}
-exit:
-	samd_protect_check(bank);
-
-	return res;
-}
-
-static bool samd_check_error(struct flash_bank *bank)
+static bool samd_check_error(struct target *target)
 {
 	int ret;
 	bool error;
 	uint16_t status;
 
-	ret = target_read_u16(bank->target,
+	ret = target_read_u16(target,
 			SAMD_NVMCTRL + SAMD_NVMCTRL_STATUS, &status);
 	if (ret != ERROR_OK) {
 		LOG_ERROR("Can't read NVM status");
@@ -310,7 +358,7 @@ static bool samd_check_error(struct flash_bank *bank)
 	}
 
 	/* Clear the error conditions by writing a one to them */
-	ret = target_write_u16(bank->target,
+	ret = target_write_u16(target,
 			SAMD_NVMCTRL + SAMD_NVMCTRL_STATUS, status);
 	if (ret != ERROR_OK)
 		LOG_ERROR("Can't clear NVM error conditions");
@@ -318,30 +366,214 @@ static bool samd_check_error(struct flash_bank *bank)
 	return error;
 }
 
-static int samd_erase_row(struct flash_bank *bank, uint32_t address)
+static int samd_issue_nvmctrl_command(struct target *target, uint16_t cmd)
 {
-	int res;
-	bool error = false;
-
-	/* Set an address contained in the row to be erased */
-	res = target_write_u32(bank->target,
-			SAMD_NVMCTRL + SAMD_NVMCTRL_ADDR, address >> 1);
-	if (res == ERROR_OK) {
-		/* Issue the Erase Row command to erase that row */
-		res = target_write_u16(bank->target,
-				SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLA,
-				SAMD_NVM_CMD(SAMD_NVM_CMD_ER));
-
-		/* Check (and clear) error conditions */
-		error = samd_check_error(bank);
+	if (target->state != TARGET_HALTED) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	if (res != ERROR_OK || error)  {
-		LOG_ERROR("Failed to erase row containing %08X" PRIx32, address);
+	/* Read current configuration. */
+	uint16_t tmp = 0;
+	int res = target_read_u16(target, SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLB,
+			&tmp);
+	if (res != ERROR_OK)
+		return res;
+
+	/* Set cache disable. */
+	res = target_write_u16(target, SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLB,
+			tmp | (1<<18));
+	if (res != ERROR_OK)
+		return res;
+
+	/* Issue the NVM command */
+	int res_cmd = target_write_u16(target,
+			SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLA, SAMD_NVM_CMD(cmd));
+
+	/* Try to restore configuration, regardless of NVM command write
+	 * status. */
+	res = target_write_u16(target, SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLB, tmp);
+
+	if (res_cmd != ERROR_OK)
+		return res_cmd;
+
+	if (res != ERROR_OK)
+		return res;
+
+	/* Check to see if the NVM command resulted in an error condition. */
+	if (samd_check_error(target))
+		return ERROR_FAIL;
+
+	return ERROR_OK;
+}
+
+static int samd_erase_row(struct target *target, uint32_t address)
+{
+	int res;
+
+	/* Set an address contained in the row to be erased */
+	res = target_write_u32(target,
+			SAMD_NVMCTRL + SAMD_NVMCTRL_ADDR, address >> 1);
+
+	/* Issue the Erase Row command to erase that row. */
+	if (res == ERROR_OK)
+		res = samd_issue_nvmctrl_command(target,
+				address == SAMD_USER_ROW ? SAMD_NVM_CMD_EAR : SAMD_NVM_CMD_ER);
+
+	if (res != ERROR_OK)  {
+		LOG_ERROR("Failed to erase row containing %08" PRIx32, address);
 		return ERROR_FAIL;
 	}
 
 	return ERROR_OK;
+}
+
+static bool is_user_row_reserved_bit(uint8_t bit)
+{
+	/* See Table 9-3 in the SAMD20 datasheet for more information. */
+	switch (bit) {
+		/* Reserved bits */
+		case 3:
+		case 7:
+		/* Voltage regulator internal configuration with default value of 0x70,
+		 * may not be changed. */
+		case 17 ... 24:
+		/* 41 is voltage regulator internal configuration and must not be
+		 * changed.  42 through 47 are reserved. */
+		case 41 ... 47:
+			return true;
+		default:
+			break;
+	}
+
+	return false;
+}
+
+/* Modify the contents of the User Row in Flash.  These are described in Table
+ * 9-3 of the SAMD20 datasheet.  The User Row itself has a size of one page
+ * and contains a combination of "fuses" and calibration data in bits 24:17.
+ * We therefore try not to erase the row's contents unless we absolutely have
+ * to and we don't permit modifying reserved bits. */
+static int samd_modify_user_row(struct target *target, uint32_t value,
+		uint8_t startb, uint8_t endb)
+{
+	int res;
+
+	if (is_user_row_reserved_bit(startb) || is_user_row_reserved_bit(endb)) {
+		LOG_ERROR("Can't modify bits in the requested range");
+		return ERROR_FAIL;
+	}
+
+	/* Retrieve the MCU's page size, in bytes. This is also the size of the
+	 * entire User Row. */
+	uint32_t page_size;
+	res = samd_get_flash_page_info(target, &page_size, NULL);
+	if (res != ERROR_OK) {
+		LOG_ERROR("Couldn't determine Flash page size");
+		return res;
+	}
+
+	/* Make sure the size is sane before we allocate. */
+	assert(page_size > 0 && page_size <= SAMD_PAGE_SIZE_MAX);
+
+	/* Make sure we're within the single page that comprises the User Row. */
+	if (startb >= (page_size * 8) || endb >= (page_size * 8)) {
+		LOG_ERROR("Can't modify bits outside the User Row page range");
+		return ERROR_FAIL;
+	}
+
+	uint8_t *buf = malloc(page_size);
+	if (!buf)
+		return ERROR_FAIL;
+
+	/* Read the user row (comprising one page) by half-words. */
+	res = target_read_memory(target, SAMD_USER_ROW, 2, page_size / 2, buf);
+	if (res != ERROR_OK)
+		goto out_user_row;
+
+	/* We will need to erase before writing if the new value needs a '1' in any
+	 * position for which the current value had a '0'.  Otherwise we can avoid
+	 * erasing. */
+	uint32_t cur = buf_get_u32(buf, startb, endb - startb + 1);
+	if ((~cur) & value) {
+		res = samd_erase_row(target, SAMD_USER_ROW);
+		if (res != ERROR_OK) {
+			LOG_ERROR("Couldn't erase user row");
+			goto out_user_row;
+		}
+	}
+
+	/* Modify */
+	buf_set_u32(buf, startb, endb - startb + 1, value);
+
+	/* Write the page buffer back out to the target.  A Flash write will be
+	 * triggered automatically. */
+	res = target_write_memory(target, SAMD_USER_ROW, 4, page_size / 4, buf);
+	if (res != ERROR_OK)
+		goto out_user_row;
+
+	if (samd_check_error(target)) {
+		res = ERROR_FAIL;
+		goto out_user_row;
+	}
+
+	/* Success */
+	res = ERROR_OK;
+
+out_user_row:
+	free(buf);
+
+	return res;
+}
+
+static int samd_protect(struct flash_bank *bank, int set, int first, int last)
+{
+	struct samd_info *chip = (struct samd_info *)bank->driver_priv;
+
+	/* We can issue lock/unlock region commands with the target running but
+	 * the settings won't persist unless we're able to modify the LOCK regions
+	 * and that requires the target to be halted. */
+	if (bank->target->state != TARGET_HALTED) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	int res = ERROR_OK;
+
+	for (int s = first; s <= last; s++) {
+		if (set != bank->sectors[s].is_protected) {
+			/* Load an address that is within this sector (we use offset 0) */
+			res = target_write_u32(bank->target,
+							SAMD_NVMCTRL + SAMD_NVMCTRL_ADDR,
+							((s * chip->sector_size) >> 1));
+			if (res != ERROR_OK)
+				goto exit;
+
+			/* Tell the controller to lock that sector */
+			res = samd_issue_nvmctrl_command(bank->target,
+					set ? SAMD_NVM_CMD_LR : SAMD_NVM_CMD_UR);
+			if (res != ERROR_OK)
+				goto exit;
+		}
+	}
+
+	/* We've now applied our changes, however they will be undone by the next
+	 * reset unless we also apply them to the LOCK bits in the User Page.  The
+	 * LOCK bits start at bit 48, correspoding to Sector 0 and end with bit 63,
+	 * corresponding to Sector 15.  A '1' means unlocked and a '0' means
+	 * locked.  See Table 9-3 in the SAMD20 datasheet for more details. */
+
+	res = samd_modify_user_row(bank->target, set ? 0x0000 : 0xFFFF,
+			48 + first, 48 + last);
+	if (res != ERROR_OK)
+		LOG_WARNING("SAMD: protect settings were not made persistent!");
+
+	res = ERROR_OK;
+
+exit:
+	samd_protect_check(bank);
+
+	return res;
 }
 
 static int samd_erase(struct flash_bank *bank, int first, int last)
@@ -374,10 +606,10 @@ static int samd_erase(struct flash_bank *bank, int first, int last)
 			return ERROR_FLASH_OPERATION_FAILED;
 		}
 
-		if (!bank->sectors[s].is_erased) {
+		if (bank->sectors[s].is_erased != 1) {
 			/* For each row in that sector */
 			for (int r = s * rows_in_sector; r < (s + 1) * rows_in_sector; r++) {
-				res = samd_erase_row(bank, r * chip->page_size * 4);
+				res = samd_erase_row(bank->target, r * chip->page_size * 4);
 				if (res != ERROR_OK) {
 					LOG_ERROR("SAMD: failed to erase sector %d", s);
 					return res;
@@ -424,7 +656,7 @@ static int samd_write_row(struct flash_bank *bank, uint32_t address,
 	}
 
 	/* Erase the row that we'll be writing to */
-	res = samd_erase_row(bank, address);
+	res = samd_erase_row(bank->target, address);
 	if (res != ERROR_OK)
 		return res;
 
@@ -442,7 +674,10 @@ static int samd_write_row(struct flash_bank *bank, uint32_t address,
 			return res;
 		}
 
-		error = samd_check_error(bank);
+		/* Access through AHB is stalled while flash is being programmed */
+		usleep(200);
+
+		error = samd_check_error(bank->target);
 		if (error)
 			return ERROR_FAIL;
 
@@ -606,6 +841,166 @@ COMMAND_HANDLER(samd_handle_info_command)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(samd_handle_chip_erase_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+
+	if (target) {
+		/* Enable access to the DSU by disabling the write protect bit */
+		target_write_u32(target, SAMD_PAC1, (1<<1));
+		/* Tell the DSU to perform a full chip erase.  It takes about 240ms to
+		 * perform the erase. */
+		target_write_u8(target, SAMD_DSU, (1<<4));
+
+		command_print(CMD_CTX, "chip erased");
+	}
+
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(samd_handle_set_security_command)
+{
+	int res = ERROR_OK;
+	struct target *target = get_current_target(CMD_CTX);
+
+	if (CMD_ARGC < 1 || (CMD_ARGC >= 1 && (strcmp(CMD_ARGV[0], "enable")))) {
+		command_print(CMD_CTX, "supply the \"enable\" argument to proceed.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	if (target) {
+		if (target->state != TARGET_HALTED) {
+			LOG_ERROR("Target not halted");
+			return ERROR_TARGET_NOT_HALTED;
+		}
+
+		res = samd_issue_nvmctrl_command(target, SAMD_NVM_CMD_SSB);
+
+		/* Check (and clear) error conditions */
+		if (res == ERROR_OK)
+			command_print(CMD_CTX, "chip secured on next power-cycle");
+		else
+			command_print(CMD_CTX, "failed to secure chip");
+	}
+
+	return res;
+}
+
+COMMAND_HANDLER(samd_handle_eeprom_command)
+{
+	int res = ERROR_OK;
+	struct target *target = get_current_target(CMD_CTX);
+
+	if (target) {
+		if (target->state != TARGET_HALTED) {
+			LOG_ERROR("Target not halted");
+			return ERROR_TARGET_NOT_HALTED;
+		}
+
+		if (CMD_ARGC >= 1) {
+			int val = atoi(CMD_ARGV[0]);
+			uint32_t code;
+
+			if (val == 0)
+				code = 7;
+			else {
+				/* Try to match size in bytes with corresponding size code */
+				for (code = 0; code <= 6; code++) {
+					if (val == (2 << (13 - code)))
+						break;
+				}
+
+				if (code > 6) {
+					command_print(CMD_CTX, "Invalid EEPROM size.  Please see "
+							"datasheet for a list valid sizes.");
+					return ERROR_COMMAND_SYNTAX_ERROR;
+				}
+			}
+
+			res = samd_modify_user_row(target, code, 4, 6);
+		} else {
+			uint16_t val;
+			res = target_read_u16(target, SAMD_USER_ROW, &val);
+			if (res == ERROR_OK) {
+				uint32_t size = ((val >> 4) & 0x7); /* grab size code */
+
+				if (size == 0x7)
+					command_print(CMD_CTX, "EEPROM is disabled");
+				else {
+					/* Otherwise, 6 is 256B, 0 is 16KB */
+					command_print(CMD_CTX, "EEPROM size is %u bytes",
+							(2 << (13 - size)));
+				}
+			}
+		}
+	}
+
+	return res;
+}
+
+COMMAND_HANDLER(samd_handle_bootloader_command)
+{
+	int res = ERROR_OK;
+	struct target *target = get_current_target(CMD_CTX);
+
+	if (target) {
+		if (target->state != TARGET_HALTED) {
+			LOG_ERROR("Target not halted");
+			return ERROR_TARGET_NOT_HALTED;
+		}
+
+		/* Retrieve the MCU's page size, in bytes. */
+		uint32_t page_size;
+		res = samd_get_flash_page_info(target, &page_size, NULL);
+		if (res != ERROR_OK) {
+			LOG_ERROR("Couldn't determine Flash page size");
+			return res;
+		}
+
+		if (CMD_ARGC >= 1) {
+			int val = atoi(CMD_ARGV[0]);
+			uint32_t code;
+
+			if (val == 0)
+				code = 7;
+			else {
+				/* Try to match size in bytes with corresponding size code */
+				for (code = 0; code <= 6; code++) {
+					if ((unsigned int)val == (2UL << (8UL - code)) * page_size)
+						break;
+				}
+
+				if (code > 6) {
+					command_print(CMD_CTX, "Invalid bootloader size.  Please "
+							"see datasheet for a list valid sizes.");
+					return ERROR_COMMAND_SYNTAX_ERROR;
+				}
+
+			}
+
+			res = samd_modify_user_row(target, code, 0, 2);
+		} else {
+			uint16_t val;
+			res = target_read_u16(target, SAMD_USER_ROW, &val);
+			if (res == ERROR_OK) {
+				uint32_t size = (val & 0x7); /* grab size code */
+				uint32_t nb;
+
+				if (size == 0x7)
+					nb = 0;
+				else
+					nb = (2 << (8 - size)) * page_size;
+
+				/* There are 4 pages per row */
+				command_print(CMD_CTX, "Bootloader size is %" PRIu32 " bytes (%" PRIu32 " rows)",
+					   nb, (uint32_t)(nb / (page_size * 4)));
+			}
+		}
+	}
+
+	return res;
+}
+
 static const struct command_registration at91samd_exec_command_handlers[] = {
 	{
 		.name = "info",
@@ -613,6 +1008,42 @@ static const struct command_registration at91samd_exec_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.help = "Print information about the current at91samd chip"
 			"and its flash configuration.",
+	},
+	{
+		.name = "chip-erase",
+		.handler = samd_handle_chip_erase_command,
+		.mode = COMMAND_EXEC,
+		.help = "Erase the entire Flash by using the Chip"
+			"Erase feature in the Device Service Unit (DSU).",
+	},
+	{
+		.name = "set-security",
+		.handler = samd_handle_set_security_command,
+		.mode = COMMAND_EXEC,
+		.help = "Secure the chip's Flash by setting the Security Bit."
+			"This makes it impossible to read the Flash contents."
+			"The only way to undo this is to issue the chip-erase"
+			"command.",
+	},
+	{
+		.name = "eeprom",
+		.usage = "[size_in_bytes]",
+		.handler = samd_handle_eeprom_command,
+		.mode = COMMAND_EXEC,
+		.help = "Show or set the EEPROM size setting, stored in the User Row."
+			"Please see Table 20-3 of the SAMD20 datasheet for allowed values."
+			"Changes are stored immediately but take affect after the MCU is"
+			"reset.",
+	},
+	{
+		.name = "bootloader",
+		.usage = "[size_in_bytes]",
+		.handler = samd_handle_bootloader_command,
+		.mode = COMMAND_EXEC,
+		.help = "Show or set the bootloader size, stored in the User Row."
+			"Please see Table 20-2 of the SAMD20 datasheet for allowed values."
+			"Changes are stored immediately but take affect after the MCU is"
+			"reset.",
 	},
 	COMMAND_REGISTRATION_DONE
 };

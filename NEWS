@@ -2,105 +2,103 @@ This file includes highlights of the changes made in the OpenOCD
 source archive release.
 
 JTAG Layer:
-	* New CMSIS-DAP driver
-	* Andes AICE debug adapter support
-	* New OpenJTAG driver
-	* New BCM2835 (RaspberryPi) driver
-	* JTAG VPI client driver (for OpenRISC Reference Platform SoC)
-	* Xilinx BSCAN_* for OpenRISC support
-	* ST-LINKv2-1 support
-	* ST-LINKv2 SWO tracing support (UART emulation)
-	* JLink-OB (onboard) support
-	* Altera USB Blaster driver rewrite, initial Blaster II
-	  support
-	* ULINK driver ported to libusb-1.0, OpenULINK build fixes
-	* Support up to 64 bit IR lengths
-	* SVF playback (FPGA programming) fixes
-	* "ftdi" interface driver got extensive testing and is now
-	  recommended over the old ft2232 implementation
+	* SWD support with FTDI, Versaloon, J-Link, sysfsgpio
+	* CMSIS-DAP massive speed and stability improvements
+	* Versaloon driver ported to libusb-1.0
+	* STLink can reestablish communication with a target that was
+          disconnected or rebooted
+	* STLink FAULT and WAIT SWD handling improved
+	* New hla_serial command to distinguish between several HLA
+          adapters attached to a single machine
+	* Serial number support for CMSIS-DAP and J-Link adapters
+	* Support for more J-Link adapters
+	* TAP autoprobing improvements
+	* Big speedup for SVF playback with USB Blaster
 
 Boundary Scan:
 
 Target Layer:
-	* New target: Andes nds32
-	* New target: OpenRISC OR1K
-	* New target: Intel Quark X10xx
-	* MIPS EJTAG 1.5/2.0 support
-	* MIPS speed improvements
-	* Cortex-M, Cortex-A (MEM-AP, APB-AP) targets working with BE
-	  hosts now
-	* XScale vector_catch support, reset fixes
-	* dsp563xx ad-hoc breakpoint/watchpoint support
-	* RTOS support for embKernel
-	* Target profiling improvements
-	* Memory access functions testbench
+	* Stability improvements for targets that get disconnected or
+          rebooted during a debug session
+	* MIPS speed and reliability improvements
+	* MIPS 1.5/2.0 fixes
+	* ARMv7-R improvements
+	* Cortex-A improvements, A7, A15 MPCores support
+	* FPU support for ARMv7-M (Cortex-M4F)
+	* TPIU/ITM support (including SWO/SWV tracing), can be
+          captured with external tools or STLink
+	* JTAG Serial Port (Advanced Debug System softcore) support
+	* Profiling support for OpenRISC
+	* ChibiOS/RT 3.0 support (with and without FPU)
+	* FreeRTOS current versions support
+	* Freescale MQX RTOS support
+	* GDB target description support for MIPS
+	* The last created target is auto-selected as the current
 
 Flash Layer:
-	* STM32 family sync with reference manuals, other bugfixes
-	* STM32F401, STM32F07x support
-	* Atmel SAM4L, SAMG5x support
-	* at91sam3sd8{a,b}, at91sam3s8{a,b,c}, at91sam4s,
-	  at91sam3n0{a,b,0a,0b} support, bugfixes
-	* Atmel SAMD support
-	* Milandr 1986ВЕ* support
-	* Kinetis KL, K21 support
-	* Nuvoton NuMicro MINI5{1,2,4} support
-	* Nuvoton NUC910 series support
-	* NXP LPC43xx, LPC2000 fixes
-	* NXP LPC800, LPC810 support
-	* More ATmega parts supported
-	* Fujitsu MB9Ax family support
-	* EFM32 Wonder Gecko family support
-	* Nordic nRF51 support
+	* nRF51 async loader to improve flashing performance and stability
+	* Cypress PSoC 41xx/42xx and CCG1 families flash driver
+	* Silabs SiM3 family flash driver
+	* Marvell Wireless Microcontroller SPI flash driver
+	* Kinetis mass erase (part unsecuring) implemented
+	* lpcspifi stability fixes
+	* STM32 family sync with reference manuals, L0 support, bugfixes
+	* LPC2000 driver automatically determines part and flash size
+	* NXP LPC11(x)xx, LPC13xx, LPC15xx, LPC8xx, LPC5410x, LPC407x support
+	* Atmel SAMD, SAMR, SAML21 devices support
+	* Atmel SAM4E16 support
+	* ZeroGecko family support
+	* TI Tiva C Blizzard and Snowflake families support
+	* Nuvoton NuMicro M051 support
 
 Board, Target, and Interface Configuration Scripts:
-	* STM32W108xx generic target config
-	* STM32F429 discovery board config
-	* STM32 Nucleo boards configs
-	* DENX M53EVK board config
-	* Altera Cyclone V SoC, SoCkit config
-	* New TI Launchpads board configs
-	* TI am43xx devices, AM437x GP EVM, AM438x ePOS EVM board
-	  configs
-	* Marvell Armada 370 family initial support
-	* TI TMDX570LS31USB (TMS570, Cortex-R4) support scripts
-	* Freescale FRDM-KL25Z, KL46Z board configs
-	* Digilent Zedboard config
-	* Asus RT-N16, Linksys WRT54GL, BT HomeHub board configs
-	* Atmel Xplained initial support
-	* Broadcom bcm28155_ap board config
-	* TUMPA, TUMPA Lite interface configs
-	* Digilent JTAG-SMT2 interface config
-	* New RAM testing functions
-	* Easy-to-use firmware recovery helpers targetting ordinary
-	  users with common equipment
+	* Normal target configs can work with HLA (STLink, ICDI) adapters
+	* STM32 discovery and Nucleo boards configs
+	* Gumstix AeroCore board config
+	* General Plus GP326XXXA target config
+	* Micrel KS869x target config
+	* ASUS RT-N66U board config
+	* Atmel SAM4E-EK board config
+	* Atmel AT91SAM4L proper reset handling implemented
+	* TI OMAP/AM 3505, 3517 target configs
+	* nRF51822-mKIT board config
+	* RC Module К1879ХБ1Я target config
+	* TI TMDX570LS20SUSB board config
+	* TI TMS570 USB Kit board config
+	* TI CC2538, CC26xx target configs
+	* TI AM437x major config improvements, DDR support
+	* TI AM437X IDK board config
+	* TI SimpleLink Wi-Fi CC3200 LaunchPad configs
+	* Silicon Labs EM357, EM358 target configs
+	* Infineon XMC1000, XMC4000 family targets and boards configs
+	* Atheros AR9331 target config
+	* TP-LINK TL-MR3020 board config
+	* Alphascale asm9260t target and eval kit configs
+	* Olimex SAM7-LA2 (AT91SAM7A2) board config
+	* EFM32 Gecko boards configs
+	* Spansion FM4 target and SK-FM4-176L-S6E2CC board configs
+	* LPC1xxx target configs were restructured
+	* IoT-LAB debug adapter config
+	* DP BusBlaster KT-Link compatible config
 
 Server Layer:
-	* Auto-generation of GDB target description for ARMv7-M,
-	  ARM4, nds32, OR1K, Quark
-	* GDB File-I/O Remote Protocol extension support
-	* Default GDB flashing events handlers to initialise and reset
-	  the target automatically when "load" is used
+	* Polling period can be configured
+	* "shutdown" command has an immediate effect
+	* The "program" command doesn't lead to a shutdown by
+          default, use optional "exit" parameter for the old behaviour
+	* Proper OS signal handling was implemented
+	* Async target notifications for the Tcl RPC
 
 Documentation:
-	* Extensive README* changes
-	* The official User's Guide was proofread
-	* Example cross-build script
-	* RTOS documentation improvements
-	* Tcl RPC documentation and examples added
 
 Build and Release:
-	* *BSD, OS X, clang, ARM, windows build fixes
-	* New pkg-config support changes the way libusb (and other
-	  dependencies) are handled. Many adapter drivers are now
-	  selected automatically during the configure stage.
 
 
 This release also contains a number of other important functional and
 cosmetic bugfixes. For more details about what has changed since the
 last release, see the git repository history:
 
-http://sourceforge.net/p/openocd/code/ci/v0.8.0/log/?path=
+http://sourceforge.net/p/openocd/code/ci/v0.9.0/log/?path=
 
 
 For older NEWS, see the NEWS files associated with each release

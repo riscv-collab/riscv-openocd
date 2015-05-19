@@ -24,18 +24,20 @@
 
 #include "imp.h"
 
+#include <target/cortex_m.h>
+
 /* At this time, the SAM4L Flash is available in these capacities:
  * ATSAM4Lx4xx: 256KB (512 pages)
  * ATSAM4Lx2xx: 128KB (256 pages)
  * ATSAM4Lx8xx: 512KB (1024 pages)
  */
 
-/* There are 16 lockable regions regardless of overall capacity.	The number
+/* There are 16 lockable regions regardless of overall capacity. The number
  * of pages per sector is therefore dependant on capacity. */
 #define SAM4L_NUM_SECTORS 16
 
 /* Locations in memory map */
-#define SAM4L_FLASH			0x00000000 /* Flash region */
+#define SAM4L_FLASH			((uint32_t)0x00000000) /* Flash region */
 #define SAM4L_FLASH_USER	0x00800000 /* Flash user page region */
 #define SAM4L_FLASHCALW		0x400A0000 /* Flash controller */
 #define SAM4L_CHIPID		0x400E0740 /* Chip Identification */
@@ -74,6 +76,14 @@
 #define SAM4L_FCMD_HSDIS	17	/* High speed mode disable */
 
 #define SAM4L_FMCD_CMDKEY	0xA5UL	/* 'key' to issue commands, see 14.10.2 */
+
+
+/* SMAP registers and bits */
+#define SMAP_BASE 0x400A3000
+
+#define SMAP_SCR (SMAP_BASE + 8)
+#define SMAP_SCR_HCR (1 << 1)
+
 
 struct sam4l_chip_info {
 	uint32_t id;
@@ -253,7 +263,7 @@ static int sam4l_check_page_erased(struct flash_bank *bank, uint32_t pn,
 	/* Issue a quick page read to verify that we've erased this page */
 	res = sam4l_flash_command(bank->target, SAM4L_FCMD_QPR, pn);
 	if (res != ERROR_OK) {
-		LOG_ERROR("Quick page read %d failed", pn);
+		LOG_ERROR("Quick page read %" PRIu32 " failed", pn);
 		return res;
 	}
 
@@ -307,7 +317,7 @@ static int sam4l_probe(struct flash_bank *bank)
 			chip->flash_kb = 512;
 			break;
 		default:
-			LOG_ERROR("Unknown flash size (chip ID is %08X), assuming 128K", id);
+			LOG_ERROR("Unknown flash size (chip ID is %08" PRIx32 "), assuming 128K", id);
 			chip->flash_kb = 128;
 			break;
 	}
@@ -351,8 +361,8 @@ static int sam4l_probe(struct flash_bank *bank)
 	/* Done */
 	chip->probed = true;
 
-	LOG_INFO("SAM4L MCU: %s (Rev %c) (%uKB Flash with %d %dB pages, %uKB RAM)",
-			chip->details ? chip->details->name : "unknown", 'A' + (id & 0xF),
+	LOG_INFO("SAM4L MCU: %s (Rev %c) (%" PRIu32 "KB Flash with %d %" PRId32 "B pages, %" PRIu32 "KB RAM)",
+			chip->details ? chip->details->name : "unknown", (char)('A' + (id & 0xF)),
 			chip->flash_kb, chip->num_pages, chip->page_size, chip->ram_kb);
 
 	return ERROR_OK;
@@ -633,21 +643,47 @@ static int sam4l_write(struct flash_bank *bank, const uint8_t *buffer,
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(sam4l_handle_info_command)
+
+COMMAND_HANDLER(sam4l_handle_reset_deassert)
 {
-	return ERROR_OK;
+	struct target *target = get_current_target(CMD_CTX);
+	struct armv7m_common *armv7m = target_to_armv7m(target);
+	struct adiv5_dap *swjdp = armv7m->arm.dap;
+	int retval = ERROR_OK;
+	enum reset_types jtag_reset_config = jtag_get_reset_config();
+
+	/* In case of sysresetreq, debug retains state set in cortex_m_assert_reset()
+	 * so we just release reset held by SMAP
+	 *
+	 * n_RESET (srst) clears the DP, so reenable debug and set vector catch here
+	 *
+	 * After vectreset SMAP release is not needed however makes no harm
+	 */
+	if (target->reset_halt && (jtag_reset_config & RESET_HAS_SRST)) {
+		retval = mem_ap_write_u32(swjdp, DCB_DHCSR, DBGKEY | C_HALT | C_DEBUGEN);
+		if (retval == ERROR_OK)
+			retval = mem_ap_write_atomic_u32(swjdp, DCB_DEMCR,
+				TRCENA | VC_HARDERR | VC_BUSERR | VC_CORERESET);
+		/* do not return on error here, releasing SMAP reset is more important */
+	}
+
+	int retval2 = mem_ap_write_atomic_u32(swjdp, SMAP_SCR, SMAP_SCR_HCR);
+	if (retval2 != ERROR_OK)
+		return retval2;
+
+	return retval;
 }
 
 static const struct command_registration at91sam4l_exec_command_handlers[] = {
 	{
-		.name = "info",
-		.handler = sam4l_handle_info_command,
+		.name = "smap_reset_deassert",
+		.handler = sam4l_handle_reset_deassert,
 		.mode = COMMAND_EXEC,
-		.help = "Print information about the current at91sam4l chip"
-			"and its flash configuration.",
+		.help = "deasert internal reset held by SMAP"
 	},
 	COMMAND_REGISTRATION_DONE
 };
+
 static const struct command_registration at91sam4l_command_handlers[] = {
 	{
 		.name = "at91sam4l",

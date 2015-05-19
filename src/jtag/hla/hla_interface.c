@@ -37,7 +37,7 @@
 
 #include <target/target.h>
 
-static struct hl_interface_s hl_if = { {0, 0, 0, 0, 0, HL_TRANSPORT_UNKNOWN, false, NULL, 0}, 0, 0 };
+static struct hl_interface_s hl_if = { {0, 0, 0, 0, 0, HL_TRANSPORT_UNKNOWN, false, -1}, 0, 0 };
 
 int hl_interface_open(enum hl_transports tr)
 {
@@ -92,8 +92,11 @@ int hl_interface_init_target(struct target *t)
 	}
 
 	if (found == 0) {
-		LOG_ERROR("hl_interface_init_target: target not found: idcode: 0x%08" PRIx32,
-				t->tap->idcode);
+		LOG_WARNING("UNEXPECTED idcode: 0x%08" PRIx32, t->tap->idcode);
+		for (ii = 0; ii < limit; ii++)
+			LOG_ERROR("expected %u of %u: 0x%08" PRIx32, ii + 1, limit,
+				t->tap->expected_ids[ii]);
+
 		return ERROR_FAIL;
 	}
 
@@ -115,11 +118,8 @@ static int hl_interface_quit(void)
 {
 	LOG_DEBUG("hl_interface_quit");
 
-	if (hl_if.param.trace_f) {
-		fclose(hl_if.param.trace_f);
-		hl_if.param.trace_f = NULL;
-	}
-	hl_if.param.trace_source_hz = 0;
+	if (hl_if.layout->api->close)
+		hl_if.layout->api->close(hl_if.handle);
 
 	return ERROR_OK;
 }
@@ -143,6 +143,71 @@ int hl_interface_init_reset(void)
 	}
 
 	return ERROR_OK;
+}
+
+static int hl_interface_khz(int khz, int *jtag_speed)
+{
+	if (hl_if.layout->api->speed == NULL)
+		return ERROR_OK;
+
+	*jtag_speed = hl_if.layout->api->speed(hl_if.handle, khz, true);
+	return ERROR_OK;
+}
+
+static int hl_interface_speed_div(int speed, int *khz)
+{
+	*khz = speed;
+	return ERROR_OK;
+}
+
+static int hl_interface_speed(int speed)
+{
+	if (hl_if.layout->api->speed == NULL)
+		return ERROR_OK;
+
+	if (hl_if.handle == NULL) {
+		/* pass speed as initial param as interface not open yet */
+		hl_if.param.initial_interface_speed = speed;
+		return ERROR_OK;
+	}
+
+	hl_if.layout->api->speed(hl_if.handle, speed, false);
+
+	return ERROR_OK;
+}
+
+int hl_interface_override_target(const char **targetname)
+{
+	if (hl_if.layout->api->override_target) {
+		if (hl_if.layout->api->override_target(*targetname)) {
+			*targetname = "hla_target";
+			return ERROR_OK;
+		} else
+			return ERROR_FAIL;
+	}
+	return ERROR_FAIL;
+}
+
+int hl_interface_config_trace(bool enabled, enum tpio_pin_protocol pin_protocol,
+			      uint32_t port_size, unsigned int *trace_freq)
+{
+	if (hl_if.layout->api->config_trace)
+		return hl_if.layout->api->config_trace(hl_if.handle, enabled, pin_protocol,
+						       port_size, trace_freq);
+	else if (enabled) {
+		LOG_ERROR("The selected interface does not support tracing");
+		return ERROR_FAIL;
+	}
+
+	return ERROR_OK;
+}
+
+int hl_interface_poll_trace(uint8_t *buf, size_t *size)
+{
+	if (hl_if.layout->api->poll_trace)
+		return hl_if.layout->api->poll_trace(hl_if.handle, buf, size);
+
+	return ERROR_FAIL;
 }
 
 COMMAND_HANDLER(hl_interface_handle_device_desc_command)
@@ -214,27 +279,17 @@ COMMAND_HANDLER(hl_interface_handle_vid_pid_command)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(interface_handle_trace_command)
+COMMAND_HANDLER(interface_handle_hla_command)
 {
-	FILE *f = NULL;
-	unsigned source_hz;
-
-	if ((CMD_ARGC < 1) || (CMD_ARGC > 2))
+	if (CMD_ARGC != 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], source_hz);
-	if (source_hz == 0) {
-		return ERROR_COMMAND_SYNTAX_ERROR;
+	if (!hl_if.layout->api->custom_command) {
+		LOG_ERROR("The selected adapter doesn't support custom commands");
+		return ERROR_FAIL;
 	}
 
-	if (CMD_ARGC == 2) {
-		f = fopen(CMD_ARGV[1], "a");
-		if (!f)
-			return ERROR_COMMAND_SYNTAX_ERROR;
-	}
-
-	hl_if.param.trace_f = f;
-	hl_if.param.trace_source_hz = source_hz;
+	hl_if.layout->api->custom_command(hl_if.handle, CMD_ARGV[0]);
 
 	return ERROR_OK;
 }
@@ -269,11 +324,11 @@ static const struct command_registration hl_interface_command_handlers[] = {
 	 .usage = "(vid pid)* ",
 	 },
 	 {
-	 .name = "trace",
-	 .handler = &interface_handle_trace_command,
-	 .mode = COMMAND_CONFIG,
-	 .help = "configure trace reception",
-	 .usage = "source_lock_hz [destination_path]",
+	 .name = "hla_command",
+	 .handler = &interface_handle_hla_command,
+	 .mode = COMMAND_EXEC,
+	 .help = "execute a custom adapter-specific command",
+	 .usage = "hla_command <command>",
 	 },
 	COMMAND_REGISTRATION_DONE
 };
@@ -286,4 +341,9 @@ struct jtag_interface hl_interface = {
 	.init = hl_interface_init,
 	.quit = hl_interface_quit,
 	.execute_queue = hl_interface_execute_queue,
+	.speed = &hl_interface_speed,
+	.khz = &hl_interface_khz,
+	.speed_div = &hl_interface_speed_div,
+	.config_trace = &hl_interface_config_trace,
+	.poll_trace = &hl_interface_poll_trace,
 };

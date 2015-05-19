@@ -33,6 +33,8 @@
 #ifndef TARGET_H
 #define TARGET_H
 
+#include <helper/list.h>
+
 struct reg;
 struct trace;
 struct command_context;
@@ -129,7 +131,6 @@ struct target {
 	int target_number;					/* DO NOT USE!  field to be removed in 2010 */
 	struct jtag_tap *tap;				/* where on the jtag chain is this */
 	int32_t coreid;						/* which device on the TAP? */
-	char *variant;						/* what variant of this chip is it? */
 
 	/**
 	 * Indicates whether this target has been examined.
@@ -265,6 +266,8 @@ enum target_event {
 	TARGET_EVENT_GDB_FLASH_ERASE_END,
 	TARGET_EVENT_GDB_FLASH_WRITE_START,
 	TARGET_EVENT_GDB_FLASH_WRITE_END,
+
+	TARGET_EVENT_TRACE_CONFIG,
 };
 
 struct target_event_action {
@@ -283,10 +286,17 @@ struct target_event_callback {
 	struct target_event_callback *next;
 };
 
+struct target_reset_callback {
+	struct list_head list;
+	void *priv;
+	int (*callback)(struct target *target, enum target_reset_mode reset_mode, void *priv);
+};
+
 struct target_timer_callback {
 	int (*callback)(void *priv);
 	int time_ms;
 	int periodic;
+	bool removed;
 	struct timeval when;
 	void *priv;
 	struct target_timer_callback *next;
@@ -302,6 +312,15 @@ int target_register_event_callback(
 int target_unregister_event_callback(
 		int (*callback)(struct target *target,
 		enum target_event event, void *priv),
+		void *priv);
+
+int target_register_reset_callback(
+		int (*callback)(struct target *target,
+		enum target_reset_mode reset_mode, void *priv),
+		void *priv);
+int target_unregister_reset_callback(
+		int (*callback)(struct target *target,
+		enum target_reset_mode reset_mode, void *priv),
 		void *priv);
 
 /* Poll the status of the target, detect any error conditions and report them.
@@ -321,6 +340,7 @@ int target_resume(struct target *target, int current, uint32_t address,
 		int handle_breakpoints, int debug_execution);
 int target_halt(struct target *target);
 int target_call_event_callbacks(struct target *target, enum target_event event);
+int target_call_reset_callbacks(struct target *target, enum target_reset_mode reset_mode);
 
 /**
  * The period is very approximate, the callback can happen much more often
@@ -336,6 +356,7 @@ int target_call_timer_callbacks(void);
  */
 int target_call_timer_callbacks_now(void);
 
+struct target *get_target_by_num(int num);
 struct target *get_current_target(struct command_context *cmd_ctx);
 struct target *get_target(const char *id);
 
@@ -566,6 +587,12 @@ int target_gdb_fileio_end(struct target *target, int retcode, int fileio_errno, 
 /** Return the *name* of this targets current state */
 const char *target_state_name(struct target *target);
 
+/** Return the *name* of a target event enumeration value */
+const char *target_event_name(enum target_event event);
+
+/** Return the *name* of a target reset reason enumeration value */
+const char *target_reset_mode_name(enum target_reset_mode reset_mode);
+
 /* DANGER!!!!!
  *
  * if "area" passed in to target_alloc_working_area() points to a memory
@@ -590,6 +617,11 @@ int target_alloc_working_area_try(struct target *target,
 int target_free_working_area(struct target *target, struct working_area *area);
 void target_free_all_working_areas(struct target *target);
 uint32_t target_get_working_area_avail(struct target *target);
+
+/**
+ * Free all the resources allocated by targets and the target layer
+ */
+void target_quit(void);
 
 extern struct target *all_targets;
 

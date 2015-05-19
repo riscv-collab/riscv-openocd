@@ -29,11 +29,12 @@
 
 #include "arm_adi_v5.h"
 #include "arm.h"
+#include "armv7m_trace.h"
 
 extern const int armv7m_psp_reg_map[];
 extern const int armv7m_msp_reg_map[];
 
-char *armv7m_exception_string(int number);
+const char *armv7m_exception_string(int number);
 
 /* offsets into armv7m core register cache */
 enum {
@@ -136,6 +137,7 @@ enum {
 };
 
 #define ARMV7M_NUM_CORE_REGS (ARMV7M_xPSR + 1)
+#define ARMV7M_NUM_CORE_REGS_NOFP (ARMV7M_NUM_CORE_REGS + 6)
 
 #define ARMV7M_COMMON_MAGIC 0x2A452A45
 
@@ -151,6 +153,8 @@ struct armv7m_common {
 
 	/* stlink is a high level adapter, does not support all functions */
 	bool stlink;
+
+	struct armv7m_trace_config trace_config;
 
 	/* Direct processor core register read and writes */
 	int (*load_core_reg_u32)(struct target *target, uint32_t num, uint32_t *value);

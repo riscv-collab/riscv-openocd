@@ -616,188 +616,10 @@ int mem_ap_sel_write_buf_noincr(struct adiv5_dap *swjdp, uint8_t ap,
 	return mem_ap_write(swjdp, buffer, size, count, address, false);
 }
 
-#define MDM_REG_STAT		0x00
-#define MDM_REG_CTRL		0x04
-#define MDM_REG_ID		0xfc
-
-#define MDM_STAT_FMEACK		(1<<0)
-#define MDM_STAT_FREADY		(1<<1)
-#define MDM_STAT_SYSSEC		(1<<2)
-#define MDM_STAT_SYSRES		(1<<3)
-#define MDM_STAT_FMEEN		(1<<5)
-#define MDM_STAT_BACKDOOREN	(1<<6)
-#define MDM_STAT_LPEN		(1<<7)
-#define MDM_STAT_VLPEN		(1<<8)
-#define MDM_STAT_LLSMODEXIT	(1<<9)
-#define MDM_STAT_VLLSXMODEXIT	(1<<10)
-#define MDM_STAT_CORE_HALTED	(1<<16)
-#define MDM_STAT_CORE_SLEEPDEEP	(1<<17)
-#define MDM_STAT_CORESLEEPING	(1<<18)
-
-#define MEM_CTRL_FMEIP		(1<<0)
-#define MEM_CTRL_DBG_DIS	(1<<1)
-#define MEM_CTRL_DBG_REQ	(1<<2)
-#define MEM_CTRL_SYS_RES_REQ	(1<<3)
-#define MEM_CTRL_CORE_HOLD_RES	(1<<4)
-#define MEM_CTRL_VLLSX_DBG_REQ	(1<<5)
-#define MEM_CTRL_VLLSX_DBG_ACK	(1<<6)
-#define MEM_CTRL_VLLSX_STAT_ACK	(1<<7)
-
-#define MDM_ACCESS_TIMEOUT	3000 /* ms */
-
-/**
- *
- */
-int dap_syssec_kinetis_mdmap(struct adiv5_dap *dap)
-{
-	uint32_t val;
-	int retval;
-	int timeout = 0;
-	enum reset_types jtag_reset_config = jtag_get_reset_config();
-
-	dap_ap_select(dap, 1);
-
-	/* first check mdm-ap id register */
-	retval = dap_queue_ap_read(dap, MDM_REG_ID, &val);
-	if (retval != ERROR_OK)
-		return retval;
-	dap_run(dap);
-
-	if (val != 0x001C0000) {
-		LOG_DEBUG("id doesn't match %08" PRIX32 " != 0x001C0000", val);
-		dap_ap_select(dap, 0);
-		return ERROR_FAIL;
-	}
-
-	/* read and parse status register
-	 * it's important that the device is out of
-	 * reset here
-	 */
-	while (1) {
-		if (timeout++ > MDM_ACCESS_TIMEOUT) {
-			LOG_DEBUG("MDMAP : flash ready timeout");
-			return ERROR_FAIL;
-		}
-		retval = dap_queue_ap_read(dap, MDM_REG_STAT, &val);
-		if (retval != ERROR_OK)
-			return retval;
-		dap_run(dap);
-
-		LOG_DEBUG("MDM_REG_STAT %08" PRIX32, val);
-		if (val & MDM_STAT_FREADY)
-			break;
-		alive_sleep(1);
-	}
-
-	if ((val & MDM_STAT_SYSSEC)) {
-		LOG_DEBUG("MDMAP: system is secured, masserase needed");
-
-		if (!(val & MDM_STAT_FMEEN))
-			LOG_DEBUG("MDMAP: masserase is disabled");
-		else {
-			/* we need to assert reset */
-			if (jtag_reset_config & RESET_HAS_SRST) {
-				/* default to asserting srst */
-				adapter_assert_reset();
-			} else {
-				LOG_DEBUG("SRST not configured");
-				dap_ap_select(dap, 0);
-				return ERROR_FAIL;
-			}
-			timeout = 0;
-			while (1) {
-				if (timeout++ > MDM_ACCESS_TIMEOUT) {
-					LOG_DEBUG("MDMAP : flash ready timeout");
-					return ERROR_FAIL;
-				}
-				retval = dap_queue_ap_write(dap, MDM_REG_CTRL, MEM_CTRL_FMEIP);
-				if (retval != ERROR_OK)
-					return retval;
-				dap_run(dap);
-				/* read status register and wait for ready */
-				retval = dap_queue_ap_read(dap, MDM_REG_STAT, &val);
-				if (retval != ERROR_OK)
-					return retval;
-				dap_run(dap);
-				LOG_DEBUG("MDM_REG_STAT %08" PRIX32, val);
-
-				if ((val & 1))
-					break;
-				alive_sleep(1);
-			}
-			timeout = 0;
-			while (1) {
-				if (timeout++ > MDM_ACCESS_TIMEOUT) {
-					LOG_DEBUG("MDMAP : flash ready timeout");
-					return ERROR_FAIL;
-				}
-				retval = dap_queue_ap_write(dap, MDM_REG_CTRL, 0);
-				if (retval != ERROR_OK)
-					return retval;
-				dap_run(dap);
-				/* read status register */
-				retval = dap_queue_ap_read(dap, MDM_REG_STAT, &val);
-				if (retval != ERROR_OK)
-					return retval;
-				dap_run(dap);
-				LOG_DEBUG("MDM_REG_STAT %08" PRIX32, val);
-				/* read control register and wait for ready */
-				retval = dap_queue_ap_read(dap, MDM_REG_CTRL, &val);
-				if (retval != ERROR_OK)
-					return retval;
-				dap_run(dap);
-				LOG_DEBUG("MDM_REG_CTRL %08" PRIX32, val);
-
-				if (val == 0x00)
-					break;
-				alive_sleep(1);
-			}
-		}
-	}
-
-	dap_ap_select(dap, 0);
-
-	return ERROR_OK;
-}
-
-/** */
-struct dap_syssec_filter {
-	/** */
-	uint32_t idcode;
-	/** */
-	int (*dap_init)(struct adiv5_dap *dap);
-};
-
-/** */
-static struct dap_syssec_filter dap_syssec_filter_data[] = {
-	{ 0x4BA00477, dap_syssec_kinetis_mdmap }
-};
-
-/**
- *
- */
-int dap_syssec(struct adiv5_dap *dap)
-{
-	unsigned int i;
-	struct jtag_tap *tap;
-
-	for (i = 0; i < sizeof(dap_syssec_filter_data); i++) {
-		tap = dap->jtag_info->tap;
-
-		while (tap != NULL) {
-			if (tap->hasidcode && (dap_syssec_filter_data[i].idcode == tap->idcode)) {
-				LOG_DEBUG("DAP: mdmap_init for idcode: %08" PRIx32, tap->idcode);
-				dap_syssec_filter_data[i].dap_init(dap);
-			}
-			tap = tap->next_tap;
-		}
-	}
-
-	return ERROR_OK;
-}
-
 /*--------------------------------------------------------------------------*/
 
+
+#define DAP_POWER_DOMAIN_TIMEOUT (10)
 
 /* FIXME don't import ... just initialize as
  * part of DAP transport setup
@@ -820,8 +642,8 @@ extern const struct dap_ops jtag_dp_ops;
  */
 int ahbap_debugport_init(struct adiv5_dap *dap)
 {
-	uint32_t ctrlstat;
-	int cnt = 0;
+	/* check that we support packed transfers */
+	uint32_t csw, cfg;
 	int retval;
 
 	LOG_DEBUG(" ");
@@ -841,86 +663,76 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 	 */
 	dap->ap_current = !0;
 	dap_ap_select(dap, 0);
+	dap->last_read = NULL;
 
-	/* DP initialization */
+	for (size_t i = 0; i < 10; i++) {
+		/* DP initialization */
 
-	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
-	if (retval != ERROR_OK)
-		return retval;
+		dap->dp_bank_value = 0;
 
-	retval = dap_queue_dp_write(dap, DP_CTRL_STAT, SSTICKYERR);
-	if (retval != ERROR_OK)
-		return retval;
+		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
+		if (retval != ERROR_OK)
+			continue;
 
-	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
-	if (retval != ERROR_OK)
-		return retval;
+		retval = dap_queue_dp_write(dap, DP_CTRL_STAT, SSTICKYERR);
+		if (retval != ERROR_OK)
+			continue;
 
-	dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ;
-	retval = dap_queue_dp_write(dap, DP_CTRL_STAT, dap->dp_ctrl_stat);
-	if (retval != ERROR_OK)
-		return retval;
+		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
+		if (retval != ERROR_OK)
+			continue;
 
-	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstat);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = dap_run(dap);
-	if (retval != ERROR_OK)
-		return retval;
+		dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ;
+		retval = dap_queue_dp_write(dap, DP_CTRL_STAT, dap->dp_ctrl_stat);
+		if (retval != ERROR_OK)
+			continue;
 
-	/* Check that we have debug power domains activated */
-	while (!(ctrlstat & CDBGPWRUPACK) && (cnt++ < 10)) {
+		/* Check that we have debug power domains activated */
 		LOG_DEBUG("DAP: wait CDBGPWRUPACK");
-		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstat);
+		retval = dap_dp_poll_register(dap, DP_CTRL_STAT,
+					      CDBGPWRUPACK, CDBGPWRUPACK,
+					      DAP_POWER_DOMAIN_TIMEOUT);
 		if (retval != ERROR_OK)
-			return retval;
-		retval = dap_run(dap);
-		if (retval != ERROR_OK)
-			return retval;
-		alive_sleep(10);
-	}
+			continue;
 
-	while (!(ctrlstat & CSYSPWRUPACK) && (cnt++ < 10)) {
 		LOG_DEBUG("DAP: wait CSYSPWRUPACK");
-		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstat);
+		retval = dap_dp_poll_register(dap, DP_CTRL_STAT,
+					      CSYSPWRUPACK, CSYSPWRUPACK,
+					      DAP_POWER_DOMAIN_TIMEOUT);
 		if (retval != ERROR_OK)
-			return retval;
+			continue;
+
+		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
+		if (retval != ERROR_OK)
+			continue;
+		/* With debug power on we can activate OVERRUN checking */
+		dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ | CORUNDETECT;
+		retval = dap_queue_dp_write(dap, DP_CTRL_STAT, dap->dp_ctrl_stat);
+		if (retval != ERROR_OK)
+			continue;
+		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
+		if (retval != ERROR_OK)
+			continue;
+
+		retval = dap_setup_accessport(dap, CSW_8BIT | CSW_ADDRINC_PACKED, 0);
+		if (retval != ERROR_OK)
+			continue;
+
+		retval = dap_queue_ap_read(dap, AP_REG_CSW, &csw);
+		if (retval != ERROR_OK)
+			continue;
+
+		retval = dap_queue_ap_read(dap, AP_REG_CFG, &cfg);
+		if (retval != ERROR_OK)
+			continue;
+
 		retval = dap_run(dap);
 		if (retval != ERROR_OK)
-			return retval;
-		alive_sleep(10);
+			continue;
+
+		break;
 	}
 
-	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
-	if (retval != ERROR_OK)
-		return retval;
-	/* With debug power on we can activate OVERRUN checking */
-	dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ | CORUNDETECT;
-	retval = dap_queue_dp_write(dap, DP_CTRL_STAT, dap->dp_ctrl_stat);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
-	if (retval != ERROR_OK)
-		return retval;
-
-	dap_syssec(dap);
-
-	/* check that we support packed transfers */
-	uint32_t csw, cfg;
-
-	retval = dap_setup_accessport(dap, CSW_8BIT | CSW_ADDRINC_PACKED, 0);
-	if (retval != ERROR_OK)
-		return retval;
-
-	retval = dap_queue_ap_read(dap, AP_REG_CSW, &csw);
-	if (retval != ERROR_OK)
-		return retval;
-
-	retval = dap_queue_ap_read(dap, AP_REG_CFG, &cfg);
-	if (retval != ERROR_OK)
-		return retval;
-
-	retval = dap_run(dap);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -1023,11 +835,10 @@ int dap_find_ap(struct adiv5_dap *dap, enum ap_type type_to_find, uint8_t *ap_nu
 }
 
 int dap_get_debugbase(struct adiv5_dap *dap, int ap,
-			uint32_t *out_dbgbase, uint32_t *out_apid)
+			uint32_t *dbgbase, uint32_t *apid)
 {
 	uint32_t ap_old;
 	int retval;
-	uint32_t dbgbase, apid;
 
 	/* AP address is in bits 31:24 of DP_SELECT */
 	if (ap >= 256)
@@ -1036,46 +847,32 @@ int dap_get_debugbase(struct adiv5_dap *dap, int ap,
 	ap_old = dap->ap_current;
 	dap_ap_select(dap, ap);
 
-	retval = dap_queue_ap_read(dap, AP_REG_BASE, &dbgbase);
+	retval = dap_queue_ap_read(dap, AP_REG_BASE, dbgbase);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = dap_queue_ap_read(dap, AP_REG_IDR, &apid);
+	retval = dap_queue_ap_read(dap, AP_REG_IDR, apid);
 	if (retval != ERROR_OK)
 		return retval;
 	retval = dap_run(dap);
 	if (retval != ERROR_OK)
 		return retval;
 
-	/* Excavate the device ID code */
-	struct jtag_tap *tap = dap->jtag_info->tap;
-	while (tap != NULL) {
-		if (tap->hasidcode)
-			break;
-		tap = tap->next_tap;
-	}
-	if (tap == NULL || !tap->hasidcode)
-		return ERROR_OK;
-
 	dap_ap_select(dap, ap_old);
-
-	/* The asignment happens only here to prevent modification of these
-	 * values before they are certain. */
-	*out_dbgbase = dbgbase;
-	*out_apid = apid;
 
 	return ERROR_OK;
 }
 
 int dap_lookup_cs_component(struct adiv5_dap *dap, int ap,
-			uint32_t dbgbase, uint8_t type, uint32_t *addr)
+			uint32_t dbgbase, uint8_t type, uint32_t *addr, int32_t *idx)
 {
 	uint32_t ap_old;
 	uint32_t romentry, entry_offset = 0, component_base, devtype;
-	int retval = ERROR_FAIL;
+	int retval;
 
 	if (ap >= 256)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
+	*addr = 0;
 	ap_old = dap->ap_current;
 	dap_ap_select(dap, ap);
 
@@ -1089,15 +886,33 @@ int dap_lookup_cs_component(struct adiv5_dap *dap, int ap,
 			+ (romentry & 0xFFFFF000);
 
 		if (romentry & 0x1) {
+			uint32_t c_cid1;
+			retval = mem_ap_read_atomic_u32(dap, component_base | 0xff4, &c_cid1);
+			if (retval != ERROR_OK) {
+				LOG_ERROR("Can't read component with base address 0x%" PRIx32
+					  ", the corresponding core might be turned off", component_base);
+				return retval;
+			}
+			if (((c_cid1 >> 4) & 0x0f) == 1) {
+				retval = dap_lookup_cs_component(dap, ap, component_base,
+							type, addr, idx);
+				if (retval == ERROR_OK)
+					break;
+				if (retval != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+					return retval;
+			}
+
 			retval = mem_ap_read_atomic_u32(dap,
 					(component_base & 0xfffff000) | 0xfcc,
 					&devtype);
 			if (retval != ERROR_OK)
 				return retval;
 			if ((devtype & 0xff) == type) {
-				*addr = component_base;
-				retval = ERROR_OK;
-				break;
+				if (!*idx) {
+					*addr = component_base;
+					break;
+				} else
+					(*idx)--;
 			}
 		}
 		entry_offset += 4;
@@ -1105,7 +920,10 @@ int dap_lookup_cs_component(struct adiv5_dap *dap, int ap,
 
 	dap_ap_select(dap, ap_old);
 
-	return retval;
+	if (!*addr)
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+
+	return ERROR_OK;
 }
 
 static int dap_rom_display(struct command_context *cmd_ctx,
@@ -1174,8 +992,8 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 			uint32_t c_cid0, c_cid1, c_cid2, c_cid3;
 			uint32_t c_pid0, c_pid1, c_pid2, c_pid3, c_pid4;
 			uint32_t component_base;
-			unsigned part_num;
-			char *type, *full;
+			uint32_t part_num;
+			const char *type, *full;
 
 			component_base = (dbgbase & 0xFFFFF000) + (romentry & 0xFFFFF000);
 
@@ -1225,8 +1043,8 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 				      "start address 0x%" PRIx32, component_base,
 				      /* component may take multiple 4K pages */
 				      (uint32_t)(component_base - 0x1000*(c_pid4 >> 4)));
-			command_print(cmd_ctx, "\t\tComponent class is 0x%x, %s",
-					(c_cid1 >> 4) & 0xf,
+			command_print(cmd_ctx, "\t\tComponent class is 0x%" PRIx8 ", %s",
+					(uint8_t)((c_cid1 >> 4) & 0xf),
 					/* See ARM IHI 0029B Table 3-3 */
 					class_description[(c_cid1 >> 4) & 0xf]);
 
@@ -1234,7 +1052,7 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 			if (((c_cid1 >> 4) & 0x0f) == 9) {
 				uint32_t devtype;
 				unsigned minor;
-				char *major = "Reserved", *subtype = "Reserved";
+				const char *major = "Reserved", *subtype = "Reserved";
 
 				retval = mem_ap_read_atomic_u32(dap,
 						(component_base & 0xfffff000) | 0xfcc,
@@ -1265,6 +1083,9 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 						break;
 					case 2:
 						subtype = "Buffer";
+						break;
+					case 3:
+						subtype = "Router";
 						break;
 					}
 					break;
@@ -1303,6 +1124,9 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 					case 4:
 						subtype = "Bus";
 						break;
+					case 6:
+						subtype = "Software";
+						break;
 					}
 					break;
 				case 4:
@@ -1316,6 +1140,9 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 						break;
 					case 2:
 						subtype = "Debug Auth";
+						break;
+					case 3:
+						subtype = "Power Requestor";
 						break;
 					}
 					break;
@@ -1334,11 +1161,40 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 					case 3:
 						subtype = "Engine/Coprocessor";
 						break;
+					case 4:
+						subtype = "Bus";
+						break;
+					case 5:
+						subtype = "Memory";
+						break;
+					}
+					break;
+				case 6:
+					major = "Perfomance Monitor";
+					switch (minor) {
+					case 0:
+						subtype = "other";
+						break;
+					case 1:
+						subtype = "Processor";
+						break;
+					case 2:
+						subtype = "DSP";
+						break;
+					case 3:
+						subtype = "Engine/Coprocessor";
+						break;
+					case 4:
+						subtype = "Bus";
+						break;
+					case 5:
+						subtype = "Memory";
+						break;
 					}
 					break;
 				}
-				command_print(cmd_ctx, "\t\tType is 0x%02x, %s, %s",
-						devtype & 0xff,
+				command_print(cmd_ctx, "\t\tType is 0x%02" PRIx8 ", %s, %s",
+						(uint8_t)(devtype & 0xff),
 						major, subtype);
 				/* REVISIT also show 0xfc8 DevId */
 			}
@@ -1384,6 +1240,18 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 				type = "Cortex-M3 FBP";
 				full = "(Flash Patch and Breakpoint)";
 				break;
+			case 0x008:
+				type = "Cortex-M0 SCS";
+				full = "(System Control Space)";
+				break;
+			case 0x00a:
+				type = "Cortex-M0 DWT";
+				full = "(Data Watchpoint and Trace)";
+				break;
+			case 0x00b:
+				type = "Cortex-M0 BPU";
+				full = "(Breakpoint Unit)";
+				break;
 			case 0x00c:
 				type = "Cortex-M4 SCS";
 				full = "(System Control Space)";
@@ -1425,6 +1293,18 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 				type = "Coresight ITM";
 				full = "(Instrumentation Trace Macrocell)";
 				break;
+			case 0x914:
+				type = "Coresight SWO";
+				full = "(Single Wire Output)";
+				break;
+			case 0x917:
+				type = "Coresight HTM";
+				full = "(AHB Trace Macrocell)";
+				break;
+			case 0x920:
+				type = "CoreSight ETM11";
+				full = "(Embedded Trace)";
+				break;
 			case 0x921:
 				type = "Cortex-A8 ETM";
 				full = "(Embedded Trace)";
@@ -1453,6 +1333,14 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 				type = "CoreSight Component";
 				full = "(unidentified Cortex-A9 component)";
 				break;
+			case 0x961:
+				type = "CoreSight TMC";
+				full = "(Trace Memory Controller)";
+				break;
+			case 0x962:
+				type = "CoreSight STM";
+				full = "(System Trace Macrocell)";
+				break;
 			case 0x9a0:
 				type = "CoreSight PMU";
 				full = "(Performance Monitoring Unit)";
@@ -1460,6 +1348,14 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 			case 0x9a1:
 				type = "Cortex-M4 TPUI";
 				full = "(Trace Port Interface Unit)";
+				break;
+			case 0x9a5:
+				type = "Cortex-A5 ETM";
+				full = "(Embedded Trace)";
+				break;
+			case 0xc05:
+				type = "Cortex-A5 Debug";
+				full = "(Debug Unit)";
 				break;
 			case 0xc08:
 				type = "Cortex-A8 Debug";
@@ -1469,7 +1365,12 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 				type = "Cortex-A9 Debug";
 				full = "(Debug Unit)";
 				break;
+			case 0x4af:
+				type = "Cortex-A15 Debug";
+				full = "(Debug Unit)";
+				break;
 			default:
+				LOG_DEBUG("Unrecognized Part number 0x%" PRIx32, part_num);
 				type = "-*- unrecognized -*-";
 				full = "";
 				break;
@@ -1498,7 +1399,7 @@ static int dap_info_command(struct command_context *cmd_ctx,
 		struct adiv5_dap *dap, int ap)
 {
 	int retval;
-	uint32_t dbgbase = 0, apid = 0; /* Silence gcc by initializing */
+	uint32_t dbgbase, apid;
 	int romtable_present = 0;
 	uint8_t mem_ap;
 	uint32_t ap_old;
@@ -1538,9 +1439,9 @@ static int dap_info_command(struct command_context *cmd_ctx,
 		command_print(cmd_ctx, "No AP found at this ap 0x%x", ap);
 
 	romtable_present = ((mem_ap) && (dbgbase != 0xFFFFFFFF));
-	if (romtable_present) {
+	if (romtable_present)
 		dap_rom_display(cmd_ctx, dap, ap, dbgbase, 0);
-	} else
+	else
 		command_print(cmd_ctx, "\tNo ROM table present");
 	dap_ap_select(dap, ap_old);
 

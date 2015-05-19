@@ -69,6 +69,8 @@
 #define FLASH_CRIS	(FLASH_CONTROL_BASE | 0x00C)
 #define FLASH_CIM	(FLASH_CONTROL_BASE | 0x010)
 #define FLASH_MISC	(FLASH_CONTROL_BASE | 0x014)
+#define FLASH_FSIZE	(FLASH_CONTROL_BASE | 0xFC0)
+#define FLASH_SSIZE	(FLASH_CONTROL_BASE | 0xFC4)
 
 #define AMISC	1
 #define PMISC	2
@@ -98,19 +100,16 @@ struct stellaris_flash_bank {
 	uint32_t did1;
 	uint32_t dc0;
 	uint32_t dc1;
+	uint32_t fsize;
+	uint32_t ssize;
 
 	const char *target_name;
 	uint8_t target_class;
 
 	uint32_t sramsiz;
-	uint32_t flshsz;
 	/* flash geometry */
 	uint32_t num_pages;
 	uint32_t pagesize;
-	uint32_t pages_in_lockregion;
-
-	/* nv memory bits */
-	uint16_t num_lockbits;
 
 	/* main clock status */
 	uint32_t rcc;
@@ -361,70 +360,96 @@ static const struct {
 	{0x06, 0x7D, "LM3S9U90"},
 	{0x06, 0x90, "LM3S9U92"},
 	{0x06, 0x9B, "LM3S9U96"},
-	{0x05, 0x18, "LM4F110B2QR"},
-	{0x05, 0x19, "LM4F110C4QR"},
-	{0x05, 0x10, "LM4F110E5QR"},
-	{0x05, 0x11, "LM4F110H5QR"},
-	{0x05, 0x22, "LM4F111B2QR"},
-	{0x05, 0x23, "LM4F111C4QR"},
-	{0x05, 0x20, "LM4F111E5QR"},
-	{0x05, 0x21, "LM4F111H5QR"},
-	{0x05, 0x36, "LM4F112C4QC"},
-	{0x05, 0x30, "LM4F112E5QC"},
-	{0x05, 0x31, "LM4F112H5QC"},
-	{0x05, 0x35, "LM4F112H5QD"},
-	{0x05, 0x01, "LM4F120B2QR"},
-	{0x05, 0x02, "LM4F120C4QR"},
-	{0x05, 0x03, "LM4F120E5QR"},
-	{0x05, 0x04, "LM4F120H5QR"},
-	{0x05, 0x08, "LM4F121B2QR"},
-	{0x05, 0x09, "LM4F121C4QR"},
-	{0x05, 0x0A, "LM4F121E5QR"},
-	{0x05, 0x0B, "LM4F121H5QR"},
-	{0x05, 0xD0, "LM4F122C4QC"},
-	{0x05, 0xD1, "LM4F122E5QC"},
-	{0x05, 0xD2, "LM4F122H5QC"},
-	{0x05, 0xD6, "LM4F122H5QD"},
-	{0x05, 0x48, "LM4F130C4QR"},
-	{0x05, 0x40, "LM4F130E5QR"},
-	{0x05, 0x41, "LM4F130H5QR"},
-	{0x05, 0x52, "LM4F131C4QR"},
-	{0x05, 0x50, "LM4F131E5QR"},
-	{0x05, 0x51, "LM4F131H5QR"},
-	{0x05, 0x66, "LM4F132C4QC"},
-	{0x05, 0x60, "LM4F132E5QC"},
-	{0x05, 0x61, "LM4F132H5QC"},
-	{0x05, 0x65, "LM4F132H5QD"},
-	{0x05, 0x70, "LM4F210E5QR"},
-	{0x05, 0x73, "LM4F210H5QR"},
-	{0x05, 0x80, "LM4F211E5QR"},
-	{0x05, 0x83, "LM4F211H5QR"},
-	{0x05, 0xE9, "LM4F212H5BB"},
-	{0x05, 0xC4, "LM4F212H5QC"},
-	{0x05, 0xC6, "LM4F212H5QD"},
-	{0x05, 0xA0, "LM4F230E5QR"},
-	{0x05, 0xA1, "LM4F230H5QR"},
-	{0x05, 0xB0, "LM4F231E5QR"},
-	{0x05, 0xB1, "LM4F231H5QR"},
-	{0x05, 0xC0, "LM4F232E5QC"},
-	{0x05, 0xE3, "LM4F232H5BB"},
-	{0x05, 0xC1, "LM4F232H5QC"},
-	{0x05, 0xC5, "LM4F232H5QD"},
-	{0x05, 0xE5, "LM4FS1AH5BB"},
-	{0x05, 0xEA, "LM4FS1GH5BB"},
-	{0x05, 0xE4, "LM4FS99H5BB"},
+	{0x05, 0x01, "LM4F120B2QR/TM4C1233C3PM"},
+	{0x05, 0x02, "LM4F120C4QR/TM4C1233D5PM"},
+	{0x05, 0x03, "LM4F120E5QR/TM4C1233E6PM"},
+	{0x05, 0x04, "LM4F120H5QR/TM4C1233H6PM"},
+	{0x05, 0x08, "LM4F121B2QR/TM4C1232C3PM"},
+	{0x05, 0x09, "LM4F121C4QR/TM4C1232D5PM"},
+	{0x05, 0x0A, "LM4F121E5QR/TM4C1232E6PM"},
+	{0x05, 0x0B, "LM4F121H5QR/TM4C1232H6PM"},
+	{0x05, 0x10, "LM4F110E5QR/TM4C1231E6PM"},
+	{0x05, 0x11, "LM4F110H5QR/TM4C1231H6PM"},
+	{0x05, 0x18, "LM4F110B2QR/TM4C1231C3PM"},
+	{0x05, 0x19, "LM4F110C4QR/TM4C1231D5PM"},
+	{0x05, 0x20, "LM4F111E5QR/TM4C1230E6PM"},
+	{0x05, 0x21, "LM4F111H5QR/TM4C1230H6PM"},
+	{0x05, 0x22, "LM4F111B2QR/TM4C1230C3PM"},
+	{0x05, 0x23, "LM4F111C4QR/TM4C1230D5PM"},
+	{0x05, 0x30, "LM4F112E5QC/TM4C1231E6PZ"},
+	{0x05, 0x31, "LM4F112H5QC/TM4C1231H6PZ"},
+	{0x05, 0x35, "LM4F112H5QD/TM4C1231H6PGE"},
+	{0x05, 0x36, "LM4F112C4QC/TM4C1231D5PZ"},
+	{0x05, 0x40, "LM4F130E5QR/TM4C1237E6PM"},
+	{0x05, 0x41, "LM4F130H5QR/TM4C1237H6PM"},
+	{0x05, 0x48, "LM4F130C4QR/TM4C1237D5PM"},
+	{0x05, 0x50, "LM4F131E5QR/TM4C1236E6PM"},
+	{0x05, 0x51, "LM4F131H5QR/TM4C1236H6PM"},
+	{0x05, 0x52, "LM4F131C4QR/TM4C1236D5PM"},
+	{0x05, 0x60, "LM4F132E5QC/TM4C1237E6PZ"},
+	{0x05, 0x61, "LM4F132H5QC/TM4C1237H6PZ"},
+	{0x05, 0x65, "LM4F132H5QD/TM4C1237H6PGE"},
+	{0x05, 0x66, "LM4F132C4QC/TM4C1237D5PZ"},
+	{0x05, 0x70, "LM4F210E5QR/TM4C123BE6PM"},
+	{0x05, 0x73, "LM4F210H5QR/TM4C123BH6PM"},
+	{0x05, 0x80, "LM4F211E5QR/TM4C123AE6PM"},
+	{0x05, 0x83, "LM4F211H5QR/TM4C123AH6PM"},
+	{0x05, 0xA0, "LM4F230E5QR/TM4C123GE6PM"},
+	{0x05, 0xA1, "LM4F230H5QR/TM4C123GH6PM"},
+	{0x05, 0xB0, "LM4F231E5QR/TM4C123FE6PM"},
+	{0x05, 0xB1, "LM4F231H5QR/TM4C123FH6PM"},
+	{0x05, 0xC0, "LM4F232E5QC/TM4C123GE6PZ"},
+	{0x05, 0xC1, "LM4F232H5QC/TM4C123GH6PZ"},
+	{0x05, 0xC3, "LM4F212E5QC/TM4C123BE6PZ"},
+	{0x05, 0xC4, "LM4F212H5QC/TM4C123BH6PZ"},
+	{0x05, 0xC5, "LM4F232H5QD/TM4C123GH6PGE"},
+	{0x05, 0xC6, "LM4F212H5QD/TM4C123BH6PGE"},
+	{0x05, 0xD0, "LM4F122C4QC/TM4C1233D5PZ"},
+	{0x05, 0xD1, "LM4F122E5QC/TM4C1233E6PZ"},
+	{0x05, 0xD2, "LM4F122H5QC/TM4C1233H6PZ"},
+	{0x05, 0xD6, "LM4F122H5QD/TM4C1233H6PGE"},
 	{0x05, 0xE1, "LM4FSXLH5BB"},
+	{0x05, 0xE3, "LM4F232H5BB/TM4C123GH6ZRB"},
+	{0x05, 0xE4, "LM4FS99H5BB"},
+	{0x05, 0xE5, "LM4FS1AH5BB"},
+	{0x05, 0xE9, "LM4F212H5BB/TM4C123BH6ZRB"},
+	{0x05, 0xEA, "LM4FS1GH5BB"},
+	{0x05, 0xF0, "TM4C123GH6ZXR"},
+	{0x0A, 0x19, "TM4C1290NCPDT"},
+	{0x0A, 0x1B, "TM4C1290NCZAD"},
+	{0x0A, 0x1C, "TM4C1292NCPDT"},
+	{0x0A, 0x1E, "TM4C1292NCZAD"},
+	{0x0A, 0x1F, "TM4C1294NCPDT"},
+	{0x0A, 0x21, "TM4C1294NCZAD"},
+	{0x0A, 0x22, "TM4C1297NCZAD"},
+	{0x0A, 0x23, "TM4C1299NCZAD"},
+	{0x0A, 0x24, "TM4C129CNCPDT"},
+	{0x0A, 0x26, "TM4C129CNCZAD"},
+	{0x0A, 0x27, "TM4C129DNCPDT"},
+	{0x0A, 0x29, "TM4C129DNCZAD"},
+	{0x0A, 0x2D, "TM4C129ENCPDT"},
+	{0x0A, 0x2F, "TM4C129ENCZAD"},
+	{0x0A, 0x30, "TM4C129LNCZAD"},
+	{0x0A, 0x32, "TM4C129XNCZAD"},
+	{0x0A, 0x34, "TM4C1294KCPDT"},
+	{0x0A, 0x35, "TM4C129EKCPDT"},
+	{0x0A, 0x36, "TM4C1299KCZAD"},
+	{0x0A, 0x37, "TM4C129XKCZAD"},
 	{0xFF, 0x00, "Unknown Part"}
 };
 
-static const char *StellarisClassname[7] = {
+static const char * const StellarisClassname[] = {
 	"Sandstorm",
 	"Fury",
 	"Unknown",
 	"DustDevil",
 	"Tempest",
-	"Blizzard",
-	"Firestorm"
+	"Blizzard/TM4C123x",
+	"Firestorm",
+	"",
+	"",
+	"",
+	"Snowflake",
 };
 
 /***************************************************************************
@@ -482,36 +507,27 @@ static int get_stellaris_info(struct flash_bank *bank, char *buf, int buf_size)
 	printed = snprintf(buf,
 			   buf_size,
 			   "did1: 0x%8.8" PRIx32 ", arch: 0x%4.4" PRIx32
-			   ", eproc: %s, ramsize: %ik, flashsize: %ik\n",
+			   ", eproc: %s, ramsize: %" PRIu32 "k, flashsize: %" PRIu32 "k\n",
 			   stellaris_info->did1,
 			   stellaris_info->did1,
 			   "ARMv7M",
-			   (int)((1 + ((stellaris_info->dc0 >> 16) & 0xFFFF))/4),
-			   (int)((1 + (stellaris_info->dc0 & 0xFFFF))*2));
+			   stellaris_info->sramsiz,
+			   (uint32_t)(stellaris_info->num_pages * stellaris_info->pagesize / 1024));
 	buf += printed;
 	buf_size -= printed;
 
-	printed = snprintf(buf,
+	snprintf(buf,
 			   buf_size,
 			   "master clock: %ikHz%s, "
-			   "rcc is 0x%" PRIx32 ", rcc2 is 0x%" PRIx32 "\n",
+			   "rcc is 0x%" PRIx32 ", rcc2 is 0x%" PRIx32 ", "
+			   "pagesize: %" PRIu32 ", pages: %" PRIu32,
 			   (int)(stellaris_info->mck_freq / 1000),
 			   stellaris_info->mck_desc,
 			   stellaris_info->rcc,
-			   stellaris_info->rcc2);
-	buf += printed;
-	buf_size -= printed;
+			   stellaris_info->rcc2,
+			   stellaris_info->pagesize,
+			   stellaris_info->num_pages);
 
-	if (stellaris_info->num_lockbits > 0) {
-		snprintf(buf,
-				buf_size,
-				"pagesize: %" PRIi32 ", pages: %d, "
-				"lockbits: %i, pages per lockbit: %i\n",
-				stellaris_info->pagesize,
-				(unsigned) stellaris_info->num_pages,
-				stellaris_info->num_lockbits,
-				(unsigned) stellaris_info->pages_in_lockregion);
-	}
 	return ERROR_OK;
 }
 
@@ -666,7 +682,7 @@ static int stellaris_read_part_info(struct flash_bank *bank)
 	LOG_DEBUG("did0 0x%" PRIx32 ", did1 0x%" PRIx32 ", dc0 0x%" PRIx32 ", dc1 0x%" PRIx32 "",
 		  did0, did1, stellaris_info->dc0, stellaris_info->dc1);
 
-	ver = did0 >> 28;
+	ver = DID0_VER(did0);
 	if ((ver != 0) && (ver != 1)) {
 		LOG_WARNING("Unknown did0 version, cannot identify target");
 		return ERROR_FLASH_OPERATION_FAILED;
@@ -724,6 +740,7 @@ static int stellaris_read_part_info(struct flash_bank *bank)
 		case 4:			/* Tempest */
 		case 5:			/* Blizzard */
 		case 6:			/* Firestorm */
+		case 0xa:		/* Snowflake */
 			stellaris_info->iosc_freq = 16000000;	/* +/- 1% */
 			stellaris_info->iosc_desc = " (±1%)";
 			/* FALL THROUGH */
@@ -747,10 +764,26 @@ static int stellaris_read_part_info(struct flash_bank *bank)
 	stellaris_info->did0 = did0;
 	stellaris_info->did1 = did1;
 
-	stellaris_info->num_lockbits = 1 + (stellaris_info->dc0 & 0xFFFF);
-	stellaris_info->num_pages = 2 * (1 + (stellaris_info->dc0 & 0xFFFF));
-	stellaris_info->pagesize = 1024;
-	stellaris_info->pages_in_lockregion = 2;
+	if (stellaris_info->target_class == 5) { /* Blizzard */
+		target_read_u32(target, FLASH_FSIZE, &stellaris_info->fsize);
+		target_read_u32(target, FLASH_SSIZE, &stellaris_info->ssize);
+
+		stellaris_info->num_pages = 2 * (1 + (stellaris_info->fsize & 0xFFFF));
+		stellaris_info->sramsiz = (1 + (stellaris_info->ssize & 0xFFFF)) / 4;
+		stellaris_info->pagesize = 1024;
+	} else if (stellaris_info->target_class == 0xa) { /* Snowflake */
+		target_read_u32(target, FLASH_FSIZE, &stellaris_info->fsize);
+		target_read_u32(target, FLASH_SSIZE, &stellaris_info->ssize);
+
+		stellaris_info->pagesize = (1 << ((stellaris_info->fsize >> 16) & 7)) * 1024;
+		stellaris_info->num_pages = 2048 * (1 + (stellaris_info->fsize & 0xFFFF)) /
+			stellaris_info->pagesize;
+		stellaris_info->sramsiz = (1 + (stellaris_info->ssize & 0xFFFF)) / 4;
+	} else {
+		stellaris_info->num_pages = 2 * (1 + (stellaris_info->dc0 & 0xFFFF));
+		stellaris_info->sramsiz = (1 + ((stellaris_info->dc0 >> 16) & 0xFFFF)) / 4;
+		stellaris_info->pagesize = 1024;
+	}
 
 	/* REVISIT for at least Tempest parts, read NVMSTAT.FWB too.
 	 * That exposes a 32-word Flash Write Buffer ... enabling
@@ -767,9 +800,12 @@ static int stellaris_read_part_info(struct flash_bank *bank)
 static int stellaris_protect_check(struct flash_bank *bank)
 {
 	struct stellaris_flash_bank *stellaris = bank->driver_priv;
+	struct target *target = bank->target;
+	uint32_t flash_sizek = stellaris->pagesize / 1024 *
+		stellaris->num_pages;
+	uint32_t fmppe_addr;
 	int status = ERROR_OK;
 	unsigned i;
-	unsigned page;
 
 	if (stellaris->did1 == 0)
 		return ERROR_FLASH_BANK_NOT_PROBED;
@@ -781,32 +817,32 @@ static int stellaris_protect_check(struct flash_bank *bank)
 	 * to report any pages that we can't write.  Ignore the Read Enable
 	 * register (FMPRE).
 	 */
-	for (i = 0, page = 0;
-			i < DIV_ROUND_UP(stellaris->num_lockbits, 32u);
-			i++) {
-		uint32_t lockbits;
 
-		status = target_read_u32(bank->target,
-				SCB_BASE + (i ? (FMPPE0 + 4 * i) : FMPPE),
-				&lockbits);
-		LOG_DEBUG("FMPPE%d = %#8.8x (status %d)", i,
-				(unsigned) lockbits, status);
-		if (status != ERROR_OK)
-			goto done;
+	if (stellaris->target_class >= 0x0a || flash_sizek > 64)
+		fmppe_addr = SCB_BASE | FMPPE0;
+	else
+		fmppe_addr = SCB_BASE | FMPPE;
 
-		for (unsigned j = 0; j < 32; j++) {
-			unsigned k;
+	unsigned int page = 0, lockbitnum, lockbitcnt = flash_sizek / 2;
+	unsigned int bits_per_page = stellaris->pagesize / 2048;
+	/* Every lock bit always corresponds to a 2k region */
+	for (lockbitnum = 0; lockbitnum < lockbitcnt; lockbitnum += 32) {
+		uint32_t fmppe;
 
-			for (k = 0; k < stellaris->pages_in_lockregion; k++) {
-				if (page >= (unsigned) bank->num_sectors)
-					goto done;
-				bank->sectors[page++].is_protected =
-						!(lockbits & (1 << j));
+		target_read_u32(target, fmppe_addr, &fmppe);
+		for (i = 0; i < 32 && lockbitnum + i < lockbitcnt; i++) {
+			bool protect = !(fmppe & (1 << i));
+			if (bits_per_page) {
+				bank->sectors[page++].is_protected = protect;
+				i += bits_per_page - 1;
+			} else { /* 1024k pages, every lockbit covers 2 pages */
+				bank->sectors[page++].is_protected = protect;
+				bank->sectors[page++].is_protected = protect;
 			}
 		}
+		fmppe_addr += 4;
 	}
 
-done:
 	return status;
 }
 
@@ -870,13 +906,12 @@ static int stellaris_erase(struct flash_bank *bank, int first, int last)
 
 static int stellaris_protect(struct flash_bank *bank, int set, int first, int last)
 {
-	uint32_t fmppe, flash_fmc, flash_cris;
-	int lockregion;
-
-	struct stellaris_flash_bank *stellaris_info = bank->driver_priv;
+	struct stellaris_flash_bank *stellaris = bank->driver_priv;
 	struct target *target = bank->target;
+	uint32_t flash_fmc, flash_cris;
+	unsigned int bits_per_page = stellaris->pagesize / 2048;
 
-	if (bank->target->state != TARGET_HALTED) {
+	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
@@ -887,14 +922,18 @@ static int stellaris_protect(struct flash_bank *bank, int set, int first, int la
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	if (stellaris_info->did1 == 0)
+	if (stellaris->did1 == 0)
 		return ERROR_FLASH_BANK_NOT_PROBED;
 
-	/* lockregions are 2 pages ... must protect [even..odd] */
-	if ((first < 0) || (first & 1)
-			|| (last < first) || !(last & 1)
-			|| (last >= 2 * stellaris_info->num_lockbits)) {
-		LOG_ERROR("Can't protect unaligned or out-of-range pages.");
+	if (stellaris->target_class == 0x03 &&
+	    !((stellaris->did0 >> 8) & 0xFF) &&
+	    !((stellaris->did0) & 0xFF)) {
+		LOG_ERROR("DustDevil A0 parts can't be unprotected, see errata; refusing to proceed");
+		return ERROR_FLASH_OPERATION_FAILED;
+	}
+
+	if (!bits_per_page && (first % 2 || !(last % 2))) {
+		LOG_ERROR("Can't protect unaligned pages");
 		return ERROR_FLASH_SECTOR_INVALID;
 	}
 
@@ -902,57 +941,60 @@ static int stellaris_protect(struct flash_bank *bank, int set, int first, int la
 	stellaris_read_clock_info(bank);
 	stellaris_set_flash_timing(bank);
 
-	/* convert from pages to lockregions */
-	first /= 2;
-	last /= 2;
-
-	/* FIXME this assumes single FMPPE, for a max of 64K of flash!!
-	 * Current parts can be much bigger.
-	 */
-	if (last >= 32) {
-		LOG_ERROR("No support yet for protection > 64K");
-		return ERROR_FLASH_OPERATION_FAILED;
-	}
-
-	target_read_u32(target, SCB_BASE | FMPPE, &fmppe);
-
-	for (lockregion = first; lockregion <= last; lockregion++)
-		fmppe &= ~(1 << lockregion);
-
 	/* Clear and disable flash programming interrupts */
 	target_write_u32(target, FLASH_CIM, 0);
 	target_write_u32(target, FLASH_MISC, PMISC | AMISC);
 
-	/* REVISIT this clobbers state set by any halted firmware ...
-	 * it might want to process those IRQs.
-	 */
+	uint32_t flash_sizek = stellaris->pagesize / 1024 *
+		stellaris->num_pages;
+	uint32_t fmppe_addr;
 
-	LOG_DEBUG("fmppe 0x%" PRIx32 "", fmppe);
-	target_write_u32(target, SCB_BASE | FMPPE, fmppe);
+	if (stellaris->target_class >= 0x0a || flash_sizek > 64)
+		fmppe_addr = SCB_BASE | FMPPE0;
+	else
+		fmppe_addr = SCB_BASE | FMPPE;
 
-	/* Commit FMPPE */
-	target_write_u32(target, FLASH_FMA, 1);
+	int page = 0;
+	unsigned int lockbitnum, lockbitcnt = flash_sizek / 2;
+	/* Every lock bit always corresponds to a 2k region */
+	for (lockbitnum = 0; lockbitnum < lockbitcnt; lockbitnum += 32) {
+		uint32_t fmppe;
 
-	/* Write commit command */
-	/* REVISIT safety check, since this cannot be undone
-	 * except by the "Recover a locked device" procedure.
-	 * REVISIT DustDevil-A0 parts have an erratum making FMPPE commits
-	 * inadvisable ... it makes future mass erase operations fail.
-	 */
-	LOG_WARNING("Flash protection cannot be removed once committed, commit is NOT executed !");
-	/* target_write_u32(target, FLASH_FMC, FMC_WRKEY | FMC_COMT); */
+		target_read_u32(target, fmppe_addr, &fmppe);
+		for (unsigned int i = 0;
+		     i < 32 && lockbitnum + i < lockbitcnt;
+		     i++) {
+			if (page >= first && page <= last)
+				fmppe &= ~(1 << i);
 
-	/* Wait until erase complete */
-	do {
-		target_read_u32(target, FLASH_FMC, &flash_fmc);
-	} while (flash_fmc & FMC_COMT);
+			if (bits_per_page) {
+				if (!((i + 1) % bits_per_page))
+					page++;
+			} else { /* 1024k pages, every lockbit covers 2 pages */
+				page += 2;
+			}
+		}
+		target_write_u32(target, fmppe_addr, fmppe);
 
-	/* Check acess violations */
-	target_read_u32(target, FLASH_CRIS, &flash_cris);
-	if (flash_cris & (AMASK)) {
-		LOG_WARNING("Error setting flash page protection,  flash_cris 0x%" PRIx32 "", flash_cris);
-		target_write_u32(target, FLASH_CRIS, 0);
-		return ERROR_FLASH_OPERATION_FAILED;
+		/* Commit FMPPE* */
+		target_write_u32(target, FLASH_FMA, 1 + lockbitnum / 16);
+		/* Write commit command */
+		target_write_u32(target, FLASH_FMC, FMC_WRKEY | FMC_COMT);
+
+		/* Wait until commit complete */
+		do {
+			target_read_u32(target, FLASH_FMC, &flash_fmc);
+		} while (flash_fmc & FMC_COMT);
+
+		/* Check access violations */
+		target_read_u32(target, FLASH_CRIS, &flash_cris);
+		if (flash_cris & (AMASK)) {
+			LOG_WARNING("Error setting flash page protection,  flash_cris 0x%" PRIx32 "", flash_cris);
+			target_write_u32(target, FLASH_CRIS, 0);
+			return ERROR_FLASH_OPERATION_FAILED;
+		}
+
+		fmppe_addr += 4;
 	}
 
 	return ERROR_OK;
@@ -1216,7 +1258,7 @@ static int stellaris_probe(struct flash_bank *bank)
 	}
 
 	/* provide this for the benefit of the NOR flash framework */
-	bank->size = 1024 * stellaris_info->num_pages;
+	bank->size = stellaris_info->num_pages * stellaris_info->pagesize;
 	bank->num_sectors = stellaris_info->num_pages;
 	bank->sectors = calloc(bank->num_sectors, sizeof(struct flash_sector));
 	for (int i = 0; i < bank->num_sectors; i++) {
@@ -1317,15 +1359,24 @@ COMMAND_HANDLER(stellaris_handle_recover_command)
 	struct flash_bank *bank;
 	int retval;
 
-	retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (retval != ERROR_OK)
-		return retval;
+	if (CMD_ARGC != 0)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	bank = get_flash_bank_by_num_noprobe(0);
+	if (!bank)
+		return ERROR_FAIL;
 
 	/* REVISIT ... it may be worth sanity checking that the AP is
 	 * inactive before we start.  ARM documents that switching a DP's
 	 * mode while it's active can cause fault modes that need a power
 	 * cycle to recover.
 	 */
+
+	Jim_Eval_Named(CMD_CTX->interp, "catch { hla_command \"debug unlock\" }", 0, 0);
+	if (!strcmp(Jim_GetString(Jim_GetResult(CMD_CTX->interp), NULL), "0")) {
+		retval = ERROR_OK;
+		goto user_action;
+	}
 
 	/* assert SRST */
 	if (!(jtag_get_reset_config() & RESET_HAS_SRST)) {
@@ -1351,6 +1402,7 @@ COMMAND_HANDLER(stellaris_handle_recover_command)
 	/* wait 400+ msec ... OK, "1+ second" is simpler */
 	usleep(1000);
 
+user_action:
 	/* USER INTERVENTION required for the power cycle
 	 * Restarting OpenOCD is likely needed because of mode switching.
 	 */
@@ -1373,7 +1425,7 @@ static const struct command_registration stellaris_exec_command_handlers[] = {
 		.name = "recover",
 		.handler = stellaris_handle_recover_command,
 		.mode = COMMAND_EXEC,
-		.usage = "bank_id",
+		.usage = "",
 		.help = "recover (and erase) locked device",
 	},
 	COMMAND_REGISTRATION_DONE

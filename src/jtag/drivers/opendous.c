@@ -36,13 +36,12 @@
 #include <jtag/commands.h>
 #include "libusb_common.h"
 #include <string.h>
-#include <sys/timeb.h>
 #include <time.h>
 
 #define OPENDOUS_MAX_VIDS_PIDS 4
 /* define some probes with similar interface */
 struct opendous_probe {
-	char *name;
+	const char *name;
 	uint16_t VID[OPENDOUS_MAX_VIDS_PIDS];
 	uint16_t PID[OPENDOUS_MAX_VIDS_PIDS];
 	uint8_t READ_EP;
@@ -51,7 +50,7 @@ struct opendous_probe {
 	int BUFFERSIZE;
 };
 
-static struct opendous_probe opendous_probes[] = {
+static const struct opendous_probe opendous_probes[] = {
 	{"usbprog-jtag",	{0x1781, 0},			{0x0C63, 0},			0x82, 0x02, 0x00, 510 },
 	{"opendous",		{0x1781, 0x03EB, 0},	{0xC0C0, 0x204F, 0},	0x81, 0x02, 0x00, 360 },
 	{"usbvlab",			{0x16C0, 0},			{0x05DC, 0},			0x81, 0x02, 0x01, 360 },
@@ -110,7 +109,7 @@ static struct pending_scan_result *pending_scan_results_buffer;
 #define FUNC_READ_DATA        0x51
 
 static char *opendous_type;
-static struct opendous_probe *opendous_probe;
+static const struct opendous_probe *opendous_probe;
 
 /* External interface functions */
 static int opendous_execute_queue(void);
@@ -150,9 +149,7 @@ static int opendous_usb_read(struct opendous_jtag *opendous_jtag);
 int opendous_get_version_info(void);
 
 #ifdef _DEBUG_USB_COMMS_
-char time_str[50];
 static void opendous_debug_buffer(uint8_t *buffer, int length);
-char *opendous_get_time(char *);
 #endif
 
 static struct opendous_jtag *opendous_jtag_handle;
@@ -324,7 +321,7 @@ static int opendous_execute_queue(void)
 static int opendous_init(void)
 {
 	int check_cnt;
-	struct opendous_probe *cur_opendous_probe;
+	const struct opendous_probe *cur_opendous_probe;
 
 	cur_opendous_probe = opendous_probes;
 
@@ -712,7 +709,7 @@ struct opendous_jtag *opendous_usb_open(void)
 	struct opendous_jtag *result;
 
 	struct jtag_libusb_device_handle *devh;
-	if (jtag_libusb_open(opendous_probe->VID, opendous_probe->PID, &devh) != ERROR_OK)
+	if (jtag_libusb_open(opendous_probe->VID, opendous_probe->PID, NULL, &devh) != ERROR_OK)
 		return NULL;
 
 	jtag_libusb_set_configuration(devh, 0);
@@ -760,7 +757,7 @@ int opendous_usb_write(struct opendous_jtag *opendous_jtag, int out_length)
 	}
 
 #ifdef _DEBUG_USB_COMMS_
-	LOG_DEBUG("%s: USB write begin", opendous_get_time(time_str));
+	LOG_DEBUG("USB write begin");
 #endif
 	if (opendous_probe->CONTROL_TRANSFER) {
 		result = jtag_libusb_control_transfer(opendous_jtag->usb_handle,
@@ -771,7 +768,7 @@ int opendous_usb_write(struct opendous_jtag *opendous_jtag, int out_length)
 			(char *)usb_out_buffer, out_length, OPENDOUS_USB_TIMEOUT);
 	}
 #ifdef _DEBUG_USB_COMMS_
-	LOG_DEBUG("%s: USB write end: %d bytes", opendous_get_time(time_str), result);
+	LOG_DEBUG("USB write end: %d bytes", result);
 #endif
 
 	DEBUG_JTAG_IO("opendous_usb_write, out_length = %d, result = %d", out_length, result);
@@ -786,7 +783,7 @@ int opendous_usb_write(struct opendous_jtag *opendous_jtag, int out_length)
 int opendous_usb_read(struct opendous_jtag *opendous_jtag)
 {
 #ifdef _DEBUG_USB_COMMS_
-	LOG_DEBUG("%s: USB read begin", opendous_get_time(time_str));
+	LOG_DEBUG("USB read begin");
 #endif
 	int result;
 	if (opendous_probe->CONTROL_TRANSFER) {
@@ -798,7 +795,7 @@ int opendous_usb_read(struct opendous_jtag *opendous_jtag)
 			(char *)usb_in_buffer, OPENDOUS_IN_BUFFER_SIZE, OPENDOUS_USB_TIMEOUT);
 	}
 #ifdef _DEBUG_USB_COMMS_
-	LOG_DEBUG("%s: USB read end: %d bytes", opendous_get_time(time_str), result);
+	LOG_DEBUG("USB read end: %d bytes", result);
 #endif
 	DEBUG_JTAG_IO("opendous_usb_read, result = %d", result);
 
@@ -826,16 +823,5 @@ void opendous_debug_buffer(uint8_t *buffer, int length)
 		}
 		LOG_DEBUG("%s", line);
 	}
-}
-
-char *opendous_get_time(char *str)
-{
-	struct timeb timebuffer;
-	char *timeline;
-
-	ftime(&timebuffer);
-	timeline = ctime(&(timebuffer.time));
-	snprintf(str, 49, "%.8s.%hu", &timeline[11], timebuffer.millitm);
-	return str;
 }
 #endif

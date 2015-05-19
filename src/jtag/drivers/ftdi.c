@@ -72,6 +72,7 @@
 
 /* project specific includes */
 #include <jtag/interface.h>
+#include <jtag/swd.h>
 #include <transport/transport.h>
 #include <helper/time_support.h>
 
@@ -85,10 +86,13 @@
 #include "mpsse.h"
 
 #define JTAG_MODE (LSB_FIRST | POS_EDGE_IN | NEG_EDGE_OUT)
+#define SWD_MODE (LSB_FIRST | POS_EDGE_IN | NEG_EDGE_OUT)
 
 static char *ftdi_device_desc;
 static char *ftdi_serial;
 static uint8_t ftdi_channel;
+
+static bool swd_mode;
 
 #define MAX_USB_IDS 8
 /* vid = pid = 0 marks the end of the list */
@@ -108,8 +112,23 @@ struct signal {
 
 static struct signal *signals;
 
+/* FIXME: Where to store per-instance data? We need an SWD context. */
+static struct swd_cmd_queue_entry {
+	uint8_t cmd;
+	uint32_t *dst;
+	uint8_t trn_ack_data_parity_trn[DIV_ROUND_UP(4 + 3 + 32 + 1 + 4, 8)];
+} *swd_cmd_queue;
+static size_t swd_cmd_queue_length;
+static size_t swd_cmd_queue_alloced;
+static int queued_retval;
+static int freq;
+
 static uint16_t output;
 static uint16_t direction;
+static uint16_t jtag_output_init;
+static uint16_t jtag_direction_init;
+
+static int ftdi_swd_switch_seq(struct adiv5_dap *dap, enum swd_special_seq seq);
 
 static struct signal *find_signal_by_name(const char *name)
 {
@@ -174,14 +193,19 @@ static int ftdi_set_signal(const struct signal *s, char value)
 		return ERROR_FAIL;
 	}
 
+	uint16_t old_output = output;
+	uint16_t old_direction = direction;
+
 	output = data ? output | s->data_mask : output & ~s->data_mask;
 	if (s->oe_mask == s->data_mask)
 		direction = oe ? direction | s->oe_mask : direction & ~s->oe_mask;
 	else
 		output = oe ? output | s->oe_mask : output & ~s->oe_mask;
 
-	mpsse_set_data_bits_low_byte(mpsse_ctx, output & 0xff, direction & 0xff);
-	mpsse_set_data_bits_high_byte(mpsse_ctx, output >> 8, direction >> 8);
+	if ((output & 0xff) != (old_output & 0xff) || (direction & 0xff) != (old_direction & 0xff))
+		mpsse_set_data_bits_low_byte(mpsse_ctx, output & 0xff, direction & 0xff);
+	if ((output >> 8 != old_output >> 8) || (direction >> 8 != old_direction >> 8))
+		mpsse_set_data_bits_high_byte(mpsse_ctx, output >> 8, direction >> 8);
 
 	return ERROR_OK;
 }
@@ -477,7 +501,8 @@ static void ftdi_execute_reset(struct jtag_command *cmd)
 			ftdi_set_signal(trst, '0');
 		else
 			LOG_ERROR("Can't assert TRST: nTRST signal is not defined");
-	} else if (trst && cmd->cmd.reset->trst == 0) {
+	} else if (trst && jtag_get_reset_config() & RESET_HAS_TRST &&
+			cmd->cmd.reset->trst == 0) {
 		if (jtag_get_reset_config() & RESET_TRST_OPEN_DRAIN)
 			ftdi_set_signal(trst, 'z');
 		else
@@ -490,7 +515,8 @@ static void ftdi_execute_reset(struct jtag_command *cmd)
 			ftdi_set_signal(srst, '0');
 		else
 			LOG_ERROR("Can't assert SRST: nSRST signal is not defined");
-	} else if (srst && cmd->cmd.reset->srst == 0) {
+	} else if (srst && jtag_get_reset_config() & RESET_HAS_SRST &&
+			cmd->cmd.reset->srst == 0) {
 		if (jtag_get_reset_config() & RESET_SRST_PUSH_PULL)
 			ftdi_set_signal(srst, '1');
 		else
@@ -608,10 +634,26 @@ static int ftdi_initialize(void)
 	if (!mpsse_ctx)
 		return ERROR_JTAG_INIT_FAILED;
 
+	output = jtag_output_init;
+	direction = jtag_direction_init;
+
+	if (swd_mode) {
+		struct signal *sig = find_signal_by_name("SWD_EN");
+		if (!sig) {
+			LOG_ERROR("SWD mode is active but SWD_EN signal is not defined");
+			return ERROR_JTAG_INIT_FAILED;
+		}
+		/* A dummy SWD_EN would have zero mask */
+		if (sig->data_mask)
+			ftdi_set_signal(sig, '1');
+	}
+
 	mpsse_set_data_bits_low_byte(mpsse_ctx, output & 0xff, direction & 0xff);
 	mpsse_set_data_bits_high_byte(mpsse_ctx, output >> 8, direction >> 8);
 
 	mpsse_loopback_config(mpsse_ctx, false);
+
+	freq = mpsse_set_frequency(mpsse_ctx, jtag_get_speed_khz() * 1000);
 
 	return mpsse_flush(mpsse_ctx);
 }
@@ -619,6 +661,8 @@ static int ftdi_initialize(void)
 static int ftdi_quit(void)
 {
 	mpsse_close(mpsse_ctx);
+
+	free(swd_cmd_queue);
 
 	return ERROR_OK;
 }
@@ -664,8 +708,8 @@ COMMAND_HANDLER(ftdi_handle_layout_init_command)
 	if (CMD_ARGC != 2)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	COMMAND_PARSE_NUMBER(u16, CMD_ARGV[0], output);
-	COMMAND_PARSE_NUMBER(u16, CMD_ARGV[1], direction);
+	COMMAND_PARSE_NUMBER(u16, CMD_ARGV[0], jtag_output_init);
+	COMMAND_PARSE_NUMBER(u16, CMD_ARGV[1], jtag_direction_init);
 
 	return ERROR_OK;
 }
@@ -692,6 +736,19 @@ COMMAND_HANDLER(ftdi_handle_layout_signal_command)
 		} else if (strcmp("-noe", CMD_ARGV[i]) == 0) {
 			invert_oe = true;
 			COMMAND_PARSE_NUMBER(u16, CMD_ARGV[i + 1], oe_mask);
+		} else if (!strcmp("-alias", CMD_ARGV[i]) ||
+			   !strcmp("-nalias", CMD_ARGV[i])) {
+			if (!strcmp("-nalias", CMD_ARGV[i]))
+				invert_data = true;
+			struct signal *sig = find_signal_by_name(CMD_ARGV[i + 1]);
+			if (!sig) {
+				LOG_ERROR("signal %s is not defined", CMD_ARGV[i + 1]);
+				return ERROR_FAIL;
+			}
+			data_mask = sig->data_mask;
+			oe_mask = sig->oe_mask;
+			invert_oe = sig->invert_oe;
+			invert_data ^= sig->invert_data;
 		} else {
 			LOG_ERROR("unknown option '%s'", CMD_ARGV[i]);
 			return ERROR_COMMAND_SYNTAX_ERROR;
@@ -811,7 +868,7 @@ static const struct command_registration ftdi_command_handlers[] = {
 		.mode = COMMAND_ANY,
 		.help = "define a signal controlled by one or more FTDI GPIO as data "
 			"and/or output enable",
-		.usage = "name [-data mask|-ndata mask] [-oe mask|-noe mask]",
+		.usage = "name [-data mask|-ndata mask] [-oe mask|-noe mask] [-alias|-nalias name]",
 	},
 	{
 		.name = "ftdi_set_signal",
@@ -830,11 +887,240 @@ static const struct command_registration ftdi_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
+static int create_default_signal(const char *name, uint16_t data_mask)
+{
+	struct signal *sig = create_signal(name);
+	if (!sig) {
+		LOG_ERROR("failed to create signal %s", name);
+		return ERROR_FAIL;
+	}
+	sig->invert_data = false;
+	sig->data_mask = data_mask;
+	sig->invert_oe = false;
+	sig->oe_mask = 0;
+
+	return ERROR_OK;
+}
+
+static int create_signals(void)
+{
+	if (create_default_signal("TCK", 0x01) != ERROR_OK)
+		return ERROR_FAIL;
+	if (create_default_signal("TDI", 0x02) != ERROR_OK)
+		return ERROR_FAIL;
+	if (create_default_signal("TDO", 0x04) != ERROR_OK)
+		return ERROR_FAIL;
+	if (create_default_signal("TMS", 0x08) != ERROR_OK)
+		return ERROR_FAIL;
+	return ERROR_OK;
+}
+
+static int ftdi_swd_init(void)
+{
+	LOG_INFO("FTDI SWD mode enabled");
+	swd_mode = true;
+
+	if (create_signals() != ERROR_OK)
+		return ERROR_FAIL;
+
+	swd_cmd_queue_alloced = 10;
+	swd_cmd_queue = malloc(swd_cmd_queue_alloced * sizeof(*swd_cmd_queue));
+
+	return swd_cmd_queue != NULL ? ERROR_OK : ERROR_FAIL;
+}
+
+static void ftdi_swd_swdio_en(bool enable)
+{
+	struct signal *oe = find_signal_by_name("SWDIO_OE");
+	if (oe)
+		ftdi_set_signal(oe, enable ? '1' : '0');
+}
+
+/**
+ * Flush the MPSSE queue and process the SWD transaction queue
+ * @param dap
+ * @return
+ */
+static int ftdi_swd_run_queue(struct adiv5_dap *dap)
+{
+	LOG_DEBUG("Executing %zu queued transactions", swd_cmd_queue_length);
+	int retval;
+	struct signal *led = find_signal_by_name("LED");
+
+	if (queued_retval != ERROR_OK) {
+		LOG_DEBUG("Skipping due to previous errors: %d", queued_retval);
+		goto skip;
+	}
+
+	/* A transaction must be followed by another transaction or at least 8 idle cycles to
+	 * ensure that data is clocked through the AP. */
+	mpsse_clock_data_out(mpsse_ctx, NULL, 0, 8, SWD_MODE);
+
+	/* Terminate the "blink", if the current layout has that feature */
+	if (led)
+		ftdi_set_signal(led, '0');
+
+	queued_retval = mpsse_flush(mpsse_ctx);
+	if (queued_retval != ERROR_OK) {
+		LOG_ERROR("MPSSE failed");
+		goto skip;
+	}
+
+	for (size_t i = 0; i < swd_cmd_queue_length; i++) {
+		int ack = buf_get_u32(swd_cmd_queue[i].trn_ack_data_parity_trn, 1, 3);
+
+		LOG_DEBUG("%s %s %s reg %X = %08"PRIx32,
+				ack == SWD_ACK_OK ? "OK" : ack == SWD_ACK_WAIT ? "WAIT" : ack == SWD_ACK_FAULT ? "FAULT" : "JUNK",
+				swd_cmd_queue[i].cmd & SWD_CMD_APnDP ? "AP" : "DP",
+				swd_cmd_queue[i].cmd & SWD_CMD_RnW ? "read" : "write",
+				(swd_cmd_queue[i].cmd & SWD_CMD_A32) >> 1,
+				buf_get_u32(swd_cmd_queue[i].trn_ack_data_parity_trn,
+						1 + 3 + (swd_cmd_queue[i].cmd & SWD_CMD_RnW ? 0 : 1), 32));
+
+		if (ack != SWD_ACK_OK) {
+			queued_retval = ack == SWD_ACK_WAIT ? ERROR_WAIT : ERROR_FAIL;
+			goto skip;
+
+		} else if (swd_cmd_queue[i].cmd & SWD_CMD_RnW) {
+			uint32_t data = buf_get_u32(swd_cmd_queue[i].trn_ack_data_parity_trn, 1 + 3, 32);
+			int parity = buf_get_u32(swd_cmd_queue[i].trn_ack_data_parity_trn, 1 + 3 + 32, 1);
+
+			if (parity != parity_u32(data)) {
+				LOG_ERROR("SWD Read data parity mismatch");
+				queued_retval = ERROR_FAIL;
+				goto skip;
+			}
+
+			if (swd_cmd_queue[i].dst != NULL)
+				*swd_cmd_queue[i].dst = data;
+		}
+	}
+
+skip:
+	swd_cmd_queue_length = 0;
+	retval = queued_retval;
+	queued_retval = ERROR_OK;
+
+	/* Queue a new "blink" */
+	if (led && retval == ERROR_OK)
+		ftdi_set_signal(led, '1');
+
+	return retval;
+}
+
+static void ftdi_swd_queue_cmd(struct adiv5_dap *dap, uint8_t cmd, uint32_t *dst, uint32_t data)
+{
+	if (swd_cmd_queue_length >= swd_cmd_queue_alloced) {
+		/* Not enough room in the queue. Run the queue and increase its size for next time.
+		 * Note that it's not possible to avoid running the queue here, because mpsse contains
+		 * pointers into the queue which may be invalid after the realloc. */
+		queued_retval = ftdi_swd_run_queue(dap);
+		struct swd_cmd_queue_entry *q = realloc(swd_cmd_queue, swd_cmd_queue_alloced * 2 * sizeof(*swd_cmd_queue));
+		if (q != NULL) {
+			swd_cmd_queue = q;
+			swd_cmd_queue_alloced *= 2;
+			LOG_DEBUG("Increased SWD command queue to %zu elements", swd_cmd_queue_alloced);
+		}
+	}
+
+	if (queued_retval != ERROR_OK)
+		return;
+
+	size_t i = swd_cmd_queue_length++;
+	swd_cmd_queue[i].cmd = cmd | SWD_CMD_START | SWD_CMD_PARK;
+
+	mpsse_clock_data_out(mpsse_ctx, &swd_cmd_queue[i].cmd, 0, 8, SWD_MODE);
+
+	if (swd_cmd_queue[i].cmd & SWD_CMD_RnW) {
+		/* Queue a read transaction */
+		swd_cmd_queue[i].dst = dst;
+
+		ftdi_swd_swdio_en(false);
+		mpsse_clock_data_in(mpsse_ctx, swd_cmd_queue[i].trn_ack_data_parity_trn,
+				0, 1 + 3 + 32 + 1 + 1, SWD_MODE);
+		ftdi_swd_swdio_en(true);
+	} else {
+		/* Queue a write transaction */
+		ftdi_swd_swdio_en(false);
+
+		mpsse_clock_data_in(mpsse_ctx, swd_cmd_queue[i].trn_ack_data_parity_trn,
+				0, 1 + 3 + 1, SWD_MODE);
+
+		ftdi_swd_swdio_en(true);
+
+		buf_set_u32(swd_cmd_queue[i].trn_ack_data_parity_trn, 1 + 3 + 1, 32, data);
+		buf_set_u32(swd_cmd_queue[i].trn_ack_data_parity_trn, 1 + 3 + 1 + 32, 1, parity_u32(data));
+
+		mpsse_clock_data_out(mpsse_ctx, swd_cmd_queue[i].trn_ack_data_parity_trn,
+				1 + 3 + 1, 32 + 1, SWD_MODE);
+	}
+
+	/* Insert idle cycles after AP accesses to avoid WAIT */
+	if (cmd & SWD_CMD_APnDP)
+		mpsse_clock_data_out(mpsse_ctx, NULL, 0, dap->memaccess_tck, SWD_MODE);
+
+}
+
+static void ftdi_swd_read_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t *value)
+{
+	assert(cmd & SWD_CMD_RnW);
+	ftdi_swd_queue_cmd(dap, cmd, value, 0);
+}
+
+static void ftdi_swd_write_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t value)
+{
+	assert(!(cmd & SWD_CMD_RnW));
+	ftdi_swd_queue_cmd(dap, cmd, NULL, value);
+}
+
+static int_least32_t ftdi_swd_frequency(struct adiv5_dap *dap, int_least32_t hz)
+{
+	if (hz > 0)
+		freq = mpsse_set_frequency(mpsse_ctx, hz);
+
+	return freq;
+}
+
+static int ftdi_swd_switch_seq(struct adiv5_dap *dap, enum swd_special_seq seq)
+{
+	switch (seq) {
+	case LINE_RESET:
+		LOG_DEBUG("SWD line reset");
+		mpsse_clock_data_out(mpsse_ctx, swd_seq_line_reset, 0, swd_seq_line_reset_len, SWD_MODE);
+		break;
+	case JTAG_TO_SWD:
+		LOG_DEBUG("JTAG-to-SWD");
+		mpsse_clock_data_out(mpsse_ctx, swd_seq_jtag_to_swd, 0, swd_seq_jtag_to_swd_len, SWD_MODE);
+		break;
+	case SWD_TO_JTAG:
+		LOG_DEBUG("SWD-to-JTAG");
+		mpsse_clock_data_out(mpsse_ctx, swd_seq_swd_to_jtag, 0, swd_seq_swd_to_jtag_len, SWD_MODE);
+		break;
+	default:
+		LOG_ERROR("Sequence %d not supported", seq);
+		return ERROR_FAIL;
+	}
+
+	return ERROR_OK;
+}
+
+static const struct swd_driver ftdi_swd = {
+	.init = ftdi_swd_init,
+	.frequency = ftdi_swd_frequency,
+	.switch_seq = ftdi_swd_switch_seq,
+	.read_reg = ftdi_swd_read_reg,
+	.write_reg = ftdi_swd_write_reg,
+	.run = ftdi_swd_run_queue,
+};
+
+static const char * const ftdi_transports[] = { "jtag", "swd", NULL };
+
 struct jtag_interface ftdi_interface = {
 	.name = "ftdi",
 	.supported = DEBUG_CAP_TMS_SEQ,
 	.commands = ftdi_command_handlers,
-	.transports = jtag_only,
+	.transports = ftdi_transports,
+	.swd = &ftdi_swd,
 
 	.init = ftdi_initialize,
 	.quit = ftdi_quit,

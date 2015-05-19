@@ -44,6 +44,7 @@
 #include <string.h>
 #include <unistd.h>
 
+unsigned int dump_swit;
 
 /* Example ITM trace word (0xWWXXYYZZ) parsing for task events, sent
  * on port 31 (Reserved for "the" RTOS in CMSIS v1.30)
@@ -58,6 +59,9 @@ static void show_task(int port, unsigned data)
 {
 	unsigned code = data >> 16;
 	char buf[16];
+
+	if (dump_swit)
+		return;
 
 	switch (code) {
 	case 0:
@@ -87,6 +91,9 @@ static void show_reserved(FILE *f, char *label, int c)
 {
 	unsigned i;
 
+	if (dump_swit)
+		return;
+
 	printf("%s - %#02x", label, c);
 
 	for (i = 0; (c & 0x80) && i < 4; i++) {
@@ -105,7 +112,6 @@ static bool read_varlen(FILE *f, int c, unsigned *value)
 {
 	unsigned size;
 	unsigned char buf[4];
-	unsigned i;
 
 	*value = 0;
 
@@ -130,23 +136,25 @@ static bool read_varlen(FILE *f, int c, unsigned *value)
 
 	*value =  (buf[3] << 24)
 		+ (buf[2] << 16)
-		+ (buf[2] << 8)
+		+ (buf[1] << 8)
 		+ (buf[0] << 0);
 	return true;
 
 err:
 	printf("(ERROR %d - %s)\n", errno, strerror(errno));
-	return;
+	return false;
 }
 
 static void show_hard(FILE *f, int c)
 {
 	unsigned type = c >> 3;
 	unsigned value;
-	unsigned size;
 	char *label;
 
-	printf("DWT - ", type);
+	if (dump_swit)
+		return;
+
+	printf("DWT - ");
 
 	if (!read_varlen(f, c, &value))
 		return;
@@ -216,7 +224,7 @@ static void show_hard(FILE *f, int c)
 		}
 		break;
 	default:
-		printf("UNDEFINED");
+		printf("UNDEFINED, rawtype: %x", type);
 		break;
 	}
 
@@ -241,19 +249,28 @@ struct {
 
 static void show_swit(FILE *f, int c)
 {
-	unsigned size;
 	unsigned port = c >> 3;
-	unsigned char buf[4];
 	unsigned value = 0;
 	unsigned i;
 
-	printf("SWIT %u - ", port);
+	if (port + 1 == dump_swit) {
+		if (!read_varlen(f, c, &value))
+			return;
+		printf("%c", value);
+		return;
+	}
 
 	if (!read_varlen(f, c, &value))
 		return;
+
+	if (dump_swit)
+		return;
+
+	printf("SWIT %u - ", port);
+
 	printf("%#08x", value);
 
-	for (i = 0; i <= sizeof(format) / sizeof(format[0]); i++) {
+	for (i = 0; i < sizeof(format) / sizeof(format[0]); i++) {
 		if (format[i].port == port) {
 			printf(", ");
 			format[i].show(port, value);
@@ -263,10 +280,6 @@ static void show_swit(FILE *f, int c)
 
 	printf("\n");
 	return;
-
-err:
-	printf("(ERROR %d - %s)\n", errno, strerror(errno));
-	return;
 }
 
 static void show_timestamp(FILE *f, int c)
@@ -274,6 +287,9 @@ static void show_timestamp(FILE *f, int c)
 	unsigned counter = 0;
 	char *label = "";
 	bool delayed = false;
+
+	if (dump_swit)
+		return;
 
 	printf("TIMESTAMP - ");
 
@@ -293,7 +309,7 @@ static void show_timestamp(FILE *f, int c)
 	}
 
 	/* Format 1:  one to four bytes of data too */
-	switch (c) {
+	switch (c >> 4) {
 	default:
 		label = ", reserved control\n";
 		break;
@@ -356,7 +372,7 @@ int main(int argc, char **argv)
 	int c;
 
 	/* parse arguments */
-	while ((c = getopt(argc, argv, "f:")) != EOF) {
+	while ((c = getopt(argc, argv, "f:d:")) != EOF) {
 		switch (c) {
 		case 'f':
 			/* e.g. from UART connected to /dev/ttyUSB0 */
@@ -366,8 +382,10 @@ int main(int argc, char **argv)
 				return 1;
 			}
 			break;
+		case 'd':
+			dump_swit = atoi(optarg);
+			break;
 		default:
-usage:
 			fprintf(stderr, "usage: %s [-f input]",
 				basename(argv[0]));
 			return 1;

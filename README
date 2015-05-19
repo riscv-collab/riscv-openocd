@@ -39,7 +39,11 @@ If you are connecting a particular adapter with some specific target,
 you need to source both the jtag interface and the target configs,
 e.g.:
 
-  openocd -f interface/ftdi/jtagkey2.cfg -f target/ti_calypso.cfg
+  openocd -f interface/ftdi/jtagkey2.cfg -c "transport select jtag" \
+          -f target/ti_calypso.cfg
+
+  openocd -f interface/stlink-v2-1.cfg -c "transport select hla_swd" \
+          -f target/stm32l0.cfg
 
 NB: when using an FTDI-based adapter you should prefer configs in the
 ftdi directory; the old configs for the ft2232 are deprecated.
@@ -57,10 +61,10 @@ In addition to the in-tree documentation, the latest manuals may be
 viewed online at the following URLs:
 
   OpenOCD User's Guide:
-    http://openocd.sourceforge.net/doc/html/index.html
+    http://openocd.org/doc/html/index.html
 
   OpenOCD Developer's Manual:
-    http://openocd.sourceforge.net/doc/doxygen/html/index.html
+    http://openocd.org/doc/doxygen/html/index.html
 
 These reflect the latest development versions, so the following section
 introduces how to build the complete documentation from the package.
@@ -123,9 +127,10 @@ Flash drivers
 -------------
 
 ADUC702x, AT91SAM, AVR, CFI, DSP5680xx, EFM32, EM357, FM3, Kinetis,
-LPC2000, LPC2900, LPCSPIFI, Milandr, NuMicro, PIC32mx, Stellaris,
-STM32, STMSMI, STR7x, STR9x, nRF51; NAND controllers of AT91SAM9, LPC3180,
-LPC32xx, i.MX31, MXC, NUC910, Orion/Kirkwood, S3C24xx, S3C6400.
+LPC8xx/LPC1xxx/LPC2xxx/LPC541xx, LPC2900, LPCSPIFI, Marvell QSPI,
+Milandr, NuMicro, PIC32mx, PSoC4, SiM3x, Stellaris, STM32, STMSMI,
+STR7x, STR9x, nRF51; NAND controllers of AT91SAM9, LPC3180, LPC32xx,
+i.MX31, MXC, NUC910, Orion/Kirkwood, S3C24xx, S3C6400.
 
 
 ==================

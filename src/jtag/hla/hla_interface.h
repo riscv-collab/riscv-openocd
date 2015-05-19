@@ -33,9 +33,9 @@ extern const char *hl_transports[];
 
 struct hl_interface_param_s {
 	/** */
-	char *device_desc;
+	const char *device_desc;
 	/** */
-	char *serial;
+	const char *serial;
 	/** */
 	uint16_t vid;
 	/** */
@@ -46,10 +46,8 @@ struct hl_interface_param_s {
 	enum hl_transports transport;
 	/** */
 	bool connect_under_reset;
-	/** Output file for trace data (if any) */
-	FILE *trace_f;
-	/** Trace module source clock rate */
-	uint32_t trace_source_hz;
+	/** Initial interface clock clock speed */
+	int initial_interface_speed;
 };
 
 struct hl_interface_s {
@@ -67,5 +65,6 @@ int hl_interface_open(enum hl_transports tr);
 
 int hl_interface_init_target(struct target *t);
 int hl_interface_init_reset(void);
+int hl_interface_override_target(const char **targetname);
 
 #endif /* _HL_INTERFACE */
