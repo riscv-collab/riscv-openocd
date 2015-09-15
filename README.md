@@ -4,7 +4,7 @@ The **GNU ARM Eclipse OpenOCD** is a new distribution of [OpenOCD](http://openoc
 
 ## How to use
 
-* [Overview](http://gnuarmeclipse.github.io/openocd/overview) (read me first!)
+* [Overview](http://gnuarmeclipse.github.io/openocd/) (read me first!)
 * [Install](http://gnuarmeclipse.github.io/openocd/install)
 * Eclipse plug-in
 * [Support](https://github.com/gnuarmeclipse/openocd/issues/1)
