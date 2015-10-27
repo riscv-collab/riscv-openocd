@@ -9,6 +9,7 @@ libocdflashnor_la_SOURCES = \
 
 NOR_DRIVERS = \
 	aduc702x.c \
+	aducm360.c \
 	at91sam4.c \
 	at91sam4l.c \
 	at91samd.c \
@@ -19,6 +20,7 @@ NOR_DRIVERS = \
 	efm32.c \
 	em357.c \
 	faux.c \
+	jtagspi.c \
 	lpc2000.c \
 	lpc288x.c \
 	lpc2900.c \
@@ -41,8 +43,7 @@ NOR_DRIVERS = \
 	fm3.c \
 	dsp5680xx_flash.c \
 	kinetis.c \
-	mini51.c \
-	nuc1x.c \
+	numicro.c \
 	nrf51.c \
 	mrvlqspi.c \
 	psoc4.c \

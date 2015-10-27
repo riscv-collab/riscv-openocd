@@ -4644,6 +4644,18 @@ starting at @var{offset} bytes from the beginning of the bank.
 The @var{num} parameter is a value shown by @command{flash banks}.
 @end deffn
 
+@deffn Command {flash read_bank} num filename offset length
+Read @var{length} bytes from the flash bank @var{num} starting at @var{offset}
+and write the contents to the binary @file{filename}.
+The @var{num} parameter is a value shown by @command{flash banks}.
+@end deffn
+
+@deffn Command {flash verify_bank} num filename offset
+Compare the contents of the binary file @var{filename} with the contents of the
+flash @var{num} starting at @var{offset}. Fails if the contents do not match.
+The @var{num} parameter is a value shown by @command{flash banks}.
+@end deffn
+
 @deffn Command {flash write_image} [erase] [unlock] filename [offset] [type]
 Write the image @file{filename} to the current target's flash bank(s).
 Only loadable sections from the image are written.
@@ -4788,6 +4800,49 @@ flash bank $_FLASHNAME cfi 0x00000000 0x02000000 2 4 $_TARGETNAME
 @end example
 
 @c "cfi part_id" disabled
+@end deffn
+
+@deffn {Flash Driver} jtagspi
+@cindex Generic JTAG2SPI driver
+@cindex SPI
+@cindex jtagspi
+@cindex bscan_spi
+Several FPGAs and CPLDs can retrieve their configuration (bitstream) from a
+SPI flash connected to them. To access this flash from the host, the device
+is first programmed with a special proxy bitstream that
+exposes the SPI flash on the device's JTAG interface. The flash can then be
+accessed through JTAG.
+
+Since signaling between JTAG and SPI is compatible, all that is required for
+a proxy bitstream is to connect TDI-MOSI, TDO-MISO, TCK-CLK and activate
+the flash chip select when the JTAG state machine is in SHIFT-DR. Such
+a bitstream for several Xilinx FPGAs can be found in
+@file{contrib/loaders/flash/fpga/xilinx_bscan_spi.py}. It requires migen
+(@url{http://github.com/m-labs/migen}) and a Xilinx toolchain to build.
+
+This flash bank driver requires a target on a JTAG tap and will access that
+tap directly. Since no support from the target is needed, the target can be a
+"testee" dummy. Since the target does not expose the flash memory
+mapping, target commands that would otherwise be expected to access the flash
+will not work. These include all @command{*_image} and
+@command{$target_name m*} commands as well as @command{program}. Equivalent
+functionality is available through the @command{flash write_bank},
+@command{flash read_bank}, and @command{flash verify_bank} commands.
+
+@itemize
+@item @var{ir} ... is loaded into the JTAG IR to map the flash as the JTAG DR.
+For the bitstreams generated from @file{xilinx_bscan_spi.py} this is the
+@var{USER1} instruction.
+@item @var{dr_length} ... is the length of the DR register. This will be 1 for
+@file{xilinx_bscan_spi.py} bitstreams and most other cases.
+@end itemize
+
+@example
+target create $_TARGETNAME testee -chain-position $_CHIPNAME.fpga
+set _XILINX_USER1 0x02
+set _DR_LENGTH 1
+flash bank $_FLASHNAME spi 0x0 0 0 0 $_TARGETNAME $_XILINX_USER1 $_DR_LENGTH
+@end example
 @end deffn
 
 @deffn {Flash Driver} lpcspifi
@@ -6274,11 +6329,13 @@ Drivers may support PLD-specific options to the @command{pld device}
 definition command, and may also define commands usable only with
 that particular type of PLD.
 
-@deffn {FPGA Driver} virtex2
+@deffn {FPGA Driver} virtex2 [no_jstart]
 Virtex-II is a family of FPGAs sold by Xilinx.
 It supports the IEEE 1532 standard for In-System Configuration (ISC).
-No driver-specific PLD definition options are used,
-and one driver-specific command is defined.
+
+If @var{no_jstart} is non-zero, the JSTART instruction is not used after
+loading the bitstream. While required for Series2, Series3, and Series6, it
+breaks bitstream loading on Series7.
 
 @deffn {Command} {virtex2 read_stat} num
 Reads and displays the Virtex-II status register (STAT)
@@ -7513,7 +7570,7 @@ Defaulting to 0.
 @cindex ITM
 @cindex ETM
 
-@deffn Command {tpiu config} (@option{disable} | ((@option{external} | @option{internal @var{filename}}) @
+@deffn Command {tpiu config} (@option{disable} | ((@option{external} | @option{internal (@var{filename} | -)}) @
                (@option{sync @var{port_width}} | ((@option{manchester} | @option{uart}) @var{formatter_enable})) @
                @var{TRACECLKIN_freq} [@var{trace_freq}]))
 
@@ -7537,6 +7594,8 @@ output externally (with an additional UART or logic analyzer hardware);
 @item @option{internal @var{filename}} configure TPIU and debug adapter to
 gather trace data and append it to @var{filename} (which can be
 either a regular file or a named pipe);
+@item @option{internal -} configure TPIU and debug adapter to
+gather trace data, but not write to any file. Useful in conjunction with the @command{tcl_trace} command;
 @item @option{sync @var{port_width}} use synchronous parallel trace output
 mode, and set port width to @var{port_width};
 @item @option{manchester} use asynchronous SWO mode with Manchester
@@ -8460,9 +8519,17 @@ Cyg_Thread::thread_list, Cyg_Scheduler_Base::current_thread.
 @item ThreadX symbols
 _tx_thread_current_ptr, _tx_thread_created_ptr, _tx_thread_created_count.
 @item FreeRTOS symbols
+@c The following is taken from recent texinfo to provide compatibility
+@c with ancient versions that do not support @raggedright
+@tex
+\begingroup
+\rightskip0pt plus2em \spaceskip.3333em \xspaceskip.5em\relax
 pxCurrentTCB, pxReadyTasksLists, xDelayedTaskList1, xDelayedTaskList2,
 pxDelayedTaskList, pxOverflowDelayedTaskList, xPendingReadyList,
 uxCurrentNumberOfTasks, uxTopUsedPriority.
+\par
+\endgroup
+@end tex
 @item linux symbols
 init_task.
 @item ChibiOS symbols
@@ -8631,6 +8698,28 @@ type target_reset mode [reset-mode]
 Toggle output of target notifications to the current Tcl RPC server.
 Only available from the Tcl RPC server.
 Defaults to off.
+
+@end deffn
+
+@section Tcl RPC server trace output
+@cindex RPC trace output
+
+Trace data is sent asynchronously to other commands being executed over
+the RPC server, so the port must be polled continuously.
+
+Target trace data is emitted as a Tcl associative array in the following format.
+
+@verbatim
+type target_trace data [trace-data-hex-encoded]
+@end verbatim
+
+@deffn {Command} tcl_trace [on/off]
+Toggle output of target trace data to the current Tcl RPC server.
+Only available from the Tcl RPC server.
+Defaults to off.
+
+See an example application here:
+@url{https://github.com/apmorton/OpenOcdTraceUtil} [OpenOcdTraceUtil]
 
 @end deffn
 
