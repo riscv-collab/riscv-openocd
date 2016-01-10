@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2014 by Ladislav Bábel                                  *
+ *   Copyright (C) 2014 by Ladislav BÃ¡bel                                  *
  *   ladababel@seznam.cz                                                   *
  *                                                                         *
  *   Copyright (C) 2015 by Andreas Bomholtz                                *
@@ -893,7 +893,7 @@ static int ap_write_register(struct adiv5_dap *dap, unsigned reg, uint32_t value
 	int retval;
 	LOG_DEBUG("DAP_REG[0x%02x] <- %08" PRIX32, reg, value);
 
-	retval = dap_queue_ap_write(dap, reg, value);
+	retval = dap_queue_ap_write(dap_ap(dap, SIM3X_AP), reg, value);
 	if (retval != ERROR_OK) {
 		LOG_DEBUG("DAP: failed to queue a write request");
 		return retval;
@@ -911,7 +911,8 @@ static int ap_write_register(struct adiv5_dap *dap, unsigned reg, uint32_t value
 static int ap_read_register(struct adiv5_dap *dap, unsigned reg, uint32_t *result)
 {
 	int retval;
-	retval = dap_queue_ap_read(dap, reg, result);
+
+	retval = dap_queue_ap_read(dap_ap(dap, SIM3X_AP), reg, result);
 	if (retval != ERROR_OK) {
 		LOG_DEBUG("DAP: failed to queue a read request");
 		return retval;
@@ -959,9 +960,6 @@ COMMAND_HANDLER(sim3x_mass_erase)
 		return ERROR_FAIL;
 	}
 
-	const uint8_t origninal_ap = dap->ap_current >> 24;
-	dap_ap_select(dap, SIM3X_AP);
-
 	ret = ap_read_register(dap, SIM3X_AP_ID, &val);
 	if (ret != ERROR_OK)
 		return ret;
@@ -987,8 +985,6 @@ COMMAND_HANDLER(sim3x_mass_erase)
 	ret = ap_write_register(dap, SIM3X_AP_CTRL1, 0x00000000); /* clear SIM3X_AP_CTRL1_RESET_REQ */
 	if (ret != ERROR_OK)
 		return ret;
-
-	dap_ap_select(dap, origninal_ap);
 
 	LOG_INFO("Mass erase success");
 	return ERROR_OK;
@@ -1017,9 +1013,6 @@ COMMAND_HANDLER(sim3x_lock)
 			return ERROR_FAIL;
 		}
 	} else {
-		const uint8_t origninal_ap = dap->ap_current >> 24;
-		dap_ap_select(dap, SIM3X_AP);
-
 		/* check SIM3X_AP_ID */
 		ret = ap_read_register(dap, SIM3X_AP_ID, &val);
 		if (ret != ERROR_OK)
@@ -1039,8 +1032,6 @@ COMMAND_HANDLER(sim3x_lock)
 			if (ret != ERROR_OK)
 				return ret;
 
-			dap_ap_select(dap, origninal_ap);
-
 			if (val & SIM3X_AP_INIT_STAT_LOCK) {
 				LOG_INFO("Target is already locked");
 				return ERROR_OK;
@@ -1049,8 +1040,6 @@ COMMAND_HANDLER(sim3x_lock)
 				return ERROR_FAIL;
 			}
 		}
-
-		dap_ap_select(dap, origninal_ap);
 	}
 
 	ret = target_read_u32(target, LOCK_WORD_ADDRESS, &val);

@@ -515,7 +515,7 @@ static int etm_read_reg_w_check(struct reg *reg,
 	retval = arm_jtag_scann(etm_reg->jtag_info, 0x6, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = arm_jtag_set_instr(etm_reg->jtag_info,
+	retval = arm_jtag_set_instr(etm_reg->jtag_info->tap,
 			etm_reg->jtag_info->intest_instr,
 			NULL,
 			TAP_IDLE);
@@ -602,7 +602,7 @@ static int etm_write_reg(struct reg *reg, uint32_t value)
 	retval = arm_jtag_scann(etm_reg->jtag_info, 0x6, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = arm_jtag_set_instr(etm_reg->jtag_info,
+	retval = arm_jtag_set_instr(etm_reg->jtag_info->tap,
 			etm_reg->jtag_info->intest_instr,
 			NULL,
 			TAP_IDLE);
@@ -1788,7 +1788,7 @@ COMMAND_HANDLER(handle_etm_load_command)
 	if (fileio_open(&file, CMD_ARGV[0], FILEIO_READ, FILEIO_BINARY) != ERROR_OK)
 		return ERROR_FAIL;
 
-	int filesize;
+	size_t filesize;
 	int retval = fileio_size(&file, &filesize);
 	if (retval != ERROR_OK) {
 		fileio_close(&file);

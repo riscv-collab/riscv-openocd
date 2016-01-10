@@ -1930,7 +1930,8 @@ int target_arch_state(struct target *target)
 		return ERROR_OK;
 	}
 
-	LOG_USER("target state: %s", target_state_name(target));
+	LOG_USER("%s: target state: %s", target_name(target),
+		 target_state_name(target));
 
 	if (target->state != TARGET_HALTED)
 		return ERROR_OK;
@@ -3262,12 +3263,12 @@ COMMAND_HANDLER(handle_dump_image_command)
 	free(buffer);
 
 	if ((ERROR_OK == retval) && (duration_measure(&bench) == ERROR_OK)) {
-		int filesize;
+		size_t filesize;
 		retval = fileio_size(&fileio, &filesize);
 		if (retval != ERROR_OK)
 			return retval;
 		command_print(CMD_CTX,
-				"dumped %ld bytes in %fs (%0.3f KiB/s)", (long)filesize,
+				"dumped %zu bytes in %fs (%0.3f KiB/s)", filesize,
 				duration_elapsed(&bench), duration_kbps(&bench, filesize));
 	}
 

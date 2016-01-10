@@ -32,6 +32,7 @@ extern struct flash_driver at91sam4_flash;
 extern struct flash_driver at91sam4l_flash;
 extern struct flash_driver at91samd_flash;
 extern struct flash_driver at91sam7_flash;
+extern struct flash_driver atsamv_flash;
 extern struct flash_driver str7x_flash;
 extern struct flash_driver str9x_flash;
 extern struct flash_driver aduc702x_flash;
@@ -41,6 +42,7 @@ extern struct flash_driver str9xpec_flash;
 extern struct flash_driver stm32f1x_flash;
 extern struct flash_driver stm32f2x_flash;
 extern struct flash_driver stm32lx_flash;
+extern struct flash_driver stm32l4x_flash;
 extern struct flash_driver tms470_flash;
 extern struct flash_driver ocl_flash;
 extern struct flash_driver pic32mx_flash;
@@ -60,6 +62,8 @@ extern struct flash_driver mrvlqspi_flash;
 extern struct flash_driver psoc4_flash;
 extern struct flash_driver sim3x_flash;
 extern struct flash_driver jtagspi_flash;
+extern struct flash_driver xmc4xxx_flash;
+extern struct flash_driver niietcm4_flash;
 
 /**
  * The list of built-in flash drivers.
@@ -76,6 +80,7 @@ static struct flash_driver *flash_drivers[] = {
 	&at91sam4_flash,
 	&at91sam4l_flash,
 	&at91samd_flash,
+	&atsamv_flash,
 	&str7x_flash,
 	&str9x_flash,
 	&aduc702x_flash,
@@ -85,6 +90,7 @@ static struct flash_driver *flash_drivers[] = {
 	&stm32f1x_flash,
 	&stm32f2x_flash,
 	&stm32lx_flash,
+	&stm32l4x_flash,
 	&tms470_flash,
 	&ocl_flash,
 	&pic32mx_flash,
@@ -104,6 +110,8 @@ static struct flash_driver *flash_drivers[] = {
 	&psoc4_flash,
 	&sim3x_flash,
 	&jtagspi_flash,
+	&xmc4xxx_flash,
+	&niietcm4_flash,
 	NULL,
 };
 

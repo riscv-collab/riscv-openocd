@@ -164,7 +164,6 @@ enum cortex_m_isrmasking_mode {
 
 struct cortex_m_common {
 	int common_magic;
-	struct arm_jtag jtag_info;
 
 	/* Context information */
 	uint32_t dcb_dhcsr;
@@ -175,6 +174,7 @@ struct cortex_m_common {
 	int fp_num_lit;
 	int fp_num_code;
 	int fp_code_available;
+	int fp_rev;
 	int fpb_enabled;
 	int auto_bp_type;
 	struct cortex_m_fp_comparator *fp_comparator_list;

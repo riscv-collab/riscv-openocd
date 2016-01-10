@@ -34,6 +34,7 @@
 #include "jtag/interface.h"
 #include "imp.h"
 #include <helper/binarybuffer.h>
+#include <target/target_type.h>
 #include <target/algorithm.h>
 #include <target/armv7m.h>
 #include <target/cortex_m.h>
@@ -86,6 +87,7 @@
 #define SIM_SOPT1	0x40047000
 #define SIM_FCFG1	0x4004804c
 #define SIM_FCFG2	0x40048050
+#define WDOG_STCTRH	0x40052000
 
 /* Commands */
 #define FTFx_CMD_BLOCKSTAT  0x00
@@ -243,7 +245,7 @@ static int kinetis_mdm_write_register(struct adiv5_dap *dap, unsigned reg, uint3
 	int retval;
 	LOG_DEBUG("MDM_REG[0x%02x] <- %08" PRIX32, reg, value);
 
-	retval = dap_queue_ap_write(dap, reg, value);
+	retval = dap_queue_ap_write(dap_ap(dap, 1), reg, value);
 	if (retval != ERROR_OK) {
 		LOG_DEBUG("MDM: failed to queue a write request");
 		return retval;
@@ -262,7 +264,8 @@ static int kinetis_mdm_write_register(struct adiv5_dap *dap, unsigned reg, uint3
 static int kinetis_mdm_read_register(struct adiv5_dap *dap, unsigned reg, uint32_t *result)
 {
 	int retval;
-	retval = dap_queue_ap_read(dap, reg, result);
+
+	retval = dap_queue_ap_read(dap_ap(dap, 1), reg, result);
 	if (retval != ERROR_OK) {
 		LOG_DEBUG("MDM: failed to queue a read request");
 		return retval;
@@ -314,7 +317,6 @@ COMMAND_HANDLER(kinetis_mdm_mass_erase)
 	}
 
 	int retval;
-	const uint8_t original_ap = dap->ap_current;
 
 	/*
 	 * ... Power on the processor, or if power has already been
@@ -330,8 +332,6 @@ COMMAND_HANDLER(kinetis_mdm_mass_erase)
 	else
 		LOG_WARNING("Attempting mass erase without hardware reset. This is not reliable; "
 			    "it's recommended you connect SRST and use ``reset_config srst_only''.");
-
-	dap_ap_select(dap, 1);
 
 	retval = kinetis_mdm_write_register(dap, MDM_REG_CTRL, MEM_CTRL_SYS_RES_REQ);
 	if (retval != ERROR_OK)
@@ -382,10 +382,13 @@ COMMAND_HANDLER(kinetis_mdm_mass_erase)
 	if (retval != ERROR_OK)
 		return retval;
 
-	if (jtag_get_reset_config() & RESET_HAS_SRST)
-		adapter_deassert_reset();
+	if (jtag_get_reset_config() & RESET_HAS_SRST) {
+		/* halt MCU otherwise it loops in hard fault - WDOG reset cycle */
+		target->reset_halt = true;
+		target->type->assert_reset(target);
+		target->type->deassert_reset(target);
+	}
 
-	dap_ap_select(dap, original_ap);
 	return ERROR_OK;
 }
 
@@ -413,10 +416,6 @@ COMMAND_HANDLER(kinetis_check_flash_security_status)
 
 	uint32_t val;
 	int retval;
-	const uint8_t origninal_ap = dap->ap_current;
-
-	dap_ap_select(dap, 1);
-
 
 	/*
 	 * ... The MDM-AP ID register can be read to verify that the
@@ -463,6 +462,29 @@ COMMAND_HANDLER(kinetis_check_flash_security_status)
 		goto fail;
 	}
 
+	if ((val & (MDM_STAT_SYSSEC | MDM_STAT_CORE_HALTED)) == MDM_STAT_SYSSEC) {
+		LOG_WARNING("MDM: Secured MCU state detected however it may be a false alarm");
+		LOG_WARNING("MDM: Halting target to detect secured state reliably");
+
+		retval = target_halt(target);
+		if (retval == ERROR_OK)
+			retval = target_wait_state(target, TARGET_HALTED, 100);
+
+		if (retval != ERROR_OK) {
+			LOG_WARNING("MDM: Target not halted, trying reset halt");
+			target->reset_halt = true;
+			target->type->assert_reset(target);
+			target->type->deassert_reset(target);
+		}
+
+		/* re-read status */
+		retval = kinetis_mdm_read_register(dap, MDM_REG_STAT, &val);
+		if (retval != ERROR_OK) {
+			LOG_ERROR("MDM: failed to read MDM_REG_STAT");
+			goto fail;
+		}
+	}
+
 	if (val & MDM_STAT_SYSSEC) {
 		jtag_poll_set_enabled(false);
 
@@ -479,8 +501,6 @@ COMMAND_HANDLER(kinetis_check_flash_security_status)
 		LOG_INFO("MDM: Chip is unsecured. Continuing.");
 		jtag_poll_set_enabled(true);
 	}
-
-	dap_ap_select(dap, origninal_ap);
 
 	return ERROR_OK;
 
@@ -507,6 +527,110 @@ FLASH_BANK_COMMAND_HANDLER(kinetis_flash_bank_command)
 
 	return ERROR_OK;
 }
+
+/* Disable the watchdog on Kinetis devices */
+int kinetis_disable_wdog(struct target *target, uint32_t sim_sdid)
+{
+	struct working_area *wdog_algorithm;
+	struct armv7m_algorithm armv7m_info;
+	uint16_t wdog;
+	int retval;
+
+	static const uint8_t kinetis_unlock_wdog_code[] = {
+		/* WDOG_UNLOCK = 0xC520 */
+		0x4f, 0xf4, 0x00, 0x53,    /* mov.w   r3, #8192     ; 0x2000  */
+		0xc4, 0xf2, 0x05, 0x03,    /* movt    r3, #16389    ; 0x4005  */
+		0x4c, 0xf2, 0x20, 0x52,   /* movw    r2, #50464    ; 0xc520  */
+		0xda, 0x81,               /* strh    r2, [r3, #14]  */
+
+		/* WDOG_UNLOCK = 0xD928 */
+		0x4f, 0xf4, 0x00, 0x53,   /* mov.w   r3, #8192     ; 0x2000  */
+		0xc4, 0xf2, 0x05, 0x03,   /* movt    r3, #16389    ; 0x4005  */
+		0x4d, 0xf6, 0x28, 0x12,   /* movw    r2, #55592    ; 0xd928  */
+		0xda, 0x81,               /* strh    r2, [r3, #14]  */
+
+		/* WDOG_SCR = 0x1d2 */
+		0x4f, 0xf4, 0x00, 0x53,   /* mov.w   r3, #8192     ; 0x2000  */
+		0xc4, 0xf2, 0x05, 0x03,   /* movt    r3, #16389    ; 0x4005  */
+		0x4f, 0xf4, 0xe9, 0x72,   /* mov.w   r2, #466      ; 0x1d2  */
+		0x1a, 0x80,               /* strh    r2, [r3, #0]  */
+
+		/* END */
+		0x00, 0xBE,               /* bkpt #0 */
+	};
+
+	/* Decide whether the connected device needs watchdog disabling.
+	 * Disable for all Kx devices, i.e., return if it is a KLx */
+
+	if ((sim_sdid & KINETIS_SDID_SERIESID_MASK) == KINETIS_SDID_SERIESID_KL)
+		return ERROR_OK;
+
+	/* The connected device requires watchdog disabling. */
+	retval = target_read_u16(target, WDOG_STCTRH, &wdog);
+	if (retval != ERROR_OK)
+		return retval;
+
+	if ((wdog & 0x1) == 0) {
+		/* watchdog already disabled */
+		return ERROR_OK;
+	}
+	LOG_INFO("Disabling Kinetis watchdog (initial WDOG_STCTRLH = 0x%x)", wdog);
+
+	if (target->state != TARGET_HALTED) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	retval = target_alloc_working_area(target, sizeof(kinetis_unlock_wdog_code), &wdog_algorithm);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = target_write_buffer(target, wdog_algorithm->address,
+			sizeof(kinetis_unlock_wdog_code), (uint8_t *)kinetis_unlock_wdog_code);
+	if (retval != ERROR_OK) {
+		target_free_working_area(target, wdog_algorithm);
+		return retval;
+	}
+
+	armv7m_info.common_magic = ARMV7M_COMMON_MAGIC;
+	armv7m_info.core_mode = ARM_MODE_THREAD;
+
+	retval = target_run_algorithm(target, 0, NULL, 0, NULL, wdog_algorithm->address,
+			wdog_algorithm->address + (sizeof(kinetis_unlock_wdog_code) - 2),
+			10000, &armv7m_info);
+
+	if (retval != ERROR_OK)
+		LOG_ERROR("error executing kinetis wdog unlock algorithm");
+
+	retval = target_read_u16(target, WDOG_STCTRH, &wdog);
+	if (retval != ERROR_OK)
+		return retval;
+	LOG_INFO("WDOG_STCTRLH = 0x%x", wdog);
+
+	target_free_working_area(target, wdog_algorithm);
+
+	return retval;
+}
+
+COMMAND_HANDLER(kinetis_disable_wdog_handler)
+{
+	int result;
+	uint32_t sim_sdid;
+	struct target *target = get_current_target(CMD_CTX);
+
+	if (CMD_ARGC > 0)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	result = target_read_u32(target, SIM_SDID, &sim_sdid);
+	if (result != ERROR_OK) {
+		LOG_ERROR("Failed to read SIMSDID");
+		return result;
+	}
+
+	result = kinetis_disable_wdog(target, sim_sdid);
+	return result;
+}
+
 
 /* Kinetis Program-LongWord Microcodes */
 static const uint8_t kinetis_flash_write_code[] = {
@@ -949,7 +1073,7 @@ static int kinetis_write(struct flash_bank *bank, const uint8_t *buffer,
 				unsigned residual_bc = (count-i) % prog_section_chunk_bytes;
 
 				/* number of complete words to copy directly from buffer */
-				wc = (count - i) / 4;
+				wc = (count - i - residual_bc) / 4;
 
 				/* number of total sections to write, including residual */
 				section_count = DIV_ROUND_UP((count-i), prog_section_chunk_bytes);
@@ -1014,6 +1138,8 @@ static int kinetis_write(struct flash_bank *bank, const uint8_t *buffer,
 		}
 
 		uint32_t words_remaining = count / 4;
+
+		kinetis_disable_wdog(bank->target, kinfo->sim_sdid);
 
 		/* try using a block write */
 		int retval = kinetis_write_block(bank, buffer, offset, words_remaining);
@@ -1564,6 +1690,13 @@ static const struct command_registration kinetis_exec_command_handlers[] = {
 		.help = "",
 		.usage = "",
 		.chain = kinetis_securtiy_command_handlers,
+	},
+	{
+		.name = "disable_wdog",
+		.mode = COMMAND_EXEC,
+		.help = "Disable the watchdog timer",
+		.usage = "",
+		.handler = kinetis_disable_wdog_handler,
 	},
 	COMMAND_REGISTRATION_DONE
 };

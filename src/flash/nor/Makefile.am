@@ -15,6 +15,7 @@ NOR_DRIVERS = \
 	at91samd.c \
 	at91sam3.c \
 	at91sam7.c \
+	atsamv.c \
 	avrf.c \
 	cfi.c \
 	efm32.c \
@@ -35,6 +36,7 @@ NOR_DRIVERS = \
 	stm32f1x.c \
 	stm32f2x.c \
 	stm32lx.c \
+	stm32l4x.c \
 	str7x.c \
 	str9x.c \
 	str9xpec.c \
@@ -47,7 +49,10 @@ NOR_DRIVERS = \
 	nrf51.c \
 	mrvlqspi.c \
 	psoc4.c \
-	sim3x.c
+	sim3x.c \
+	xmc4xxx.c \
+	niietcm4.c
+
 
 noinst_HEADERS = \
 	core.h \

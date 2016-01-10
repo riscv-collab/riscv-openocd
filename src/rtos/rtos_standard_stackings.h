@@ -30,5 +30,11 @@
 extern const struct rtos_register_stacking rtos_standard_Cortex_M3_stacking;
 extern const struct rtos_register_stacking rtos_standard_Cortex_R4_stacking;
 extern const struct rtos_register_stacking rtos_standard_NDS32_N1068_stacking;
+int64_t rtos_generic_stack_align8(struct target *target,
+	const uint8_t *stack_data, const struct rtos_register_stacking *stacking,
+	int64_t stack_ptr);
+int64_t rtos_Cortex_M_stack_align(struct target *target,
+	const uint8_t *stack_data, const struct rtos_register_stacking *stacking,
+	int64_t stack_ptr, size_t xpsr_offset);
 
 #endif	/* ifndef INCLUDED_RTOS_STANDARD_STACKINGS_H_ */

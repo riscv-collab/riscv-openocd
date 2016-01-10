@@ -55,6 +55,16 @@
 
 #define CORTEX_A_PADDRDBG_CPU_SHIFT 13
 
+enum cortex_a_isrmasking_mode {
+	CORTEX_A_ISRMASK_OFF,
+	CORTEX_A_ISRMASK_ON,
+};
+
+enum cortex_a_dacrfixup_mode {
+	CORTEX_A_DACRFIXUP_OFF,
+	CORTEX_A_DACRFIXUP_ON
+};
+
 struct cortex_a_brp {
 	int used;
 	int type;
@@ -65,7 +75,6 @@ struct cortex_a_brp {
 
 struct cortex_a_common {
 	int common_magic;
-	struct arm_jtag jtag_info;
 
 	/* Context information */
 	uint32_t cpudbg_dscr;
@@ -74,8 +83,11 @@ struct cortex_a_common {
 	uint32_t cp15_control_reg;
 	/* latest cp15 register value written and cpsr processor mode */
 	uint32_t cp15_control_reg_curr;
+	/* auxiliary control reg */
+	uint32_t cp15_aux_control_reg;
+	/* DACR */
+	uint32_t cp15_dacr_reg;
 	enum arm_mode curr_mode;
-
 
 	/* Breakpoint register pairs */
 	int brp_num_context;
@@ -90,6 +102,9 @@ struct cortex_a_common {
 	uint32_t ctypr;
 	uint32_t ttypr;
 	uint32_t didr;
+
+	enum cortex_a_isrmasking_mode isrmasking_mode;
+	enum cortex_a_dacrfixup_mode dacrfixup_mode;
 
 	struct armv7a_common armv7a_common;
 
