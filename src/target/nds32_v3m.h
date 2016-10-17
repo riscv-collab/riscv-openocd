@@ -13,12 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
-#ifndef __NDS32_V3M_H__
-#define __NDS32_V3M_H__
+
+#ifndef OPENOCD_TARGET_NDS32_V3M_H
+#define OPENOCD_TARGET_NDS32_V3M_H
 
 #include "nds32.h"
 
@@ -49,5 +48,4 @@ static inline struct nds32_v3m_common *target_to_nds32_v3m(struct target *target
 	return container_of(target->arch_info, struct nds32_v3m_common, nds32);
 }
 
-
-#endif	/* __NDS32_V3M_H__ */
+#endif /* OPENOCD_TARGET_NDS32_V3M_H */

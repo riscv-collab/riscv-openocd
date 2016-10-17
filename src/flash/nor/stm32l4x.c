@@ -13,8 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.                                        *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -463,21 +462,21 @@ static int stm32l4_write_block(struct flash_bank *bank, const uint8_t *buffer,
 	 */
 
 	static const uint8_t stm32l4_flash_write_code[] = {
-		0xd0, 0xf8, 0x00, 0x80, 0xb8, 0xf1, 0x00, 0x0f, 0x22, 0xd0, 0x47, 0x68,
-		0xb8, 0xeb, 0x07, 0x06, 0x07, 0x2e, 0xf5, 0xd3, 0xdf, 0xf8, 0x3c, 0x60,
-		0x66, 0x61, 0x57, 0xf8, 0x04, 0x6b, 0x42, 0xf8, 0x04, 0x6b, 0x57, 0xf8,
-		0x04, 0x6b, 0x42, 0xf8, 0x04, 0x6b, 0xbf, 0xf3, 0x4f, 0x8f, 0x26, 0x69,
-		0x16, 0xf4, 0x80, 0x3f, 0xfb, 0xd1, 0x16, 0xf0, 0xfa, 0x0f, 0x07, 0xd1,
-		0x8f, 0x42, 0x28, 0xbf, 0x00, 0xf1, 0x08, 0x07, 0x47, 0x60, 0x01, 0x3b,
-		0x13, 0xb1, 0xd9, 0xe7, 0x00, 0x21, 0x41, 0x60, 0x30, 0x46, 0x00, 0xbe,
-		0x01, 0x00, 0x00, 0x00
+		0xd0, 0xf8, 0x00, 0x80, 0xb8, 0xf1, 0x00, 0x0f, 0x21, 0xd0, 0x45, 0x68,
+		0xb8, 0xeb, 0x05, 0x06, 0x44, 0xbf, 0x76, 0x18, 0x36, 0x1a, 0x08, 0x2e,
+		0xf2, 0xd3, 0xdf, 0xf8, 0x36, 0x60, 0x66, 0x61, 0xf5, 0xe8, 0x02, 0x67,
+		0xe2, 0xe8, 0x02, 0x67, 0xbf, 0xf3, 0x4f, 0x8f, 0x26, 0x69, 0x16, 0xf4,
+		0x80, 0x3f, 0xfb, 0xd1, 0x16, 0xf0, 0xfa, 0x0f, 0x07, 0xd1, 0x8d, 0x42,
+		0x28, 0xbf, 0x00, 0xf1, 0x08, 0x05, 0x45, 0x60, 0x01, 0x3b, 0x13, 0xb1,
+		0xda, 0xe7, 0x00, 0x21, 0x41, 0x60, 0x30, 0x46, 0x00, 0xbe, 0x01, 0x00,
+		0x00, 0x00
 	};
 
 	if (target_alloc_working_area(target, sizeof(stm32l4_flash_write_code),
 			&write_algorithm) != ERROR_OK) {
 		LOG_WARNING("no working area available, can't do block memory writes");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	};
+	}
 
 	retval = target_write_buffer(target, write_algorithm->address,
 			sizeof(stm32l4_flash_write_code),
@@ -497,7 +496,7 @@ static int stm32l4_write_block(struct flash_bank *bank, const uint8_t *buffer,
 			LOG_WARNING("no large enough working area available, can't do block memory writes");
 			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 		}
-	};
+	}
 
 	armv7m_info.common_magic = ARMV7M_COMMON_MAGIC;
 	armv7m_info.core_mode = ARM_MODE_THREAD;
@@ -600,6 +599,7 @@ static int stm32l4_probe(struct flash_bank *bank)
 	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
 	int i;
 	uint16_t flash_size_in_kb = 0xffff;
+	uint16_t max_flash_size_in_kb;
 	uint32_t device_id;
 	uint32_t options;
 	uint32_t base_address = 0x08000000;
@@ -615,6 +615,10 @@ static int stm32l4_probe(struct flash_bank *bank)
 	/* set max flash size depending on family */
 	switch (device_id & 0xfff) {
 	case 0x415:
+		max_flash_size_in_kb = 1024;
+		break;
+	case 0x435:
+		max_flash_size_in_kb = 256;
 		break;
 	default:
 		LOG_WARNING("Cannot identify target as a STM32L4 family.");
@@ -624,6 +628,19 @@ static int stm32l4_probe(struct flash_bank *bank)
 	/* get flash size from target. */
 	retval = target_read_u16(target, FLASH_SIZE_REG, &flash_size_in_kb);
 
+	/* failed reading flash size or flash size invalid (early silicon),
+	 * default to max target family */
+	if (retval != ERROR_OK || flash_size_in_kb == 0xffff || flash_size_in_kb == 0) {
+		LOG_WARNING("STM32 flash size failed, probe inaccurate - assuming %dk flash",
+			max_flash_size_in_kb);
+		flash_size_in_kb = max_flash_size_in_kb;
+	}
+
+	LOG_INFO("flash size = %dkbytes", flash_size_in_kb);
+
+	/* did we assign flash size? */
+	assert(flash_size_in_kb != 0xffff);
+
 	/* get options to for DUAL BANK. */
 	retval = target_read_u32(target, STM32_FLASH_OPTR, &options);
 
@@ -632,8 +649,6 @@ static int stm32l4_probe(struct flash_bank *bank)
 		stm32l4_info->option_bytes.bank_b_start = 256;
 	else
 		stm32l4_info->option_bytes.bank_b_start = flash_size_in_kb << 9;
-
-	LOG_INFO("flash size = %dkbytes", flash_size_in_kb);
 
 	/* did we assign flash size? */
 	assert((flash_size_in_kb != 0xffff) && flash_size_in_kb);
@@ -686,7 +701,7 @@ static int get_stm32l4_info(struct flash_bank *bank, char *buf, int buf_size)
 	if (retval != ERROR_OK)
 		return retval;
 
-	uint16_t device_id = dbgmcu_idcode & 0xffff;
+	uint16_t device_id = dbgmcu_idcode & 0xfff;
 	uint8_t rev_id = dbgmcu_idcode >> 28;
 	uint8_t rev_minor = 0;
 	int i;
@@ -701,8 +716,12 @@ static int get_stm32l4_info(struct flash_bank *bank, char *buf, int buf_size)
 	const char *device_str;
 
 	switch (device_id) {
-	case 0x6415:
+	case 0x415:
 		device_str = "STM32L4xx";
+		break;
+
+	case 0x435:
+		device_str = "STM32L43x";
 		break;
 
 	default:

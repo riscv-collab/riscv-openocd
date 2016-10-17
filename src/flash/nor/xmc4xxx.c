@@ -11,6 +11,8 @@
 *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
 *   GNU General Public License for more details.                          *
 *                                                                         *
+*   You should have received a copy of the GNU General Public License     *
+*   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
 ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -181,7 +183,7 @@
 
 /* Flash controller configuration values */
 #define FLASH_ID_XMC4500        0xA2
-#define FLASH_ID_XMC4800        0x92
+#define FLASH_ID_XMC4700_4800   0x92
 #define FLASH_ID_XMC4100_4200   0x9C
 #define FLASH_ID_XMC4400        0x9F
 
@@ -381,9 +383,9 @@ static int xmc4xxx_probe(struct flash_bank *bank)
 		bank->num_sectors = 12;
 		LOG_DEBUG("XMC4xxx: XMC4500 detected.");
 		break;
-	case FLASH_ID_XMC4800:
+	case FLASH_ID_XMC4700_4800:
 		bank->num_sectors = 16;
-		LOG_DEBUG("XMC4xxx: XMC4800 detected.");
+		LOG_DEBUG("XMC4xxx: XMC4700/4800 detected.");
 		break;
 	default:
 		LOG_ERROR("XMC4xxx: Unexpected flash ID. got %02" PRIx8,
@@ -620,7 +622,7 @@ static int xmc4xxx_enter_page_mode(struct flash_bank *bank)
  * implement our own */
 
 /** Checks whether a memory region is zeroed. */
-int xmc4xxx_blank_check_memory(struct target *target,
+static int xmc4xxx_blank_check_memory(struct target *target,
 	uint32_t address, uint32_t count, uint32_t *blank)
 {
 	struct working_area *erase_check_algorithm;
@@ -628,16 +630,8 @@ int xmc4xxx_blank_check_memory(struct target *target,
 	struct armv7m_algorithm armv7m_info;
 	int retval;
 
-	/* see contrib/loaders/erase_check/armv7m_0_erase_check.s for src */
-
 	static const uint8_t erase_check_code[] = {
-		/* loop: */
-		0x03, 0x78,		/* ldrb	r3, [r0] */
-		0x01, 0x30,		/* adds	r0, #1 */
-		0x1A, 0x43,		/* orrs	r2, r2, r3 */
-		0x01, 0x39,		/* subs	r1, r1, #1 */
-		0xFA, 0xD1,		/* bne	loop */
-		0x00, 0xBE		/* bkpt	#0 */
+#include "../../../contrib/loaders/erase_check/armv7m_0_erase_check.inc"
 	};
 
 	/* make sure we have a working area */
@@ -648,7 +642,7 @@ int xmc4xxx_blank_check_memory(struct target *target,
 	retval = target_write_buffer(target, erase_check_algorithm->address,
 			sizeof(erase_check_code), (uint8_t *)erase_check_code);
 	if (retval != ERROR_OK)
-		return retval;
+		goto cleanup;
 
 	armv7m_info.common_magic = ARMV7M_COMMON_MAGIC;
 	armv7m_info.core_mode = ARM_MODE_THREAD;
@@ -679,6 +673,7 @@ int xmc4xxx_blank_check_memory(struct target *target,
 	destroy_reg_param(&reg_params[1]);
 	destroy_reg_param(&reg_params[2]);
 
+cleanup:
 	target_free_working_area(target, erase_check_algorithm);
 
 	return retval;
@@ -688,7 +683,7 @@ static int xmc4xxx_flash_blank_check(struct flash_bank *bank)
 {
 	struct target *target = bank->target;
 	int i;
-	int retval;
+	int retval = ERROR_OK;
 	uint32_t blank;
 
 	if (bank->target->state != TARGET_HALTED) {
@@ -712,7 +707,7 @@ static int xmc4xxx_flash_blank_check(struct flash_bank *bank)
 			bank->sectors[i].is_erased = 0;
 	}
 
-	return ERROR_OK;
+	return retval;
 }
 
 static int xmc4xxx_write_page(struct flash_bank *bank, const uint8_t *pg_buf,
@@ -980,6 +975,15 @@ static int xmc4xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_
 			break;
 		case 0x4:
 			rev_str = "AC";
+			break;
+		}
+		break;
+	case 0x700:
+		dev_str = "XMC4700";
+
+		switch (rev_id) {
+		case 0x1:
+			rev_str = "EES-AA";
 			break;
 		}
 		break;

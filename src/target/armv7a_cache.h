@@ -11,10 +11,13 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARM7A_CACHE_H
-#define ARM7A_CACHE_H
+#ifndef OPENOCD_TARGET_ARM7A_CACHE_H
+#define OPENOCD_TARGET_ARM7A_CACHE_H
 
 #include "arm_jtag.h"
 #include "armv7a_cache_l2x.h"
@@ -40,4 +43,4 @@ extern const struct command_registration arm7a_cache_command_handlers[];
 #define CACHE_LEVEL_HAS_D_CACHE		0x2
 #define CACHE_LEVEL_HAS_I_CACHE		0x1
 
-#endif
+#endif /* OPENOCD_TARGET_ARM7A_CACHE_H */

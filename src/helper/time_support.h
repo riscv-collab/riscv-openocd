@@ -19,13 +19,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef TIME_SUPPORT_H
-#define TIME_SUPPORT_H
+#ifndef OPENOCD_HELPER_TIME_SUPPORT_H
+#define OPENOCD_HELPER_TIME_SUPPORT_H
 
 #ifdef TIME_WITH_SYS_TIME
 # include <sys/time.h>
@@ -55,8 +53,8 @@ int duration_start(struct duration *duration);
 int duration_measure(struct duration *duration);
 
 /** @returns Elapsed time in seconds. */
-float duration_elapsed(struct duration *duration);
+float duration_elapsed(const struct duration *duration);
 /** @returns KB/sec for the elapsed @a duration and @a count bytes. */
-float duration_kbps(struct duration *duration, size_t count);
+float duration_kbps(const struct duration *duration, size_t count);
 
-#endif	/* TIME_SUPPORT_H */
+#endif /* OPENOCD_HELPER_TIME_SUPPORT_H */

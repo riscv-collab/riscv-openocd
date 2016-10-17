@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef S3C24xx_NAND_H
-#define S3C24xx_NAND_H
+#ifndef OPENOCD_FLASH_NAND_S3C24XX_H
+#define OPENOCD_FLASH_NAND_S3C24XX_H
 
 /*
  * S3C24XX Series OpenOCD NAND Flash controller support.
@@ -77,4 +75,4 @@ int s3c2440_read_block_data(struct nand_device *nand,
 int s3c2440_write_block_data(struct nand_device *nand,
 		uint8_t *data, int data_size);
 
-#endif /* S3C24xx_NAND_H */
+#endif /* OPENOCD_FLASH_NAND_S3C24XX_H */

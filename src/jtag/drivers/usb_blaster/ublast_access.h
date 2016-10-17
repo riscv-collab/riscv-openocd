@@ -20,10 +20,13 @@
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   GNU General Public License for more details.
  *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef JTAG_UBLAST_ACCESS_H
-#define JTAG_UBLAST_ACCESS_H
+#ifndef OPENOCD_JTAG_DRIVERS_USB_BLASTER_UBLAST_ACCESS_H
+#define OPENOCD_JTAG_DRIVERS_USB_BLASTER_UBLAST_ACCESS_H
 
 #include <libusb_common.h>
 
@@ -68,4 +71,4 @@ extern struct ublast_lowlevel *ublast_register_ftdi(void);
 extern struct ublast_lowlevel *ublast_register_ftd2xx(void);
 extern struct ublast_lowlevel *ublast2_register_libusb(void);
 
-#endif /* JTAG_UBLAST_ACCESS_H */
+#endif /* OPENOCD_JTAG_DRIVERS_USB_BLASTER_UBLAST_ACCESS_H */

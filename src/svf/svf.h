@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef SVF_H
-#define SVF_H
+#ifndef OPENOCD_SVF_SVF_H
+#define OPENOCD_SVF_SVF_H
 
 #include <jtag/jtag.h>
 
@@ -46,4 +44,4 @@ int svf_add_statemove(tap_state_t goal_state);
  */
 bool svf_tap_state_is_stable(tap_state_t state);
 
-#endif	/* SVF_H */
+#endif /* OPENOCD_SVF_SVF_H */

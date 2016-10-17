@@ -19,13 +19,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef TELNET_SERVER_H
-#define TELNET_SERVER_H
+#ifndef OPENOCD_SERVER_TELNET_SERVER_H
+#define OPENOCD_SERVER_TELNET_SERVER_H
 
 #include <server/server.h>
 
@@ -69,4 +67,4 @@ struct telnet_service {
 int telnet_init(char *banner);
 int telnet_register_commands(struct command_context *command_context);
 
-#endif	/* TELNET_SERVER_H */
+#endif /* OPENOCD_SERVER_TELNET_SERVER_H */

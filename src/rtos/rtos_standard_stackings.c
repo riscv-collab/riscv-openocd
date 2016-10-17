@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -44,6 +42,47 @@ static const struct stack_register_offset rtos_standard_Cortex_M3_stack_offsets[
 	{ 0x38, 32 },		/* pc   */
 	{ 0x3c, 32 },		/* xPSR */
 };
+
+static const struct stack_register_offset rtos_standard_Cortex_M4F_stack_offsets[] = {
+	{ 0x24, 32 },		/* r0   */
+	{ 0x28, 32 },		/* r1   */
+	{ 0x2c, 32 },		/* r2   */
+	{ 0x30, 32 },		/* r3   */
+	{ 0x00, 32 },		/* r4   */
+	{ 0x04, 32 },		/* r5   */
+	{ 0x08, 32 },		/* r6   */
+	{ 0x0c, 32 },		/* r7   */
+	{ 0x10, 32 },		/* r8   */
+	{ 0x14, 32 },		/* r9   */
+	{ 0x18, 32 },		/* r10  */
+	{ 0x1c, 32 },		/* r11  */
+	{ 0x34, 32 },		/* r12  */
+	{ -2,   32 },		/* sp   */
+	{ 0x38, 32 },		/* lr   */
+	{ 0x3c, 32 },		/* pc   */
+	{ 0x40, 32 },		/* xPSR */
+};
+
+static const struct stack_register_offset rtos_standard_Cortex_M4F_FPU_stack_offsets[] = {
+	{ 0x64, 32 },		/* r0   */
+	{ 0x68, 32 },		/* r1   */
+	{ 0x6c, 32 },		/* r2   */
+	{ 0x70, 32 },		/* r3   */
+	{ 0x00, 32 },		/* r4   */
+	{ 0x04, 32 },		/* r5   */
+	{ 0x08, 32 },		/* r6   */
+	{ 0x0c, 32 },		/* r7   */
+	{ 0x10, 32 },		/* r8   */
+	{ 0x14, 32 },		/* r9   */
+	{ 0x18, 32 },		/* r10  */
+	{ 0x1c, 32 },		/* r11  */
+	{ 0x74, 32 },		/* r12  */
+	{ -2,   32 },		/* sp   */
+	{ 0x78, 32 },		/* lr   */
+	{ 0x7c, 32 },		/* pc   */
+	{ 0x80, 32 },		/* xPSR */
+};
+
 
 static const struct stack_register_offset rtos_standard_Cortex_R4_stack_offsets[] = {
 	{ 0x08, 32 },		/* r0  (a1)   */
@@ -141,7 +180,7 @@ int64_t rtos_generic_stack_align8(struct target *target,
 			stacking, stack_ptr, 8);
 }
 
-/* The Cortex M3 will indicate that an alignment adjustment
+/* The Cortex-M3 will indicate that an alignment adjustment
  * has been done on the stack by setting bit 9 of the stacked xPSR
  * register.  In this case, we can just add an extra 4 bytes to get
  * to the program stack.  Note that some places in the ARM documentation
@@ -196,6 +235,22 @@ const struct rtos_register_stacking rtos_standard_Cortex_M3_stacking = {
 	ARMV7M_NUM_CORE_REGS,	/* num_output_registers */
 	rtos_standard_Cortex_M3_stack_align,	/* stack_alignment */
 	rtos_standard_Cortex_M3_stack_offsets	/* register_offsets */
+};
+
+const struct rtos_register_stacking rtos_standard_Cortex_M4F_stacking = {
+	0x44,					/* stack_registers_size 4 more for LR*/
+	-1,						/* stack_growth_direction */
+	ARMV7M_NUM_CORE_REGS,	/* num_output_registers */
+	rtos_standard_Cortex_M3_stack_align,	/* stack_alignment */
+	rtos_standard_Cortex_M4F_stack_offsets	/* register_offsets */
+};
+
+const struct rtos_register_stacking rtos_standard_Cortex_M4F_FPU_stacking = {
+	0xcc,					/* stack_registers_size 4 more for LR + 48 more for FPU S0-S15 register*/
+	-1,						/* stack_growth_direction */
+	ARMV7M_NUM_CORE_REGS,	/* num_output_registers */
+	rtos_standard_Cortex_M3_stack_align,	/* stack_alignment */
+	rtos_standard_Cortex_M4F_FPU_stack_offsets	/* register_offsets */
 };
 
 const struct rtos_register_stacking rtos_standard_Cortex_R4_stacking = {

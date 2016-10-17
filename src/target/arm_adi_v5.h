@@ -16,13 +16,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARM_ADI_V5_H
-#define ARM_ADI_V5_H
+#ifndef OPENOCD_TARGET_ARM_ADI_V5_H
+#define OPENOCD_TARGET_ARM_ADI_V5_H
 
 /**
  * @file
@@ -31,13 +29,8 @@
  * resources accessed through a MEM-AP.
  */
 
+#include <helper/list.h>
 #include "arm_jtag.h"
-
-/* FIXME remove these JTAG-specific decls when mem_ap_read_buf_u32()
- * is no longer JTAG-specific
- */
-#define JTAG_DP_DPACC		0xA
-#define JTAG_DP_APACC		0xB
 
 /* three-bit ACK values for SWD access (sent LSB first) */
 #define SWD_ACK_OK    0x1
@@ -52,18 +45,21 @@
 /* A[3:0] for DP registers; A[1:0] are always zero.
  * - JTAG accesses all of these via JTAG_DP_DPACC, except for
  *   IDCODE (JTAG_DP_IDCODE) and ABORT (JTAG_DP_ABORT).
- * - SWD accesses these directly, sometimes needing SELECT.CTRLSEL
+ * - SWD accesses these directly, sometimes needing SELECT.DPBANKSEL
  */
-#define DP_IDCODE		BANK_REG(0x0, 0x0)	/* SWD: read */
-#define DP_ABORT		BANK_REG(0x0, 0x0)	/* SWD: write */
-#define DP_CTRL_STAT		BANK_REG(0x0, 0x4)	/* r/w */
-#define DP_RESEND		BANK_REG(0x0, 0x8)	/* SWD: read */
-#define DP_SELECT		BANK_REG(0x0, 0x8)	/* JTAG: r/w; SWD: write */
-#define DP_RDBUFF		BANK_REG(0x0, 0xC)	/* read-only */
-#define DP_WCR			BANK_REG(0x1, 0x4)	/* SWD: r/w */
+#define DP_DPIDR        BANK_REG(0x0, 0x0) /* DPv1+: ro */
+#define DP_ABORT        BANK_REG(0x0, 0x0) /* DPv1+: SWD: wo */
+#define DP_CTRL_STAT    BANK_REG(0x0, 0x4) /* DPv0+: rw */
+#define DP_DLCR         BANK_REG(0x1, 0x4) /* DPv1+: SWD: rw */
+#define DP_TARGETID     BANK_REG(0x2, 0x4) /* DPv2: ro */
+#define DP_DLPIDR       BANK_REG(0x3, 0x4) /* DPv2: ro */
+#define DP_EVENTSTAT    BANK_REG(0x4, 0x4) /* DPv2: ro */
+#define DP_RESEND       BANK_REG(0x0, 0x8) /* DPv1+: SWD: ro */
+#define DP_SELECT       BANK_REG(0x0, 0x8) /* DPv0+: JTAG: rw; SWD: wo */
+#define DP_RDBUFF       BANK_REG(0x0, 0xC) /* DPv0+: ro */
+#define DP_TARGETSEL    BANK_REG(0x0, 0xC) /* DPv2: SWD: wo */
 
-#define WCR_TO_TRN(wcr) ((uint32_t)(1 + (3 & ((wcr)) >> 8)))	/* 1..4 clocks */
-#define WCR_TO_PRESCALE(wcr) ((uint32_t)(7 & ((wcr))))		/* impl defined */
+#define DLCR_TO_TRN(dlcr) ((uint32_t)(1 + ((3 & (dlcr)) >> 8))) /* 1..4 clocks */
 
 /* Fields of the DP's AP ABORT register */
 #define DAPABORT        (1UL << 0)
@@ -206,6 +202,9 @@ struct adiv5_ap {
 struct adiv5_dap {
 	const struct dap_ops *ops;
 
+	/* dap transaction list for WAIT support */
+	struct list_head cmd_journal;
+
 	struct jtag_tap *tap;
 	/* Control config */
 	uint32_t dp_ctrl_stat;
@@ -270,6 +269,10 @@ struct dap_ops {
 
 	/** Executes all queued DAP operations. */
 	int (*run)(struct adiv5_dap *dap);
+
+	/** Executes all queued DAP operations but doesn't check
+	 * sticky error conditions */
+	int (*sync)(struct adiv5_dap *dap);
 };
 
 /*
@@ -393,6 +396,14 @@ static inline int dap_run(struct adiv5_dap *dap)
 	return dap->ops->run(dap);
 }
 
+static inline int dap_sync(struct adiv5_dap *dap)
+{
+	assert(dap->ops != NULL);
+	if (dap->ops->sync)
+		return dap->ops->sync(dap);
+	return ERROR_OK;
+}
+
 static inline int dap_dp_read_atomic(struct adiv5_dap *dap, unsigned reg,
 				     uint32_t *value)
 {
@@ -493,4 +504,4 @@ int dap_to_jtag(struct target *target);
 
 extern const struct command_registration dap_command_handlers[];
 
-#endif
+#endif /* OPENOCD_TARGET_ARM_ADI_V5_H */

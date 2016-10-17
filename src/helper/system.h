@@ -15,13 +15,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef SYSTEM_H
-#define SYSTEM_H
+#ifndef OPENOCD_HELPER_SYSTEM_H
+#define OPENOCD_HELPER_SYSTEM_H
 
 /* standard C library header files */
 #include <stdio.h>
@@ -88,4 +86,4 @@
 #define false   0
 #endif
 
-#endif	/* SYSTEM_H */
+#endif /* OPENOCD_HELPER_SYSTEM_H */

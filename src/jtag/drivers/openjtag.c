@@ -26,13 +26,11 @@
  *   GNU General Public License for more details.                              *
  *                                                                             *
  *   You should have received a copy of the GNU General Public License         *
- *   along with this program; if not, write to the                             *
- *   Free Software Foundation, Inc.,                                           *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.               *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>.     *
  ***************************************************************************/
 
 /***************************************************************************
- * Version 1.0  Tested on a MCBSTM32 board using a Cortex M3 (stm32f103x), *
+ * Version 1.0  Tested on a MCBSTM32 board using a Cortex-M3 (stm32f103x), *
  *              GDB and Eclipse under Linux (Ubuntu 10.04)                 *
  *                                                                         *
  ***************************************************************************/
@@ -471,7 +469,7 @@ if (openjtag_device_desc == NULL) {
 		LOG_ERROR("Can't set baud rate to max: %s",
 			ftdi_get_error_string(&ftdic));
 		return ERROR_JTAG_DEVICE_ERROR;
-	};
+	}
 #endif
 
 #if BUILD_OPENJTAG_FTD2XX == 1

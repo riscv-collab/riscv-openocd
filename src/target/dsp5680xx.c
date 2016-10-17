@@ -16,9 +16,7 @@
  *  GNU General Public License for more details.                          *
  *                                                                        *
  *  You should have received a copy of the GNU General Public License     *
- *  along with this program; if not, write to the                         *
- *  Free Software Foundation, Inc.,                                       *
- *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -1003,12 +1001,12 @@ static int dsp5680xx_poll(struct target *target)
 			 __func__);
 		target->state = TARGET_UNKNOWN;
 		return ERROR_TARGET_FAILURE;
-	};
+	}
 	if (target->state == TARGET_UNKNOWN) {
 		LOG_ERROR("%s: Target status invalid - communication failure",
 			  __func__);
 		return ERROR_TARGET_FAILURE;
-	};
+	}
 	return ERROR_OK;
 }
 

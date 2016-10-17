@@ -18,13 +18,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef FLASH_NAND_CORE_H
-#define FLASH_NAND_CORE_H
+#ifndef OPENOCD_FLASH_NAND_CORE_H
+#define OPENOCD_FLASH_NAND_CORE_H
 
 #include <flash/common.h>
 
@@ -68,7 +66,7 @@ struct nand_device {
 	int address_cycles;
 	int page_size;
 	int erase_size;
-	int use_raw;
+	bool use_raw;
 	int num_blocks;
 	struct nand_block *blocks;
 	struct nand_device *next;
@@ -231,4 +229,4 @@ COMMAND_HELPER(nand_command_get_device, unsigned name_index,
 #define         ERROR_NAND_ERROR_CORRECTION_FAILED      (-1105)
 #define         ERROR_NAND_NO_BUFFER                    (-1106)
 
-#endif	/* FLASH_NAND_CORE_H */
+#endif /* OPENOCD_FLASH_NAND_CORE_H */

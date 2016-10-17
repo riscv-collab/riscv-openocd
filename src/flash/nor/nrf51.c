@@ -15,9 +15,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -110,7 +108,6 @@ enum nrf51_nvmc_config_bits {
 
 struct nrf51_info {
 	uint32_t code_page_size;
-	uint32_t code_memory_size;
 
 	struct {
 		bool probed;
@@ -193,6 +190,18 @@ static const struct nrf51_device_spec nrf51_known_devices_table[] = {
 		.flash_size_kb	= 256,
 	},
 	{
+		.hwid		= 0x0057,
+		.variant	= "QFAA",
+		.build_code	= "G2",
+		.flash_size_kb	= 256,
+	},
+	{
+		.hwid		= 0x0058,
+		.variant	= "QFAA",
+		.build_code	= "G3",
+		.flash_size_kb	= 256,
+	},
+	{
 		.hwid		= 0x004C,
 		.variant	= "QFAB",
 		.build_code	= "B0",
@@ -234,6 +243,12 @@ static const struct nrf51_device_spec nrf51_known_devices_table[] = {
 		.hwid		= 0x0083,
 		.variant	= "QFAC",
 		.build_code	= "A0",
+		.flash_size_kb	= 256,
+	},
+	{
+		.hwid		= 0x0084,
+		.variant	= "QFAC",
+		.build_code	= "A1",
 		.flash_size_kb	= 256,
 	},
 	{
@@ -313,12 +328,6 @@ static const struct nrf51_device_spec nrf51_known_devices_table[] = {
 		.variant	= "QFAB",
 		.build_code	= "B0",
 		.flash_size_kb	= 128,
-	},
-	{
-		.hwid		= 0x0084,
-		.variant	= "QFAC",
-		.build_code	= "A1",
-		.flash_size_kb	= 256,
 	},
 	{
 		.hwid		= 0x0085,
@@ -575,7 +584,7 @@ static int nrf51_protect(struct flash_bank *bank, int set, int first, int last)
 	if ((ppfc & 0xFF) == 0x00) {
 		LOG_ERROR("Code region 0 size was pre-programmed at the factory, can't change flash protection settings");
 		return ERROR_FAIL;
-	};
+	}
 
 	res = target_read_u32(chip->target, NRF51_UICR_CLENR0,
 			      &clenr0);
@@ -631,29 +640,29 @@ static int nrf51_probe(struct flash_bank *bank)
 			LOG_WARNING("Unknown device (HWID 0x%08" PRIx32 ")", hwid);
 	}
 
-
 	if (bank->base == NRF51_FLASH_BASE) {
+		/* The value stored in NRF51_FICR_CODEPAGESIZE is the number of bytes in one page of FLASH. */
 		res = target_read_u32(chip->target, NRF51_FICR_CODEPAGESIZE,
-				      &chip->code_page_size);
+				&chip->code_page_size);
 		if (res != ERROR_OK) {
 			LOG_ERROR("Couldn't read code page size");
 			return res;
 		}
 
+		/* Note the register name is misleading,
+		 * NRF51_FICR_CODESIZE is the number of pages in flash memory, not the number of bytes! */
 		res = target_read_u32(chip->target, NRF51_FICR_CODESIZE,
-				      &chip->code_memory_size);
+				(uint32_t *) &bank->num_sectors);
 		if (res != ERROR_OK) {
 			LOG_ERROR("Couldn't read code memory size");
 			return res;
 		}
 
-		if (spec && chip->code_memory_size != spec->flash_size_kb) {
-			LOG_ERROR("Chip's reported Flash capacity does not match expected one");
-			return ERROR_FAIL;
-		}
+		bank->size = bank->num_sectors * chip->code_page_size;
 
-		bank->size = chip->code_memory_size * 1024;
-		bank->num_sectors = bank->size / chip->code_page_size;
+		if (spec && bank->size / 1024 != spec->flash_size_kb)
+			LOG_WARNING("Chip's reported Flash capacity does not match expected one");
+
 		bank->sectors = calloc(bank->num_sectors,
 				       sizeof((bank->sectors)[0]));
 		if (!bank->sectors)
@@ -755,7 +764,7 @@ static int nrf51_erase_page(struct flash_bank *bank,
 
 			LOG_ERROR("The chip was not pre-programmed with SoftDevice stack and UICR cannot be erased separately. Please issue mass erase before trying to write to this region");
 			return ERROR_FAIL;
-		};
+		}
 
 		res = nrf51_nvmc_generic_erase(chip,
 					       NRF51_NVMC_ERASEUICR,
@@ -1136,7 +1145,7 @@ COMMAND_HANDLER(nrf51_handle_mass_erase_command)
 		LOG_ERROR("Code region 0 size was pre-programmed at the factory, "
 			  "mass erase command won't work.");
 		return ERROR_FAIL;
-	};
+	}
 
 	res = nrf51_erase_all(chip);
 	if (res != ERROR_OK) {
@@ -1262,7 +1271,7 @@ static int nrf51_info(struct flash_bank *bank, char *buf, int buf_size)
 		 "reset value for XTALFREQ: %"PRIx32"\n"
 		 "firmware id: 0x%04"PRIx32,
 		 ficr[0].value,
-		 ficr[1].value,
+		 (ficr[1].value * ficr[0].value) / 1024,
 		 (ficr[2].value == 0xFFFFFFFF) ? 0 : ficr[2].value / 1024,
 		 ((ficr[3].value & 0xFF) == 0x00) ? "present" : "not present",
 		 ficr[4].value,

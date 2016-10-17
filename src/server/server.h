@@ -19,13 +19,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef SERVER_H
-#define SERVER_H
+#ifndef OPENOCD_SERVER_SERVER_H
+#define OPENOCD_SERVER_SERVER_H
 
 #include <helper/log.h>
 
@@ -111,4 +109,4 @@ COMMAND_HELPER(server_port_command, unsigned short *out);
 #define ERROR_SERVER_REMOTE_CLOSED		(-400)
 #define ERROR_CONNECTION_REJECTED		(-401)
 
-#endif	/* SERVER_H */
+#endif /* OPENOCD_SERVER_SERVER_H */

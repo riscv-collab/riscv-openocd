@@ -19,13 +19,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARMV7M_COMMON_H
-#define ARMV7M_COMMON_H
+#ifndef OPENOCD_TARGET_ARMV7M_H
+#define OPENOCD_TARGET_ARMV7M_H
 
 #include "arm_adi_v5.h"
 #include "arm.h"
@@ -134,6 +132,8 @@ enum {
 enum {
 	FP_NONE = 0,
 	FPv4_SP,
+	FPv5_SP,
+	FPv5_DP,
 };
 
 #define ARMV7M_NUM_CORE_REGS (ARMV7M_xPSR + 1)
@@ -231,4 +231,4 @@ int armv7m_maybe_skip_bkpt_inst(struct target *target, bool *inst_found);
 
 extern const struct command_registration armv7m_command_handlers[];
 
-#endif /* ARMV7M_H */
+#endif /* OPENOCD_TARGET_ARMV7M_H */

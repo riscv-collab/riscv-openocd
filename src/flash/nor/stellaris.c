@@ -16,9 +16,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 /***************************************************************************
@@ -602,7 +600,7 @@ static void stellaris_read_clock_info(struct flash_bank *bank)
 	LOG_DEBUG("Stellaris PLLCFG %" PRIx32 "", pllcfg);
 
 	stellaris_info->rcc = rcc;
-	stellaris_info->rcc = rcc2;
+	stellaris_info->rcc2 = rcc2;
 
 	sysdiv = (rcc >> 23) & 0xF;
 	usesysdiv = (rcc >> 22) & 0x1;
@@ -1065,7 +1063,7 @@ static int stellaris_write_block(struct flash_bank *bank,
 			&write_algorithm) != ERROR_OK) {
 		LOG_DEBUG("no working area for block memory writes");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	};
+	}
 
 	/* plus a buffer big enough for this data */
 	if (wcount * 4 < buffer_size)
@@ -1080,7 +1078,7 @@ static int stellaris_write_block(struct flash_bank *bank,
 		}
 		LOG_DEBUG("retry target_alloc_working_area(%s, size=%u)",
 				target_name(target), (unsigned) buffer_size);
-	};
+	}
 
 	target_write_buffer(target, write_algorithm->address,
 			sizeof(stellaris_write_code),

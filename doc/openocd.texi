@@ -995,7 +995,7 @@ For example, there may be configuration files for your JTAG adapter
 and target chip, but you need a new board-specific config file
 giving access to your particular flash chips.
 Or you might need to write another target chip configuration file
-for a new chip built around the Cortex M3 core.
+for a new chip built around the Cortex-M3 core.
 
 @quotation Note
 When you write new configuration files, please submit
@@ -2097,7 +2097,7 @@ only during configuration (before those ports are opened).
 
 For reasons including security, you may wish to prevent remote
 access using one or more of these ports.
-In such cases, just specify the relevant port number as zero.
+In such cases, just specify the relevant port number as "disabled".
 If you disable all access through TCP/IP, you will need to
 use the command line @option{-pipe} option.
 
@@ -2109,7 +2109,7 @@ communicate via pipes(stdin/out or named pipes). The name
 the normal use cases.
 
 No arguments reports GDB port. "pipe" means listen to stdin
-output to stdout, an integer is base port number, "disable"
+output to stdout, an integer is base port number, "disabled"
 disables the gdb server.
 
 When using "pipe", also use log_output to redirect the log
@@ -2140,7 +2140,7 @@ output from the Tcl engine.
 Intended as a machine interface.
 When not specified during the configuration stage,
 the port @var{number} defaults to 6666.
-
+When specified as "disabled", this service is not activated.
 @end deffn
 
 @deffn {Command} telnet_port [number]
@@ -2149,7 +2149,7 @@ port on which to listen for incoming telnet connections.
 This port is intended for interaction with one human through TCL commands.
 When not specified during the configuration stage,
 the port @var{number} defaults to 4444.
-When specified as zero, this port is not activated.
+When specified as "disabled", this service is not activated.
 @end deffn
 
 @anchor{gdbconfiguration}
@@ -2515,7 +2515,8 @@ The driver uses a signal abstraction to enable Tcl configuration files to
 define outputs for one or several FTDI GPIO. These outputs can then be
 controlled using the @command{ftdi_set_signal} command. Special signal names
 are reserved for nTRST, nSRST and LED (for blink) so that they, if defined,
-will be used for their customary purpose.
+will be used for their customary purpose. Inputs can be read using the
+@command{ftdi_get_signal} command.
 
 Depending on the type of buffer attached to the FTDI GPIO, the outputs have to
 be controlled differently. In order to support tristateable signals such as
@@ -2558,6 +2559,16 @@ If not specified, serial numbers are not considered.
 and are not restricted to containing only decimal digits.)
 @end deffn
 
+@deffn {Config Command} {ftdi_location} <bus>:<port>[,<port>]...
+Specifies the physical USB port of the adapter to use. The path
+roots at @var{bus} and walks down the physical ports, with each
+@var{port} option specifying a deeper level in the bus topology, the last
+@var{port} denoting where the target adapter is actually plugged.
+The USB bus topology can be queried with the command @emph{lsusb -t}.
+
+This command is only available if your libusb1 is at least version 1.0.16.
+@end deffn
+
 @deffn {Config Command} {ftdi_channel} channel
 Selects the channel of the FTDI device to use for MPSSE operations. Most
 adapters use the default, channel 0, but there are exceptions.
@@ -2572,7 +2583,7 @@ minimal impact on the target system. Avoid floating inputs, conflicting outputs
 and initially asserted reset signals.
 @end deffn
 
-@deffn {Config Command} {ftdi_layout_signal} name [@option{-data}|@option{-ndata} data_mask] [@option{-oe}|@option{-noe} oe_mask] [@option{-alias}|@option{-nalias} name]
+@deffn {Config Command} {ftdi_layout_signal} name [@option{-data}|@option{-ndata} data_mask] [@option{-input}|@option{-ninput} input_mask] [@option{-oe}|@option{-noe} oe_mask] [@option{-alias}|@option{-nalias} name]
 Creates a signal with the specified @var{name}, controlled by one or more FTDI
 GPIO pins via a range of possible buffer connections. The masks are FTDI GPIO
 register bitmasks to tell the driver the connection and type of the output
@@ -2580,7 +2591,9 @@ buffer driving the respective signal. @var{data_mask} is the bitmask for the
 pin(s) connected to the data input of the output buffer. @option{-ndata} is
 used with inverting data inputs and @option{-data} with non-inverting inputs.
 The @option{-oe} (or @option{-noe}) option tells where the output-enable (or
-not-output-enable) input to the output buffer is connected.
+not-output-enable) input to the output buffer is connected. The options
+@option{-input} and @option{-ninput} specify the bitmask for pins to be read
+with the method @command{ftdi_get_signal}.
 
 Both @var{data_mask} and @var{oe_mask} need not be specified. For example, a
 simple open-collector transistor driver would be specified with @option{-oe}
@@ -2610,8 +2623,26 @@ Set a previously defined signal to the specified level.
 @end itemize
 @end deffn
 
+@deffn {Command} {ftdi_get_signal} name
+Get the value of a previously defined signal.
+@end deffn
+
+@deffn {Command} {ftdi_tdo_sample_edge} @option{rising}|@option{falling}
+Configure TCK edge at which the adapter samples the value of the TDO signal
+
+Due to signal propagation delays, sampling TDO on rising TCK can become quite
+peculiar at high JTAG clock speeds. However, FTDI chips offer a possiblity to sample
+TDO on falling edge of TCK. With some board/adapter configurations, this may increase
+stability at higher JTAG clocks.
+@itemize @minus
+@item @option{rising}, sample TDO on rising edge of TCK - this is the default
+@item @option{falling}, sample TDO on falling edge of TCK
+@end itemize
+@end deffn
+
 For example adapter definitions, see the configuration files shipped in the
 @file{interface/ftdi} directory.
+
 @end deffn
 
 @deffn {Interface Driver} {remote_bitbang}
@@ -4035,6 +4066,8 @@ compact Thumb2 instruction set.
 not a CPU type. It is based on the ARMv5 architecture.
 @item @code{openrisc} -- this is an OpenRISC 1000 core.
 The current implementation supports three JTAG TAP cores:
+@item @code{ls1_sap} -- this is the SAP on NXP LS102x CPUs,
+allowing access to physical memory addresses independently of CPU cores.
 @itemize @minus
 @item @code{OpenCores TAP} (See: @url{http://opencores.org/project,jtag})
 @item @code{Altera Virtual JTAG TAP} (See: @url{http://www.altera.com/literature/ug/ug_virtualjtag.pdf})
@@ -4713,8 +4746,10 @@ and display that status.
 The @var{num} parameter is a value shown by @command{flash banks}.
 @end deffn
 
-@deffn Command {flash info} num
-Print info about flash bank @var{num}
+@deffn Command {flash info} num [sectors]
+Print info about flash bank @var{num}, a list of protection blocks
+and their status. Use @option{sectors} to show a list of sectors instead.
+
 The @var{num} parameter is a value shown by @command{flash banks}.
 This command will first query the hardware, it does not print cached
 and possibly stale information.
@@ -4792,6 +4827,9 @@ The CFI driver can accept the following optional parameters, in any order:
 @item @var{jedec_probe} ... is used to detect certain non-CFI flash ROMs,
 like AM29LV010 and similar types.
 @item @var{x16_as_x8} ... when a 16-bit flash is hooked up to an 8-bit bus.
+@item @var{bus_swap} ... when data bytes in a 16-bit flash needs to be swapped.
+@item @var{data_swap} ... when data bytes in a 16-bit flash needs to be
+swapped when writing data values (ie. not CFI commands).
 @end itemize
 
 To configure two adjacent banks of 16 MBytes each, both sixteen bits (two bytes)
@@ -4933,6 +4971,52 @@ since all devices in this family have the same memory layout.
 @example
 flash bank $_FLASHNAME aduc702x 0 0 0 0 $_TARGETNAME
 @end example
+@end deffn
+
+@deffn {Flash Driver} ambiqmicro
+@cindex ambiqmicro
+@cindex apollo
+All members of the Apollo microcontroller family from
+Ambiq Micro include internal flash and use ARM's Cortex-M4 core.
+The host connects over USB to an FTDI interface that communicates
+with the target using SWD.
+
+The @var{ambiqmicro} driver reads the Chip Information Register detect
+the device class of the MCU.
+The Flash and Sram sizes directly follow device class, and are used
+to set up the flash banks.
+If this fails, the driver will use default values set to the minimum
+sizes of an Apollo chip.
+
+All Apollo chips have two flash banks of the same size.
+In all cases the first flash bank starts at location 0,
+and the second bank starts after the first.
+
+@example
+# Flash bank 0
+flash bank $_FLASHNAME ambiqmicro 0 0x00040000 0 0 $_TARGETNAME
+# Flash bank 1 - same size as bank0, starts after bank 0.
+flash bank $_FLASHNAME ambiqmicro 0x00040000 0x00040000 0 0 $_TARGETNAME
+@end example
+
+Flash is programmed using custom entry points into the bootloader.
+This is the only way to program the flash as no flash control registers
+are available to the user.
+
+The @var{ambiqmicro} driver adds some additional commands:
+
+@deffn Command {ambiqmicro mass_erase} <bank>
+Erase entire bank.
+@end deffn
+@deffn Command {ambiqmicro page_erase} <bank> <first> <last>
+Erase device pages.
+@end deffn
+@deffn Command {ambiqmicro program_otp} <bank> <offset> <count>
+Program OTP is a one time operation to create write protected flash.
+The user writes sectors to sram starting at 0x10000010.
+Program OTP will write these sectors from sram to flash, and write protect
+the flash.
+@end deffn
 @end deffn
 
 @anchor{at91samd}
@@ -5144,19 +5228,27 @@ The AVR 8-bit microcontrollers from Atmel integrate flash memory.
 
 @deffn {Flash Driver} efm32
 All members of the EFM32 microcontroller family from Energy Micro include
-internal flash and use ARM Cortex M3 cores. The driver automatically recognizes
+internal flash and use ARM Cortex-M3 cores. The driver automatically recognizes
 a number of these chips using the chip identification register, and
 autoconfigures itself.
 @example
 flash bank $_FLASHNAME efm32 0 0 0 0 $_TARGETNAME
 @end example
+A special feature of efm32 controllers is that it is possible to completely disable the
+debug interface by writing the correct values to the 'Debug Lock Word'. OpenOCD supports
+this via the following command:
+@example
+efm32 debuglock num
+@end example
+The @var{num} parameter is a value shown by @command{flash banks}.
+Note that in order for this command to take effect, the target needs to be reset.
 @emph{The current implementation is incomplete. Unprotecting flash pages is not
 supported.}
 @end deffn
 
 @deffn {Flash Driver} fm3
 All members of the FM3 microcontroller family from Fujitsu
-include internal flash and use ARM Cortex M3 cores.
+include internal flash and use ARM Cortex-M3 cores.
 The @var{fm3} driver uses the @var{target} parameter to select the
 correct bank config, it can currently be one of the following:
 @code{mb9bfxx1.cpu}, @code{mb9bfxx2.cpu}, @code{mb9bfxx3.cpu},
@@ -5165,6 +5257,136 @@ correct bank config, it can currently be one of the following:
 @example
 flash bank $_FLASHNAME fm3 0 0 0 0 $_TARGETNAME
 @end example
+@end deffn
+
+@deffn {Flash Driver} fm4
+All members of the FM4 microcontroller family from Spansion (formerly Fujitsu)
+include internal flash and use ARM Cortex-M4 cores.
+The @var{fm4} driver uses a @var{family} parameter to select the
+correct bank config, it can currently be one of the following:
+@code{MB9BFx64}, @code{MB9BFx65}, @code{MB9BFx66}, @code{MB9BFx67}, @code{MB9BFx68},
+@code{S6E2Cx8}, @code{S6E2Cx9}, @code{S6E2CxA} or @code{S6E2Dx},
+with @code{x} treated as wildcard and otherwise case (and any trailing
+characters) ignored.
+
+@example
+flash bank $@{_FLASHNAME@}0 fm4 0x00000000 0 0 0 $_TARGETNAME S6E2CCAJ0A
+flash bank $@{_FLASHNAME@}1 fm4 0x00100000 0 0 0 $_TARGETNAME S6E2CCAJ0A
+@end example
+@emph{The current implementation is incomplete. Protection is not supported,
+nor is Chip Erase (only Sector Erase is implemented).}
+@end deffn
+
+@deffn {Flash Driver} kinetis
+@cindex kinetis
+Kx and KLx members of the Kinetis microcontroller family from Freescale include
+internal flash and use ARM Cortex-M0+ or M4 cores. The driver automatically
+recognizes flash size and a number of flash banks (1-4) using the chip
+identification register, and autoconfigures itself.
+
+@example
+flash bank $_FLASHNAME kinetis 0 0 0 0 $_TARGETNAME
+@end example
+
+@deffn Command {kinetis fcf_source} [protection|write]
+Select what source is used when writing to a Flash Configuration Field.
+@option{protection} mode builds FCF content from protection bits previously
+set by 'flash protect' command.
+This mode is default. MCU is protected from unwanted locking by immediate
+writing FCF after erase of relevant sector.
+@option{write} mode enables direct write to FCF.
+Protection cannot be set by 'flash protect' command. FCF is written along
+with the rest of a flash image.
+@emph{BEWARE: Incorrect flash configuration may permanently lock the device!}
+@end deffn
+
+@deffn Command {kinetis fopt} [num]
+Set value to write to FOPT byte of Flash Configuration Field.
+Used in kinetis 'fcf_source protection' mode only.
+@end deffn
+
+@deffn Command {kinetis mdm check_security}
+Checks status of device security lock. Used internally in examine-end event.
+@end deffn
+
+@deffn Command {kinetis mdm halt}
+Issues a halt via the MDM-AP. This command can be used to break a watchdog reset
+loop when connecting to an unsecured target.
+@end deffn
+
+@deffn Command {kinetis mdm mass_erase}
+Issues a complete flash erase via the MDM-AP. This can be used to erase a chip
+back to its factory state, removing security. It does not require the processor
+to be halted, however the target will remain in a halted state after this
+command completes.
+@end deffn
+
+@deffn Command {kinetis nvm_partition}
+For FlexNVM devices only (KxxDX and KxxFX).
+Command shows or sets data flash or EEPROM backup size in kilobytes,
+sets two EEPROM blocks sizes in bytes and enables/disables loading
+of EEPROM contents to FlexRAM during reset.
+
+For details see device reference manual, Flash Memory Module,
+Program Partition command.
+
+Setting is possible only once after mass_erase.
+Reset the device after partition setting.
+
+Show partition size:
+@example
+kinetis nvm_partition info
+@end example
+
+Set 32 KB data flash, rest of FlexNVM is EEPROM backup. EEPROM has two blocks
+of 512 and 1536 bytes and its contents is loaded to FlexRAM during reset:
+@example
+kinetis nvm_partition dataflash 32 512 1536 on
+@end example
+
+Set 16 KB EEPROM backup, rest of FlexNVM is a data flash. EEPROM has two blocks
+of 1024 bytes and its contents is not loaded to FlexRAM during reset:
+@example
+kinetis nvm_partition eebkp 16 1024 1024 off
+@end example
+@end deffn
+
+@deffn Command {kinetis mdm reset}
+Issues a reset via the MDM-AP. This causes the MCU to output a low pulse on the
+RESET pin, which can be used to reset other hardware on board.
+@end deffn
+
+@deffn Command {kinetis disable_wdog}
+For Kx devices only (KLx has different COP watchdog, it is not supported).
+Command disables watchdog timer.
+@end deffn
+@end deffn
+
+@deffn {Flash Driver} kinetis_ke
+@cindex kinetis_ke
+KE members of the Kinetis microcontroller family from Freescale include
+internal flash and use ARM Cortex-M0+. The driver automatically recognizes
+the KE family and sub-family using the chip identification register, and
+autoconfigures itself.
+
+@example
+flash bank $_FLASHNAME kinetis_ke 0 0 0 0 $_TARGETNAME
+@end example
+
+@deffn Command {kinetis_ke mdm check_security}
+Checks status of device security lock. Used internally in examine-end event.
+@end deffn
+
+@deffn Command {kinetis_ke mdm mass_erase}
+Issues a complete Flash erase via the MDM-AP.
+This can be used to erase a chip back to its factory state.
+Command removes security lock from a device (use of SRST highly recommended).
+It does not require the processor to be halted.
+@end deffn
+
+@deffn Command {kinetis_ke disable_wdog}
+Command disables watchdog timer.
+@end deffn
 @end deffn
 
 @deffn {Flash Driver} lpc2000
@@ -5504,7 +5726,7 @@ This will remove any Code Protection.
 
 @deffn {Flash Driver} psoc4
 All members of the PSoC 41xx/42xx microcontroller family from Cypress
-include internal flash and use ARM Cortex M0 cores.
+include internal flash and use ARM Cortex-M0 cores.
 The driver automatically recognizes a number of these chips using
 the chip identification register, and autoconfigures itself.
 
@@ -5538,7 +5760,7 @@ The @var{num} parameter is a value shown by @command{flash banks}.
 
 @deffn {Flash Driver} sim3x
 All members of the SiM3 microcontroller family from Silicon Laboratories
-include internal flash and use ARM Cortex M3 cores. It supports both JTAG
+include internal flash and use ARM Cortex-M3 cores. It supports both JTAG
 and SWD interface.
 The @var{sim3x} driver tries to probe the device to auto detect the MCU.
 If this failes, it will use the @var{size} parameter as the size of flash bank.
@@ -5641,8 +5863,8 @@ The @var{num} parameter is a value shown by @command{flash banks}.
 @end deffn
 
 @deffn {Flash Driver} stm32f2x
-All members of the STM32F2 and STM32F4 microcontroller families from ST Microelectronics
-include internal flash and use ARM Cortex-M3/M4 cores.
+All members of the STM32F2, STM32F4 and STM32F7 microcontroller families from ST Microelectronics
+include internal flash and use ARM Cortex-M3/M4/M7 cores.
 The driver automatically recognizes a number of these chips using
 the chip identification register, and autoconfigures itself.
 
@@ -5664,6 +5886,19 @@ The @var{num} parameter is a value shown by @command{flash banks}.
 @deffn Command {stm32f2x unlock} num
 Unlocks the entire stm32 device.
 The @var{num} parameter is a value shown by @command{flash banks}.
+@end deffn
+
+@deffn Command {stm32f2x options_read} num
+Reads and displays user options and (where implemented) boot_addr0 and boot_addr1.
+The @var{num} parameter is a value shown by @command{flash banks}.
+@end deffn
+
+@deffn Command {stm32f2x options_write} num user_options boot_addr0 boot_addr1
+Writes user options and (where implemented) boot_addr0 and boot_addr1 in raw format.
+Warning: The meaning of the various bits depends on the device, always check datasheet!
+The @var{num} parameter is a value shown by @command{flash banks}, user_options a
+12 bit value, consisting of bits 31-28 and 7-0 of FLASH_OPTCR, boot_addr0 and boot_addr1
+two halfwords (of FLASH_OPTCR1).
 @end deffn
 @end deffn
 
@@ -5849,6 +6084,11 @@ Reports the clock speed, which is used to calculate timings.
 Disables (@var{1}) or enables (@var{0}) use of the PLL to speed up
 the flash clock.
 @end deffn
+@end deffn
+
+@deffn {Flash Driver} xmc1xxx
+All members of the XMC1xxx microcontroller family from Infineon.
+This driver does not require the chip and bus width to be specified.
 @end deffn
 
 @deffn {Flash Driver} xmc4xxx
@@ -6538,6 +6778,11 @@ the initial log output channel is stderr.
 
 @deffn Command add_script_search_dir [directory]
 Add @var{directory} to the file/script search path.
+@end deffn
+
+@deffn Command bindto [name]
+Specify address by name on which to listen for incoming TCP/IP connections.
+By default, OpenOCD will listen on all available interfaces.
 @end deffn
 
 @anchor{targetstatehandling}
@@ -7638,6 +7883,12 @@ They are available in addition to other core-specific commands that may be avail
 @deffn Command {dap apid} [num]
 Displays ID register from AP @var{num},
 defaulting to the currently selected AP.
+@end deffn
+
+@deffn Command {dap apreg} ap_num reg [value]
+Displays content of a register @var{reg} from AP @var{ap_num}
+or set a new value @var{value}.
+@var{reg} is byte address of a word register, 0, 4, 8 ... 0xfc.
 @end deffn
 
 @deffn Command {dap apsel} [num]

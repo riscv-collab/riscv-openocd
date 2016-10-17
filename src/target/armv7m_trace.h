@@ -10,10 +10,13 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARMV7M_TRACE_H
-#define ARMV7M_TRACE_H
+#ifndef OPENOCD_TARGET_ARMV7M_TRACE_H
+#define OPENOCD_TARGET_ARMV7M_TRACE_H
 
 #include <target/target.h>
 #include <command.h>
@@ -85,4 +88,4 @@ int armv7m_trace_tpiu_config(struct target *target);
  */
 int armv7m_trace_itm_config(struct target *target);
 
-#endif
+#endif /* OPENOCD_TARGET_ARMV7M_TRACE_H */

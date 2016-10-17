@@ -16,9 +16,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -360,16 +358,16 @@ COMMAND_HANDLER(handle_nand_dump_command)
 		}
 
 		if (NULL != s.page)
-			fileio_write(&s.fileio, s.page_size, s.page, &size_written);
+			fileio_write(s.fileio, s.page_size, s.page, &size_written);
 
 		if (NULL != s.oob)
-			fileio_write(&s.fileio, s.oob_size, s.oob, &size_written);
+			fileio_write(s.fileio, s.oob_size, s.oob, &size_written);
 
 		s.size -= nand->page_size;
 		s.address += nand->page_size;
 	}
 
-	retval = fileio_size(&s.fileio, &filesize);
+	retval = fileio_size(s.fileio, &filesize);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -547,7 +545,7 @@ static COMMAND_HELPER(create_nand_device, const char *bank_name,
 	c->bus_width = 0;
 	c->address_cycles = 0;
 	c->page_size = 0;
-	c->use_raw = 0;
+	c->use_raw = false;
 	c->next = NULL;
 
 	retval = CALL_COMMAND_HANDLER(controller->nand_device_command, c);

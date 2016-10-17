@@ -19,13 +19,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef TARGET_REQUEST_H
-#define TARGET_REQUEST_H
+#ifndef OPENOCD_TARGET_TARGET_REQUEST_H
+#define OPENOCD_TARGET_TARGET_REQUEST_H
 
 struct target;
 struct command_context;
@@ -54,4 +52,4 @@ int target_request_register_commands(struct command_context *cmd_ctx);
  */
 bool target_got_message(void);
 
-#endif /* TARGET_REQUEST_H */
+#endif /* OPENOCD_TARGET_TARGET_REQUEST_H */

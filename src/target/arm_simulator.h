@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARM_SIMULATOR_H
-#define ARM_SIMULATOR_H
+#ifndef OPENOCD_TARGET_ARM_SIMULATOR_H
+#define OPENOCD_TARGET_ARM_SIMULATOR_H
 
 struct target;
 
@@ -38,4 +36,4 @@ struct arm_sim_interface {
 /* armv4_5 version */
 int arm_simulate_step(struct target *target, uint32_t *dry_run_pc);
 
-#endif /* ARM_SIMULATOR_H */
+#endif /* OPENOCD_TARGET_ARM_SIMULATOR_H */

@@ -25,13 +25,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef TARGET_H
-#define TARGET_H
+#ifndef OPENOCD_TARGET_TARGET_H
+#define OPENOCD_TARGET_TARGET_H
 
 #include <helper/list.h>
 
@@ -156,7 +154,7 @@ struct target {
 										 * upon first allocation from virtual/physical address. */
 	bool working_area_virt_spec;		/* virtual address specified? */
 	uint32_t working_area_virt;			/* virtual address */
-	bool working_area_phys_spec;		/* virtual address specified? */
+	bool working_area_phys_spec;		/* physical address specified? */
 	uint32_t working_area_phys;			/* physical address */
 	uint32_t working_area_size;			/* size in bytes */
 	uint32_t backup_working_area;		/* whether the content of the working area has to be preserved */
@@ -177,7 +175,7 @@ struct target {
 	int display;						/* display async info in telnet session. Do not display
 										 * lots of halted/resumed info when stepping in debugger. */
 	bool halt_issued;					/* did we transition to halted state? */
-	long long halt_issued_time;			/* Note time when halt was issued */
+	int64_t halt_issued_time;			/* Note time when halt was issued */
 
 	bool dbgbase_set;					/* By default the debug base is not set */
 	uint32_t dbgbase;					/* Really a Cortex-A specific option, but there is no
@@ -685,4 +683,4 @@ void target_handle_event(struct target *t, enum target_event e);
 
 extern bool get_target_reset_nag(void);
 
-#endif /* TARGET_H */
+#endif /* OPENOCD_TARGET_TARGET_H */

@@ -19,13 +19,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef CORTEX_M_H
-#define CORTEX_M_H
+#ifndef OPENOCD_TARGET_CORTEX_M_H
+#define OPENOCD_TARGET_CORTEX_M_H
 
 #include "armv7m.h"
 
@@ -213,4 +211,4 @@ void cortex_m_enable_watchpoints(struct target *target);
 void cortex_m_dwt_setup(struct cortex_m_common *cm, struct target *target);
 void cortex_m_deinit_target(struct target *target);
 
-#endif /* CORTEX_M_H */
+#endif /* OPENOCD_TARGET_CORTEX_M_H */

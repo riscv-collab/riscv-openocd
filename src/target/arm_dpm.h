@@ -12,13 +12,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the
- * Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __ARM_DPM_H
-#define __ARM_DPM_H
+#ifndef OPENOCD_TARGET_ARM_DPM_H
+#define OPENOCD_TARGET_ARM_DPM_H
 
 /**
  * @file
@@ -200,4 +198,4 @@ void arm_dpm_report_wfar(struct arm_dpm *, uint32_t wfar);
 
 void arm_dpm_report_dscr(struct arm_dpm *dpm, uint32_t dcsr);
 
-#endif /* __ARM_DPM_H */
+#endif /* OPENOCD_TARGET_ARM_DPM_H */

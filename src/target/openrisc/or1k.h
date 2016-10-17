@@ -18,10 +18,13 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef OR1K_H
-#define OR1K_H
+#ifndef OPENOCD_TARGET_OPENRISC_OR1K_H
+#define OPENOCD_TARGET_OPENRISC_OR1K_H
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -152,4 +155,4 @@ enum or1k_debug_reg_nums {
  */
 #define OR1K_ICBIR_CPU_REG_ADD ((4 << 11) + 2)             /* IC Block Invalidate Register 0x2002 */
 
-#endif
+#endif /* OPENOCD_TARGET_OPENRISC_OR1K_H */

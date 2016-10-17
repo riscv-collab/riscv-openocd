@@ -25,9 +25,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -146,11 +144,11 @@ static int efm32x_read_info(struct flash_bank *bank,
 		return ret;
 
 	if (((cpuid >> 4) & 0xfff) == 0xc23) {
-		/* Cortex M3 device */
+		/* Cortex-M3 device */
 	} else if (((cpuid >> 4) & 0xfff) == 0xc24) {
-		/* Cortex M4 device(WONDER GECKO) */
+		/* Cortex-M4 device (WONDER GECKO) */
 	} else if (((cpuid >> 4) & 0xfff) == 0xc60) {
-		/* Cortex M0plus device */
+		/* Cortex-M0+ device */
 	} else {
 		LOG_ERROR("Target is not Cortex-Mx Device");
 		return ERROR_FAIL;
@@ -668,7 +666,7 @@ static int efm32x_write_block(struct flash_bank *bank, const uint8_t *buf,
 			&write_algorithm) != ERROR_OK) {
 		LOG_WARNING("no working area available, can't do block memory writes");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	};
+	}
 
 	ret = target_write_buffer(target, write_algorithm->address,
 			sizeof(efm32x_flash_write_code), efm32x_flash_write_code);
@@ -687,7 +685,7 @@ static int efm32x_write_block(struct flash_bank *bank, const uint8_t *buf,
 			LOG_WARNING("no large enough working area available, can't do block memory writes");
 			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 		}
-	};
+	}
 
 	init_reg_param(&reg_params[0], "r0", 32, PARAM_IN_OUT);	/* flash base (in), status (out) */
 	init_reg_param(&reg_params[1], "r1", 32, PARAM_OUT);	/* count (word-32bit) */
@@ -997,7 +995,50 @@ static int get_efm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 	return efm32x_decode_info(&info, buf, buf_size);
 }
 
+COMMAND_HANDLER(efm32x_handle_debuglock_command)
+{
+	struct target *target = NULL;
+
+	if (CMD_ARGC < 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	struct flash_bank *bank;
+	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
+	if (ERROR_OK != retval)
+		return retval;
+
+	struct efm32x_flash_bank *efm32x_info = bank->driver_priv;
+
+	target = bank->target;
+
+	if (target->state != TARGET_HALTED) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	uint32_t *ptr;
+	ptr = efm32x_info->lb_page + 127;
+	*ptr = 0;
+
+	retval = efm32x_write_lock_data(bank);
+	if (ERROR_OK != retval) {
+		LOG_ERROR("Failed to write LB page");
+		return retval;
+	}
+
+	command_print(CMD_CTX, "efm32x debug interface locked, reset the device to apply");
+
+	return ERROR_OK;
+}
+
 static const struct command_registration efm32x_exec_command_handlers[] = {
+	{
+		.name = "debuglock",
+		.handler = efm32x_handle_debuglock_command,
+		.mode = COMMAND_EXEC,
+		.usage = "bank_id",
+		.help = "Lock the debug interface of the device.",
+	},
 	COMMAND_REGISTRATION_DONE
 };
 

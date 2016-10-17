@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -73,8 +71,10 @@
 #define SAMD_FAMILY_C		0x02
 #define SAMD_SERIES_20		0x00
 #define SAMD_SERIES_21		0x01
+#define SAMD_SERIES_22		0x02
 #define SAMD_SERIES_10		0x02
 #define SAMD_SERIES_11		0x03
+#define SAMD_SERIES_09		0x04
 
 /* Device ID macros */
 #define SAMD_GET_PROCESSOR(id) (id >> 28)
@@ -87,6 +87,13 @@ struct samd_part {
 	const char *name;
 	uint32_t flash_kb;
 	uint32_t ram_kb;
+};
+
+/* Known SAMD09 parts. DID reset values missing in RM, see
+ * https://github.com/avrxml/asf/blob/master/sam0/utils/cmsis/samd09/include/ */
+static const struct samd_part samd09_parts[] = {
+	{ 0x0, "SAMD09D14A", 16, 4 },
+	{ 0x7, "SAMD09C13A", 8, 4 },
 };
 
 /* Known SAMD10 parts */
@@ -151,6 +158,13 @@ static const struct samd_part samd21_parts[] = {
 	{ 0xC, "SAMD21E16A", 64, 8 },
 	{ 0xD, "SAMD21E15A", 32, 4 },
 	{ 0xE, "SAMD21E14A", 16, 2 },
+    /* Below are B Variants (Table 3-7 from rev I of datasheet) */
+	{ 0x20, "SAMD21J16B", 64, 8 },
+	{ 0x21, "SAMD21J15B", 32, 4 },
+	{ 0x23, "SAMD21G16B", 64, 8 },
+	{ 0x24, "SAMD21G15B", 32, 4 },
+	{ 0x26, "SAMD21E16B", 64, 8 },
+	{ 0x27, "SAMD21E15B", 32, 4 },
 };
 
 /* Known SAMR21 parts. */
@@ -185,6 +199,19 @@ static const struct samd_part saml21_parts[] = {
 	{ 0x1A, "SAML21E17B", 128, 16 },
 	{ 0x1B, "SAML21E16B", 64, 8 },
 	{ 0x1C, "SAML21E15B", 32, 4 },
+};
+
+/* Known SAML22 parts. */
+static const struct samd_part saml22_parts[] = {
+	{ 0x00, "SAML22N18A", 256, 32 },
+	{ 0x01, "SAML22N17A", 128, 16 },
+	{ 0x02, "SAML22N16A", 64, 8 },
+	{ 0x05, "SAML22J18A", 256, 32 },
+	{ 0x06, "SAML22J17A", 128, 16 },
+	{ 0x07, "SAML22J16A", 64, 8 },
+	{ 0x0A, "SAML22G18A", 256, 32 },
+	{ 0x0B, "SAML22G17A", 128, 16 },
+	{ 0x0C, "SAML22G16A", 64, 8 },
 };
 
 /* Known SAMC20 parts. */
@@ -238,12 +265,16 @@ static const struct samd_family samd_families[] = {
 		samd21_parts, ARRAY_SIZE(samd21_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_21,
 		samr21_parts, ARRAY_SIZE(samr21_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_09,
+		samd09_parts, ARRAY_SIZE(samd09_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_10,
 		samd10_parts, ARRAY_SIZE(samd10_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_11,
 		samd11_parts, ARRAY_SIZE(samd11_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_L, SAMD_SERIES_21,
 		saml21_parts, ARRAY_SIZE(saml21_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_L, SAMD_SERIES_22,
+		saml22_parts, ARRAY_SIZE(saml22_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_C, SAMD_SERIES_20,
 		samc20_parts, ARRAY_SIZE(samc20_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_C, SAMD_SERIES_21,
@@ -342,7 +373,7 @@ static int samd_probe(struct flash_bank *bank)
 
 	part = samd_find_part(id);
 	if (part == NULL) {
-		LOG_ERROR("Couldn't find part correspoding to DID %08" PRIx32, id);
+		LOG_ERROR("Couldn't find part corresponding to DID %08" PRIx32, id);
 		return ERROR_FAIL;
 	}
 
@@ -601,7 +632,7 @@ static int samd_protect(struct flash_bank *bank, int set, int first, int last)
 
 	/* We've now applied our changes, however they will be undone by the next
 	 * reset unless we also apply them to the LOCK bits in the User Page.  The
-	 * LOCK bits start at bit 48, correspoding to Sector 0 and end with bit 63,
+	 * LOCK bits start at bit 48, corresponding to Sector 0 and end with bit 63,
 	 * corresponding to Sector 15.  A '1' means unlocked and a '0' means
 	 * locked.  See Table 9-3 in the SAMD20 datasheet for more details. */
 

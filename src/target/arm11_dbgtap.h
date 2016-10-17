@@ -15,13 +15,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARM11_DBGTAP_H
-#define ARM11_DBGTAP_H
+#ifndef OPENOCD_TARGET_ARM11_DBGTAP_H
+#define OPENOCD_TARGET_ARM11_DBGTAP_H
 
 #include "arm11.h"
 
@@ -82,4 +80,4 @@ int arm11_read_memory_word(struct arm11_common *arm11,
 int arm11_dpm_init(struct arm11_common *arm11, uint32_t didr);
 int arm11_bpwp_flush(struct arm11_common *arm11);
 
-#endif	/* ARM11_DBGTAP_H */
+#endif /* OPENOCD_TARGET_ARM11_DBGTAP_H */

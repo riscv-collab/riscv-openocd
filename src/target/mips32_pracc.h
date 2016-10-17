@@ -18,13 +18,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef MIPS32_PRACC_H
-#define MIPS32_PRACC_H
+#ifndef OPENOCD_TARGET_MIPS32_PRACC_H
+#define OPENOCD_TARGET_MIPS32_PRACC_H
 
 #include <target/mips32.h>
 #include <target/mips_ejtag.h>
@@ -101,4 +99,4 @@ int mips32_cp0_read(struct mips_ejtag *ejtag_info,
 int mips32_cp0_write(struct mips_ejtag *ejtag_info,
 		uint32_t val, uint32_t cp0_reg, uint32_t cp0_sel);
 
-#endif
+#endif /* OPENOCD_TARGET_MIPS32_PRACC_H */

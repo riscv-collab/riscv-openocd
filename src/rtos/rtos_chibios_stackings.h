@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef INCLUDED_RTOS_CHIBIOS_STACKINGS_H_
-#define INCLUDED_RTOS_CHIBIOS_STACKINGS_H_
+#ifndef OPENOCD_RTOS_RTOS_CHIBIOS_STACKINGS_H
+#define OPENOCD_RTOS_RTOS_CHIBIOS_STACKINGS_H
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -30,4 +28,4 @@
 extern const struct rtos_register_stacking rtos_chibios_arm_v7m_stacking;
 extern const struct rtos_register_stacking rtos_chibios_arm_v7m_stacking_w_fpu;
 
-#endif	/* ifndef INCLUDED_RTOS_CHIBIOS_STACKINGS_H_ */
+#endif /* OPENOCD_RTOS_RTOS_CHIBIOS_STACKINGS_H */

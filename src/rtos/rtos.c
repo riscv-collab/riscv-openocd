@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -104,7 +102,7 @@ static int os_alloc_create(struct target *target, struct rtos_type *ostype)
 int rtos_create(Jim_GetOptInfo *goi, struct target *target)
 {
 	int x;
-	char *cp;
+	const char *cp;
 	struct Jim_Obj *res;
 
 	if (!goi->isconfigure && goi->argc != 0) {
@@ -215,7 +213,7 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 		goto done;
 
 	/* Decode any symbol name in the packet*/
-	int len = unhexify(cur_sym, strchr(packet + 8, ':') + 1, strlen(strchr(packet + 8, ':') + 1));
+	size_t len = unhexify((uint8_t *)cur_sym, strchr(packet + 8, ':') + 1, strlen(strchr(packet + 8, ':') + 1));
 	cur_sym[len] = 0;
 
 	if ((strcmp(packet, "qSymbol::") != 0) &&               /* GDB is not offering symbol lookup for the first time */
@@ -298,28 +296,20 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 			struct thread_detail *detail = &target->rtos->thread_details[found];
 
 			int str_size = 0;
-			if (detail->display_str != NULL)
-				str_size += strlen(detail->display_str);
 			if (detail->thread_name_str != NULL)
 				str_size += strlen(detail->thread_name_str);
 			if (detail->extra_info_str != NULL)
 				str_size += strlen(detail->extra_info_str);
 
-			char *tmp_str = calloc(str_size + 7, sizeof(char));
+			char *tmp_str = calloc(str_size + 4, sizeof(char));
 			char *tmp_str_ptr = tmp_str;
 
-			if (detail->display_str != NULL)
-				tmp_str_ptr += sprintf(tmp_str_ptr, "%s", detail->display_str);
-			if (detail->thread_name_str != NULL) {
-				if (tmp_str_ptr != tmp_str)
-					tmp_str_ptr += sprintf(tmp_str_ptr, " : ");
+			if (detail->thread_name_str != NULL)
 				tmp_str_ptr += sprintf(tmp_str_ptr, "%s", detail->thread_name_str);
-			}
 			if (detail->extra_info_str != NULL) {
 				if (tmp_str_ptr != tmp_str)
 					tmp_str_ptr += sprintf(tmp_str_ptr, " : ");
-				tmp_str_ptr +=
-					sprintf(tmp_str_ptr, " : %s", detail->extra_info_str);
+				tmp_str_ptr += sprintf(tmp_str_ptr, "%s", detail->extra_info_str);
 			}
 
 			assert(strlen(tmp_str) ==
@@ -547,7 +537,6 @@ void rtos_free_threadlist(struct rtos *rtos)
 
 		for (j = 0; j < rtos->thread_count; j++) {
 			struct thread_detail *current_thread = &rtos->thread_details[j];
-			free(current_thread->display_str);
 			free(current_thread->thread_name_str);
 			free(current_thread->extra_info_str);
 		}

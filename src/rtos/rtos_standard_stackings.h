@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef INCLUDED_RTOS_STANDARD_STACKINGS_H_
-#define INCLUDED_RTOS_STANDARD_STACKINGS_H_
+#ifndef OPENOCD_RTOS_RTOS_STANDARD_STACKINGS_H
+#define OPENOCD_RTOS_RTOS_STANDARD_STACKINGS_H
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -28,6 +26,8 @@
 #include "rtos.h"
 
 extern const struct rtos_register_stacking rtos_standard_Cortex_M3_stacking;
+extern const struct rtos_register_stacking rtos_standard_Cortex_M4F_stacking;
+extern const struct rtos_register_stacking rtos_standard_Cortex_M4F_FPU_stacking;
 extern const struct rtos_register_stacking rtos_standard_Cortex_R4_stacking;
 extern const struct rtos_register_stacking rtos_standard_NDS32_N1068_stacking;
 int64_t rtos_generic_stack_align8(struct target *target,
@@ -37,4 +37,4 @@ int64_t rtos_Cortex_M_stack_align(struct target *target,
 	const uint8_t *stack_data, const struct rtos_register_stacking *stacking,
 	int64_t stack_ptr, size_t xpsr_offset);
 
-#endif	/* ifndef INCLUDED_RTOS_STANDARD_STACKINGS_H_ */
+#endif /* OPENOCD_RTOS_RTOS_STANDARD_STACKINGS_H */

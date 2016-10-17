@@ -24,9 +24,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 /**
@@ -75,7 +73,9 @@
 #include "jtag/interface.h"
 #include "arm.h"
 #include "arm_adi_v5.h"
+#include <helper/jep106.h>
 #include <helper/time_support.h>
+#include <helper/list.h>
 
 /* ARM ADI Specification requires at least 10 bits used for TAR autoincrement  */
 
@@ -586,6 +586,7 @@ struct adiv5_dap *dap_init(void)
 		/* Number of bits for tar autoincrement, impl. dep. at least 10 */
 		dap->ap[i].tar_autoincr_block = (1<<10);
 	}
+	INIT_LIST_HEAD(&dap->cmd_journal);
 	return dap;
 }
 
@@ -737,10 +738,9 @@ static const char *class_description[16] = {
 	"Generic IP component", "PrimeCell or System component"
 };
 
-static bool is_dap_cid_ok(uint32_t cid3, uint32_t cid2, uint32_t cid1, uint32_t cid0)
+static bool is_dap_cid_ok(uint32_t cid)
 {
-	return cid3 == 0xb1 && cid2 == 0x05
-			&& ((cid1 & 0x0f) == 0) && cid0 == 0x0d;
+	return (cid & 0xffff0fff) == 0xb105000d;
 }
 
 /*
@@ -874,6 +874,61 @@ int dap_lookup_cs_component(struct adiv5_ap *ap,
 	return ERROR_OK;
 }
 
+static int dap_read_part_id(struct adiv5_ap *ap, uint32_t component_base, uint32_t *cid, uint64_t *pid)
+{
+	assert((component_base & 0xFFF) == 0);
+	assert(ap != NULL && cid != NULL && pid != NULL);
+
+	uint32_t cid0, cid1, cid2, cid3;
+	uint32_t pid0, pid1, pid2, pid3, pid4;
+	int retval;
+
+	/* IDs are in last 4K section */
+	retval = mem_ap_read_u32(ap, component_base + 0xFE0, &pid0);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFE4, &pid1);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFE8, &pid2);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFEC, &pid3);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFD0, &pid4);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFF0, &cid0);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFF4, &cid1);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFF8, &cid2);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFFC, &cid3);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = dap_run(ap->dap);
+	if (retval != ERROR_OK)
+		return retval;
+
+	*cid = (cid3 & 0xff) << 24
+			| (cid2 & 0xff) << 16
+			| (cid1 & 0xff) << 8
+			| (cid0 & 0xff);
+	*pid = (uint64_t)(pid4 & 0xff) << 32
+			| (pid3 & 0xff) << 24
+			| (pid2 & 0xff) << 16
+			| (pid1 & 0xff) << 8
+			| (pid0 & 0xff);
+
+	return ERROR_OK;
+}
+
 /* The designer identity code is encoded as:
  * bits 11:8 : JEP106 Bank (number of continuation codes), only valid when bit 7 is 1.
  * bit 7     : Set when bits 6:0 represent a JEP106 ID and cleared when bits 6:0 represent
@@ -905,62 +960,101 @@ static const struct {
 	const char *type;
 	const char *full;
 } dap_partnums[] = {
-	{ ARM_ID, 0x000, "Cortex-M3 SCS",    "(System Control Space)", },
-	{ ARM_ID, 0x001, "Cortex-M3 ITM",    "(Instrumentation Trace Module)", },
-	{ ARM_ID, 0x002, "Cortex-M3 DWT",    "(Data Watchpoint and Trace)", },
-	{ ARM_ID, 0x003, "Cortex-M3 FBP",    "(Flash Patch and Breakpoint)", },
-	{ ARM_ID, 0x008, "Cortex-M0 SCS",    "(System Control Space)", },
-	{ ARM_ID, 0x00a, "Cortex-M0 DWT",    "(Data Watchpoint and Trace)", },
-	{ ARM_ID, 0x00b, "Cortex-M0 BPU",    "(Breakpoint Unit)", },
-	{ ARM_ID, 0x00c, "Cortex-M4 SCS",    "(System Control Space)", },
-	{ ARM_ID, 0x00d, "CoreSight ETM11",  "(Embedded Trace)", },
-	{ ARM_ID, 0x490, "Cortex-A15 GIC",   "(Generic Interrupt Controller)", },
-	{ ARM_ID, 0x4c7, "Cortex-M7 PPB",    "(Private Peripheral Bus ROM Table)", },
-	{ ARM_ID, 0x906, "CoreSight CTI",    "(Cross Trigger)", },
-	{ ARM_ID, 0x907, "CoreSight ETB",    "(Trace Buffer)", },
-	{ ARM_ID, 0x908, "CoreSight CSTF",   "(Trace Funnel)", },
-	{ ARM_ID, 0x910, "CoreSight ETM9",   "(Embedded Trace)", },
-	{ ARM_ID, 0x912, "CoreSight TPIU",   "(Trace Port Interface Unit)", },
-	{ ARM_ID, 0x913, "CoreSight ITM",    "(Instrumentation Trace Macrocell)", },
-	{ ARM_ID, 0x914, "CoreSight SWO",    "(Single Wire Output)", },
-	{ ARM_ID, 0x917, "CoreSight HTM",    "(AHB Trace Macrocell)", },
-	{ ARM_ID, 0x920, "CoreSight ETM11",  "(Embedded Trace)", },
-	{ ARM_ID, 0x921, "Cortex-A8 ETM",    "(Embedded Trace)", },
-	{ ARM_ID, 0x922, "Cortex-A8 CTI",    "(Cross Trigger)", },
-	{ ARM_ID, 0x923, "Cortex-M3 TPIU",   "(Trace Port Interface Unit)", },
-	{ ARM_ID, 0x924, "Cortex-M3 ETM",    "(Embedded Trace)", },
-	{ ARM_ID, 0x925, "Cortex-M4 ETM",    "(Embedded Trace)", },
-	{ ARM_ID, 0x930, "Cortex-R4 ETM",    "(Embedded Trace)", },
-	{ ARM_ID, 0x941, "CoreSight TPIU-Lite", "(Trace Port Interface Unit)", },
-	{ ARM_ID, 0x950, "CoreSight Component", "(unidentified Cortex-A9 component)", },
-	{ ARM_ID, 0x955, "CoreSight Component", "(unidentified Cortex-A5 component)", },
-	{ ARM_ID, 0x95f, "Cortex-A15 PTM",   "(Program Trace Macrocell)", },
-	{ ARM_ID, 0x961, "CoreSight TMC",    "(Trace Memory Controller)", },
-	{ ARM_ID, 0x962, "CoreSight STM",    "(System Trace Macrocell)", },
-	{ ARM_ID, 0x9a0, "CoreSight PMU",    "(Performance Monitoring Unit)", },
-	{ ARM_ID, 0x9a1, "Cortex-M4 TPIU",   "(Trace Port Interface Unit)", },
-	{ ARM_ID, 0x9a5, "Cortex-A5 ETM",    "(Embedded Trace)", },
-	{ ARM_ID, 0x9a7, "Cortex-A7 PMU",    "(Performance Monitor Unit)", },
-	{ ARM_ID, 0x9af, "Cortex-A15 PMU",   "(Performance Monitor Unit)", },
-	{ ARM_ID, 0xc05, "Cortex-A5 Debug",  "(Debug Unit)", },
-	{ ARM_ID, 0xc07, "Cortex-A7 Debug",  "(Debug Unit)", },
-	{ ARM_ID, 0xc08, "Cortex-A8 Debug",  "(Debug Unit)", },
-	{ ARM_ID, 0xc09, "Cortex-A9 Debug",  "(Debug Unit)", },
-	{ ARM_ID, 0xc0f, "Cortex-A15 Debug", "(Debug Unit)", },
-	{ ARM_ID, 0xc14, "Cortex-R4 Debug",  "(Debug Unit)", },
-	{ 0x0E5,  0x000, "SHARC+/Blackfin+", "", },
+	{ ARM_ID, 0x000, "Cortex-M3 SCS",              "(System Control Space)", },
+	{ ARM_ID, 0x001, "Cortex-M3 ITM",              "(Instrumentation Trace Module)", },
+	{ ARM_ID, 0x002, "Cortex-M3 DWT",              "(Data Watchpoint and Trace)", },
+	{ ARM_ID, 0x003, "Cortex-M3 FPB",              "(Flash Patch and Breakpoint)", },
+	{ ARM_ID, 0x008, "Cortex-M0 SCS",              "(System Control Space)", },
+	{ ARM_ID, 0x00a, "Cortex-M0 DWT",              "(Data Watchpoint and Trace)", },
+	{ ARM_ID, 0x00b, "Cortex-M0 BPU",              "(Breakpoint Unit)", },
+	{ ARM_ID, 0x00c, "Cortex-M4 SCS",              "(System Control Space)", },
+	{ ARM_ID, 0x00d, "CoreSight ETM11",            "(Embedded Trace)", },
+	{ ARM_ID, 0x00e, "Cortex-M7 FPB",              "(Flash Patch and Breakpoint)", },
+	{ ARM_ID, 0x490, "Cortex-A15 GIC",             "(Generic Interrupt Controller)", },
+	{ ARM_ID, 0x4a1, "Cortex-A53 ROM",             "(v8 Memory Map ROM Table)", },
+	{ ARM_ID, 0x4a2, "Cortex-A57 ROM",             "(ROM Table)", },
+	{ ARM_ID, 0x4a3, "Cortex-A53 ROM",             "(v7 Memory Map ROM Table)", },
+	{ ARM_ID, 0x4a4, "Cortex-A72 ROM",             "(ROM Table)", },
+	{ ARM_ID, 0x4af, "Cortex-A15 ROM",             "(ROM Table)", },
+	{ ARM_ID, 0x4c0, "Cortex-M0+ ROM",             "(ROM Table)", },
+	{ ARM_ID, 0x4c3, "Cortex-M3 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x4c4, "Cortex-M4 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x4c7, "Cortex-M7 PPB ROM",          "(Private Peripheral Bus ROM Table)", },
+	{ ARM_ID, 0x4c8, "Cortex-M7 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x470, "Cortex-M1 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x471, "Cortex-M0 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x906, "CoreSight CTI",              "(Cross Trigger)", },
+	{ ARM_ID, 0x907, "CoreSight ETB",              "(Trace Buffer)", },
+	{ ARM_ID, 0x908, "CoreSight CSTF",             "(Trace Funnel)", },
+	{ ARM_ID, 0x909, "CoreSight ATBR",             "(Advanced Trace Bus Replicator)", },
+	{ ARM_ID, 0x910, "CoreSight ETM9",             "(Embedded Trace)", },
+	{ ARM_ID, 0x912, "CoreSight TPIU",             "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x913, "CoreSight ITM",              "(Instrumentation Trace Macrocell)", },
+	{ ARM_ID, 0x914, "CoreSight SWO",              "(Single Wire Output)", },
+	{ ARM_ID, 0x917, "CoreSight HTM",              "(AHB Trace Macrocell)", },
+	{ ARM_ID, 0x920, "CoreSight ETM11",            "(Embedded Trace)", },
+	{ ARM_ID, 0x921, "Cortex-A8 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x922, "Cortex-A8 CTI",              "(Cross Trigger)", },
+	{ ARM_ID, 0x923, "Cortex-M3 TPIU",             "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x924, "Cortex-M3 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x925, "Cortex-M4 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x930, "Cortex-R4 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x931, "Cortex-R5 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x932, "CoreSight MTB-M0+",          "(Micro Trace Buffer)", },
+	{ ARM_ID, 0x941, "CoreSight TPIU-Lite",        "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x950, "Cortex-A9 PTM",              "(Program Trace Macrocell)", },
+	{ ARM_ID, 0x955, "Cortex-A5 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x95a, "Cortex-A72 ETM",             "(Embedded Trace)", },
+	{ ARM_ID, 0x95b, "Cortex-A17 PTM",             "(Program Trace Macrocell)", },
+	{ ARM_ID, 0x95d, "Cortex-A53 ETM",             "(Embedded Trace)", },
+	{ ARM_ID, 0x95e, "Cortex-A57 ETM",             "(Embedded Trace)", },
+	{ ARM_ID, 0x95f, "Cortex-A15 PTM",             "(Program Trace Macrocell)", },
+	{ ARM_ID, 0x961, "CoreSight TMC",              "(Trace Memory Controller)", },
+	{ ARM_ID, 0x962, "CoreSight STM",              "(System Trace Macrocell)", },
+	{ ARM_ID, 0x975, "Cortex-M7 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x9a0, "CoreSight PMU",              "(Performance Monitoring Unit)", },
+	{ ARM_ID, 0x9a1, "Cortex-M4 TPIU",             "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x9a4, "CoreSight GPR",              "(Granular Power Requester)", },
+	{ ARM_ID, 0x9a5, "Cortex-A5 PMU",              "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9a7, "Cortex-A7 PMU",              "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9a8, "Cortex-A53 CTI",             "(Cross Trigger)", },
+	{ ARM_ID, 0x9a9, "Cortex-M7 TPIU",             "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x9ae, "Cortex-A17 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9af, "Cortex-A15 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9b7, "Cortex-R7 PMU",              "(Performance Monitoring Unit)", },
+	{ ARM_ID, 0x9d3, "Cortex-A53 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9d7, "Cortex-A57 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9d8, "Cortex-A72 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0xc05, "Cortex-A5 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc07, "Cortex-A7 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc08, "Cortex-A8 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc09, "Cortex-A9 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc0e, "Cortex-A17 Debug",           "(Debug Unit)", },
+	{ ARM_ID, 0xc0f, "Cortex-A15 Debug",           "(Debug Unit)", },
+	{ ARM_ID, 0xc14, "Cortex-R4 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc15, "Cortex-R5 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc17, "Cortex-R7 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xd03, "Cortex-A53 Debug",           "(Debug Unit)", },
+	{ ARM_ID, 0xd07, "Cortex-A57 Debug",           "(Debug Unit)", },
+	{ ARM_ID, 0xd08, "Cortex-A72 Debug",           "(Debug Unit)", },
+	{ 0x097,  0x9af, "MSP432 ROM",                 "(ROM Table)" },
+	{ 0x09f,  0xcd0, "Atmel CPU with DSU",         "(CPU)" },
+	{ 0x0c1,  0x1db, "XMC4500 ROM",                "(ROM Table)" },
+	{ 0x0c1,  0x1df, "XMC4700/4800 ROM",           "(ROM Table)" },
+	{ 0x0c1,  0x1ed, "XMC1000 ROM",                "(ROM Table)" },
+	{ 0x0E5,  0x000, "SHARC+/Blackfin+",           "", },
+	{ 0x0F0,  0x440, "Qualcomm QDSS Component v1", "(Qualcomm Designed CoreSight Component v1)", },
 	/* legacy comment: 0x113: what? */
-	{ ANY_ID,  0x120, "TI SDTI",         "(System Debug Trace Interface)", }, /* from OMAP3 memmap */
-	{ ANY_ID,  0x343, "TI DAPCTL",       "", }, /* from OMAP3 memmap */
+	{ ANY_ID, 0x120, "TI SDTI",                    "(System Debug Trace Interface)", }, /* from OMAP3 memmap */
+	{ ANY_ID, 0x343, "TI DAPCTL",                  "", }, /* from OMAP3 memmap */
 };
 
 static int dap_rom_display(struct command_context *cmd_ctx,
 				struct adiv5_ap *ap, uint32_t dbgbase, int depth)
 {
-	struct adiv5_dap *dap = ap->dap;
 	int retval;
-	uint32_t cid0, cid1, cid2, cid3, memtype, romentry;
-	uint16_t entry_offset;
+	uint64_t pid;
+	uint32_t cid;
 	char tabs[7] = "";
 
 	if (depth > 16) {
@@ -971,330 +1065,241 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 	if (depth)
 		snprintf(tabs, sizeof(tabs), "[L%02d] ", depth);
 
-	/* bit 16 of apid indicates a memory access port */
-	if (dbgbase & 0x02)
-		command_print(cmd_ctx, "\t%sValid ROM table present", tabs);
-	else
-		command_print(cmd_ctx, "\t%sROM table in legacy format", tabs);
+	uint32_t base_addr = dbgbase & 0xFFFFF000;
+	command_print(cmd_ctx, "\t\tComponent base address 0x%08" PRIx32, base_addr);
 
-	/* Now we read ROM table ID registers, ref. ARM IHI 0029B sec  */
-	retval = mem_ap_read_u32(ap, (dbgbase&0xFFFFF000) | 0xFF0, &cid0);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = mem_ap_read_u32(ap, (dbgbase&0xFFFFF000) | 0xFF4, &cid1);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = mem_ap_read_u32(ap, (dbgbase&0xFFFFF000) | 0xFF8, &cid2);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = mem_ap_read_u32(ap, (dbgbase&0xFFFFF000) | 0xFFC, &cid3);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = mem_ap_read_u32(ap, (dbgbase&0xFFFFF000) | 0xFCC, &memtype);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = dap_run(dap);
-	if (retval != ERROR_OK)
-		return retval;
+	retval = dap_read_part_id(ap, base_addr, &cid, &pid);
+	if (retval != ERROR_OK) {
+		command_print(cmd_ctx, "\t\tCan't read component, the corresponding core might be turned off");
+		return ERROR_OK; /* Don't abort recursion */
+	}
 
-	if (!is_dap_cid_ok(cid3, cid2, cid1, cid0))
-		command_print(cmd_ctx, "\t%sCID3 0x%02x"
-				", CID2 0x%02x"
-				", CID1 0x%02x"
-				", CID0 0x%02x",
-				tabs,
-				(unsigned)cid3, (unsigned)cid2,
-				(unsigned)cid1, (unsigned)cid0);
-	if (memtype & 0x01)
-		command_print(cmd_ctx, "\t%sMEMTYPE system memory present on bus", tabs);
-	else
-		command_print(cmd_ctx, "\t%sMEMTYPE system memory not present: dedicated debug bus", tabs);
+	if (!is_dap_cid_ok(cid)) {
+		command_print(cmd_ctx, "\t\tInvalid CID 0x%08" PRIx32, cid);
+		return ERROR_OK; /* Don't abort recursion */
+	}
 
-	/* Now we read ROM table entries from dbgbase&0xFFFFF000) | 0x000 until we get 0x00000000 */
-	for (entry_offset = 0; ; entry_offset += 4) {
-		retval = mem_ap_read_atomic_u32(ap, (dbgbase&0xFFFFF000) | entry_offset, &romentry);
+	/* component may take multiple 4K pages */
+	uint32_t size = (pid >> 36) & 0xf;
+	if (size > 0)
+		command_print(cmd_ctx, "\t\tStart address 0x%08" PRIx32, (uint32_t)(base_addr - 0x1000 * size));
+
+	command_print(cmd_ctx, "\t\tPeripheral ID 0x%010" PRIx64, pid);
+
+	uint8_t class = (cid >> 12) & 0xf;
+	uint16_t part_num = pid & 0xfff;
+	uint16_t designer_id = ((pid >> 32) & 0xf) << 8 | ((pid >> 12) & 0xff);
+
+	if (designer_id & 0x80) {
+		/* JEP106 code */
+		command_print(cmd_ctx, "\t\tDesigner is 0x%03" PRIx16 ", %s",
+				designer_id, jep106_manufacturer(designer_id >> 8, designer_id & 0x7f));
+	} else {
+		/* Legacy ASCII ID, clear invalid bits */
+		designer_id &= 0x7f;
+		command_print(cmd_ctx, "\t\tDesigner ASCII code 0x%02" PRIx16 ", %s",
+				designer_id, designer_id == 0x41 ? "ARM" : "<unknown>");
+	}
+
+	/* default values to be overwritten upon finding a match */
+	const char *type = "Unrecognized";
+	const char *full = "";
+
+	/* search dap_partnums[] array for a match */
+	for (unsigned entry = 0; entry < ARRAY_SIZE(dap_partnums); entry++) {
+
+		if ((dap_partnums[entry].designer_id != designer_id) && (dap_partnums[entry].designer_id != ANY_ID))
+			continue;
+
+		if (dap_partnums[entry].part_num != part_num)
+			continue;
+
+		type = dap_partnums[entry].type;
+		full = dap_partnums[entry].full;
+		break;
+	}
+
+	command_print(cmd_ctx, "\t\tPart is 0x%" PRIx16", %s %s", part_num, type, full);
+	command_print(cmd_ctx, "\t\tComponent class is 0x%" PRIx8 ", %s", class, class_description[class]);
+
+	if (class == 1) { /* ROM Table */
+		uint32_t memtype;
+		retval = mem_ap_read_atomic_u32(ap, base_addr | 0xFCC, &memtype);
 		if (retval != ERROR_OK)
 			return retval;
-		command_print(cmd_ctx, "\t%sROMTABLE[0x%x] = 0x%" PRIx32 "",
-				tabs, entry_offset, romentry);
-		if (romentry & 0x01) {
-			uint32_t c_cid0, c_cid1, c_cid2, c_cid3;
-			uint32_t c_pid0, c_pid1, c_pid2, c_pid3, c_pid4;
-			uint32_t component_base;
-			uint16_t part_num, designer_id;
-			const char *type, *full;
 
-			component_base = (dbgbase & 0xFFFFF000) + (romentry & 0xFFFFF000);
+		if (memtype & 0x01)
+			command_print(cmd_ctx, "\t\tMEMTYPE system memory present on bus");
+		else
+			command_print(cmd_ctx, "\t\tMEMTYPE system memory not present: dedicated debug bus");
 
-			/* IDs are in last 4K section */
-			retval = mem_ap_read_atomic_u32(ap, component_base + 0xFE0, &c_pid0);
-			if (retval != ERROR_OK) {
-				command_print(cmd_ctx, "\t%s\tCan't read component with base address 0x%" PRIx32
-					      ", the corresponding core might be turned off", tabs, component_base);
-				continue;
-			}
-			c_pid0 &= 0xff;
-			retval = mem_ap_read_atomic_u32(ap, component_base + 0xFE4, &c_pid1);
+		/* Read ROM table entries from base address until we get 0x00000000 or reach the reserved area */
+		for (uint16_t entry_offset = 0; entry_offset < 0xF00; entry_offset += 4) {
+			uint32_t romentry;
+			retval = mem_ap_read_atomic_u32(ap, base_addr | entry_offset, &romentry);
 			if (retval != ERROR_OK)
 				return retval;
-			c_pid1 &= 0xff;
-			retval = mem_ap_read_atomic_u32(ap, component_base + 0xFE8, &c_pid2);
-			if (retval != ERROR_OK)
-				return retval;
-			c_pid2 &= 0xff;
-			retval = mem_ap_read_atomic_u32(ap, component_base + 0xFEC, &c_pid3);
-			if (retval != ERROR_OK)
-				return retval;
-			c_pid3 &= 0xff;
-			retval = mem_ap_read_atomic_u32(ap, component_base + 0xFD0, &c_pid4);
-			if (retval != ERROR_OK)
-				return retval;
-			c_pid4 &= 0xff;
-
-			retval = mem_ap_read_atomic_u32(ap, component_base + 0xFF0, &c_cid0);
-			if (retval != ERROR_OK)
-				return retval;
-			c_cid0 &= 0xff;
-			retval = mem_ap_read_atomic_u32(ap, component_base + 0xFF4, &c_cid1);
-			if (retval != ERROR_OK)
-				return retval;
-			c_cid1 &= 0xff;
-			retval = mem_ap_read_atomic_u32(ap, component_base + 0xFF8, &c_cid2);
-			if (retval != ERROR_OK)
-				return retval;
-			c_cid2 &= 0xff;
-			retval = mem_ap_read_atomic_u32(ap, component_base + 0xFFC, &c_cid3);
-			if (retval != ERROR_OK)
-				return retval;
-			c_cid3 &= 0xff;
-
-			command_print(cmd_ctx, "\t\tComponent base address 0x%" PRIx32 ", "
-				      "start address 0x%" PRIx32, component_base,
-				      /* component may take multiple 4K pages */
-				      (uint32_t)(component_base - 0x1000*(c_pid4 >> 4)));
-			command_print(cmd_ctx, "\t\tComponent class is 0x%" PRIx8 ", %s",
-					(uint8_t)((c_cid1 >> 4) & 0xf),
-					/* See ARM IHI 0029B Table 3-3 */
-					class_description[(c_cid1 >> 4) & 0xf]);
-
-			/* CoreSight component? */
-			if (((c_cid1 >> 4) & 0x0f) == 9) {
-				uint32_t devtype;
-				unsigned minor;
-				const char *major = "Reserved", *subtype = "Reserved";
-
-				retval = mem_ap_read_atomic_u32(ap,
-						(component_base & 0xfffff000) | 0xfcc,
-						&devtype);
+			command_print(cmd_ctx, "\t%sROMTABLE[0x%x] = 0x%" PRIx32 "",
+					tabs, entry_offset, romentry);
+			if (romentry & 0x01) {
+				/* Recurse */
+				retval = dap_rom_display(cmd_ctx, ap, base_addr + (romentry & 0xFFFFF000), depth + 1);
 				if (retval != ERROR_OK)
 					return retval;
-				minor = (devtype >> 4) & 0x0f;
-				switch (devtype & 0x0f) {
-				case 0:
-					major = "Miscellaneous";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 4:
-						subtype = "Validation component";
-						break;
-					}
-					break;
-				case 1:
-					major = "Trace Sink";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Port";
-						break;
-					case 2:
-						subtype = "Buffer";
-						break;
-					case 3:
-						subtype = "Router";
-						break;
-					}
-					break;
-				case 2:
-					major = "Trace Link";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Funnel, router";
-						break;
-					case 2:
-						subtype = "Filter";
-						break;
-					case 3:
-						subtype = "FIFO, buffer";
-						break;
-					}
-					break;
-				case 3:
-					major = "Trace Source";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Processor";
-						break;
-					case 2:
-						subtype = "DSP";
-						break;
-					case 3:
-						subtype = "Engine/Coprocessor";
-						break;
-					case 4:
-						subtype = "Bus";
-						break;
-					case 6:
-						subtype = "Software";
-						break;
-					}
-					break;
-				case 4:
-					major = "Debug Control";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Trigger Matrix";
-						break;
-					case 2:
-						subtype = "Debug Auth";
-						break;
-					case 3:
-						subtype = "Power Requestor";
-						break;
-					}
-					break;
-				case 5:
-					major = "Debug Logic";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Processor";
-						break;
-					case 2:
-						subtype = "DSP";
-						break;
-					case 3:
-						subtype = "Engine/Coprocessor";
-						break;
-					case 4:
-						subtype = "Bus";
-						break;
-					case 5:
-						subtype = "Memory";
-						break;
-					}
-					break;
-				case 6:
-					major = "Perfomance Monitor";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Processor";
-						break;
-					case 2:
-						subtype = "DSP";
-						break;
-					case 3:
-						subtype = "Engine/Coprocessor";
-						break;
-					case 4:
-						subtype = "Bus";
-						break;
-					case 5:
-						subtype = "Memory";
-						break;
-					}
-					break;
-				}
-				command_print(cmd_ctx, "\t\tType is 0x%02" PRIx8 ", %s, %s",
-						(uint8_t)(devtype & 0xff),
-						major, subtype);
-				/* REVISIT also show 0xfc8 DevId */
-			}
-
-			if (!is_dap_cid_ok(cid3, cid2, cid1, cid0))
-				command_print(cmd_ctx,
-						"\t\tCID3 0%02x"
-						", CID2 0%02x"
-						", CID1 0%02x"
-						", CID0 0%02x",
-						(int)c_cid3,
-						(int)c_cid2,
-						(int)c_cid1,
-						(int)c_cid0);
-			command_print(cmd_ctx,
-				"\t\tPeripheral ID[4..0] = hex "
-				"%02x %02x %02x %02x %02x",
-				(int)c_pid4, (int)c_pid3, (int)c_pid2,
-				(int)c_pid1, (int)c_pid0);
-
-			part_num = (c_pid0 & 0xff);
-			part_num |= (c_pid1 & 0x0f) << 8;
-			designer_id = (c_pid1 & 0xf0) >> 4;
-			designer_id |= (c_pid2 & 0x0f) << 4;
-			designer_id |= (c_pid4 & 0x0f) << 8;
-			if ((designer_id & 0x80) == 0) {
-				/* Legacy ASCII ID, clear invalid bits */
-				designer_id &= 0x7f;
-			}
-
-			/* default values to be overwritten upon finding a match */
-			type = NULL;
-			full = "";
-
-			/* search dap_partnums[] array for a match */
-			unsigned entry;
-			for (entry = 0; entry < ARRAY_SIZE(dap_partnums); entry++) {
-
-				if ((dap_partnums[entry].designer_id != designer_id) && (dap_partnums[entry].designer_id != ANY_ID))
-					continue;
-
-				if (dap_partnums[entry].part_num != part_num)
-					continue;
-
-				type = dap_partnums[entry].type;
-				full = dap_partnums[entry].full;
-				break;
-			}
-
-			if (type) {
-				command_print(cmd_ctx, "\t\tPart is %s %s",
-						type, full);
-			} else {
-				command_print(cmd_ctx, "\t\tUnrecognized (Part 0x%" PRIx16 ", designer 0x%" PRIx16 ")",
-						part_num, designer_id);
-			}
-
-			/* ROM Table? */
-			if (((c_cid1 >> 4) & 0x0f) == 1) {
-				retval = dap_rom_display(cmd_ctx, ap, component_base, depth + 1);
-				if (retval != ERROR_OK)
-					return retval;
-			}
-		} else {
-			if (romentry)
+			} else if (romentry != 0) {
 				command_print(cmd_ctx, "\t\tComponent not present");
-			else
+			} else {
+				command_print(cmd_ctx, "\t%s\tEnd of ROM table", tabs);
 				break;
+			}
 		}
+	} else if (class == 9) { /* CoreSight component */
+		const char *major = "Reserved", *subtype = "Reserved";
+
+		uint32_t devtype;
+		retval = mem_ap_read_atomic_u32(ap, base_addr | 0xFCC, &devtype);
+		if (retval != ERROR_OK)
+			return retval;
+		unsigned minor = (devtype >> 4) & 0x0f;
+		switch (devtype & 0x0f) {
+		case 0:
+			major = "Miscellaneous";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 4:
+				subtype = "Validation component";
+				break;
+			}
+			break;
+		case 1:
+			major = "Trace Sink";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Port";
+				break;
+			case 2:
+				subtype = "Buffer";
+				break;
+			case 3:
+				subtype = "Router";
+				break;
+			}
+			break;
+		case 2:
+			major = "Trace Link";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Funnel, router";
+				break;
+			case 2:
+				subtype = "Filter";
+				break;
+			case 3:
+				subtype = "FIFO, buffer";
+				break;
+			}
+			break;
+		case 3:
+			major = "Trace Source";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Processor";
+				break;
+			case 2:
+				subtype = "DSP";
+				break;
+			case 3:
+				subtype = "Engine/Coprocessor";
+				break;
+			case 4:
+				subtype = "Bus";
+				break;
+			case 6:
+				subtype = "Software";
+				break;
+			}
+			break;
+		case 4:
+			major = "Debug Control";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Trigger Matrix";
+				break;
+			case 2:
+				subtype = "Debug Auth";
+				break;
+			case 3:
+				subtype = "Power Requestor";
+				break;
+			}
+			break;
+		case 5:
+			major = "Debug Logic";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Processor";
+				break;
+			case 2:
+				subtype = "DSP";
+				break;
+			case 3:
+				subtype = "Engine/Coprocessor";
+				break;
+			case 4:
+				subtype = "Bus";
+				break;
+			case 5:
+				subtype = "Memory";
+				break;
+			}
+			break;
+		case 6:
+			major = "Perfomance Monitor";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Processor";
+				break;
+			case 2:
+				subtype = "DSP";
+				break;
+			case 3:
+				subtype = "Engine/Coprocessor";
+				break;
+			case 4:
+				subtype = "Bus";
+				break;
+			case 5:
+				subtype = "Memory";
+				break;
+			}
+			break;
+		}
+		command_print(cmd_ctx, "\t\tType is 0x%02" PRIx8 ", %s, %s",
+				(uint8_t)(devtype & 0xff),
+				major, subtype);
+		/* REVISIT also show 0xfc8 DevId */
 	}
-	command_print(cmd_ctx, "\t%s\tEnd of ROM table", tabs);
+
 	return ERROR_OK;
 }
 
@@ -1303,7 +1308,6 @@ static int dap_info_command(struct command_context *cmd_ctx,
 {
 	int retval;
 	uint32_t dbgbase, apid;
-	int romtable_present = 0;
 	uint8_t mem_ap;
 
 	/* Now we read ROM table ID registers, ref. ARM IHI 0029B sec  */
@@ -1342,11 +1346,16 @@ static int dap_info_command(struct command_context *cmd_ctx,
 	if (mem_ap) {
 		command_print(cmd_ctx, "MEM-AP BASE 0x%8.8" PRIx32, dbgbase);
 
-		romtable_present = dbgbase != 0xFFFFFFFF;
-		if (romtable_present)
-			dap_rom_display(cmd_ctx, ap, dbgbase, 0);
-		else
+		if (dbgbase == 0xFFFFFFFF || (dbgbase & 0x3) == 0x2) {
 			command_print(cmd_ctx, "\tNo ROM table present");
+		} else {
+			if (dbgbase & 0x01)
+				command_print(cmd_ctx, "\tValid ROM table present");
+			else
+				command_print(cmd_ctx, "\tROM table in legacy format");
+
+			dap_rom_display(cmd_ctx, ap, dbgbase & 0xFFFFF000, 0);
+		}
 	}
 
 	return ERROR_OK;
@@ -1547,6 +1556,45 @@ COMMAND_HANDLER(dap_apid_command)
 	return retval;
 }
 
+COMMAND_HANDLER(dap_apreg_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	struct arm *arm = target_to_arm(target);
+	struct adiv5_dap *dap = arm->dap;
+
+	uint32_t apsel, reg, value;
+	int retval;
+
+	if (CMD_ARGC < 2 || CMD_ARGC > 3)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], apsel);
+	/* AP address is in bits 31:24 of DP_SELECT */
+	if (apsel >= 256)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], reg);
+	if (reg >= 256 || (reg & 3))
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (CMD_ARGC == 3) {
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], value);
+		retval = dap_queue_ap_write(dap_ap(dap, apsel), reg, value);
+	} else {
+		retval = dap_queue_ap_read(dap_ap(dap, apsel), reg, &value);
+	}
+	if (retval == ERROR_OK)
+		retval = dap_run(dap);
+
+	if (retval != ERROR_OK)
+		return retval;
+
+	if (CMD_ARGC == 2)
+		command_print(CMD_CTX, "0x%08" PRIx32, value);
+
+	return retval;
+}
+
 COMMAND_HANDLER(dap_ti_be_32_quirks_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
@@ -1605,6 +1653,14 @@ static const struct command_registration dap_commands[] = {
 		.help = "return ID register from AP "
 			"(default currently selected AP)",
 		.usage = "[ap_num]",
+	},
+	{
+		.name = "apreg",
+		.handler = dap_apreg_command,
+		.mode = COMMAND_EXEC,
+		.help = "read/write a register from AP "
+			"(reg is byte address of a word register, like 0 4 8...)",
+		.usage = "ap_num reg [value]",
 	},
 	{
 		.name = "baseaddr",

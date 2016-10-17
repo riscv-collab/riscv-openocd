@@ -9,19 +9,17 @@
  *   (at91sam3x* & at91sam4 support)*                                      *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General public License as published by  *
+ *   it under the terms of the GNU General Public License as published by  *
  *   the Free Software Foundation; either version 2 of the License, or     *
  *   (at your option) any later version.                                   *
  *                                                                         *
  *   This program is distributed in the hope that it will be useful,       *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS for A PARTICULAR PURPOSE.  See the         *
- *   GNU General public License for more details.                          *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
  *                                                                         *
- *   You should have received a copy of the GNU General public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
 ****************************************************************************/
 
 /* Some of the the lower level code was based on code supplied by
@@ -268,6 +266,173 @@ static const struct sam4_chip_details all_sam4_details[] = {
 		.name           = "at91sam4e16e",
 		.total_flash_size     = 1024 * 1024,
 		.total_sram_size      = 128 * 1024,
+		.n_gpnvms       = 2,
+		.n_banks        = 1,
+		{
+/*		.bank[0] = {*/
+		  {
+			.probed = 0,
+			.pChip  = NULL,
+			.pBank  = NULL,
+			.bank_number = 0,
+			.base_address = FLASH_BANK_BASE_S,
+			.controller_address = 0x400e0a00,
+			.flash_wait_states = 6,	/* workaround silicon bug */
+			.present = 1,
+			.size_bytes =  1024 * 1024,
+			.nsectors   =  128,
+			.sector_size = 8192,
+			.page_size   = 512,
+		  },
+/*		.bank[1] = {*/
+		  {
+			.present = 0,
+			.probed = 0,
+			.bank_number = 1,
+
+		  },
+		},
+	},
+
+	/* Start at91sam4n* series */
+	/*atsam4n8a - LQFP48/QFN48*/
+	{
+		.chipid_cidr    = 0x293B0AE0,
+		.name           = "at91sam4n8a",
+		.total_flash_size     = 512 * 1024,
+		.total_sram_size      = 64 * 1024,
+		.n_gpnvms       = 2,
+		.n_banks        = 1,
+		{
+/*		.bank[0] = {*/
+		  {
+			.probed = 0,
+			.pChip  = NULL,
+			.pBank  = NULL,
+			.bank_number = 0,
+			.base_address = FLASH_BANK_BASE_S,
+			.controller_address = 0x400e0a00,
+			.flash_wait_states = 6,	/* workaround silicon bug */
+			.present = 1,
+			.size_bytes =  512 * 1024,
+			.nsectors   =  64,
+			.sector_size = 8192,
+			.page_size   = 512,
+		  },
+/*		.bank[1] = {*/
+		  {
+			.present = 0,
+			.probed = 0,
+			.bank_number = 1,
+
+		  },
+		},
+	},
+	/*atsam4n8b - LQFP64/QFN64*/
+	{
+		.chipid_cidr    = 0x294B0AE0,
+		.name           = "at91sam4n8b",
+		.total_flash_size     = 512 * 1024,
+		.total_sram_size      = 64 * 1024,
+		.n_gpnvms       = 2,
+		.n_banks        = 1,
+		{
+/*		.bank[0] = {*/
+		  {
+			.probed = 0,
+			.pChip  = NULL,
+			.pBank  = NULL,
+			.bank_number = 0,
+			.base_address = FLASH_BANK_BASE_S,
+			.controller_address = 0x400e0a00,
+			.flash_wait_states = 6,	/* workaround silicon bug */
+			.present = 1,
+			.size_bytes =  512 * 1024,
+			.nsectors   =  64,
+			.sector_size = 8192,
+			.page_size   = 512,
+		  },
+/*		.bank[1] = {*/
+		  {
+			.present = 0,
+			.probed = 0,
+			.bank_number = 1,
+
+		  },
+		},
+	},
+	/*atsam4n8c - LQFP100/TFBGA100/VFBGA100*/
+	{
+		.chipid_cidr    = 0x295B0AE0,
+		.name           = "at91sam4n8c",
+		.total_flash_size     = 512 * 1024,
+		.total_sram_size      = 64 * 1024,
+		.n_gpnvms       = 2,
+		.n_banks        = 1,
+		{
+/*		.bank[0] = {*/
+		  {
+			.probed = 0,
+			.pChip  = NULL,
+			.pBank  = NULL,
+			.bank_number = 0,
+			.base_address = FLASH_BANK_BASE_S,
+			.controller_address = 0x400e0a00,
+			.flash_wait_states = 6,	/* workaround silicon bug */
+			.present = 1,
+			.size_bytes =  512 * 1024,
+			.nsectors   =  64,
+			.sector_size = 8192,
+			.page_size   = 512,
+		  },
+/*		.bank[1] = {*/
+		  {
+			.present = 0,
+			.probed = 0,
+			.bank_number = 1,
+
+		  },
+		},
+	},
+	/*atsam4n16b - LQFP64/QFN64*/
+	{
+		.chipid_cidr    = 0x29460CE0,
+		.name           = "at91sam4n16b",
+		.total_flash_size     = 1024 * 1024,
+		.total_sram_size      = 80 * 1024,
+		.n_gpnvms       = 2,
+		.n_banks        = 1,
+		{
+/*		.bank[0] = {*/
+		  {
+			.probed = 0,
+			.pChip  = NULL,
+			.pBank  = NULL,
+			.bank_number = 0,
+			.base_address = FLASH_BANK_BASE_S,
+			.controller_address = 0x400e0a00,
+			.flash_wait_states = 6,	/* workaround silicon bug */
+			.present = 1,
+			.size_bytes =  1024 * 1024,
+			.nsectors   =  128,
+			.sector_size = 8192,
+			.page_size   = 512,
+		  },
+/*		.bank[1] = {*/
+		  {
+			.present = 0,
+			.probed = 0,
+			.bank_number = 1,
+
+		  },
+		},
+	},
+	/*atsam4n16c - LQFP100/TFBGA100/VFBGA100*/
+	{
+		.chipid_cidr    = 0x29560CE0,
+		.name           = "at91sam4n16c",
+		.total_flash_size     = 1024 * 1024,
+		.total_sram_size      = 80 * 1024,
 		.n_gpnvms       = 2,
 		.n_banks        = 1,
 		{
@@ -888,7 +1053,7 @@ static int EFC_PerformCommand(struct sam4_bank_private *pPrivate,
 
 	int r;
 	uint32_t v;
-	long long ms_now, ms_end;
+	int64_t ms_now, ms_end;
 
 	/* default */
 	if (status)
@@ -1240,11 +1405,11 @@ static const char *const eproc_names[] = {
 	_unknown,					/* 0 */
 	"arm946es",					/* 1 */
 	"arm7tdmi",					/* 2 */
-	"cortex-m3",				/* 3 */
+	"Cortex-M3",				/* 3 */
 	"arm920t",					/* 4 */
 	"arm926ejs",				/* 5 */
-	"cortex-a5",				/* 6 */
-	"cortex-m4",				/* 7 */
+	"Cortex-A5",				/* 6 */
+	"Cortex-M4",				/* 7 */
 	_unknown,					/* 8 */
 	_unknown,					/* 9 */
 	_unknown,					/* 10 */

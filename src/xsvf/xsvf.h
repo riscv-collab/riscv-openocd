@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef XSVF_H
-#define XSVF_H
+#ifndef OPENOCD_XSVF_XSVF_H
+#define OPENOCD_XSVF_XSVF_H
 
 #include <helper/command.h>
 
@@ -28,4 +26,4 @@ int xsvf_register_commands(struct command_context *cmd_ctx);
 #define ERROR_XSVF_EOF  (-200)
 #define ERROR_XSVF_FAILED       (-201)
 
-#endif	/* XSVF_H */
+#endif /* OPENOCD_XSVF_XSVF_H */

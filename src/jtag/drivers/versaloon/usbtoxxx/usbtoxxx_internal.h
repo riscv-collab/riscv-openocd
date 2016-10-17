@@ -12,13 +12,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef __USBTOXXX_INTERNAL_H_INCLUDED__
-#define __USBTOXXX_INTERNAL_H_INCLUDED__
+#ifndef OPENOCD_JTAG_DRIVERS_VERSALOON_USBTOXXX_USBTOXXX_INTERNAL_H
+#define OPENOCD_JTAG_DRIVERS_VERSALOON_USBTOXXX_USBTOXXX_INTERNAL_H
 
 /* USB_TO_XXX USB Commands */
 /* Page0 */
@@ -160,4 +158,4 @@ RESULT usbtoxxx_add_command(uint8_t type, uint8_t cmd, uint8_t *cmdbuf,
 /* USB_TO_GPIO */
 #define USB_TO_GPIO_DIR_MSK			0x01
 
-#endif	/* __USBTOXXX_INTERNAL_H_INCLUDED__ */
+#endif /* OPENOCD_JTAG_DRIVERS_VERSALOON_USBTOXXX_USBTOXXX_INTERNAL_H */

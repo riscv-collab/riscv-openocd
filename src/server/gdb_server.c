@@ -31,9 +31,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -1451,7 +1449,7 @@ static int gdb_write_memory_packet(struct connection *connection,
 
 	LOG_DEBUG("addr: 0x%8.8" PRIx32 ", len: 0x%8.8" PRIx32 "", addr, len);
 
-	if (unhexify((char *)buffer, separator, len) != (int)len)
+	if (unhexify(buffer, separator, len) != len)
 		LOG_ERROR("unable to decode memory packet");
 
 	retval = target_write_buffer(target, addr, len, buffer);
@@ -2279,7 +2277,7 @@ static int gdb_query_packet(struct connection *connection,
 		if (packet_size > 6) {
 			char *cmd;
 			cmd = malloc((packet_size - 6) / 2 + 1);
-			int len = unhexify(cmd, packet + 6, (packet_size - 6) / 2);
+			size_t len = unhexify((uint8_t *)cmd, packet + 6, (packet_size - 6) / 2);
 			cmd[len] = 0;
 
 			/* We want to print all debug output to GDB connection */
@@ -2923,6 +2921,11 @@ static int gdb_target_start(struct target *target, const char *port)
 
 static int gdb_target_add_one(struct target *target)
 {
+	if (strcmp(gdb_port, "disabled") == 0) {
+		LOG_INFO("gdb port disabled");
+		return ERROR_OK;
+	}
+
 	/*  one gdb instance per smp list */
 	if ((target->smp) && (target->gdb_service))
 		return ERROR_OK;
@@ -2946,6 +2949,11 @@ static int gdb_target_add_one(struct target *target)
 
 int gdb_target_add_all(struct target *target)
 {
+	if (strcmp(gdb_port, "disabled") == 0) {
+		LOG_INFO("gdb server disabled");
+		return ERROR_OK;
+	}
+
 	if (NULL == target) {
 		LOG_WARNING("gdb services need one or more targets defined");
 		return ERROR_OK;
@@ -3063,7 +3071,7 @@ COMMAND_HANDLER(handle_gdb_save_tdesc_command)
 
 	tdesc_length = strlen(tdesc);
 
-	struct fileio fileio;
+	struct fileio *fileio;
 	size_t size_written;
 
 	char *tdesc_filename = alloc_printf("%s.xml", target_type_name(target));
@@ -3079,9 +3087,9 @@ COMMAND_HANDLER(handle_gdb_save_tdesc_command)
 		goto out;
 	}
 
-	retval = fileio_write(&fileio, tdesc_length, tdesc, &size_written);
+	retval = fileio_write(fileio, tdesc_length, tdesc, &size_written);
 
-	fileio_close(&fileio);
+	fileio_close(fileio);
 
 	if (retval != ERROR_OK)
 		LOG_ERROR("Error while writing the tdesc file");
@@ -3111,7 +3119,7 @@ static const struct command_registration gdb_command_handlers[] = {
 			"server listens for the next port number after the "
 			"base port number specified. "
 			"No arguments reports GDB port. \"pipe\" means listen to stdin "
-			"output to stdout, an integer is base port number, \"disable\" disables "
+			"output to stdout, an integer is base port number, \"disabled\" disables "
 			"port. Any other string is are interpreted as named pipe to listen to. "
 			"Output pipe is the same name as input pipe, but with 'o' appended.",
 		.usage = "[port_num]",

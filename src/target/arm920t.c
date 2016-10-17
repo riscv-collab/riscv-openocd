@@ -14,9 +14,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -753,8 +751,8 @@ int arm920t_soft_reset_halt(struct target *target)
 	if (retval != ERROR_OK)
 		return retval;
 
-	long long then = timeval_ms();
-	int timeout;
+	int64_t then = timeval_ms();
+	bool timeout;
 	while (!(timeout = ((timeval_ms()-then) > 1000))) {
 		if (buf_get_u32(dbg_stat->value, EICE_DBG_STATUS_DBGACK, 1) == 0) {
 			embeddedice_read_reg(dbg_stat);

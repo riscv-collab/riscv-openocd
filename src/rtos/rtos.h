@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef RTOS_H
-#define RTOS_H
+#ifndef OPENOCD_RTOS_RTOS_H
+#define OPENOCD_RTOS_RTOS_H
 
 #include "server/server.h"
 #include <jim-nvp.h>
@@ -41,7 +39,6 @@ typedef struct symbol_table_elem_struct {
 struct thread_detail {
 	threadid_t threadid;
 	bool exists;
-	char *display_str;
 	char *thread_name_str;
 	char *extra_info_str;
 };
@@ -111,4 +108,4 @@ int rtos_smp_init(struct target *target);
 /*  function for handling symbol access */
 int rtos_qsymbol(struct connection *connection, char const *packet, int packet_size);
 
-#endif	/* RTOS_H */
+#endif /* OPENOCD_RTOS_RTOS_H */

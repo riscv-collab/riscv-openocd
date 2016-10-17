@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef VIRTEX2_H
-#define VIRTEX2_H
+#ifndef OPENOCD_PLD_VIRTEX2_H
+#define OPENOCD_PLD_VIRTEX2_H
 
 #include <jtag/jtag.h>
 
@@ -28,4 +26,4 @@ struct virtex2_pld_device {
 	int no_jstart;
 };
 
-#endif	/* VIRTEX2_H */
+#endif /* OPENOCD_PLD_VIRTEX2_H */

@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -193,6 +191,7 @@ int ulink_execute_queued_commands(struct ulink *device, int timeout);
 const char *ulink_cmd_id_string(uint8_t id);
 void ulink_print_command(struct ulink_cmd *ulink_cmd);
 void ulink_print_queue(struct ulink *device);
+static int ulink_calculate_frequency(enum ulink_delay_type type, int delay, long *f);
 #endif
 
 int ulink_append_scan_cmd(struct ulink *device,
@@ -225,7 +224,6 @@ int ulink_append_test_cmd(struct ulink *device);
 
 /* OpenULINK TCK frequency helper functions */
 int ulink_calculate_delay(enum ulink_delay_type type, long f, int *delay);
-int ulink_calculate_frequency(enum ulink_delay_type type, int delay, long *f);
 
 /* Interface between OpenULINK and OpenOCD */
 static void ulink_set_end_state(tap_state_t endstate);
@@ -1369,6 +1367,7 @@ int ulink_calculate_delay(enum ulink_delay_type type, long f, int *delay)
 	return ERROR_OK;
 }
 
+#ifdef _DEBUG_JTAG_IO_
 /**
  * Calculate frequency for a given delay value.
  *
@@ -1383,7 +1382,7 @@ int ulink_calculate_delay(enum ulink_delay_type type, long f, int *delay)
  * @return on success: ERROR_OK
  * @return on failure: ERROR_FAIL
  */
-int ulink_calculate_frequency(enum ulink_delay_type type, int delay, long *f)
+static int ulink_calculate_frequency(enum ulink_delay_type type, int delay, long *f)
 {
 	float t, f_float, f_rounded;
 
@@ -1432,6 +1431,7 @@ int ulink_calculate_frequency(enum ulink_delay_type type, int delay, long *f)
 
 	return ERROR_OK;
 }
+#endif
 
 /******************* Interface between OpenULINK and OpenOCD ******************/
 

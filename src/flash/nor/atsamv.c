@@ -12,15 +12,17 @@
  *   (atsamv, atsams, and atsame support)                                  *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General public License as published by  *
+ *   it under the terms of the GNU General Public License as published by  *
  *   the Free Software Foundation; either version 2 of the License, or     *
  *   (at your option) any later version.                                   *
  *                                                                         *
  *   This program is distributed in the hope that it will be useful,       *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS for A PARTICULAR PURPOSE.  See the         *
- *   GNU General public License for more details.                          *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
  *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 /* Some of the the lower level code was based on code supplied by
@@ -145,7 +147,7 @@ static int samv_efc_perform_command(struct target *target,
 {
 	int r;
 	uint32_t v;
-	long long ms_now, ms_end;
+	int64_t ms_now, ms_end;
 
 	if (status)
 		*status = 0;
@@ -355,7 +357,7 @@ static int samv_probe(struct flash_bank *bank)
 
 	uint8_t eproc = (device_id >> 5) & 0x7;
 	if (eproc != 0) {
-		LOG_ERROR("unexpected eproc code: %d was expecting 0 (cortex-m7)", eproc);
+		LOG_ERROR("unexpected eproc code: %d was expecting 0 (Cortex-M7)", eproc);
 		return ERROR_FAIL;
 	}
 

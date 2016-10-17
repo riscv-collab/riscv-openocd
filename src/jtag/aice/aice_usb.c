@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -1858,7 +1856,7 @@ static int aice_check_dbger(uint32_t coreid, uint32_t expect_status)
 		if ((i % 30) == 0)
 			keep_alive();
 
-		long long then = 0;
+		int64_t then = 0;
 		if (i == aice_count_to_check_dbger)
 			then = timeval_ms();
 		if (i >= aice_count_to_check_dbger) {
@@ -2999,7 +2997,7 @@ static int aice_usb_step(uint32_t coreid)
 		if (AICE_TARGET_HALTED == state)
 			break;
 
-		long long then = 0;
+		int64_t then = 0;
 		if (i == 30)
 			then = timeval_ms();
 

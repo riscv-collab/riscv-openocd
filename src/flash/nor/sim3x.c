@@ -14,6 +14,9 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -748,7 +751,7 @@ static int sim3x_read_info(struct flash_bank *bank)
 	}
 
 	if (((cpuid >> 4) & 0xfff) != 0xc23) {
-		LOG_ERROR("Target is not CortexM3");
+		LOG_ERROR("Target is not Cortex-M3");
 		return ERROR_FAIL;
 	}
 
@@ -1009,7 +1012,7 @@ COMMAND_HANDLER(sim3x_lock)
 			return ret;
 
 		if ((val & CPUID_CHECK_VALUE_MASK) != CPUID_CHECK_VALUE) {
-			LOG_ERROR("Target is not ARM CortexM3 or is already locked");
+			LOG_ERROR("Target is not ARM Cortex-M3 or is already locked");
 			return ERROR_FAIL;
 		}
 	} else {

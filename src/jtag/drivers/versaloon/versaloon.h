@@ -12,13 +12,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef __VERSALOON_H_INCLUDED__
-#define __VERSALOON_H_INCLUDED__
+#ifndef OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_H
+#define OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_H
 
 #include <libusb.h>
 
@@ -111,5 +109,4 @@ struct versaloon_interface_t {
 extern struct versaloon_interface_t versaloon_interface;
 extern libusb_device_handle *versaloon_usb_device_handle;
 
-#endif /* __VERSALOON_H_INCLUDED__ */
-
+#endif /* OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_H */

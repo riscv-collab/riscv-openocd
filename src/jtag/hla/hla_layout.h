@@ -16,13 +16,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef _HL_LAYOUT_H
-#define _HL_LAYOUT_H
+#ifndef OPENOCD_JTAG_HLA_HLA_LAYOUT_H
+#define OPENOCD_JTAG_HLA_HLA_LAYOUT_H
 
 #include <target/armv7m_trace.h>
 
@@ -127,4 +125,4 @@ const struct hl_layout *hl_layout_get_list(void);
 /** */
 int hl_layout_init(struct hl_interface_s *adapter);
 
-#endif /* _HL_LAYOUT_H */
+#endif /* OPENOCD_JTAG_HLA_HLA_LAYOUT_H */

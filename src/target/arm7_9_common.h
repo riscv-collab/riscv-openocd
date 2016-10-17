@@ -22,13 +22,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARM7_9_COMMON_H
-#define ARM7_9_COMMON_H
+#ifndef OPENOCD_TARGET_ARM7_9_COMMON_H
+#define OPENOCD_TARGET_ARM7_9_COMMON_H
 
 #include "arm.h"
 #include "arm_jtag.h"
@@ -194,4 +192,4 @@ int arm7_9_endianness_callback(jtag_callback_data_t pu8_in,
 		jtag_callback_data_t i_size, jtag_callback_data_t i_be,
 		jtag_callback_data_t i_flip);
 
-#endif /* ARM7_9_COMMON_H */
+#endif /* OPENOCD_TARGET_ARM7_9_COMMON_H */

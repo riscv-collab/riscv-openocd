@@ -12,9 +12,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -749,7 +747,7 @@ COMMAND_HANDLER(mg_write_cmd)
 {
 	uint32_t address, cnt, res, i;
 	uint8_t *buffer;
-	struct fileio fileio;
+	struct fileio *fileio;
 	int ret;
 
 	if (CMD_ARGC != 3)
@@ -764,12 +762,12 @@ COMMAND_HANDLER(mg_write_cmd)
 	size_t filesize;
 	buffer = malloc(MG_FILEIO_CHUNK);
 	if (!buffer) {
-		fileio_close(&fileio);
+		fileio_close(fileio);
 		return ERROR_FAIL;
 	}
-	int retval = fileio_size(&fileio, &filesize);
+	int retval = fileio_size(fileio, &filesize);
 	if (retval != ERROR_OK) {
-		fileio_close(&fileio);
+		fileio_close(fileio);
 		free(buffer);
 		return retval;
 	}
@@ -782,7 +780,7 @@ COMMAND_HANDLER(mg_write_cmd)
 
 	size_t buf_cnt;
 	for (i = 0; i < cnt; i++) {
-		ret = fileio_read(&fileio, MG_FILEIO_CHUNK, buffer, &buf_cnt);
+		ret = fileio_read(fileio, MG_FILEIO_CHUNK, buffer, &buf_cnt);
 		if (ret != ERROR_OK)
 			goto mg_write_cmd_err;
 		ret = mg_mflash_write(address, buffer, MG_FILEIO_CHUNK);
@@ -792,7 +790,7 @@ COMMAND_HANDLER(mg_write_cmd)
 	}
 
 	if (res) {
-		ret = fileio_read(&fileio, res, buffer, &buf_cnt);
+		ret = fileio_read(fileio, res, buffer, &buf_cnt);
 		if (ret != ERROR_OK)
 			goto mg_write_cmd_err;
 		ret = mg_mflash_write(address, buffer, res);
@@ -807,13 +805,13 @@ COMMAND_HANDLER(mg_write_cmd)
 	}
 
 	free(buffer);
-	fileio_close(&fileio);
+	fileio_close(fileio);
 
 	return ERROR_OK;
 
 mg_write_cmd_err:
 	free(buffer);
-	fileio_close(&fileio);
+	fileio_close(fileio);
 
 	return ret;
 }
@@ -822,7 +820,7 @@ COMMAND_HANDLER(mg_dump_cmd)
 {
 	uint32_t address, size, cnt, res, i;
 	uint8_t *buffer;
-	struct fileio fileio;
+	struct fileio *fileio;
 	int ret;
 
 	if (CMD_ARGC != 4)
@@ -837,7 +835,7 @@ COMMAND_HANDLER(mg_dump_cmd)
 
 	buffer = malloc(MG_FILEIO_CHUNK);
 	if (!buffer) {
-		fileio_close(&fileio);
+		fileio_close(fileio);
 		return ERROR_FAIL;
 	}
 
@@ -852,7 +850,7 @@ COMMAND_HANDLER(mg_dump_cmd)
 		ret = mg_mflash_read(address, buffer, MG_FILEIO_CHUNK);
 		if (ret != ERROR_OK)
 			goto mg_dump_cmd_err;
-		ret = fileio_write(&fileio, MG_FILEIO_CHUNK, buffer, &size_written);
+		ret = fileio_write(fileio, MG_FILEIO_CHUNK, buffer, &size_written);
 		if (ret != ERROR_OK)
 			goto mg_dump_cmd_err;
 		address += MG_FILEIO_CHUNK;
@@ -862,7 +860,7 @@ COMMAND_HANDLER(mg_dump_cmd)
 		ret = mg_mflash_read(address, buffer, res);
 		if (ret != ERROR_OK)
 			goto mg_dump_cmd_err;
-		ret = fileio_write(&fileio, res, buffer, &size_written);
+		ret = fileio_write(fileio, res, buffer, &size_written);
 		if (ret != ERROR_OK)
 			goto mg_dump_cmd_err;
 	}
@@ -875,13 +873,13 @@ COMMAND_HANDLER(mg_dump_cmd)
 	}
 
 	free(buffer);
-	fileio_close(&fileio);
+	fileio_close(fileio);
 
 	return ERROR_OK;
 
 mg_dump_cmd_err:
 	free(buffer);
-	fileio_close(&fileio);
+	fileio_close(fileio);
 
 	return ret;
 }

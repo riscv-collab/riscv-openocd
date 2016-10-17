@@ -13,12 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
-#ifndef __NDS32_EDM_H__
-#define __NDS32_EDM_H__
+
+#ifndef OPENOCD_TARGET_NDS32_EDM_H
+#define OPENOCD_TARGET_NDS32_EDM_H
 
 /**
  * @file
@@ -113,4 +112,4 @@ enum nds_memory_select {
 #define NDS_EDMSW_WDV		(1 << 0)
 #define NDS_EDMSW_RDV		(1 << 1)
 
-#endif /* __NDS32_EDM_H__ */
+#endif /* OPENOCD_TARGET_NDS32_EDM_H */

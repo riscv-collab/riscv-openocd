@@ -19,9 +19,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -392,7 +390,7 @@ static int arm11_halt(struct target *target)
 			break;
 
 
-		long long then = 0;
+		int64_t then = 0;
 		if (i == 1000)
 			then = timeval_ms();
 		if (i >= 1000) {
@@ -420,10 +418,32 @@ static uint32_t arm11_nextpc(struct arm11_common *arm11, int current, uint32_t a
 {
 	void *value = arm11->arm.pc->value;
 
-	if (!current)
-		buf_set_u32(value, 0, 32, address);
-	else
+	/* use the current program counter */
+	if (current)
 		address = buf_get_u32(value, 0, 32);
+
+	/* Make sure that the gdb thumb fixup does not
+	 * kill the return address
+	 */
+	switch (arm11->arm.core_state) {
+		case ARM_STATE_ARM:
+			address &= 0xFFFFFFFC;
+			break;
+		case ARM_STATE_THUMB:
+			/* When the return address is loaded into PC
+			 * bit 0 must be 1 to stay in Thumb state
+			 */
+			address |= 0x1;
+			break;
+
+		/* catch-all for JAZELLE and THUMB_EE */
+		default:
+			break;
+	}
+
+	buf_set_u32(value, 0, 32, address);
+	arm11->arm.pc->dirty = 1;
+	arm11->arm.pc->valid = 1;
 
 	return address;
 }
@@ -514,7 +534,7 @@ static int arm11_resume(struct target *target, int current,
 			break;
 
 
-		long long then = 0;
+		int64_t then = 0;
 		if (i == 1000)
 			then = timeval_ms();
 		if (i >= 1000) {
@@ -694,21 +714,32 @@ static int arm11_assert_reset(struct target *target)
 {
 	struct arm11_common *arm11 = target_to_arm11(target);
 
-	/* optionally catch reset vector */
-	if (target->reset_halt && !(arm11->vcr & 1))
-		CHECK_RETVAL(arm11_sc7_set_vcr(arm11, arm11->vcr | 1));
-
-	/* Issue some kind of warm reset. */
-	if (target_has_event_action(target, TARGET_EVENT_RESET_ASSERT))
-		target_handle_event(target, TARGET_EVENT_RESET_ASSERT);
-	else if (jtag_get_reset_config() & RESET_HAS_SRST) {
-		/* REVISIT handle "pulls" cases, if there's
-		 * hardware that needs them to work.
-		 */
-		jtag_add_reset(0, 1);
+	if (!(target_was_examined(target))) {
+		if (jtag_get_reset_config() & RESET_HAS_SRST)
+			jtag_add_reset(0, 1);
+		else {
+			LOG_WARNING("Reset is not asserted because the target is not examined.");
+			LOG_WARNING("Use a reset button or power cycle the target.");
+			return ERROR_TARGET_NOT_EXAMINED;
+		}
 	} else {
-		LOG_ERROR("%s: how to reset?", target_name(target));
-		return ERROR_FAIL;
+
+		/* optionally catch reset vector */
+		if (target->reset_halt && !(arm11->vcr & 1))
+			CHECK_RETVAL(arm11_sc7_set_vcr(arm11, arm11->vcr | 1));
+
+		/* Issue some kind of warm reset. */
+		if (target_has_event_action(target, TARGET_EVENT_RESET_ASSERT))
+			target_handle_event(target, TARGET_EVENT_RESET_ASSERT);
+		else if (jtag_get_reset_config() & RESET_HAS_SRST) {
+			/* REVISIT handle "pulls" cases, if there's
+			 * hardware that needs them to work.
+			 */
+			jtag_add_reset(0, 1);
+		} else {
+			LOG_ERROR("%s: how to reset?", target_name(target));
+			return ERROR_FAIL;
+		}
 	}
 
 	/* registers are now invalid */

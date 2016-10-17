@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef OPENOCD_H
-#define OPENOCD_H
+#ifndef OPENOCD_OPENOCD_H
+#define OPENOCD_OPENOCD_H
 
 /**
  * Different applications can define this entry point to override
@@ -31,4 +29,4 @@
  */
 int openocd_main(int argc, char *argv[]);
 
-#endif
+#endif /* OPENOCD_OPENOCD_H */

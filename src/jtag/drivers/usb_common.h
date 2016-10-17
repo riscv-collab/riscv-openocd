@@ -12,17 +12,15 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef JTAG_USB_COMMON_H
-#define JTAG_USB_COMMON_H
+#ifndef OPENOCD_JTAG_DRIVERS_USB_COMMON_H
+#define OPENOCD_JTAG_DRIVERS_USB_COMMON_H
 
 #include <usb.h>
 
 int jtag_usb_open(const uint16_t vids[], const uint16_t pids[],
 		struct usb_dev_handle **out);
 
-#endif /* JTAG_USB_COMMON_H */
+#endif /* OPENOCD_JTAG_DRIVERS_USB_COMMON_H */

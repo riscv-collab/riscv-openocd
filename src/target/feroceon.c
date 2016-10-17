@@ -16,9 +16,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 /*
@@ -63,6 +61,13 @@ static int feroceon_assert_reset(struct target *target)
 	struct arm *arm = target->arch_info;
 	struct arm7_9_common *arm7_9 = arm->arch_info;
 	int ud = arm7_9->use_dbgrq;
+
+	/* TODO: apply hw reset signal in not examined state */
+	if (!(target_was_examined(target))) {
+		LOG_WARNING("Reset is not asserted because the target is not examined.");
+		LOG_WARNING("Use a reset button or power cycle the target.");
+		return ERROR_TARGET_NOT_EXAMINED;
+	}
 
 	arm7_9->use_dbgrq = 0;
 	if (target->reset_halt)

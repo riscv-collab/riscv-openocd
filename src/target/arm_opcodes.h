@@ -22,12 +22,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the
- * Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef __ARM_OPCODES_H
-#define __ARM_OPCODES_H
+
+#ifndef OPENOCD_TARGET_ARM_OPCODES_H
+#define OPENOCD_TARGET_ARM_OPCODES_H
 
 /**
  * @file
@@ -311,4 +310,4 @@
 	((0xB660 | (0 << 8) | ((IF)&0x3)) \
 	| ((0xB660 | (0 << 8) | ((IF)&0x3)) << 16))
 
-#endif /* __ARM_OPCODES_H */
+#endif /* OPENOCD_TARGET_ARM_OPCODES_H */
