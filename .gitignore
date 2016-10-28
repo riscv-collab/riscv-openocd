@@ -92,3 +92,4 @@ TAGS
 
 # ctags tag files
 tags
+.vscode
