@@ -1,27 +1,27 @@
 
 This package was build with MinGW-w64 on a Debian 8 64-bits Docker container,  
 running on an OS X machine, using the script provided in the GNU ARM Eclipse 
-Second Edition git. 
+build-scripts git. 
 
 To build the latest version of the package please use the script from:
 
-  curl -L https://sourceforge.net/p/gnuarmeclipse/se/ci/develop/tree/scripts/build-openocd.sh?format=raw \
-    -o ~/Downloads/build-openocd.sh
+  git clone https://github.com/gnuarmeclipse/build-scripts.git \
+    ~/Downloads/build-scripts.git
 
 To run it, first be sure that the packages required in the Prerequisites 
 section are installed, then download the script and execute it with bash:
 
-  bash ~/Downloads/build-openocd.sh --win32 --win64
+  bash ~/Downloads/build-scripts.git/scripts/build-openocd.sh --win32 --win64
 
 The output of the build script are two setup.exe files in the 
 ${WORK_FOLDER}/output folder.
 
-The script was developed on OS X 10.10.3 with MacPorts 2.3.3, but also runs
+The script was developed on OS X 10.12 with Homebrew, but also runs
 on most GNU/Linux distributions supporting Docker.
 
-Up-to-date build information is available in the GNU ARM Eclipse project wiki:
+Up-to-date build information is available in the GNU ARM Eclipse project web:
 
-  http://gnuarmeclipse.livius.net/wiki/
+  http://gnuarmeclipse.github.io/openocd/
 
 Many thanks to my friend Dan Maiorescu for his major contributions 
 to this project.
