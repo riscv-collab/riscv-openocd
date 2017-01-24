@@ -1,6 +1,11 @@
 
 The changes applied to the OpenOCD master branch, and the releases, are:
 
+[2017-01-24]
+
+- v0.10.0-20170124* released (stable)
+- merge original 0.10.0, override local relative path processing
+
 [2016-10-28]
 
 - v0.10.0-20161028*-dev released
