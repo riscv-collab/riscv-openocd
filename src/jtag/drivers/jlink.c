@@ -545,6 +545,9 @@ static int jlink_init(void)
 	enum jaylink_usb_address address;
 	size_t length;
 
+	LOG_DEBUG("Using libjaylink %s (compiled with %s).",
+		jaylink_version_package_get_string(), JAYLINK_VERSION_PACKAGE_STRING);
+
 	ret = jaylink_init(&jayctx);
 
 	if (ret != JAYLINK_OK) {
@@ -674,7 +677,7 @@ static int jlink_init(void)
 		}
 	}
 
-	jtag_command_version = JAYLINK_JTAG_V2;
+	jtag_command_version = JAYLINK_JTAG_VERSION_2;
 
 	if (jaylink_has_cap(caps, JAYLINK_DEV_CAP_GET_HW_VERSION)) {
 		ret = jaylink_get_hardware_version(devh, &hwver);
@@ -690,7 +693,7 @@ static int jlink_init(void)
 		LOG_INFO("Hardware version: %u.%02u", hwver.major, hwver.minor);
 
 		if (hwver.major >= 5)
-			jtag_command_version = JAYLINK_JTAG_V3;
+			jtag_command_version = JAYLINK_JTAG_VERSION_3;
 	}
 
 	if (iface == JAYLINK_TIF_SWD) {
@@ -1008,10 +1011,10 @@ COMMAND_HANDLER(jlink_handle_jlink_jtag_command)
 
 	if (!CMD_ARGC) {
 		switch (jtag_command_version) {
-			case JAYLINK_JTAG_V2:
+			case JAYLINK_JTAG_VERSION_2:
 				version = 2;
 				break;
-			case JAYLINK_JTAG_V3:
+			case JAYLINK_JTAG_VERSION_3:
 				version = 3;
 				break;
 			default:
@@ -1027,10 +1030,10 @@ COMMAND_HANDLER(jlink_handle_jlink_jtag_command)
 
 		switch (tmp) {
 			case 2:
-				jtag_command_version = JAYLINK_JTAG_V2;
+				jtag_command_version = JAYLINK_JTAG_VERSION_2;
 				break;
 			case 3:
-				jtag_command_version = JAYLINK_JTAG_V3;
+				jtag_command_version = JAYLINK_JTAG_VERSION_3;
 				break;
 			default:
 				command_print(CMD_CTX, "Invalid argument: %s.", CMD_ARGV[0]);
@@ -1602,6 +1605,125 @@ COMMAND_HANDLER(jlink_handle_config_command)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(jlink_handle_emucom_write_command)
+{
+	int ret;
+	size_t tmp;
+	uint32_t channel;
+	uint32_t length;
+	uint8_t *buf;
+	size_t dummy;
+
+	if (CMD_ARGC != 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (!jaylink_has_cap(caps, JAYLINK_DEV_CAP_EMUCOM)) {
+		LOG_ERROR("Device does not support EMUCOM.");
+		return ERROR_FAIL;
+	}
+
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], channel);
+
+	tmp = strlen(CMD_ARGV[1]);
+
+	if (tmp % 2 != 0) {
+		LOG_ERROR("Data must be encoded as hexadecimal pairs.");
+		return ERROR_COMMAND_ARGUMENT_INVALID;
+	}
+
+	buf = malloc(tmp / 2);
+
+	if (!buf) {
+		LOG_ERROR("Failed to allocate buffer.");
+		return ERROR_FAIL;
+	}
+
+	dummy = unhexify(buf, CMD_ARGV[1], tmp / 2);
+
+	if (dummy != (tmp / 2)) {
+		LOG_ERROR("Data must be encoded as hexadecimal pairs.");
+		free(buf);
+		return ERROR_COMMAND_ARGUMENT_INVALID;
+	}
+
+	length = tmp / 2;
+	ret = jaylink_emucom_write(devh, channel, buf, &length);
+
+	free(buf);
+
+	if (ret == JAYLINK_ERR_DEV_NOT_SUPPORTED) {
+		LOG_ERROR("Channel not supported by the device.");
+		return ERROR_FAIL;
+	} else if (ret != JAYLINK_OK) {
+		LOG_ERROR("Failed to write to channel: %s.",
+			jaylink_strerror_name(ret));
+		return ERROR_FAIL;
+	}
+
+	if (length != (tmp / 2))
+		LOG_WARNING("Only %" PRIu32 " bytes written to the channel.", length);
+
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(jlink_handle_emucom_read_command)
+{
+	int ret;
+	uint32_t channel;
+	uint32_t length;
+	uint8_t *buf;
+	size_t tmp;
+
+	if (CMD_ARGC != 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (!jaylink_has_cap(caps, JAYLINK_DEV_CAP_EMUCOM)) {
+		LOG_ERROR("Device does not support EMUCOM.");
+		return ERROR_FAIL;
+	}
+
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], channel);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], length);
+
+	buf = malloc(length * 3 + 1);
+
+	if (!buf) {
+		LOG_ERROR("Failed to allocate buffer.");
+		return ERROR_FAIL;
+	}
+
+	ret = jaylink_emucom_read(devh, channel, buf, &length);
+
+	if (ret == JAYLINK_ERR_DEV_NOT_SUPPORTED) {
+		LOG_ERROR("Channel is not supported by the device.");
+		free(buf);
+		return ERROR_FAIL;
+	} else if (ret == JAYLINK_ERR_DEV_NOT_AVAILABLE) {
+		LOG_ERROR("Channel is not available for the requested amount of data. "
+			"%" PRIu32 " bytes are avilable.", length);
+		free(buf);
+		return ERROR_FAIL;
+	} else if (ret != JAYLINK_OK) {
+		LOG_ERROR("Failed to read from channel: %s.",
+			jaylink_strerror_name(ret));
+		free(buf);
+		return ERROR_FAIL;
+	}
+
+	tmp = hexify((char *)buf + length, buf, length, 2 * length + 1);
+
+	if (tmp != 2 * length) {
+		LOG_ERROR("Failed to convert data into hexadecimal string.");
+		free(buf);
+		return ERROR_FAIL;
+	}
+
+	command_print(CMD_CTX, "%s", buf + length);
+	free(buf);
+
+	return ERROR_OK;
+}
+
 static const struct command_registration jlink_config_subcommand_handlers[] = {
 	{
 		.name = "usb",
@@ -1643,6 +1765,24 @@ static const struct command_registration jlink_config_subcommand_handlers[] = {
 		.handler = &jlink_handle_config_write_command,
 		.mode = COMMAND_EXEC,
 		.help = "write configuration to the device"
+	},
+	COMMAND_REGISTRATION_DONE
+};
+
+static const struct command_registration jlink_emucom_subcommand_handlers[] = {
+	{
+		.name = "write",
+		.handler = &jlink_handle_emucom_write_command,
+		.mode = COMMAND_EXEC,
+		.help = "write to a channel",
+		.usage = "<channel> <data>",
+	},
+	{
+		.name = "read",
+		.handler = &jlink_handle_emucom_read_command,
+		.mode = COMMAND_EXEC,
+		.help = "read from a channel",
+		.usage = "<channel> <length>"
 	},
 	COMMAND_REGISTRATION_DONE
 };
@@ -1695,6 +1835,12 @@ static const struct command_registration jlink_subcommand_handlers[] = {
 		.help = "access the device configuration. If no argument is given "
 			"this will show the device configuration",
 		.chain = jlink_config_subcommand_handlers,
+	},
+	{
+		.name = "emucom",
+		.mode = COMMAND_EXEC,
+		.help = "access EMUCOM channel",
+		.chain = jlink_emucom_subcommand_handlers
 	},
 	COMMAND_REGISTRATION_DONE
 };

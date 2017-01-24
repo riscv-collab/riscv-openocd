@@ -73,7 +73,7 @@ static int xscale_read_trace(struct target *);
  * mini-ICache, which is 2K of code writable only via JTAG.
  */
 static const uint8_t xscale_debug_handler[] = {
-#include "xscale_debug.inc"
+#include "../../contrib/loaders/debug/xscale/debug_handler.inc"
 };
 
 static const char *const xscale_reg_list[] = {
@@ -2667,7 +2667,7 @@ static int xscale_analyze_trace(struct target *target, struct command_context *c
 	struct xscale_common *xscale = target_to_xscale(target);
 	struct xscale_trace_data *trace_data = xscale->trace.data;
 	int i, retval;
-	uint32_t breakpoint_pc;
+	uint32_t breakpoint_pc = 0;
 	struct arm_instruction instruction;
 	uint32_t current_pc = 0;/* initialized when address determined */
 

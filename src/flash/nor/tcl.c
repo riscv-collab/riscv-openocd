@@ -341,7 +341,7 @@ COMMAND_HANDLER(handle_flash_erase_command)
 			"in %fs", first, last, p->bank_number, duration_elapsed(&bench));
 	}
 
-	return ERROR_OK;
+	return retval;
 }
 
 COMMAND_HANDLER(handle_flash_protect_command)
@@ -600,7 +600,7 @@ COMMAND_HANDLER(handle_flash_write_bank_command)
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], offset);
 
 	if (fileio_open(&fileio, CMD_ARGV[1], FILEIO_READ, FILEIO_BINARY) != ERROR_OK)
-		return ERROR_OK;
+		return ERROR_FAIL;
 
 	size_t filesize;
 	retval = fileio_size(fileio, &filesize);
@@ -619,7 +619,7 @@ COMMAND_HANDLER(handle_flash_write_bank_command)
 	if (fileio_read(fileio, filesize, buffer, &buf_cnt) != ERROR_OK) {
 		free(buffer);
 		fileio_close(fileio);
-		return ERROR_OK;
+		return ERROR_FAIL;
 	}
 
 	retval = flash_driver_write(p, buffer, offset, buf_cnt);
@@ -936,10 +936,11 @@ static const struct command_registration flash_exec_command_handlers[] = {
 		.name = "protect",
 		.handler = handle_flash_protect_command,
 		.mode = COMMAND_EXEC,
-		.usage = "bank_id first_sector [last_sector|'last'] "
+		.usage = "bank_id first_block [last_block|'last'] "
 			"('on'|'off')",
-		.help = "Turn protection on or off for a range of sectors "
-			"in a given flash bank.",
+		.help = "Turn protection on or off for a range of protection "
+			"blocks or sectors in a given flash bank. "
+			"See 'flash info' output for a list of blocks.",
 	},
 	{
 		.name = "padded_value",
@@ -1012,7 +1013,7 @@ COMMAND_HANDLER(handle_flash_bank_command)
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], c->size);
 	COMMAND_PARSE_NUMBER(int, CMD_ARGV[3], c->chip_width);
 	COMMAND_PARSE_NUMBER(int, CMD_ARGV[4], c->bus_width);
-	c->default_padded_value = 0xff;
+	c->default_padded_value = c->erased_value = 0xff;
 	c->num_sectors = 0;
 	c->sectors = NULL;
 	c->num_prot_blocks = 0;

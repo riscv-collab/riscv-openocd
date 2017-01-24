@@ -29,6 +29,15 @@
 
 #include <getopt.h>
 
+#include <limits.h>
+#include <stdlib.h>
+#if IS_DARWIN
+#include <libproc.h>
+#endif
+#ifdef HAVE_SYS_SYSCTL_H
+#include <sys/sysctl.h>
+#endif
+
 static int help_flag, version_flag;
 
 static const struct option long_options[] = {
@@ -50,84 +59,129 @@ int configuration_output_handler(struct command_context *context, const char *li
 	return ERROR_OK;
 }
 
-// #ifdef _WIN32
-static char *find_suffix(const char *text, const char *suffix)
+/* Return the canonical path to the directory the openocd executable is in.
+ * The path should be absolute, use / as path separator and have all symlinks
+ * resolved. The returned string is malloc'd. */
+static char *find_exe_path(void)
 {
-	size_t text_len = strlen(text);
-	size_t suffix_len = strlen(suffix);
+	char *exepath = NULL;
 
-	if (suffix_len == 0)
-		return (char *)text + text_len;
+	do {
+#if IS_WIN32 && !IS_CYGWIN
+		exepath = malloc(MAX_PATH);
+		if (exepath == NULL)
+			break;
+		GetModuleFileName(NULL, exepath, MAX_PATH);
 
-	if (suffix_len > text_len || strncmp(text + text_len - suffix_len, suffix, suffix_len) != 0)
-		return NULL; /* Not a suffix of text */
+		/* Convert path separators to UNIX style, should work on Windows also. */
+		for (char *p = exepath; *p; p++) {
+			if (*p == '\\')
+				*p = '/';
+		}
 
-	return (char *)text + text_len - suffix_len;
-}
-// #endif
+#elif IS_DARWIN
+		exepath = malloc(PROC_PIDPATHINFO_MAXSIZE);
+		if (exepath == NULL)
+			break;
+		if (proc_pidpath(getpid(), exepath, PROC_PIDPATHINFO_MAXSIZE) <= 0) {
+			free(exepath);
+			exepath = NULL;
+		}
 
-static void add_default_dirs(char* argv0)
-{
-	const char *run_prefix;
-	char *path;
+#elif defined(CTL_KERN) && defined(KERN_PROC) && defined(KERN_PROC_PATHNAME) /* *BSD */
+#ifndef PATH_MAX
+#define PATH_MAX 1024
+#endif
+		char *path = malloc(PATH_MAX);
+		if (path == NULL)
+			break;
+		int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+		size_t size = PATH_MAX;
 
-#ifdef _WIN32
-	char strExePath[MAX_PATH];
-	GetModuleFileName(NULL, strExePath, MAX_PATH);
+		if (sysctl(mib, (u_int)ARRAY_SIZE(mib), path, &size, NULL, 0) != 0)
+			break;
 
-	/* Strip executable file name, leaving path */
-	*strrchr(strExePath, '\\') = '\0';
+#ifdef HAVE_REALPATH
+		exepath = realpath(path, NULL);
+		free(path);
+#else
+		exepath = path;
+#endif
 
-	/* Convert path separators to UNIX style, should work on Windows also. */
-	for (char *p = strExePath; *p; p++) {
-		if (*p == '\\')
-			*p = '/';
+#elif defined(HAVE_REALPATH) /* Assume POSIX.1-2008 */
+		/* Try Unices in order of likelihood. */
+		exepath = realpath("/proc/self/exe", NULL); /* Linux/Cygwin */
+		if (exepath == NULL)
+			exepath = realpath("/proc/self/path/a.out", NULL); /* Solaris */
+		if (exepath == NULL)
+			exepath = realpath("/proc/curproc/file", NULL); /* FreeBSD (Should be covered above) */
+#endif
+	} while (0);
+
+	if (exepath != NULL) {
+		/* Strip executable file name, leaving path */
+		*strrchr(exepath, '/') = '\0';
+	} else {
+		LOG_WARNING("Could not determine executable path, using configured BINDIR.");
+		LOG_DEBUG("BINDIR = %s", BINDIR);
+#ifdef HAVE_REALPATH
+		exepath = realpath(BINDIR, NULL);
+#else
+		exepath = strdup(BINDIR);
+#endif
 	}
 
-	char *end_of_prefix = find_suffix(strExePath, BINDIR);
-	if (end_of_prefix != NULL)
-		*end_of_prefix = '\0';
+	return exepath;
+}
 
-	run_prefix = strExePath;
-#else
-    char strElfPath[PATH_MAX];
-    char strElfRealPath[PATH_MAX];
-    
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-result"
-    if (strchr(argv0, '/') == NULL) {
-        /* If the name has no path separators, use default logic */
-        run_prefix = "";
-    } else {
-        if (*argv0 != '/') {
-            /* Relative path must be appended to current directory */
-            getcwd(strElfPath, PATH_MAX);
-            if (strElfPath[strlen(strElfPath)-1] != '/') {
-                strcat(strElfPath, "/");
-            }
-            strcat(strElfPath, argv0);
-        } else {
-            /* Absolute folder is used as is */
-            strncpy(strElfPath, argv0, PATH_MAX);
-        }
-        /* Convert to canonical path */
-        realpath(strElfPath, strElfRealPath);
-#pragma GCC diagnostic pop
-        
-        /* Strip executable file name, leaving path (there always is a '/' */
-        *strrchr(strElfRealPath, '/') = '\0';
+static char *find_relative_path(const char *from, const char *to)
+{
+	size_t i;
 
-        char *end_of_prefix = find_suffix(strElfRealPath, BINDIR);
-        if (end_of_prefix != NULL)
-            *end_of_prefix = '\0';
-    
-        run_prefix = strElfRealPath;
-    }
-#endif
+	/* Skip common /-separated parts of from and to */
+	i = 0;
+	for (size_t n = 0; from[n] == to[n]; n++) {
+		if (from[n] == '\0') {
+			i = n;
+			break;
+		}
+		if (from[n] == '/')
+			i = n + 1;
+	}
+	from += i;
+	to += i;
+
+	/* Count number of /-separated non-empty parts of from */
+	i = 0;
+	while (from[0] != '\0') {
+		if (from[0] != '/')
+			i++;
+		char *next = strchr(from, '/');
+		if (next == NULL)
+			break;
+		from = next + 1;
+	}
+
+	/* Prepend that number of ../ in front of to */
+	char *relpath = malloc(i * 3 + strlen(to) + 1);
+	relpath[0] = '\0';
+	for (size_t n = 0; n < i; n++)
+		strcat(relpath, "../");
+	strcat(relpath, to);
+
+	return relpath;
+}
+
+static void add_default_dirs(void)
+{
+	char *path;
+	char *exepath = find_exe_path();
+	char *bin2data = find_relative_path(BINDIR, PKGDATADIR);
 
 	LOG_DEBUG("bindir=%s", BINDIR);
 	LOG_DEBUG("pkgdatadir=%s", PKGDATADIR);
-	LOG_DEBUG("run_prefix=%s", run_prefix);
+	LOG_DEBUG("exepath=%s", exepath);
+	LOG_DEBUG("bin2data=%s", bin2data);
 
 	/*
 	 * The directory containing OpenOCD-supplied scripts should be
@@ -161,17 +215,20 @@ static void add_default_dirs(char* argv0)
 	}
 #endif
 
-	path = alloc_printf("%s%s%s", run_prefix, PKGDATADIR, "/site");
+	path = alloc_printf("%s/%s/%s", exepath, bin2data, "site");
 	if (path) {
 		add_script_search_dir(path);
 		free(path);
 	}
 
-	path = alloc_printf("%s%s%s", run_prefix, PKGDATADIR, "/scripts");
+	path = alloc_printf("%s/%s/%s", exepath, bin2data, "scripts");
 	if (path) {
 		add_script_search_dir(path);
 		free(path);
 	}
+
+	free(exepath);
+	free(bin2data);
 }
 
 int parse_cmdline_args(struct command_context *cmd_ctx, int argc, char *argv[])
@@ -256,7 +313,7 @@ int parse_cmdline_args(struct command_context *cmd_ctx, int argc, char *argv[])
 	/* paths specified on the command line take precedence over these
 	 * built-in paths
 	 */
-	add_default_dirs(argv[0]);
+	add_default_dirs();
 
 	return ERROR_OK;
 }

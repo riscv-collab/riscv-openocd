@@ -666,14 +666,19 @@ int arm_arch_state(struct target *target)
 		return ERROR_FAIL;
 	}
 
+	/* avoid filling log waiting for fileio reply */
+	if (arm->semihosting_hit_fileio)
+		return ERROR_OK;
+
 	LOG_USER("target halted in %s state due to %s, current mode: %s\n"
-		"cpsr: 0x%8.8" PRIx32 " pc: 0x%8.8" PRIx32 "%s",
+		"cpsr: 0x%8.8" PRIx32 " pc: 0x%8.8" PRIx32 "%s%s",
 		arm_state_strings[arm->core_state],
 		debug_reason_name(target),
 		arm_mode_name(arm->core_mode),
 		buf_get_u32(arm->cpsr->value, 0, 32),
 		buf_get_u32(arm->pc->value, 0, 32),
-		arm->is_semihosting ? ", semihosting" : "");
+		arm->is_semihosting ? ", semihosting" : "",
+		arm->is_semihosting_fileio ? " fileio" : "");
 
 	return ERROR_OK;
 }
@@ -1055,6 +1060,37 @@ COMMAND_HANDLER(handle_arm_semihosting_command)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(handle_arm_semihosting_fileio_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+
+	if (target == NULL) {
+		LOG_ERROR("No target selected");
+		return ERROR_FAIL;
+	}
+
+	struct arm *arm = target_to_arm(target);
+
+	if (!is_arm(arm)) {
+		command_print(CMD_CTX, "current target isn't an ARM");
+		return ERROR_FAIL;
+	}
+
+	if (!arm->is_semihosting) {
+		command_print(CMD_CTX, "semihosting is not enabled");
+		return ERROR_FAIL;
+	}
+
+	if (CMD_ARGC > 0)
+		COMMAND_PARSE_ENABLE(CMD_ARGV[0], arm->is_semihosting_fileio);
+
+	command_print(CMD_CTX, "semihosting fileio is %s",
+		arm->is_semihosting_fileio
+		? "enabled" : "disabled");
+
+	return ERROR_OK;
+}
+
 static const struct command_registration arm_exec_command_handlers[] = {
 	{
 		.name = "reg",
@@ -1096,6 +1132,13 @@ static const struct command_registration arm_exec_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.usage = "['enable'|'disable']",
 		.help = "activate support for semihosting operations",
+	},
+	{
+		"semihosting_fileio",
+		.handler = handle_arm_semihosting_fileio_command,
+		.mode = COMMAND_EXEC,
+		.usage = "['enable'|'disable']",
+		.help = "activate support for semihosting fileio operations",
 	},
 
 	COMMAND_REGISTRATION_DONE
@@ -1486,7 +1529,7 @@ cleanup:
  *
  */
 int arm_blank_check_memory(struct target *target,
-	uint32_t address, uint32_t count, uint32_t *blank)
+	uint32_t address, uint32_t count, uint32_t *blank, uint8_t erased_value)
 {
 	struct working_area *check_algorithm;
 	struct reg_param reg_params[3];
@@ -1501,6 +1544,12 @@ int arm_blank_check_memory(struct target *target,
 	};
 
 	assert(sizeof(check_code_le) % 4 == 0);
+
+	if (erased_value != 0xff) {
+		LOG_ERROR("Erase value 0x%02" PRIx8 " not yet supported for ARMv4/v5 targets",
+			erased_value);
+		return ERROR_FAIL;
+	}
 
 	/* make sure we have a working area */
 	retval = target_alloc_working_area(target,
@@ -1529,7 +1578,7 @@ int arm_blank_check_memory(struct target *target,
 	buf_set_u32(reg_params[1].value, 0, 32, count);
 
 	init_reg_param(&reg_params[2], "r2", 32, PARAM_IN_OUT);
-	buf_set_u32(reg_params[2].value, 0, 32, 0xff);
+	buf_set_u32(reg_params[2].value, 0, 32, erased_value);
 
 	/* armv4 must exit using a hardware breakpoint */
 	if (arm->is_armv4)
