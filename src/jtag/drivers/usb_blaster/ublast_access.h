@@ -20,10 +20,13 @@
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   GNU General Public License for more details.
  *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
-#ifndef JTAG_UBLAST_ACCESS_H
-#define JTAG_UBLAST_ACCESS_H
+#ifndef OPENOCD_JTAG_DRIVERS_USB_BLASTER_UBLAST_ACCESS_H
+#define OPENOCD_JTAG_DRIVERS_USB_BLASTER_UBLAST_ACCESS_H
 
 #include <libusb_common.h>
 
@@ -53,19 +56,16 @@ struct ublast_lowlevel {
 
 /**
  * ublast_register_ftdi - get a lowlevel USB Blaster driver
- * ublast_register_ftd2xx - get a lowlevel USB Blaster driver
  * ublast2_register_libusb - get a lowlevel USB Blaster II driver
  *
- * Get a lowlevel USB-Blaster driver. In the current implementation, there are 3
+ * Get a lowlevel USB-Blaster driver. In the current implementation, there are 2
  * possible lowlevel drivers :
- *  - one based on libftdi from ftdichip.com
- *  - one based on libftdxx, the free alternative
+ *  - one based on libftdi,
  *  - one based on libusb, specific to the USB-Blaster II
  *
  * Returns the lowlevel driver structure.
  */
 extern struct ublast_lowlevel *ublast_register_ftdi(void);
-extern struct ublast_lowlevel *ublast_register_ftd2xx(void);
 extern struct ublast_lowlevel *ublast2_register_libusb(void);
 
-#endif /* JTAG_UBLAST_ACCESS_H */
+#endif /* OPENOCD_JTAG_DRIVERS_USB_BLASTER_UBLAST_ACCESS_H */

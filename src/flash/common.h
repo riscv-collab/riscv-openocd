@@ -12,13 +12,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef FLASH_COMMON_H
-#define FLASH_COMMON_H
+#ifndef OPENOCD_FLASH_COMMON_H
+#define OPENOCD_FLASH_COMMON_H
 
 #include <helper/log.h>
 
@@ -46,5 +44,6 @@ bool flash_driver_name_matches(const char *name, const char *expected);
 #define ERROR_FLASH_SECTOR_NOT_ERASED		(-906)
 #define ERROR_FLASH_BANK_NOT_PROBED			(-907)
 #define ERROR_FLASH_OPER_UNSUPPORTED		(-908)
+#define ERROR_FLASH_PROTECTED			(-909)
 
-#endif	/* FLASH_COMMON_H */
+#endif /* OPENOCD_FLASH_COMMON_H */

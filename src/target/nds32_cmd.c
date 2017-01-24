@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -846,7 +844,7 @@ static int jim_nds32_read_edm_sr(Jim_Interp *interp, int argc, Jim_Obj * const *
 	}
 
 	int e;
-	char *edm_sr_name;
+	const char *edm_sr_name;
 	int edm_sr_name_len;
 	e = Jim_GetOpt_String(&goi, &edm_sr_name, &edm_sr_name_len);
 	if (e != JIM_OK)
@@ -892,7 +890,7 @@ static int jim_nds32_write_edm_sr(Jim_Interp *interp, int argc, Jim_Obj * const 
 	}
 
 	int e;
-	char *edm_sr_name;
+	const char *edm_sr_name;
 	int edm_sr_name_len;
 	e = Jim_GetOpt_String(&goi, &edm_sr_name, &edm_sr_name_len);
 	if (e != JIM_OK)

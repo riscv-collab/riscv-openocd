@@ -16,9 +16,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -130,15 +128,13 @@ struct rtos_type ChibiOS_rtos = {
 enum ChibiOS_symbol_values {
 	ChibiOS_VAL_rlist = 0,
 	ChibiOS_VAL_ch = 1,
-	ChibiOS_VAL_ch_debug = 2,
-	ChibiOS_VAL_chSysInit = 3
+	ChibiOS_VAL_ch_debug = 2
 };
 
 static symbol_table_elem_t ChibiOS_symbol_list[] = {
 	{ "rlist", 0, true},		/* Thread ready list */
 	{ "ch", 0, true},			/* System data structure */
 	{ "ch_debug", 0, false},	/* Memory Signature containing offsets of fields in rlist */
-	{ "chSysInit", 0, false},	/* Necessary part of API, used for ChibiOS detection */
 	{ NULL, 0, false}
 };
 
@@ -226,7 +222,7 @@ static int ChibiOS_update_stacking(struct rtos *rtos)
 	/* Sometimes the stacking can not be determined only by looking at the
 	 * target name but only a runtime.
 	 *
-	 * For example, this is the case for cortex-m4 targets and ChibiOS which
+	 * For example, this is the case for Cortex-M4 targets and ChibiOS which
 	 * only stack the FPU registers if it is enabled during ChibiOS build.
 	 *
 	 * Terminating which stacking is used is target depending.
@@ -248,7 +244,7 @@ static int ChibiOS_update_stacking(struct rtos *rtos)
 	struct ChibiOS_params *param;
 	param = (struct ChibiOS_params *) rtos->rtos_specific_params;
 
-	/* Check for armv7m with *enabled* FPU, i.e. a Cortex M4  */
+	/* Check for armv7m with *enabled* FPU, i.e. a Cortex-M4  */
 	struct armv7m_common *armv7m_target = target_to_armv7m(rtos->target);
 	if (is_armv7m(armv7m_target)) {
 		if (armv7m_target->fp_feature == FPv4_SP) {
@@ -361,7 +357,6 @@ static int ChibiOS_update_threads(struct rtos *rtos)
 				sizeof(struct thread_detail));
 		rtos->thread_details->threadid = 1;
 		rtos->thread_details->exists = true;
-		rtos->thread_details->display_str = NULL;
 
 		rtos->thread_details->extra_info_str = malloc(
 				sizeof(tmp_thread_extra_info));
@@ -445,14 +440,13 @@ static int ChibiOS_update_threads(struct rtos *rtos)
 		if (threadState < CHIBIOS_NUM_STATES)
 			state_desc = ChibiOS_thread_states[threadState];
 		else
-			state_desc = "Unknown state";
+			state_desc = "Unknown";
 
 		curr_thrd_details->extra_info_str = malloc(strlen(
-					state_desc)+1);
-		strcpy(curr_thrd_details->extra_info_str, state_desc);
+					state_desc)+8);
+		sprintf(curr_thrd_details->extra_info_str, "State: %s", state_desc);
 
 		curr_thrd_details->exists = true;
-		curr_thrd_details->display_str = NULL;
 
 		curr_thrd_details++;
 	}
@@ -520,12 +514,11 @@ static int ChibiOS_detect_rtos(struct target *target)
 {
 	if ((target->rtos->symbols != NULL) &&
 			((target->rtos->symbols[ChibiOS_VAL_rlist].address != 0) ||
-			 (target->rtos->symbols[ChibiOS_VAL_ch].address != 0)) &&
-			(target->rtos->symbols[ChibiOS_VAL_chSysInit].address != 0)) {
+			 (target->rtos->symbols[ChibiOS_VAL_ch].address != 0))) {
 
 		if (target->rtos->symbols[ChibiOS_VAL_ch_debug].address == 0) {
-			LOG_INFO("It looks like the target is running ChibiOS without "
-					"ch_debug.");
+			LOG_INFO("It looks like the target may be running ChibiOS "
+					"without ch_debug.");
 			return 0;
 		}
 

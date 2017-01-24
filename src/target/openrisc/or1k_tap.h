@@ -11,10 +11,13 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef _OR1K_TAP_H_
-#define _OR1K_TAP_H_
+#ifndef OPENOCD_TARGET_OPENRISC_OR1K_TAP_H
+#define OPENOCD_TARGET_OPENRISC_OR1K_TAP_H
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -36,4 +39,4 @@ struct or1k_tap_ip {
 	const char *name;
 };
 
-#endif
+#endif /* OPENOCD_TARGET_OPENRISC_OR1K_TAP_H */

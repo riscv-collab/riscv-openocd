@@ -16,13 +16,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef BINARYBUFFER_H
-#define BINARYBUFFER_H
+#ifndef OPENOCD_HELPER_BINARYBUFFER_H
+#define OPENOCD_HELPER_BINARYBUFFER_H
 
 #include "list.h"
 
@@ -236,8 +234,8 @@ void bit_copy_discard(struct bit_copy_queue *q);
 
 /* functions to convert to/from hex encoded buffer
  * used in ti-icdi driver and gdb server */
-int unhexify(char *bin, const char *hex, int count);
-int hexify(char *hex, const char *bin, int count, int out_maxlen);
+size_t unhexify(uint8_t *bin, const char *hex, size_t count);
+size_t hexify(char *hex, const uint8_t *bin, size_t count, size_t out_maxlen);
 void buffer_shr(void *_buf, unsigned buf_len, unsigned count);
 
-#endif /* BINARYBUFFER_H */
+#endif /* OPENOCD_HELPER_BINARYBUFFER_H */

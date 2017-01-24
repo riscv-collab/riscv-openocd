@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -186,7 +184,7 @@ static int nds32_v2_activate_hardware_watchpoint(struct target *target)
 		/* set value */
 		aice_write_debug_reg(aice, NDS_EDM_SR_BPV0 + wp_num, 0);
 
-		LOG_DEBUG("Add hardware wathcpoint %" PRId32 " at %08" PRIx32 " mask %08" PRIx32, wp_num,
+		LOG_DEBUG("Add hardware watchpoint %" PRId32 " at %08" PRIx32 " mask %08" PRIx32, wp_num,
 				wp->address, wp->mask);
 
 	}
@@ -206,7 +204,7 @@ static int nds32_v2_deactivate_hardware_watchpoint(struct target *target)
 		/* disable watchpoint */
 		aice_write_debug_reg(aice, NDS_EDM_SR_BPC0 + wp_num, 0x0);
 
-		LOG_DEBUG("Remove hardware wathcpoint %" PRId32 " at %08" PRIx32 " mask %08" PRIx32,
+		LOG_DEBUG("Remove hardware watchpoint %" PRId32 " at %08" PRIx32 " mask %08" PRIx32,
 				wp_num, wp->address, wp->mask);
 	}
 

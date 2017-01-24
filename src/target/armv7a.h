@@ -12,15 +12,14 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARMV7A_H
-#define ARMV7A_H
+#ifndef OPENOCD_TARGET_ARMV7A_H
+#define OPENOCD_TARGET_ARMV7A_H
 
 #include "arm_adi_v5.h"
+#include "armv7a_cache.h"
 #include "arm.h"
 #include "armv4_5_mmu.h"
 #include "armv4_5_cache.h"
@@ -49,7 +48,6 @@ struct armv7a_l2x_cache {
 };
 
 struct armv7a_cachesize {
-	uint32_t level_num;
 	/*  cache dimensionning */
 	uint32_t linelen;
 	uint32_t associativity;
@@ -62,25 +60,35 @@ struct armv7a_cachesize {
 	uint32_t way_shift;
 };
 
-struct armv7a_cache_common {
-	int ctype;
+/* information about one architecture cache at any level */
+struct armv7a_arch_cache {
+	int ctype;				/* cache type, CLIDR encoding */
 	struct armv7a_cachesize d_u_size;	/* data cache */
 	struct armv7a_cachesize i_size;		/* instruction cache */
+};
+
+/* common cache information */
+struct armv7a_cache_common {
+	int info;				/* -1 invalid, else valid */
+	int loc;				/* level of coherency */
+	uint32_t dminline;			/* minimum d-cache linelen */
+	uint32_t iminline;			/* minimum i-cache linelen */
+	struct armv7a_arch_cache arch[6];	/* cache info, L1 - L7 */
 	int i_cache_enabled;
 	int d_u_cache_enabled;
-	/* l2 external unified cache if some */
-	void *l2_cache;
+	int auto_cache_enabled;			/* openocd automatic
+						 * cache handling */
+	/* outer unified cache if some */
+	void *outer_cache;
 	int (*flush_all_data_cache)(struct target *target);
-	int (*display_cache_info)(struct command_context *cmd_ctx,
-			struct armv7a_cache_common *armv7a_cache);
 };
 
 struct armv7a_mmu_common {
 	/* following field mmu working way */
-	int32_t ttbr0_used;
-	int32_t ttbr1_used; /*  -1 not initialized, 0 no ttbr1 1 ttbr1 used and  */
-	uint32_t ttbr0_mask;/*  masked to be used  */
-	uint32_t os_border;
+	int32_t cached;     /* 0: not initialized, 1: initialized */
+	uint32_t ttbcr;     /* cache for ttbcr register */
+	uint32_t ttbr_mask[2];
+	uint32_t ttbr_range[2];
 
 	int (*read_physical_memory)(struct target *target, uint32_t address, uint32_t size,
 			uint32_t count, uint8_t *buffer);
@@ -93,13 +101,11 @@ struct armv7a_common {
 	int common_magic;
 	struct reg_cache *core_cache;
 
-	struct adiv5_dap dap;
-
 	/* Core Debug Unit */
 	struct arm_dpm dpm;
 	uint32_t debug_base;
-	uint8_t debug_ap;
-	uint8_t memory_ap;
+	struct adiv5_ap *debug_ap;
+	struct adiv5_ap *memory_ap;
 	bool memory_ap_available;
 	/* mdir */
 	uint8_t multi_processor_system;
@@ -126,6 +132,12 @@ target_to_armv7a(struct target *target)
 {
 	return container_of(target->arch_info, struct armv7a_common, arm);
 }
+
+static inline bool is_armv7a(struct armv7a_common *armv7a)
+{
+	return armv7a->common_magic == ARMV7_COMMON_MAGIC;
+}
+
 
 /* register offsets from armv7a.debug_base */
 
@@ -160,9 +172,17 @@ target_to_armv7a(struct target *target)
 
 /* See ARMv7a arch spec section C10.7 */
 #define CPUDBG_DSCCR		0x028
+#define CPUDBG_DSMCR		0x02C
 
 /* See ARMv7a arch spec section C10.8 */
 #define CPUDBG_AUTHSTATUS	0xFB8
+
+/* Masks for Vector Catch register */
+#define DBG_VCR_FIQ_MASK	((1 << 31) | (1 << 7))
+#define DBG_VCR_IRQ_MASK	((1 << 30) | (1 << 6))
+#define DBG_VCR_DATA_ABORT_MASK	((1 << 28) | (1 << 4))
+#define DBG_VCR_PREF_ABORT_MASK	((1 << 27) | (1 << 3))
+#define DBG_VCR_SVC_MASK	((1 << 26) | (1 << 2))
 
 int armv7a_arch_state(struct target *target);
 int armv7a_identify_cache(struct target *target);
@@ -176,4 +196,4 @@ int armv7a_handle_cache_info_command(struct command_context *cmd_ctx,
 
 extern const struct command_registration armv7a_command_handlers[];
 
-#endif /* ARMV4_5_H */
+#endif /* OPENOCD_TARGET_ARMV7A_H */

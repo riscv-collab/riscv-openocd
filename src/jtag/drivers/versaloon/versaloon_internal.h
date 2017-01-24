@@ -12,13 +12,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef __VERSALOON_INTERNAL_H_INCLUDED__
-#define __VERSALOON_INTERNAL_H_INCLUDED__
+#ifndef OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_INTERNAL_H
+#define OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_INTERNAL_H
 
 #define VERSALOON_PRODUCTSTRING_INDEX	2
 #define VERSALOON_SERIALSTRING_INDEX	3
@@ -109,4 +107,4 @@ extern uint8_t *versaloon_buf;
 extern uint8_t *versaloon_cmd_buf;
 extern uint16_t versaloon_buf_size;
 
-#endif /* __VERSALOON_INTERNAL_H_INCLUDED__ */
+#endif /* OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_INTERNAL_H */

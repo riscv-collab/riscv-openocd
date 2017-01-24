@@ -19,18 +19,16 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
+#include "log.h"
+#include "command.h"
 #include "time_support.h"
-/* @todo the inclusion of server.h here is a layering violation */
-#include <server/server.h>
 
 #include <stdarg.h>
 
@@ -47,10 +45,10 @@ int debug_level = -1;
 static FILE *log_output;
 static struct log_callback *log_callbacks;
 
-static long long last_time;
-static long long current_time;
+static int64_t last_time;
+static int64_t current_time;
 
-static long long start;
+static int64_t start;
 
 static const char * const log_strings[5] = {
 	"User : ",
@@ -136,12 +134,12 @@ static void log_puts(enum log_levels level,
 	if (strlen(string) > 0) {
 		if (debug_level >= LOG_LVL_DEBUG) {
 			/* print with count and time information */
-			int t = (int)(timeval_ms()-start);
+			int64_t t = timeval_ms() - start;
 #ifdef _DEBUG_FREE_SPACE_
 			struct mallinfo info;
 			info = mallinfo();
 #endif
-			fprintf(log_output, "%s%d %d %s:%d %s()"
+			fprintf(log_output, "%s%d %" PRId64 " %s:%d %s()"
 #ifdef _DEBUG_FREE_SPACE_
 				" %d"
 #endif
@@ -193,6 +191,30 @@ void log_printf(enum log_levels level,
 	va_end(ap);
 }
 
+void log_vprintf_lf(enum log_levels level, const char *file, unsigned line,
+		const char *function, const char *format, va_list args)
+{
+	char *tmp;
+
+	count++;
+
+	if (level > debug_level)
+		return;
+
+	tmp = alloc_vprintf(format, args);
+
+	if (!tmp)
+		return;
+
+	/*
+	 * Note: alloc_vprintf() guarantees that the buffer is at least one
+	 * character longer.
+	 */
+	strcat(tmp, "\n");
+	log_puts(level, file, line, function, tmp);
+	free(tmp);
+}
+
 void log_printf_lf(enum log_levels level,
 	const char *file,
 	unsigned line,
@@ -200,23 +222,10 @@ void log_printf_lf(enum log_levels level,
 	const char *format,
 	...)
 {
-	char *string;
 	va_list ap;
 
-	count++;
-	if (level > debug_level)
-		return;
-
 	va_start(ap, format);
-
-	string = alloc_vprintf(format, ap);
-	if (string != NULL) {
-		strcat(string, "\n");	/* alloc_vprintf guaranteed the buffer to be at least one
-					 *char longer */
-		log_puts(level, file, line, function, string);
-		free(string);
-	}
-
+	log_vprintf_lf(level, file, line, function, format, ap);
 	va_end(ap);
 }
 
@@ -412,12 +421,12 @@ void keep_alive()
 		if (gdb_actual_connections)
 			LOG_WARNING("keep_alive() was not invoked in the "
 				"1000ms timelimit. GDB alive packet not "
-				"sent! (%lld). Workaround: increase "
+				"sent! (%" PRId64 "). Workaround: increase "
 				"\"set remotetimeout\" in GDB",
 				current_time-last_time);
 		else
 			LOG_DEBUG("keep_alive() was not invoked in the "
-				"1000ms timelimit (%lld). This may cause "
+				"1000ms timelimit (%" PRId64 "). This may cause "
 				"trouble with GDB connections.",
 				current_time-last_time);
 	}

@@ -16,13 +16,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARM9TDMI_H
-#define ARM9TDMI_H
+#ifndef OPENOCD_TARGET_ARM9TDMI_H
+#define OPENOCD_TARGET_ARM9TDMI_H
 
 #include "embeddedice.h"
 
@@ -55,4 +53,4 @@ void arm9tdmi_branch_resume(struct target *target);
 void arm9tdmi_enable_single_step(struct target *target, uint32_t next_pc);
 void arm9tdmi_disable_single_step(struct target *target);
 
-#endif /* ARM9TDMI_H */
+#endif /* OPENOCD_TARGET_ARM9TDMI_H */

@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -145,7 +143,6 @@ static int embKernel_get_tasks_details(struct rtos *rtos, int64_t iterable, cons
 		return retval;
 	details->threadid = (threadid_t) task;
 	details->exists = true;
-	details->display_str = NULL;
 
 	int64_t name_ptr = 0;
 	retval = target_read_buffer(rtos->target, task + param->thread_name_offset, param->pointer_width,
@@ -171,11 +168,11 @@ static int embKernel_get_tasks_details(struct rtos *rtos, int64_t iterable, cons
 		return retval;
 	details->extra_info_str = malloc(EMBKERNEL_MAX_THREAD_NAME_STR_SIZE);
 	if (task == rtos->current_thread) {
-		snprintf(details->extra_info_str, EMBKERNEL_MAX_THREAD_NAME_STR_SIZE, "Pri=%u, Running",
+		snprintf(details->extra_info_str, EMBKERNEL_MAX_THREAD_NAME_STR_SIZE, "State: Running, Priority: %u",
 				(unsigned int) priority);
 	} else {
-		snprintf(details->extra_info_str, EMBKERNEL_MAX_THREAD_NAME_STR_SIZE, "Pri=%u, %s", (unsigned int) priority,
-				state_str);
+		snprintf(details->extra_info_str, EMBKERNEL_MAX_THREAD_NAME_STR_SIZE, "State: %s, Priority: %u",
+				state_str, (unsigned int) priority);
 	}
 
 	LOG_OUTPUT("Getting task details: iterable=0x%08X, task=0x%08X, name=%s\n", (unsigned int)iterable,

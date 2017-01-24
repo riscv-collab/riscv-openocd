@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARMV4_5_MMU_H
-#define ARMV4_5_MMU_H
+#ifndef OPENOCD_TARGET_ARMV4_5_MMU_H
+#define OPENOCD_TARGET_ARMV4_5_MMU_H
 
 #include "armv4_5_cache.h"
 
@@ -55,4 +53,4 @@ enum {
 	ARMV4_5_MMU_R_BIT = 0x200
 };
 
-#endif /* ARMV4_5_MMU_H */
+#endif /* OPENOCD_TARGET_ARMV4_5_MMU_H */

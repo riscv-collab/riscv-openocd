@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -2198,6 +2196,13 @@ int nds32_assert_reset(struct target *target)
 	struct nds32 *nds32 = target_to_nds32(target);
 	struct aice_port_s *aice = target_to_aice(target);
 	struct nds32_cpu_version *cpu_version = &(nds32->cpu_version);
+
+	/* TODO: apply hw reset signal in not examined state */
+	if (!(target_was_examined(target))) {
+		LOG_WARNING("Reset is not asserted because the target is not examined.");
+		LOG_WARNING("Use a reset button or power cycle the target.");
+		return ERROR_TARGET_NOT_EXAMINED;
+	}
 
 	if (target->reset_halt) {
 		if ((nds32->soft_reset_halt)

@@ -23,9 +23,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -213,6 +211,7 @@
 #define LPC1317        0x1A020525
 #define LPC1342        0x3D01402B
 #define LPC1343        0x3D00002B
+#define LPC1343_1      0x3000002B
 #define LPC1345        0x28010541
 #define LPC1346        0x08018542
 #define LPC1347        0x08020543
@@ -259,6 +258,8 @@
 #define LPC824_201_1   0x00008242
 
 #define IAP_CODE_LEN 0x34
+
+#define LPC11xx_REG_SECTORS	24
 
 typedef enum {
 	lpc2000_v1,
@@ -555,14 +556,21 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 			exit(-1);
 		}
 		lpc2000_info->cmd51_max_buffer = 512; /* smallest MCU in the series, LPC1110, has 1 kB of SRAM */
-		bank->num_sectors = bank->size / 4096;
+		unsigned int large_sectors = 0;
+		unsigned int normal_sectors = bank->size / 4096;
+
+		if (normal_sectors > LPC11xx_REG_SECTORS) {
+			large_sectors = (normal_sectors - LPC11xx_REG_SECTORS) / 8;
+			normal_sectors = LPC11xx_REG_SECTORS;
+		}
+
+		bank->num_sectors = normal_sectors + large_sectors;
 
 		bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
 
 		for (int i = 0; i < bank->num_sectors; i++) {
 			bank->sectors[i].offset = offset;
-			/* all sectors are 4kB-sized */
-			bank->sectors[i].size = 4 * 1024;
+			bank->sectors[i].size = (i < LPC11xx_REG_SECTORS ? 4 : 32) * 1024;
 			offset += bank->sectors[i].size;
 			bank->sectors[i].is_erased = -1;
 			bank->sectors[i].is_protected = 1;
@@ -1317,6 +1325,7 @@ static int lpc2000_auto_probe_flash(struct flash_bank *bank)
 		case LPC1313_1:
 		case LPC1315:
 		case LPC1343:
+		case LPC1343_1:
 		case LPC1345:
 			lpc2000_info->variant = lpc1100;
 			bank->size = 32 * 1024;

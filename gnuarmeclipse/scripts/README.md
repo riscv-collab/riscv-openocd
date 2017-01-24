@@ -1,10 +1,6 @@
-These are the scripts used during the **GNU ARM Eclipse OpenOCD** build procedure.
+These scripts are used during the **GNU ARM Eclipse OpenOCD** build procedure. 
 
-The build scripts:
-
-* build-openocd-linux.sh
-* build-openocd-osx.sh
-* build-openocd-win-cross-linux.sh
+For the build script itself, see https://github.com/gnuarmeclipse/build-scripts.
 
 ## cross-pkg-config
 

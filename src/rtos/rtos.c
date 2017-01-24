@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -36,6 +34,7 @@ extern struct rtos_type Linux_os;
 extern struct rtos_type ChibiOS_rtos;
 extern struct rtos_type embKernel_rtos;
 extern struct rtos_type mqx_rtos;
+extern struct rtos_type uCOS_III_rtos;
 
 static struct rtos_type *rtos_types[] = {
 	&ThreadX_rtos,
@@ -45,6 +44,7 @@ static struct rtos_type *rtos_types[] = {
 	&ChibiOS_rtos,
 	&embKernel_rtos,
 	&mqx_rtos,
+	&uCOS_III_rtos,
 	NULL
 };
 
@@ -104,8 +104,9 @@ static int os_alloc_create(struct target *target, struct rtos_type *ostype)
 int rtos_create(Jim_GetOptInfo *goi, struct target *target)
 {
 	int x;
-	char *cp;
+	const char *cp;
 	struct Jim_Obj *res;
+	int e;
 
 	if (!goi->isconfigure && goi->argc != 0) {
 		Jim_WrongNumArgs(goi->interp, goi->argc, goi->argv, "NO PARAMS");
@@ -114,7 +115,9 @@ int rtos_create(Jim_GetOptInfo *goi, struct target *target)
 
 	os_free(target);
 
-	Jim_GetOpt_String(goi, &cp, NULL);
+	e = Jim_GetOpt_String(goi, &cp, NULL);
+	if (e != JIM_OK)
+		return e;
 
 	if (0 == strcmp(cp, "auto")) {
 		/* Auto detect tries to look up all symbols for each RTOS,
@@ -215,7 +218,7 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 		goto done;
 
 	/* Decode any symbol name in the packet*/
-	int len = unhexify(cur_sym, strchr(packet + 8, ':') + 1, strlen(strchr(packet + 8, ':') + 1));
+	size_t len = unhexify((uint8_t *)cur_sym, strchr(packet + 8, ':') + 1, strlen(strchr(packet + 8, ':') + 1));
 	cur_sym[len] = 0;
 
 	if ((strcmp(packet, "qSymbol::") != 0) &&               /* GDB is not offering symbol lookup for the first time */
@@ -263,7 +266,9 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 	}
 
 	reply_len = snprintf(reply, sizeof(reply), "qSymbol:");
-	reply_len += hexify(reply + reply_len, next_sym->symbol_name, 0, sizeof(reply) - reply_len);
+	reply_len += hexify(reply + reply_len,
+		(const uint8_t *)next_sym->symbol_name, strlen(next_sym->symbol_name),
+		sizeof(reply) - reply_len);
 
 done:
 	gdb_put_packet(connection, reply, reply_len);
@@ -298,35 +303,28 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 			struct thread_detail *detail = &target->rtos->thread_details[found];
 
 			int str_size = 0;
-			if (detail->display_str != NULL)
-				str_size += strlen(detail->display_str);
 			if (detail->thread_name_str != NULL)
 				str_size += strlen(detail->thread_name_str);
 			if (detail->extra_info_str != NULL)
 				str_size += strlen(detail->extra_info_str);
 
-			char *tmp_str = calloc(str_size + 7, sizeof(char));
+			char *tmp_str = calloc(str_size + 9, sizeof(char));
 			char *tmp_str_ptr = tmp_str;
 
-			if (detail->display_str != NULL)
-				tmp_str_ptr += sprintf(tmp_str_ptr, "%s", detail->display_str);
-			if (detail->thread_name_str != NULL) {
-				if (tmp_str_ptr != tmp_str)
-					tmp_str_ptr += sprintf(tmp_str_ptr, " : ");
-				tmp_str_ptr += sprintf(tmp_str_ptr, "%s", detail->thread_name_str);
-			}
+			if (detail->thread_name_str != NULL)
+				tmp_str_ptr += sprintf(tmp_str_ptr, "Name: %s", detail->thread_name_str);
 			if (detail->extra_info_str != NULL) {
 				if (tmp_str_ptr != tmp_str)
-					tmp_str_ptr += sprintf(tmp_str_ptr, " : ");
-				tmp_str_ptr +=
-					sprintf(tmp_str_ptr, " : %s", detail->extra_info_str);
+					tmp_str_ptr += sprintf(tmp_str_ptr, ", ");
+				tmp_str_ptr += sprintf(tmp_str_ptr, "%s", detail->extra_info_str);
 			}
 
 			assert(strlen(tmp_str) ==
 				(size_t) (tmp_str_ptr - tmp_str));
 
 			char *hex_str = malloc(strlen(tmp_str) * 2 + 1);
-			int pkt_len = hexify(hex_str, tmp_str, 0, strlen(tmp_str) * 2 + 1);
+			size_t pkt_len = hexify(hex_str, (const uint8_t *)tmp_str,
+				strlen(tmp_str), strlen(tmp_str) * 2 + 1);
 
 			gdb_put_packet(connection, hex_str, pkt_len);
 			free(hex_str);
@@ -407,9 +405,14 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 	} else if (packet[0] == 'H') {	/* Set current thread ( 'c' for step and continue, 'g' for
 					 * all other operations ) */
 		if ((packet[1] == 'g') && (target->rtos != NULL)) {
-			sscanf(packet, "Hg%16" SCNx64, &target->rtos->current_threadid);
-			LOG_DEBUG("RTOS: GDB requested to set current thread to 0x%" PRIx64 "\r\n",
-										target->rtos->current_threadid);
+			threadid_t threadid;
+			sscanf(packet, "Hg%16" SCNx64, &threadid);
+			LOG_DEBUG("RTOS: GDB requested to set current thread to 0x%" PRIx64, threadid);
+			/* threadid of 0 indicates target should choose */
+			if (threadid == 0)
+				target->rtos->current_threadid = target->rtos->current_thread;
+			else
+				target->rtos->current_threadid = threadid;
 		}
 		gdb_put_packet(connection, "OK", 2);
 		return ERROR_OK;
@@ -433,9 +436,13 @@ int rtos_get_gdb_reg_list(struct connection *connection)
 										current_threadid,
 										target->rtos->current_thread);
 
-		target->rtos->type->get_thread_reg_list(target->rtos,
-			current_threadid,
-			&hex_reg_list);
+		int retval = target->rtos->type->get_thread_reg_list(target->rtos,
+				current_threadid,
+				&hex_reg_list);
+		if (retval != ERROR_OK) {
+			LOG_ERROR("RTOS: failed to get register list");
+			return retval;
+		}
 
 		if (hex_reg_list != NULL) {
 			gdb_put_packet(connection, hex_reg_list, strlen(hex_reg_list));
@@ -485,13 +492,12 @@ int rtos_generic_stack_read(struct target *target,
 		list_size += stacking->register_offsets[i].width_bits/8;
 	*hex_reg_list = malloc(list_size*2 + 1);
 	tmp_str_ptr = *hex_reg_list;
-	new_stack_ptr = stack_ptr - stacking->stack_growth_direction *
-		stacking->stack_registers_size;
-	if (stacking->stack_alignment != 0) {
-		/* Align new stack pointer to x byte boundary */
-		new_stack_ptr =
-			(new_stack_ptr & (~((int64_t) stacking->stack_alignment - 1))) +
-			((stacking->stack_growth_direction == -1) ? stacking->stack_alignment : 0);
+	if (stacking->calculate_process_stack != NULL) {
+		new_stack_ptr = stacking->calculate_process_stack(target,
+				stack_data, stacking, stack_ptr);
+	} else {
+		new_stack_ptr = stack_ptr - stacking->stack_growth_direction *
+			stacking->stack_registers_size;
 	}
 	for (i = 0; i < stacking->num_output_registers; i++) {
 		int j;
@@ -548,12 +554,13 @@ void rtos_free_threadlist(struct rtos *rtos)
 
 		for (j = 0; j < rtos->thread_count; j++) {
 			struct thread_detail *current_thread = &rtos->thread_details[j];
-			free(current_thread->display_str);
 			free(current_thread->thread_name_str);
 			free(current_thread->extra_info_str);
 		}
 		free(rtos->thread_details);
 		rtos->thread_details = NULL;
 		rtos->thread_count = 0;
+		rtos->current_threadid = -1;
+		rtos->current_thread = 0;
 	}
 }

@@ -18,13 +18,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef MIPS32_H
-#define MIPS32_H
+#ifndef OPENOCD_TARGET_MIPS32_H
+#define OPENOCD_TARGET_MIPS32_H
 
 #include "target.h"
 #include "mips32_pracc.h"
@@ -62,6 +60,8 @@
 
 #define MIPS32_ARCH_REL1 0x0
 #define MIPS32_ARCH_REL2 0x1
+
+#define MIPS32_SCAN_DELAY_LEGACY_MODE 2000000
 
 /* offsets into mips32 core register cache */
 enum {
@@ -249,6 +249,6 @@ int mips32_get_gdb_reg_list(struct target *target,
 int mips32_checksum_memory(struct target *target, uint32_t address,
 		uint32_t count, uint32_t *checksum);
 int mips32_blank_check_memory(struct target *target,
-		uint32_t address, uint32_t count, uint32_t *blank);
+		uint32_t address, uint32_t count, uint32_t *blank, uint8_t erased_value);
 
-#endif	/*MIPS32_H*/
+#endif /* OPENOCD_TARGET_MIPS32_H */

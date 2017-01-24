@@ -12,13 +12,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef SWD_H
-#define SWD_H
+#ifndef OPENOCD_JTAG_SWD_H
+#define OPENOCD_JTAG_SWD_H
 
 #include <target/arm_adi_v5.h>
 
@@ -153,48 +151,47 @@ struct swd_driver {
 	 * queued transactions are executed. If the frequency is lowered, it may
 	 * apply immediately.
 	 *
-	 * @param dap The DAP controlled by the SWD link.
 	 * @param hz The desired frequency in Hz.
 	 * @return The actual resulting frequency after rounding.
 	 */
-	int_least32_t (*frequency)(struct adiv5_dap *dap, int_least32_t hz);
+	int_least32_t (*frequency)(int_least32_t hz);
 
 	/**
 	 * Queue a special SWDIO sequence.
 	 *
-	 * @param dap The DAP controlled by the SWD link.
 	 * @param seq The special sequence to generate.
 	 * @return ERROR_OK if the sequence was queued, negative error if the
 	 * sequence is unsupported.
 	 */
-	int (*switch_seq)(struct adiv5_dap *dap, enum swd_special_seq seq);
+	int (*switch_seq)(enum swd_special_seq seq);
 
 	/**
 	 * Queued read of an AP or DP register.
 	 *
-	 * @param dap The DAP controlled by the SWD link.
 	 * @param Command byte with APnDP/RnW/addr/parity bits
 	 * @param Where to store value to read from register
+	 * @param ap_delay_hint Number of idle cycles that may be
+	 * needed after an AP access to avoid WAITs
 	 */
-	void (*read_reg)(struct adiv5_dap *dap, uint8_t cmd, uint32_t *value);
+	void (*read_reg)(uint8_t cmd, uint32_t *value, uint32_t ap_delay_hint);
 
 	/**
 	 * Queued write of an AP or DP register.
 	 *
-	 * @param dap The DAP controlled by the SWD link.
 	 * @param Command byte with APnDP/RnW/addr/parity bits
 	 * @param Value to be written to the register
+	 * @param ap_delay_hint Number of idle cycles that may be
+	 * needed after an AP access to avoid WAITs
 	 */
-	void (*write_reg)(struct adiv5_dap *dap, uint8_t cmd, uint32_t value);
+	void (*write_reg)(uint8_t cmd, uint32_t value, uint32_t ap_delay_hint);
 
 	/**
 	 * Execute any queued transactions and collect the result.
 	 *
-	 * @param dap The DAP controlled by the SWD link.
 	 * @return ERROR_OK on success, Ack response code on WAIT/FAULT
 	 * or negative error code on other kinds of failure.
 	 */
-	int (*run)(struct adiv5_dap *dap);
+	int (*run)(void);
 
 	/**
 	 * Configures data collection from the Single-wire
@@ -208,7 +205,7 @@ struct swd_driver {
 	 *
 	 * @return ERROR_OK on success, else a negative fault code.
 	 */
-	int *(*trace)(struct adiv5_dap *dap, bool swo);
+	int *(*trace)(bool swo);
 };
 
 int swd_init_reset(struct command_context *cmd_ctx);
@@ -216,4 +213,4 @@ void swd_add_reset(int req_srst);
 
 bool transport_is_swd(void);
 
-#endif /* SWD_H */
+#endif /* OPENOCD_JTAG_SWD_H */

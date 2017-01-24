@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef TRACE_H
-#define TRACE_H
+#ifndef OPENOCD_TARGET_TRACE_H
+#define OPENOCD_TARGET_TRACE_H
 
 struct target;
 struct command_context;
@@ -58,4 +56,4 @@ int trace_register_commands(struct command_context *cmd_ctx);
 #define ERROR_TRACE_IMAGE_UNAVAILABLE		(-1500)
 #define ERROR_TRACE_INSTRUCTION_UNAVAILABLE	(-1501)
 
-#endif /* TRACE_H */
+#endif /* OPENOCD_TARGET_TRACE_H */

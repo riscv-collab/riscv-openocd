@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef __NDS32_H__
-#define __NDS32_H__
+#ifndef OPENOCD_TARGET_NDS32_H
+#define OPENOCD_TARGET_NDS32_H
 
 #include <jtag/jtag.h>
 #include "target.h"
@@ -456,4 +454,4 @@ static inline bool nds32_reach_max_interrupt_level(struct nds32 *nds32)
 	return nds32->max_interrupt_level == nds32->current_interrupt_level;
 }
 
-#endif /* __NDS32_H__ */
+#endif /* OPENOCD_TARGET_NDS32_H */

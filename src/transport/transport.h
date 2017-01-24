@@ -13,12 +13,11 @@
  * GNU General Public License for more details.
 
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TRANSPORT_H
-#define TRANSPORT_H
+#ifndef OPENOCD_TRANSPORT_TRANSPORT_H
+#define OPENOCD_TRANSPORT_TRANSPORT_H
 
 #include "helper/command.h"
 
@@ -91,4 +90,4 @@ int allow_transports(struct command_context *ctx, const char * const *vector);
 
 bool transports_are_declared(void);
 
-#endif
+#endif /* OPENOCD_TRANSPORT_TRANSPORT_H */

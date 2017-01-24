@@ -12,9 +12,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -44,18 +42,23 @@ static int testee_init(struct command_context *cmd_ctx, struct target *target)
 }
 static int testee_poll(struct target *target)
 {
+	if ((target->state == TARGET_RUNNING) || (target->state == TARGET_DEBUG_RUNNING))
+		target->state = TARGET_HALTED;
 	return ERROR_OK;
 }
 static int testee_halt(struct target *target)
 {
+	target->state = TARGET_HALTED;
 	return ERROR_OK;
 }
 static int testee_reset_assert(struct target *target)
 {
+	target->state = TARGET_RESET;
 	return ERROR_OK;
 }
 static int testee_reset_deassert(struct target *target)
 {
+	target->state = TARGET_RUNNING;
 	return ERROR_OK;
 }
 struct target_type testee_target = {

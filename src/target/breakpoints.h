@@ -13,13 +13,13 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef BREAKPOINTS_H
-#define BREAKPOINTS_H
+#ifndef OPENOCD_TARGET_BREAKPOINTS_H
+#define OPENOCD_TARGET_BREAKPOINTS_H
+
+#include <stdint.h>
 
 struct target;
 
@@ -75,4 +75,4 @@ void watchpoint_remove(struct target *target, uint32_t address);
 /* report type and address of just hit watchpoint */
 int watchpoint_hit(struct target *target, enum watchpoint_rw *rw, uint32_t *address);
 
-#endif /* BREAKPOINTS_H */
+#endif /* OPENOCD_TARGET_BREAKPOINTS_H */

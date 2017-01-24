@@ -12,9 +12,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 /* 2014-12: Addition of the SWD protocol support is based on the initial work
@@ -210,7 +208,7 @@ static int sysfsgpio_swdio_read(void)
 		return 0;
 	}
 
-	return buf[0] == '1';
+	return buf[0] != '0';
 }
 
 static void sysfsgpio_swdio_write(int swclk, int swdio)
@@ -259,7 +257,7 @@ static int sysfsgpio_read(void)
 		return 0;
 	}
 
-	return buf[0] == '1';
+	return buf[0] != '0';
 }
 
 /*
@@ -663,9 +661,9 @@ static int sysfsgpio_init(void)
 
 	if (sysfsgpio_swd_mode_possible()) {
 		if (swd_mode)
-			bitbang_swd_switch_seq(NULL, JTAG_TO_SWD);
+			bitbang_swd_switch_seq(JTAG_TO_SWD);
 		else
-			bitbang_swd_switch_seq(NULL, SWD_TO_JTAG);
+			bitbang_swd_switch_seq(SWD_TO_JTAG);
 	}
 
 	return ERROR_OK;

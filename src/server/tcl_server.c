@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -24,17 +22,21 @@
 
 #include "tcl_server.h"
 #include <target/target.h>
+#include <helper/binarybuffer.h>
 
 #define TCL_SERVER_VERSION		"TCL Server 0.1"
-#define TCL_MAX_LINE			(4096)
+#define TCL_LINE_INITIAL		(4*1024)
+#define TCL_LINE_MAX			(4*1024*1024)
 
 struct tcl_connection {
 	int tc_linedrop;
 	int tc_lineoffset;
-	char tc_line[TCL_MAX_LINE];
+	int tc_line_size;
+	char *tc_line;
 	int tc_outerror;/* flag an output error */
 	enum target_state tc_laststate;
 	bool tc_notify;
+	bool tc_trace;
 };
 
 static char *tcl_port;
@@ -87,6 +89,32 @@ static int tcl_target_callback_reset_handler(struct target *target,
 	return ERROR_OK;
 }
 
+static int tcl_target_callback_trace_handler(struct target *target,
+		size_t len, uint8_t *data, void *priv)
+{
+	struct connection *connection = priv;
+	struct tcl_connection *tclc;
+	char *header = "type target_trace data ";
+	char *trailer = "\r\n\x1a";
+	size_t hex_len = len * 2 + 1;
+	size_t max_len = hex_len + strlen(header) + strlen(trailer);
+	char *buf, *hex;
+
+	tclc = connection->priv;
+
+	if (tclc->tc_trace) {
+		hex = malloc(hex_len);
+		buf = malloc(max_len);
+		hexify(hex, data, len, hex_len);
+		snprintf(buf, max_len, "%s%s%s", header, hex, trailer);
+		tcl_output(connection, buf, strlen(buf));
+		free(hex);
+		free(buf);
+	}
+
+	return ERROR_OK;
+}
+
 /* write data out to a socket.
  *
  * this is a blocking write, so the return value must equal the length, if
@@ -116,11 +144,17 @@ static int tcl_new_connection(struct connection *connection)
 {
 	struct tcl_connection *tclc;
 
-	tclc = malloc(sizeof(struct tcl_connection));
+	tclc = calloc(1, sizeof(struct tcl_connection));
 	if (tclc == NULL)
 		return ERROR_CONNECTION_REJECTED;
 
-	memset(tclc, 0, sizeof(struct tcl_connection));
+	tclc->tc_line_size = TCL_LINE_INITIAL;
+	tclc->tc_line = malloc(tclc->tc_line_size);
+	if (tclc->tc_line == NULL) {
+		free(tclc);
+		return ERROR_CONNECTION_REJECTED;
+	}
+
 	connection->priv = tclc;
 
 	struct target *target = get_target_by_num(connection->cmd_ctx->current_target);
@@ -132,6 +166,7 @@ static int tcl_new_connection(struct connection *connection)
 
 	target_register_event_callback(tcl_target_callback_event_handler, connection);
 	target_register_reset_callback(tcl_target_callback_reset_handler, connection);
+	target_register_trace_callback(tcl_target_callback_trace_handler, connection);
 
 	return ERROR_OK;
 }
@@ -146,6 +181,8 @@ static int tcl_input(struct connection *connection)
 	int reslen;
 	struct tcl_connection *tclc;
 	unsigned char in[256];
+	char *tc_line_new;
+	int tc_line_size_new;
 
 	rlen = connection_read(connection, &in, sizeof(in));
 	if (rlen <= 0) {
@@ -162,10 +199,31 @@ static int tcl_input(struct connection *connection)
 	for (i = 0; i < rlen; i++) {
 		/* buffer the data */
 		tclc->tc_line[tclc->tc_lineoffset] = in[i];
-		if (tclc->tc_lineoffset < TCL_MAX_LINE)
+		if (tclc->tc_lineoffset < tclc->tc_line_size) {
 			tclc->tc_lineoffset++;
-		else
+		} else if (tclc->tc_line_size >= TCL_LINE_MAX) {
+			/* maximum line size reached, drop line */
 			tclc->tc_linedrop = 1;
+		} else {
+			/* grow line buffer: exponential below 1 MB, linear above */
+			if (tclc->tc_line_size <= 1*1024*1024)
+				tc_line_size_new = tclc->tc_line_size * 2;
+			else
+				tc_line_size_new = tclc->tc_line_size + 1*1024*1024;
+
+			if (tc_line_size_new > TCL_LINE_MAX)
+				tc_line_size_new = TCL_LINE_MAX;
+
+			tc_line_new = realloc(tclc->tc_line, tc_line_size_new);
+			if (tc_line_new == NULL) {
+				tclc->tc_linedrop = 1;
+			} else {
+				tclc->tc_line = tc_line_new;
+				tclc->tc_line_size = tc_line_size_new;
+				tclc->tc_lineoffset++;
+			}
+
+		}
 
 		/* ctrl-z is end of command. When testing from telnet, just
 		 * press ctrl-z a couple of times first to put telnet into the
@@ -183,7 +241,7 @@ static int tcl_input(struct connection *connection)
 #undef ESTR
 		} else {
 			tclc->tc_line[tclc->tc_lineoffset-1] = '\0';
-			retval = command_run_line(connection->cmd_ctx, tclc->tc_line);
+			command_run_line(connection->cmd_ctx, tclc->tc_line);
 			result = Jim_GetString(Jim_GetResult(interp), &reslen);
 			retval = tcl_output(connection, result, reslen);
 			if (retval != ERROR_OK)
@@ -201,14 +259,19 @@ static int tcl_input(struct connection *connection)
 
 static int tcl_closed(struct connection *connection)
 {
+	struct tcl_connection *tclc;
+	tclc = connection->priv;
+
 	/* cleanup connection context */
-	if (connection->priv) {
-		free(connection->priv);
+	if (tclc) {
+		free(tclc->tc_line);
+		free(tclc);
 		connection->priv = NULL;
 	}
 
 	target_unregister_event_callback(tcl_target_callback_event_handler, connection);
 	target_unregister_reset_callback(tcl_target_callback_reset_handler, connection);
+	target_unregister_trace_callback(tcl_target_callback_trace_handler, connection);
 
 	return ERROR_OK;
 }
@@ -220,7 +283,7 @@ int tcl_init(void)
 		return ERROR_OK;
 	}
 
-	return add_service("tcl", tcl_port, 1,
+	return add_service("tcl", tcl_port, CONNECTION_LIMIT_UNLIMITED,
 		&tcl_new_connection, &tcl_input,
 		&tcl_closed, NULL);
 }
@@ -240,7 +303,24 @@ COMMAND_HANDLER(handle_tcl_notifications_command)
 
 	if (connection != NULL && !strcmp(connection->service->name, "tcl")) {
 		tclc = connection->priv;
-		return CALL_COMMAND_HANDLER(handle_command_parse_bool, &tclc->tc_notify, "Target Notification output is");
+		return CALL_COMMAND_HANDLER(handle_command_parse_bool, &tclc->tc_notify, "Target Notification output ");
+	} else {
+		LOG_ERROR("%s: can only be called from the tcl server", CMD_NAME);
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+}
+
+COMMAND_HANDLER(handle_tcl_trace_command)
+{
+	struct connection *connection = NULL;
+	struct tcl_connection *tclc = NULL;
+
+	if (CMD_CTX->output_handler_priv != NULL)
+		connection = CMD_CTX->output_handler_priv;
+
+	if (connection != NULL && !strcmp(connection->service->name, "tcl")) {
+		tclc = connection->priv;
+		return CALL_COMMAND_HANDLER(handle_command_parse_bool, &tclc->tc_trace, "Target trace output ");
 	} else {
 		LOG_ERROR("%s: can only be called from the tcl server", CMD_NAME);
 		return ERROR_COMMAND_SYNTAX_ERROR;
@@ -262,6 +342,13 @@ static const struct command_registration tcl_command_handlers[] = {
 		.handler = handle_tcl_notifications_command,
 		.mode = COMMAND_EXEC,
 		.help = "Target Notification output",
+		.usage = "[on|off]",
+	},
+	{
+		.name = "tcl_trace",
+		.handler = handle_tcl_trace_command,
+		.mode = COMMAND_EXEC,
+		.help = "Target trace output",
 		.usage = "[on|off]",
 	},
 	COMMAND_REGISTRATION_DONE

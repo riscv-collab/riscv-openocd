@@ -14,9 +14,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -373,7 +371,7 @@ static int aduc702x_check_flash_completion(struct target *target, unsigned int t
 {
 	uint8_t v = 4;
 
-	long long endtime = timeval_ms() + timeout_ms;
+	int64_t endtime = timeval_ms() + timeout_ms;
 	while (1) {
 		target_read_u8(target, ADUC702x_FLASH + ADUC702x_FLASH_FEESTA, &v);
 		if ((v & 4) == 0)

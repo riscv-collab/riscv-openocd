@@ -15,13 +15,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef MIPS_EJTAG
-#define MIPS_EJTAG
+#ifndef OPENOCD_TARGET_MIPS_EJTAG_H
+#define OPENOCD_TARGET_MIPS_EJTAG_H
 
 #include <jtag/jtag.h>
 
@@ -144,7 +142,7 @@
 #define EJTAG_V20_IBC_OFFS		0x4	/* IBC Offset */
 #define EJTAG_V20_IBM_OFFS		0x8
 #define EJTAG_V20_IBAn_STEP		0x10	/* Offset for next channel */
-#define EJTAG_V20_DBS			0xFF30008
+#define EJTAG_V20_DBS			0xFF300008
 #define EJTAG_V20_DBA0			0xFF300200
 #define EJTAG_V20_DBC_OFFS		0x4
 #define EJTAG_V20_DBM_OFFS		0x8
@@ -234,4 +232,4 @@ static inline void mips_le_to_h_u32(jtag_callback_data_t arg)
 	*((uint32_t *)arg) = le_to_h_u32(in);
 }
 
-#endif /* MIPS_EJTAG */
+#endif /* OPENOCD_TARGET_MIPS_EJTAG_H */

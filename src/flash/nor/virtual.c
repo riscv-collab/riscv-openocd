@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -46,6 +44,7 @@ static void virtual_update_bank_info(struct flash_bank *bank)
 	bank->size = master_bank->size;
 	bank->chip_width = master_bank->chip_width;
 	bank->bus_width = master_bank->bus_width;
+	bank->erased_value = master_bank->erased_value;
 	bank->default_padded_value = master_bank->default_padded_value;
 	bank->num_sectors = master_bank->num_sectors;
 	bank->sectors = master_bank->sectors;

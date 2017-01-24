@@ -20,6 +20,9 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -102,12 +105,12 @@ const struct psoc4_chip_details psoc4_devices[] = {
 	/* 4100 series */
 	{ 0x0410, "CY8C4124PVI-432", "SSOP-28", .flash_size_in_kb = 16 },
 	{ 0x0411, "CY8C4124PVI-442", "SSOP-28", .flash_size_in_kb = 16 },
-	{ 0x0416, "CY8C4124LQI-443", "QFN-40",  .flash_size_in_kb = 16 },
+	{ 0x041C, "CY8C4124LQI-443", "QFN-40",  .flash_size_in_kb = 16 },
 	{ 0x041A, "CY8C4124AXI-443", "TQFP-44", .flash_size_in_kb = 16 },
 	{ 0x041B, "CY8C4125AXI-473", "TQFP-44", .flash_size_in_kb = 32 },
 	{ 0x0412, "CY8C4125PVI-482", "SSOP-28", .flash_size_in_kb = 32 },
 	{ 0x0417, "CY8C4125LQI-483", "QFN-40",  .flash_size_in_kb = 32 },
-	{ 0x041C, "CY8C4125AXI-483", "TQFP-44", .flash_size_in_kb = 32 },
+	{ 0x0416, "CY8C4125AXI-483", "TQFP-44", .flash_size_in_kb = 32 },
 
 	/* CCG1 series */
 	{ 0x0490, "CYPD1103-35FNXI", "CSP-35",  .flash_size_in_kb = 32 },
@@ -221,7 +224,7 @@ static int psoc4_sysreq(struct target *target, uint8_t cmd, uint16_t cmd_param,
 			&sysreq_wait_algorithm) != ERROR_OK) {
 		LOG_DEBUG("no working area for sysreq code");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	};
+	}
 
 	/* Write the code */
 	retval = target_write_buffer(target,

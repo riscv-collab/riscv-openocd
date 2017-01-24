@@ -13,8 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.                                        *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -75,7 +74,7 @@ const struct rtos_register_stacking rtos_mqx_arm_v7m_stacking = {
 	0x4C,					/* stack_registers_size, calculate offset base address */
 	-1,						/* stack_growth_direction */
 	ARMV7M_NUM_CORE_REGS,	/* num_output_registers */
-	0,						/* stack_alignment */
+	NULL,					/* stack_alignment */
 	rtos_mqx_arm_v7m_stack_offsets	/* register_offsets */
 };
 

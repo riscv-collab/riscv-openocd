@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -24,6 +22,8 @@
 
 #include "imp.h"
 #include "helper/binarybuffer.h"
+
+#include <target/cortex_m.h>
 
 #define SAMD_NUM_SECTORS	16
 #define SAMD_PAGE_SIZE_MAX	1024
@@ -34,6 +34,7 @@
 #define SAMD_DSU			0x41002000	/* Device Service Unit */
 #define SAMD_NVMCTRL		0x41004000	/* Non-volatile memory controller */
 
+#define SAMD_DSU_STATUSA        1               /* DSU status register */
 #define SAMD_DSU_DID		0x18		/* Device ID register */
 
 #define SAMD_NVMCTRL_CTRLA		0x00	/* NVM control A register */
@@ -60,20 +61,39 @@
 #define SAMD_NVM_CMD_SSB	0x45		/* Set Security Bit */
 #define SAMD_NVM_CMD_INVALL	0x46		/* Invalidate all caches */
 
+/* NVMCTRL bits */
+#define SAMD_NVM_CTRLB_MANW 0x80
+
 /* Known identifiers */
 #define SAMD_PROCESSOR_M0	0x01
 #define SAMD_FAMILY_D		0x00
 #define SAMD_FAMILY_L		0x01
+#define SAMD_FAMILY_C		0x02
 #define SAMD_SERIES_20		0x00
 #define SAMD_SERIES_21		0x01
+#define SAMD_SERIES_22		0x02
 #define SAMD_SERIES_10		0x02
 #define SAMD_SERIES_11		0x03
+#define SAMD_SERIES_09		0x04
+
+/* Device ID macros */
+#define SAMD_GET_PROCESSOR(id) (id >> 28)
+#define SAMD_GET_FAMILY(id) (((id >> 23) & 0x1F))
+#define SAMD_GET_SERIES(id) (((id >> 16) & 0x3F))
+#define SAMD_GET_DEVSEL(id) (id & 0xFF)
 
 struct samd_part {
 	uint8_t id;
 	const char *name;
 	uint32_t flash_kb;
 	uint32_t ram_kb;
+};
+
+/* Known SAMD09 parts. DID reset values missing in RM, see
+ * https://github.com/avrxml/asf/blob/master/sam0/utils/cmsis/samd09/include/ */
+static const struct samd_part samd09_parts[] = {
+	{ 0x0, "SAMD09D14A", 16, 4 },
+	{ 0x7, "SAMD09C13A", 8, 4 },
 };
 
 /* Known SAMD10 parts */
@@ -138,6 +158,13 @@ static const struct samd_part samd21_parts[] = {
 	{ 0xC, "SAMD21E16A", 64, 8 },
 	{ 0xD, "SAMD21E15A", 32, 4 },
 	{ 0xE, "SAMD21E14A", 16, 2 },
+    /* Below are B Variants (Table 3-7 from rev I of datasheet) */
+	{ 0x20, "SAMD21J16B", 64, 8 },
+	{ 0x21, "SAMD21J15B", 32, 4 },
+	{ 0x23, "SAMD21G16B", 64, 8 },
+	{ 0x24, "SAMD21G15B", 32, 4 },
+	{ 0x26, "SAMD21E16B", 64, 8 },
+	{ 0x27, "SAMD21E15B", 32, 4 },
 };
 
 /* Known SAMR21 parts. */
@@ -162,6 +189,61 @@ static const struct samd_part saml21_parts[] = {
 	{ 0x0B, "SAML21E17A", 128, 16 },
 	{ 0x0C, "SAML21E16A", 64, 8 },
 	{ 0x0D, "SAML21E15A", 32, 4 },
+	{ 0x0F, "SAML21J18B", 256, 32 },
+	{ 0x10, "SAML21J17B", 128, 16 },
+	{ 0x11, "SAML21J16B", 64, 8 },
+	{ 0x14, "SAML21G18B", 256, 32 },
+	{ 0x15, "SAML21G17B", 128, 16 },
+	{ 0x16, "SAML21G16B", 64, 8 },
+	{ 0x19, "SAML21E18B", 256, 32 },
+	{ 0x1A, "SAML21E17B", 128, 16 },
+	{ 0x1B, "SAML21E16B", 64, 8 },
+	{ 0x1C, "SAML21E15B", 32, 4 },
+};
+
+/* Known SAML22 parts. */
+static const struct samd_part saml22_parts[] = {
+	{ 0x00, "SAML22N18A", 256, 32 },
+	{ 0x01, "SAML22N17A", 128, 16 },
+	{ 0x02, "SAML22N16A", 64, 8 },
+	{ 0x05, "SAML22J18A", 256, 32 },
+	{ 0x06, "SAML22J17A", 128, 16 },
+	{ 0x07, "SAML22J16A", 64, 8 },
+	{ 0x0A, "SAML22G18A", 256, 32 },
+	{ 0x0B, "SAML22G17A", 128, 16 },
+	{ 0x0C, "SAML22G16A", 64, 8 },
+};
+
+/* Known SAMC20 parts. */
+static const struct samd_part samc20_parts[] = {
+	{ 0x00, "SAMC20J18A", 256, 32 },
+	{ 0x01, "SAMC20J17A", 128, 16 },
+	{ 0x02, "SAMC20J16A", 64, 8 },
+	{ 0x03, "SAMC20J15A", 32, 4 },
+	{ 0x05, "SAMC20G18A", 256, 32 },
+	{ 0x06, "SAMC20G17A", 128, 16 },
+	{ 0x07, "SAMC20G16A", 64, 8 },
+	{ 0x08, "SAMC20G15A", 32, 4 },
+	{ 0x0A, "SAMC20E18A", 256, 32 },
+	{ 0x0B, "SAMC20E17A", 128, 16 },
+	{ 0x0C, "SAMC20E16A", 64, 8 },
+	{ 0x0D, "SAMC20E15A", 32, 4 },
+};
+
+/* Known SAMC21 parts. */
+static const struct samd_part samc21_parts[] = {
+	{ 0x00, "SAMC21J18A", 256, 32 },
+	{ 0x01, "SAMC21J17A", 128, 16 },
+	{ 0x02, "SAMC21J16A", 64, 8 },
+	{ 0x03, "SAMC21J15A", 32, 4 },
+	{ 0x05, "SAMC21G18A", 256, 32 },
+	{ 0x06, "SAMC21G17A", 128, 16 },
+	{ 0x07, "SAMC21G16A", 64, 8 },
+	{ 0x08, "SAMC21G15A", 32, 4 },
+	{ 0x0A, "SAMC21E18A", 256, 32 },
+	{ 0x0B, "SAMC21E17A", 128, 16 },
+	{ 0x0C, "SAMC21E16A", 64, 8 },
+	{ 0x0D, "SAMC21E15A", 32, 4 },
 };
 
 /* Each family of parts contains a parts table in the DEVSEL field of DID.  The
@@ -183,12 +265,20 @@ static const struct samd_family samd_families[] = {
 		samd21_parts, ARRAY_SIZE(samd21_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_21,
 		samr21_parts, ARRAY_SIZE(samr21_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_09,
+		samd09_parts, ARRAY_SIZE(samd09_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_10,
 		samd10_parts, ARRAY_SIZE(samd10_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_D, SAMD_SERIES_11,
 		samd11_parts, ARRAY_SIZE(samd11_parts) },
 	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_L, SAMD_SERIES_21,
 		saml21_parts, ARRAY_SIZE(saml21_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_L, SAMD_SERIES_22,
+		saml22_parts, ARRAY_SIZE(saml22_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_C, SAMD_SERIES_20,
+		samc20_parts, ARRAY_SIZE(samc20_parts) },
+	{ SAMD_PROCESSOR_M0, SAMD_FAMILY_C, SAMD_SERIES_21,
+		samc21_parts, ARRAY_SIZE(samc21_parts) },
 };
 
 struct samd_info {
@@ -203,12 +293,14 @@ struct samd_info {
 
 static struct samd_info *samd_chips;
 
+
+
 static const struct samd_part *samd_find_part(uint32_t id)
 {
-	uint8_t processor = (id >> 28);
-	uint8_t family = (id >> 23) & 0x1F;
-	uint8_t series = (id >> 16) & 0x3F;
-	uint8_t devsel = id & 0xFF;
+	uint8_t processor = SAMD_GET_PROCESSOR(id);
+	uint8_t family = SAMD_GET_FAMILY(id);
+	uint8_t series = SAMD_GET_SERIES(id);
+	uint8_t devsel = SAMD_GET_DEVSEL(id);
 
 	for (unsigned i = 0; i < ARRAY_SIZE(samd_families); i++) {
 		if (samd_families[i].processor == processor &&
@@ -281,7 +373,7 @@ static int samd_probe(struct flash_bank *bank)
 
 	part = samd_find_part(id);
 	if (part == NULL) {
-		LOG_ERROR("Couldn't find part correspoding to DID %08" PRIx32, id);
+		LOG_ERROR("Couldn't find part corresponding to DID %08" PRIx32, id);
 		return ERROR_FAIL;
 	}
 
@@ -331,80 +423,62 @@ static int samd_probe(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
-static bool samd_check_error(struct target *target)
+static int samd_check_error(struct target *target)
 {
-	int ret;
-	bool error;
+	int ret, ret2;
 	uint16_t status;
 
 	ret = target_read_u16(target,
 			SAMD_NVMCTRL + SAMD_NVMCTRL_STATUS, &status);
 	if (ret != ERROR_OK) {
 		LOG_ERROR("Can't read NVM status");
-		return true;
+		return ret;
 	}
 
-	if (status & 0x001C) {
-		if (status & (1 << 4)) /* NVME */
-			LOG_ERROR("SAMD: NVM Error");
-		if (status & (1 << 3)) /* LOCKE */
-			LOG_ERROR("SAMD: NVM lock error");
-		if (status & (1 << 2)) /* PROGE */
-			LOG_ERROR("SAMD: NVM programming error");
+	if ((status & 0x001C) == 0)
+		return ERROR_OK;
 
-		error = true;
-	} else {
-		error = false;
+	if (status & (1 << 4)) { /* NVME */
+		LOG_ERROR("SAMD: NVM Error");
+		ret = ERROR_FLASH_OPERATION_FAILED;
+	}
+
+	if (status & (1 << 3)) { /* LOCKE */
+		LOG_ERROR("SAMD: NVM lock error");
+		ret = ERROR_FLASH_PROTECTED;
+	}
+
+	if (status & (1 << 2)) { /* PROGE */
+		LOG_ERROR("SAMD: NVM programming error");
+		ret = ERROR_FLASH_OPER_UNSUPPORTED;
 	}
 
 	/* Clear the error conditions by writing a one to them */
-	ret = target_write_u16(target,
+	ret2 = target_write_u16(target,
 			SAMD_NVMCTRL + SAMD_NVMCTRL_STATUS, status);
-	if (ret != ERROR_OK)
+	if (ret2 != ERROR_OK)
 		LOG_ERROR("Can't clear NVM error conditions");
 
-	return error;
+	return ret;
 }
 
 static int samd_issue_nvmctrl_command(struct target *target, uint16_t cmd)
 {
+	int res;
+
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	/* Read current configuration. */
-	uint16_t tmp = 0;
-	int res = target_read_u16(target, SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLB,
-			&tmp);
-	if (res != ERROR_OK)
-		return res;
-
-	/* Set cache disable. */
-	res = target_write_u16(target, SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLB,
-			tmp | (1<<18));
-	if (res != ERROR_OK)
-		return res;
-
 	/* Issue the NVM command */
-	int res_cmd = target_write_u16(target,
+	res = target_write_u16(target,
 			SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLA, SAMD_NVM_CMD(cmd));
-
-	/* Try to restore configuration, regardless of NVM command write
-	 * status. */
-	res = target_write_u16(target, SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLB, tmp);
-
-	if (res_cmd != ERROR_OK)
-		return res_cmd;
-
 	if (res != ERROR_OK)
 		return res;
 
 	/* Check to see if the NVM command resulted in an error condition. */
-	if (samd_check_error(target))
-		return ERROR_FAIL;
-
-	return ERROR_OK;
+	return samd_check_error(target);
 }
 
 static int samd_erase_row(struct target *target, uint32_t address)
@@ -458,11 +532,18 @@ static int samd_modify_user_row(struct target *target, uint32_t value,
 		uint8_t startb, uint8_t endb)
 {
 	int res;
+	uint32_t nvm_ctrlb;
+	bool manual_wp = true;
 
 	if (is_user_row_reserved_bit(startb) || is_user_row_reserved_bit(endb)) {
 		LOG_ERROR("Can't modify bits in the requested range");
 		return ERROR_FAIL;
 	}
+
+	/* Check if we need to do manual page write commands */
+	res = target_read_u32(target, SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLB, &nvm_ctrlb);
+	if (res == ERROR_OK)
+		manual_wp = (nvm_ctrlb & SAMD_NVM_CTRLB_MANW) != 0;
 
 	/* Retrieve the MCU's page size, in bytes. This is also the size of the
 	 * entire User Row. */
@@ -486,8 +567,8 @@ static int samd_modify_user_row(struct target *target, uint32_t value,
 	if (!buf)
 		return ERROR_FAIL;
 
-	/* Read the user row (comprising one page) by half-words. */
-	res = target_read_memory(target, SAMD_USER_ROW, 2, page_size / 2, buf);
+	/* Read the user row (comprising one page) by words. */
+	res = target_read_memory(target, SAMD_USER_ROW, 4, page_size / 4, buf);
 	if (res != ERROR_OK)
 		goto out_user_row;
 
@@ -506,19 +587,17 @@ static int samd_modify_user_row(struct target *target, uint32_t value,
 	/* Modify */
 	buf_set_u32(buf, startb, endb - startb + 1, value);
 
-	/* Write the page buffer back out to the target.  A Flash write will be
-	 * triggered automatically. */
+	/* Write the page buffer back out to the target. */
 	res = target_write_memory(target, SAMD_USER_ROW, 4, page_size / 4, buf);
 	if (res != ERROR_OK)
 		goto out_user_row;
 
-	if (samd_check_error(target)) {
-		res = ERROR_FAIL;
-		goto out_user_row;
+	if (manual_wp) {
+		/* Trigger flash write */
+		res = samd_issue_nvmctrl_command(target, SAMD_NVM_CMD_WAP);
+	} else {
+		res = samd_check_error(target);
 	}
-
-	/* Success */
-	res = ERROR_OK;
 
 out_user_row:
 	free(buf);
@@ -559,7 +638,7 @@ static int samd_protect(struct flash_bank *bank, int set, int first, int last)
 
 	/* We've now applied our changes, however they will be undone by the next
 	 * reset unless we also apply them to the LOCK bits in the User Page.  The
-	 * LOCK bits start at bit 48, correspoding to Sector 0 and end with bit 63,
+	 * LOCK bits start at bit 48, corresponding to Sector 0 and end with bit 63,
 	 * corresponding to Sector 15.  A '1' means unlocked and a '0' means
 	 * locked.  See Table 9-3 in the SAMD20 datasheet for more details. */
 
@@ -606,135 +685,35 @@ static int samd_erase(struct flash_bank *bank, int first, int last)
 			return ERROR_FLASH_OPERATION_FAILED;
 		}
 
-		if (bank->sectors[s].is_erased != 1) {
-			/* For each row in that sector */
-			for (int r = s * rows_in_sector; r < (s + 1) * rows_in_sector; r++) {
-				res = samd_erase_row(bank->target, r * chip->page_size * 4);
-				if (res != ERROR_OK) {
-					LOG_ERROR("SAMD: failed to erase sector %d", s);
-					return res;
-				}
+		/* For each row in that sector */
+		for (int r = s * rows_in_sector; r < (s + 1) * rows_in_sector; r++) {
+			res = samd_erase_row(bank->target, r * chip->page_size * 4);
+			if (res != ERROR_OK) {
+				LOG_ERROR("SAMD: failed to erase sector %d", s);
+				return res;
 			}
-
-			bank->sectors[s].is_erased = 1;
 		}
 	}
 
 	return ERROR_OK;
 }
 
-static struct flash_sector *samd_find_sector_by_address(struct flash_bank *bank, uint32_t address)
-{
-	struct samd_info *chip = (struct samd_info *)bank->driver_priv;
-
-	for (int i = 0; i < bank->num_sectors; i++) {
-		if (bank->sectors[i].offset <= address &&
-		    address < bank->sectors[i].offset + chip->sector_size)
-			return &bank->sectors[i];
-	}
-	return NULL;
-}
-
-/* Write an entire row (four pages) from host buffer 'buf' to row-aligned
- * 'address' in the Flash. */
-static int samd_write_row(struct flash_bank *bank, uint32_t address,
-		const uint8_t *buf)
-{
-	int res;
-	struct samd_info *chip = (struct samd_info *)bank->driver_priv;
-
-	struct flash_sector *sector = samd_find_sector_by_address(bank, address);
-
-	if (!sector) {
-		LOG_ERROR("Can't find sector corresponding to address 0x%08" PRIx32, address);
-		return ERROR_FLASH_OPERATION_FAILED;
-	}
-
-	if (sector->is_protected) {
-		LOG_ERROR("Trying to write to a protected sector at 0x%08" PRIx32, address);
-		return ERROR_FLASH_OPERATION_FAILED;
-	}
-
-	/* Erase the row that we'll be writing to */
-	res = samd_erase_row(bank->target, address);
-	if (res != ERROR_OK)
-		return res;
-
-	/* Now write the pages in this row. */
-	for (unsigned int i = 0; i < 4; i++) {
-		bool error;
-
-		/* Write the page contents to the target's page buffer.  A page write
-		 * is issued automatically once the last location is written in the
-		 * page buffer (ie: a complete page has been written out). */
-		res = target_write_memory(bank->target, address, 4,
-				chip->page_size / 4, buf);
-		if (res != ERROR_OK) {
-			LOG_ERROR("%s: %d", __func__, __LINE__);
-			return res;
-		}
-
-		/* Access through AHB is stalled while flash is being programmed */
-		usleep(200);
-
-		error = samd_check_error(bank->target);
-		if (error)
-			return ERROR_FAIL;
-
-		/* Next page */
-		address += chip->page_size;
-		buf += chip->page_size;
-	}
-
-	sector->is_erased = 0;
-
-	return res;
-}
-
-/* Write partial contents into row-aligned 'address' on the Flash from host
- * buffer 'buf' by writing 'nb' of 'buf' at 'row_offset' into the Flash row. */
-static int samd_write_row_partial(struct flash_bank *bank, uint32_t address,
-		const uint8_t *buf, uint32_t row_offset, uint32_t nb)
-{
-	int res;
-	struct samd_info *chip = (struct samd_info *)bank->driver_priv;
-	uint32_t row_size = chip->page_size * 4;
-	uint8_t *rb = malloc(row_size);
-	if (!rb)
-		return ERROR_FAIL;
-
-	assert(row_offset + nb < row_size);
-	assert((address % row_size) == 0);
-
-	/* Retrieve the full row contents from Flash */
-	res = target_read_memory(bank->target, address, 4, row_size / 4, rb);
-	if (res != ERROR_OK) {
-		free(rb);
-		return res;
-	}
-
-	/* Insert our partial row over the data from Flash */
-	memcpy(rb + (row_offset % row_size), buf, nb);
-
-	/* Write the row back out */
-	res = samd_write_row(bank, address, rb);
-	free(rb);
-
-	return res;
-}
 
 static int samd_write(struct flash_bank *bank, const uint8_t *buffer,
 		uint32_t offset, uint32_t count)
 {
 	int res;
+	uint32_t nvm_ctrlb;
 	uint32_t address;
-	uint32_t nb = 0;
+	uint32_t pg_offset;
+	uint32_t nb;
+	uint32_t nw;
 	struct samd_info *chip = (struct samd_info *)bank->driver_priv;
-	uint32_t row_size = chip->page_size * 4;
+	uint8_t *pb = NULL;
+	bool manual_wp;
 
 	if (bank->target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
-
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
@@ -743,61 +722,97 @@ static int samd_write(struct flash_bank *bank, const uint8_t *buffer,
 			return ERROR_FLASH_BANK_NOT_PROBED;
 	}
 
-	if (offset % row_size) {
-		/* We're starting at an unaligned offset so we'll write a partial row
-		 * comprising that offset and up to the end of that row. */
-		nb = row_size - (offset % row_size);
-		if (nb > count)
+	/* Check if we need to do manual page write commands */
+	res = target_read_u32(bank->target, SAMD_NVMCTRL + SAMD_NVMCTRL_CTRLB, &nvm_ctrlb);
+
+	if (res != ERROR_OK)
+		return res;
+
+	if (nvm_ctrlb & SAMD_NVM_CTRLB_MANW)
+		manual_wp = true;
+	else
+		manual_wp = false;
+
+	res = samd_issue_nvmctrl_command(bank->target, SAMD_NVM_CMD_PBC);
+	if (res != ERROR_OK) {
+		LOG_ERROR("%s: %d", __func__, __LINE__);
+		return res;
+	}
+
+	while (count) {
+		nb = chip->page_size - offset % chip->page_size;
+		if (count < nb)
 			nb = count;
-	} else if (count < row_size) {
-		/* We're writing an aligned but partial row. */
-		nb = count;
-	}
 
-	address = (offset / row_size) * row_size + bank->base;
+		address = bank->base + offset;
+		pg_offset = offset % chip->page_size;
 
-	if (nb > 0) {
-		res = samd_write_row_partial(bank, address, buffer,
-				offset % row_size, nb);
-		if (res != ERROR_OK)
-			return res;
-
-		/* We're done with the row contents */
-		count -= nb;
-		offset += nb;
-		buffer += row_size;
-	}
-
-	/* There's at least one aligned row to write out. */
-	if (count >= row_size) {
-		int nr = count / row_size + ((count % row_size) ? 1 : 0);
-		unsigned int r = 0;
-
-		for (unsigned int i = address / row_size;
-				(i < (address / row_size) + nr) && count > 0; i++) {
-			address = (i * row_size) + bank->base;
-
-			if (count >= row_size) {
-				res = samd_write_row(bank, address, buffer + (r * row_size));
-				/* Advance one row */
-				offset += row_size;
-				count -= row_size;
-			} else {
-				res = samd_write_row_partial(bank, address,
-						buffer + (r * row_size), 0, count);
-				/* We're done after this. */
-				offset += count;
-				count = 0;
+		if (offset % 4 || (offset + nb) % 4) {
+			/* Either start or end of write is not word aligned */
+			if (!pb) {
+				pb = malloc(chip->page_size);
+				if (!pb)
+					return ERROR_FAIL;
 			}
 
-			r++;
+			/* Set temporary page buffer to 0xff and overwrite the relevant part */
+			memset(pb, 0xff, chip->page_size);
+			memcpy(pb + pg_offset, buffer, nb);
 
-			if (res != ERROR_OK)
-				return res;
+			/* Align start address to a word boundary */
+			address -= offset % 4;
+			pg_offset -= offset % 4;
+			assert(pg_offset % 4 == 0);
+
+			/* Extend length to whole words */
+			nw = (nb + offset % 4 + 3) / 4;
+			assert(pg_offset + 4 * nw <= chip->page_size);
+
+			/* Now we have original data extended by 0xff bytes
+			 * to the nearest word boundary on both start and end */
+			res = target_write_memory(bank->target, address, 4, nw, pb + pg_offset);
+		} else {
+			assert(nb % 4 == 0);
+			nw = nb / 4;
+			assert(pg_offset + 4 * nw <= chip->page_size);
+
+			/* Word aligned data, use direct write from buffer */
+			res = target_write_memory(bank->target, address, 4, nw, buffer);
 		}
+		if (res != ERROR_OK) {
+			LOG_ERROR("%s: %d", __func__, __LINE__);
+			goto free_pb;
+		}
+
+		/* Devices with errata 13134 have automatic page write enabled by default
+		 * For other devices issue a write page CMD to the NVM
+		 * If the page has not been written up to the last word
+		 * then issue CMD_WP always */
+		if (manual_wp || pg_offset + 4 * nw < chip->page_size) {
+			res = samd_issue_nvmctrl_command(bank->target, SAMD_NVM_CMD_WP);
+		} else {
+			/* Access through AHB is stalled while flash is being programmed */
+			usleep(200);
+
+			res = samd_check_error(bank->target);
+		}
+
+		if (res != ERROR_OK) {
+			LOG_ERROR("%s: write failed at address 0x%08" PRIx32, __func__, address);
+			goto free_pb;
+		}
+
+		/* We're done with the page contents */
+		count -= nb;
+		offset += nb;
+		buffer += nb;
 	}
 
-	return ERROR_OK;
+free_pb:
+	if (pb)
+		free(pb);
+
+	return res;
 }
 
 FLASH_BANK_COMMAND_HANDLER(samd_flash_bank_command)
@@ -1001,7 +1016,50 @@ COMMAND_HANDLER(samd_handle_bootloader_command)
 	return res;
 }
 
+
+
+COMMAND_HANDLER(samd_handle_reset_deassert)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	int retval = ERROR_OK;
+	enum reset_types jtag_reset_config = jtag_get_reset_config();
+
+	/* If the target has been unresponsive before, try to re-establish
+	 * communication now - CPU is held in reset by DSU, DAP is working */
+	if (!target_was_examined(target))
+		target_examine_one(target);
+	target_poll(target);
+
+	/* In case of sysresetreq, debug retains state set in cortex_m_assert_reset()
+	 * so we just release reset held by DSU
+	 *
+	 * n_RESET (srst) clears the DP, so reenable debug and set vector catch here
+	 *
+	 * After vectreset DSU release is not needed however makes no harm
+	 */
+	if (target->reset_halt && (jtag_reset_config & RESET_HAS_SRST)) {
+		retval = target_write_u32(target, DCB_DHCSR, DBGKEY | C_HALT | C_DEBUGEN);
+		if (retval == ERROR_OK)
+			retval = target_write_u32(target, DCB_DEMCR,
+				TRCENA | VC_HARDERR | VC_BUSERR | VC_CORERESET);
+		/* do not return on error here, releasing DSU reset is more important */
+	}
+
+	/* clear CPU Reset Phase Extension bit */
+	int retval2 = target_write_u8(target, SAMD_DSU + SAMD_DSU_STATUSA, (1<<1));
+	if (retval2 != ERROR_OK)
+		return retval2;
+
+	return retval;
+}
+
 static const struct command_registration at91samd_exec_command_handlers[] = {
+	{
+		.name = "dsu_reset_deassert",
+		.handler = samd_handle_reset_deassert,
+		.mode = COMMAND_EXEC,
+		.help = "deasert internal reset held by DSU"
+	},
 	{
 		.name = "info",
 		.handler = samd_handle_info_command,

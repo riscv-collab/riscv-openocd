@@ -16,13 +16,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef FLASH_NOR_CORE_H
-#define FLASH_NOR_CORE_H
+#ifndef OPENOCD_FLASH_NOR_CORE_H
+#define OPENOCD_FLASH_NOR_CORE_H
 
 #include <flash/common.h>
 
@@ -48,6 +46,8 @@ struct flash_sector {
 	/**
 	 * Indication of erasure status: 0 = not erased, 1 = erased,
 	 * other = unknown.  Set by @c flash_driver_s::erase_check.
+	 *
+	 * Flag is not used in protection block
 	 */
 	int is_erased;
 	/**
@@ -58,6 +58,9 @@ struct flash_sector {
 	 * This information must be considered stale immediately.
 	 * A million things could make it stale: power cycle,
 	 * reset of target, code running on target, etc.
+	 *
+	 * If a flash_bank uses an extra array of protection blocks,
+	 * protection flag is not valid in sector array
 	 */
 	int is_protected;
 };
@@ -87,6 +90,9 @@ struct flash_bank {
 	int chip_width; /**< Width of the chip in bytes (1,2,4 bytes) */
 	int bus_width; /**< Maximum bus width, in bytes (1,2,4 bytes) */
 
+	/** Erased value. Defaults to 0xFF. */
+	uint8_t erased_value;
+
 	/** Default padded value used, normally this matches the  flash
 	 * erased value. Defaults to 0xFF. */
 	uint8_t default_padded_value;
@@ -97,8 +103,18 @@ struct flash_bank {
 	 * some non-zero value during "probe()" or "auto_probe()".
 	 */
 	int num_sectors;
-	/** Array of sectors, allocated and initilized by the flash driver */
+	/** Array of sectors, allocated and initialized by the flash driver */
 	struct flash_sector *sectors;
+
+	/**
+	 * The number of protection blocks in this bank. This value
+	 * is set intially to 0 and sectors are used as protection blocks.
+	 * Driver probe can set protection blocks array to work with
+	 * protection granularity different than sector size.
+	 */
+	int num_prot_blocks;
+	/** Array of protection blocks, allocated and initilized by the flash driver */
+	struct flash_sector *prot_blocks;
 
 	struct flash_bank *next; /**< The next flash bank on this chip */
 };
@@ -207,5 +223,13 @@ struct flash_bank *get_flash_bank_by_num_noprobe(int num);
  */
 int get_flash_bank_by_addr(struct target *target, uint32_t addr, bool check,
 		struct flash_bank **result_bank);
+/**
+ * Allocate and fill an array of sectors or protection blocks.
+ * @param offset Offset of first block.
+ * @param size Size of each block.
+ * @param num_blocks Number of blocks in array.
+ * @returns A struct flash_sector pointer or NULL when allocation failed.
+ */
+struct flash_sector *alloc_block_array(uint32_t offset, uint32_t size, int num_blocks);
 
-#endif /* FLASH_NOR_CORE_H */
+#endif /* OPENOCD_FLASH_NOR_CORE_H */

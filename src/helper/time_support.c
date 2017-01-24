@@ -19,9 +19,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -78,14 +76,14 @@ int duration_measure(struct duration *duration)
 	return retval;
 }
 
-float duration_elapsed(struct duration *duration)
+float duration_elapsed(const struct duration *duration)
 {
 	float t = duration->elapsed.tv_sec;
 	t += (float)duration->elapsed.tv_usec / 1000000.0;
 	return t;
 }
 
-float duration_kbps(struct duration *duration, size_t count)
+float duration_kbps(const struct duration *duration, size_t count)
 {
 	return count / (1024.0 * duration_elapsed(duration));
 }

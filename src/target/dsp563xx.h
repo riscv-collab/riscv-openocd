@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef DSP563XX_H
-#define DSP563XX_H
+#ifndef OPENOCD_TARGET_DSP563XX_H
+#define OPENOCD_TARGET_DSP563XX_H
 
 #include <jtag/jtag.h>
 #include <target/dsp563xx_once.h>
@@ -72,4 +70,4 @@ static inline struct dsp563xx_common *target_to_dsp563xx(struct target *target)
 	return target->arch_info;
 }
 
-#endif /* DSP563XX_H */
+#endif /* OPENOCD_TARGET_DSP563XX_H */

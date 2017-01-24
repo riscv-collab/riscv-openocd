@@ -31,9 +31,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -92,6 +90,8 @@ struct gdb_connection {
 	bool attached;
 	/* temporarily used for target description support */
 	struct target_desc_format target_desc;
+	/* temporarily used for thread list support */
+	char *thread_list;
 };
 
 #if 0
@@ -697,7 +697,8 @@ static int gdb_output_con(struct connection *connection, const char *line)
 		return ERROR_GDB_BUFFER_TOO_SMALL;
 
 	hex_buffer[0] = 'O';
-	int pkt_len = hexify(hex_buffer + 1, line, bin_size, bin_size * 2 + 1);
+	size_t pkt_len = hexify(hex_buffer + 1, (const uint8_t *)line, bin_size,
+		bin_size * 2 + 1);
 	int retval = gdb_put_packet(connection, hex_buffer, pkt_len + 1);
 
 	free(hex_buffer);
@@ -936,6 +937,7 @@ static int gdb_new_connection(struct connection *connection)
 	gdb_connection->attached = true;
 	gdb_connection->target_desc.tdesc = NULL;
 	gdb_connection->target_desc.tdesc_length = 0;
+	gdb_connection->thread_list = NULL;
 
 	/* send ACK to GDB for debug request */
 	gdb_write(connection, "+", 1);
@@ -1159,6 +1161,9 @@ static int gdb_get_registers_packet(struct connection *connection,
 	assert(reg_packet_size > 0);
 
 	reg_packet = malloc(reg_packet_size + 1); /* plus one for string termination null */
+	if (reg_packet == NULL)
+		return ERROR_FAIL;
+
 	reg_packet_p = reg_packet;
 
 	for (i = 0; i < reg_list_size; i++) {
@@ -1403,7 +1408,7 @@ static int gdb_read_memory_packet(struct connection *connection,
 	if (retval == ERROR_OK) {
 		hex_buffer = malloc(len * 2 + 1);
 
-		int pkt_len = hexify(hex_buffer, (char *)buffer, len, len * 2 + 1);
+		size_t pkt_len = hexify(hex_buffer, buffer, len, len * 2 + 1);
 
 		gdb_put_packet(connection, hex_buffer, pkt_len);
 
@@ -1448,7 +1453,7 @@ static int gdb_write_memory_packet(struct connection *connection,
 
 	LOG_DEBUG("addr: 0x%8.8" PRIx32 ", len: 0x%8.8" PRIx32 "", addr, len);
 
-	if (unhexify((char *)buffer, separator, len) != (int)len)
+	if (unhexify(buffer, separator, len) != len)
 		LOG_ERROR("unable to decode memory packet");
 
 	retval = target_write_buffer(target, addr, len, buffer);
@@ -1472,6 +1477,10 @@ static int gdb_write_memory_binary_packet(struct connection *connection,
 	uint32_t len = 0;
 
 	int retval = ERROR_OK;
+	/* Packets larger than fast_limit bytes will be acknowledged instantly on
+	 * the assumption that we're in a download and it's important to go as fast
+	 * as possible. */
+	uint32_t fast_limit = 8;
 
 	/* skip command character */
 	packet++;
@@ -1492,19 +1501,23 @@ static int gdb_write_memory_binary_packet(struct connection *connection,
 
 	struct gdb_connection *gdb_connection = connection->priv;
 
-	if (gdb_connection->mem_write_error) {
+	if (gdb_connection->mem_write_error)
 		retval = ERROR_FAIL;
+
+	if (retval == ERROR_OK) {
+		if (len >= fast_limit) {
+			/* By replying the packet *immediately* GDB will send us a new packet
+			 * while we write the last one to the target.
+			 * We only do this for larger writes, so that users who do something like:
+			 * p *((int*)0xdeadbeef)=8675309
+			 * will get immediate feedback that that write failed.
+			 */
+			gdb_put_packet(connection, "OK", 2);
+		}
+	} else {
+		retval = gdb_error(connection, retval);
 		/* now that we have reported the memory write error, we can clear the condition */
 		gdb_connection->mem_write_error = false;
-	}
-
-	/* By replying the packet *immediately* GDB will send us a new packet
-	 * while we write the last one to the target.
-	 */
-	if (retval == ERROR_OK)
-		gdb_put_packet(connection, "OK", 2);
-	else {
-		retval = gdb_error(connection, retval);
 		if (retval != ERROR_OK)
 			return retval;
 	}
@@ -1515,6 +1528,15 @@ static int gdb_write_memory_binary_packet(struct connection *connection,
 		retval = target_write_buffer(target, addr, len, (uint8_t *)separator);
 		if (retval != ERROR_OK)
 			gdb_connection->mem_write_error = true;
+	}
+
+	if (len < fast_limit) {
+		if (retval != ERROR_OK) {
+			gdb_error(connection, retval);
+			gdb_connection->mem_write_error = false;
+		} else {
+			gdb_put_packet(connection, "OK", 2);
+		}
 	}
 
 	return ERROR_OK;
@@ -2265,6 +2287,95 @@ error:
 	return retval;
 }
 
+static int gdb_generate_thread_list(struct target *target, char **thread_list_out)
+{
+	struct rtos *rtos = target->rtos;
+	int retval = ERROR_OK;
+	char *thread_list = NULL;
+	int pos = 0;
+	int size = 0;
+
+	xml_printf(&retval, &thread_list, &pos, &size,
+		   "<?xml version=\"1.0\"?>\n"
+		   "<threads>\n");
+
+	if (rtos != NULL) {
+		for (int i = 0; i < rtos->thread_count; i++) {
+			struct thread_detail *thread_detail = &rtos->thread_details[i];
+
+			if (!thread_detail->exists)
+				continue;
+
+			xml_printf(&retval, &thread_list, &pos, &size,
+				   "<thread id=\"%" PRIx64 "\">", thread_detail->threadid);
+
+			if (thread_detail->thread_name_str != NULL)
+				xml_printf(&retval, &thread_list, &pos, &size,
+					   "Name: %s", thread_detail->thread_name_str);
+
+			if (thread_detail->extra_info_str != NULL) {
+				if (thread_detail->thread_name_str != NULL)
+					xml_printf(&retval, &thread_list, &pos, &size,
+						   ", ");
+				xml_printf(&retval, &thread_list, &pos, &size,
+					   thread_detail->extra_info_str);
+			}
+
+			xml_printf(&retval, &thread_list, &pos, &size,
+				   "</thread>\n");
+		}
+	}
+
+	xml_printf(&retval, &thread_list, &pos, &size,
+		   "</threads>\n");
+
+	if (retval == ERROR_OK)
+		*thread_list_out = thread_list;
+	else
+		free(thread_list);
+
+	return retval;
+}
+
+static int gdb_get_thread_list_chunk(struct target *target, char **thread_list,
+		char **chunk, int32_t offset, uint32_t length)
+{
+	if (*thread_list == NULL) {
+		int retval = gdb_generate_thread_list(target, thread_list);
+		if (retval != ERROR_OK) {
+			LOG_ERROR("Unable to Generate Thread List");
+			return ERROR_FAIL;
+		}
+	}
+
+	size_t thread_list_length = strlen(*thread_list);
+	char transfer_type;
+
+	length = MIN(length, thread_list_length - offset);
+	if (length < (thread_list_length - offset))
+		transfer_type = 'm';
+	else
+		transfer_type = 'l';
+
+	*chunk = malloc(length + 2);
+	if (*chunk == NULL) {
+		LOG_ERROR("Unable to allocate memory");
+		return ERROR_FAIL;
+	}
+
+	(*chunk)[0] = transfer_type;
+	strncpy((*chunk) + 1, (*thread_list) + offset, length);
+	(*chunk)[1 + length] = '\0';
+
+	/* After gdb-server sends out last chunk, invalidate thread list. */
+	if (transfer_type == 'l') {
+		free(*thread_list);
+		*thread_list = NULL;
+	}
+
+	return ERROR_OK;
+}
+
 static int gdb_query_packet(struct connection *connection,
 		char const *packet, int packet_size)
 {
@@ -2276,7 +2387,7 @@ static int gdb_query_packet(struct connection *connection,
 		if (packet_size > 6) {
 			char *cmd;
 			cmd = malloc((packet_size - 6) / 2 + 1);
-			int len = unhexify(cmd, packet + 6, (packet_size - 6) / 2);
+			size_t len = unhexify((uint8_t *)cmd, packet + 6, (packet_size - 6) / 2);
 			cmd[len] = 0;
 
 			/* We want to print all debug output to GDB connection */
@@ -2354,7 +2465,7 @@ static int gdb_query_packet(struct connection *connection,
 			&buffer,
 			&pos,
 			&size,
-			"PacketSize=%x;qXfer:memory-map:read%c;qXfer:features:read%c;QStartNoAckMode+",
+			"PacketSize=%x;qXfer:memory-map:read%c;qXfer:features:read%c;qXfer:threads:read+;QStartNoAckMode+",
 			(GDB_BUFFER_SIZE - 1),
 			((gdb_use_memory_map == 1) && (flash_get_bank_count() > 0)) ? '+' : '-',
 			(gdb_target_desc_supported == 1) ? '+' : '-');
@@ -2393,6 +2504,37 @@ static int gdb_query_packet(struct connection *connection,
 		 */
 		retval = gdb_get_target_description_chunk(target, &gdb_connection->target_desc,
 				&xml, offset, length);
+		if (retval != ERROR_OK) {
+			gdb_error(connection, retval);
+			return retval;
+		}
+
+		gdb_put_packet(connection, xml, strlen(xml));
+
+		free(xml);
+		return ERROR_OK;
+	} else if (strncmp(packet, "qXfer:threads:read:", 19) == 0) {
+		char *xml = NULL;
+		int retval = ERROR_OK;
+
+		int offset;
+		unsigned int length;
+
+		/* skip command character */
+		packet += 19;
+
+		if (decode_xfer_read(packet, NULL, &offset, &length) < 0) {
+			gdb_send_error(connection, 01);
+			return ERROR_OK;
+		}
+
+		/* Target should prepare correct thread list for annex.
+		 * The first character of returned xml is 'm' or 'l'. 'm' for
+		 * there are *more* chunks to transfer. 'l' for it is the *last*
+		 * chunk of target description.
+		 */
+		retval = gdb_get_thread_list_chunk(target, &gdb_connection->thread_list,
+						   &xml, offset, length);
 		if (retval != ERROR_OK) {
 			gdb_error(connection, retval);
 			return retval;
@@ -2920,6 +3062,11 @@ static int gdb_target_start(struct target *target, const char *port)
 
 static int gdb_target_add_one(struct target *target)
 {
+	if (strcmp(gdb_port, "disabled") == 0) {
+		LOG_INFO("gdb port disabled");
+		return ERROR_OK;
+	}
+
 	/*  one gdb instance per smp list */
 	if ((target->smp) && (target->gdb_service))
 		return ERROR_OK;
@@ -2943,6 +3090,11 @@ static int gdb_target_add_one(struct target *target)
 
 int gdb_target_add_all(struct target *target)
 {
+	if (strcmp(gdb_port, "disabled") == 0) {
+		LOG_INFO("gdb server disabled");
+		return ERROR_OK;
+	}
+
 	if (NULL == target) {
 		LOG_WARNING("gdb services need one or more targets defined");
 		return ERROR_OK;
@@ -3060,7 +3212,7 @@ COMMAND_HANDLER(handle_gdb_save_tdesc_command)
 
 	tdesc_length = strlen(tdesc);
 
-	struct fileio fileio;
+	struct fileio *fileio;
 	size_t size_written;
 
 	char *tdesc_filename = alloc_printf("%s.xml", target_type_name(target));
@@ -3076,9 +3228,9 @@ COMMAND_HANDLER(handle_gdb_save_tdesc_command)
 		goto out;
 	}
 
-	retval = fileio_write(&fileio, tdesc_length, tdesc, &size_written);
+	retval = fileio_write(fileio, tdesc_length, tdesc, &size_written);
 
-	fileio_close(&fileio);
+	fileio_close(fileio);
 
 	if (retval != ERROR_OK)
 		LOG_ERROR("Error while writing the tdesc file");
@@ -3108,7 +3260,7 @@ static const struct command_registration gdb_command_handlers[] = {
 			"server listens for the next port number after the "
 			"base port number specified. "
 			"No arguments reports GDB port. \"pipe\" means listen to stdin "
-			"output to stdout, an integer is base port number, \"disable\" disables "
+			"output to stdout, an integer is base port number, \"disabled\" disables "
 			"port. Any other string is are interpreted as named pipe to listen to. "
 			"Output pipe is the same name as input pipe, but with 'o' appended.",
 		.usage = "[port_num]",

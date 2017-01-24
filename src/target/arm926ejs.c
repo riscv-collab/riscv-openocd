@@ -16,9 +16,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -67,7 +65,7 @@ static int arm926ejs_cp15_read(struct target *target, uint32_t op1, uint32_t op2
 	retval = arm_jtag_scann(jtag_info, 0xf, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = arm_jtag_set_instr(jtag_info, jtag_info->intest_instr, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, jtag_info->intest_instr, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -89,7 +87,7 @@ static int arm926ejs_cp15_read(struct target *target, uint32_t op1, uint32_t op2
 
 	jtag_add_dr_scan(jtag_info->tap, 4, fields, TAP_IDLE);
 
-	long long then = timeval_ms();
+	int64_t then = timeval_ms();
 
 	for (;;) {
 		/* rescan with NOP, to wait for the access to complete */
@@ -117,7 +115,7 @@ static int arm926ejs_cp15_read(struct target *target, uint32_t op1, uint32_t op2
 	LOG_DEBUG("addr: 0x%x value: %8.8x", address, *value);
 #endif
 
-	retval = arm_jtag_set_instr(jtag_info, 0xc, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, 0xc, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -153,7 +151,7 @@ static int arm926ejs_cp15_write(struct target *target, uint32_t op1, uint32_t op
 	retval = arm_jtag_scann(jtag_info, 0xf, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = arm_jtag_set_instr(jtag_info, jtag_info->intest_instr, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, jtag_info->intest_instr, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -175,7 +173,7 @@ static int arm926ejs_cp15_write(struct target *target, uint32_t op1, uint32_t op
 
 	jtag_add_dr_scan(jtag_info->tap, 4, fields, TAP_IDLE);
 
-	long long then = timeval_ms();
+	int64_t then = timeval_ms();
 
 	for (;;) {
 		/* rescan with NOP, to wait for the access to complete */
@@ -200,7 +198,7 @@ static int arm926ejs_cp15_write(struct target *target, uint32_t op1, uint32_t op
 	LOG_DEBUG("addr: 0x%x value: %8.8x", address, value);
 #endif
 
-	retval = arm_jtag_set_instr(jtag_info, 0xf, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, 0xf, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -548,7 +546,7 @@ int arm926ejs_soft_reset_halt(struct target *target)
 	if (retval != ERROR_OK)
 		return retval;
 
-	long long then = timeval_ms();
+	int64_t then = timeval_ms();
 	int timeout;
 	while (!(timeout = ((timeval_ms()-then) > 1000))) {
 		if (buf_get_u32(dbg_stat->value, EICE_DBG_STATUS_DBGACK, 1) == 0) {

@@ -23,9 +23,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -36,6 +34,7 @@
 #include "swd.h"
 #include "interface.h"
 #include <transport/transport.h>
+#include <helper/jep106.h>
 
 #ifdef HAVE_STRINGS_H
 #include <strings.h>
@@ -894,6 +893,8 @@ void jtag_sleep(uint32_t us)
 
 #define JTAG_MAX_AUTO_TAPS 20
 
+#define EXTRACT_JEP106_BANK(X) (((X) & 0xf00) >> 8)
+#define EXTRACT_JEP106_ID(X)   (((X) & 0xfe) >> 1)
 #define EXTRACT_MFG(X)  (((X) & 0xffe) >> 1)
 #define EXTRACT_PART(X) (((X) & 0xffff000) >> 12)
 #define EXTRACT_VER(X)  (((X) & 0xf0000000) >> 28)
@@ -957,10 +958,11 @@ static void jtag_examine_chain_display(enum log_levels level, const char *msg,
 {
 	log_printf_lf(level, __FILE__, __LINE__, __func__,
 		"JTAG tap: %s %16.16s: 0x%08x "
-		"(mfg: 0x%3.3x, part: 0x%4.4x, ver: 0x%1.1x)",
+		"(mfg: 0x%3.3x (%s), part: 0x%4.4x, ver: 0x%1.1x)",
 		name, msg,
 		(unsigned int)idcode,
 		(unsigned int)EXTRACT_MFG(idcode),
+		jep106_manufacturer(EXTRACT_JEP106_BANK(idcode), EXTRACT_JEP106_ID(idcode)),
 		(unsigned int)EXTRACT_PART(idcode),
 		(unsigned int)EXTRACT_VER(idcode));
 }
@@ -1715,11 +1717,11 @@ void jtag_set_reset_config(enum reset_types type)
 
 int jtag_get_trst(void)
 {
-	return jtag_trst;
+	return jtag_trst == 1;
 }
 int jtag_get_srst(void)
 {
-	return jtag_srst;
+	return jtag_srst == 1;
 }
 
 void jtag_set_nsrst_delay(unsigned delay)

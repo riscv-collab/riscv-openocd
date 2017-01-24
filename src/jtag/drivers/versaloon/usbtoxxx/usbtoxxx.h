@@ -12,13 +12,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef __USBTOXXX_H_INCLUDED__
-#define __USBTOXXX_H_INCLUDED__
+#ifndef OPENOCD_JTAG_DRIVERS_VERSALOON_USBTOXXX_USBTOXXX_H
+#define OPENOCD_JTAG_DRIVERS_VERSALOON_USBTOXXX_USBTOXXX_H
 
 RESULT usbtoxxx_init(void);
 RESULT usbtoxxx_fini(void);
@@ -236,4 +234,4 @@ RESULT usbtopwm_config(uint8_t interface_index, uint16_t kHz, uint8_t mode);
 RESULT usbtopwm_out(uint8_t interface_index, uint16_t count, uint16_t *rate);
 RESULT usbtopwm_in(uint8_t interface_index, uint16_t count, uint16_t *rate);
 
-#endif	/* __USBTOXXX_H_INCLUDED__ */
+#endif /* OPENOCD_JTAG_DRIVERS_VERSALOON_USBTOXXX_USBTOXXX_H */

@@ -19,9 +19,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -47,6 +45,19 @@
 #include <strings.h>
 #endif
 
+// [GNU ARM Eclipse]
+#if 0
+
+#ifdef PKGBLDDATE
+#define OPENOCD_VERSION	\
+	"Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
+#else
+#define OPENOCD_VERSION	\
+	"Open On-Chip Debugger " VERSION RELSTR
+#endif
+
+#else
+
 #define OPENOCD_BRANDING "GNU ARM Eclipse "
 #if INTPTR_MAX == INT32_MAX
 #define OPENOCD_WORDSIZE "32-bits "
@@ -56,8 +67,15 @@
 #define OPENOCD_WORDSIZE ""
 #endif
 
+#ifdef PKGBLDDATE
 #define OPENOCD_VERSION	OPENOCD_BRANDING OPENOCD_WORDSIZE \
     "Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
+#else
+#define OPENOCD_VERSION	OPENOCD_BRANDING OPENOCD_WORDSIZE \
+    "Open On-Chip Debugger " VERSION RELSTR
+#endif
+
+#endif
 
 static const char openocd_startup_tcl[] = {
 #include "startup_tcl.inc"

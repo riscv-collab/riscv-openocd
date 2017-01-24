@@ -19,9 +19,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -487,7 +485,7 @@ static int str7x_write_block(struct flash_bank *bank, const uint8_t *buffer,
 	if (target_alloc_working_area_try(target, sizeof(str7x_flash_write_code),
 			&write_algorithm) != ERROR_OK) {
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	};
+	}
 
 	uint8_t code[sizeof(str7x_flash_write_code)];
 	target_buffer_set_u32_array(target, code, ARRAY_SIZE(str7x_flash_write_code),

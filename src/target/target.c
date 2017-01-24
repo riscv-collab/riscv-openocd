@@ -34,9 +34,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -92,6 +90,7 @@ extern struct target_type cortexm_target;
 extern struct target_type cortexa_target;
 extern struct target_type cortexr4_target;
 extern struct target_type arm11_target;
+extern struct target_type ls1_sap_target;
 extern struct target_type mips_m4k_target;
 extern struct target_type avr_target;
 extern struct target_type dsp563xx_target;
@@ -104,6 +103,7 @@ extern struct target_type nds32_v3_target;
 extern struct target_type nds32_v3m_target;
 extern struct target_type or1k_target;
 extern struct target_type quark_x10xx_target;
+extern struct target_type quark_d20xx_target;
 
 static struct target_type *target_types[] = {
 	&arm7tdmi_target,
@@ -121,6 +121,7 @@ static struct target_type *target_types[] = {
 	&cortexa_target,
 	&cortexr4_target,
 	&arm11_target,
+	&ls1_sap_target,
 	&mips_m4k_target,
 	&avr_target,
 	&dsp563xx_target,
@@ -133,6 +134,7 @@ static struct target_type *target_types[] = {
 	&nds32_v3m_target,
 	&or1k_target,
 	&quark_x10xx_target,
+	&quark_d20xx_target,
 	NULL,
 };
 
@@ -140,6 +142,7 @@ struct target *all_targets;
 static struct target_event_callback *target_event_callbacks;
 static struct target_timer_callback *target_timer_callbacks;
 LIST_HEAD(target_reset_callback_list);
+LIST_HEAD(target_trace_callback_list);
 static const int polling_interval = 100;
 
 static const Jim_Nvp nvp_assert[] = {
@@ -280,6 +283,10 @@ const char *target_state_name(struct target *t)
 		LOG_ERROR("Invalid target state: %d", (int)(t->state));
 		cp = "(*BUG*unknown*BUG*)";
 	}
+
+	if (!target_was_examined(t) && t->defer_examine)
+		cp = "examine deferred";
+
 	return cp;
 }
 
@@ -529,7 +536,7 @@ int target_poll(struct target *target)
 		if (target->state == TARGET_HALTED)
 			target->halt_issued = false;
 		else {
-			long long t = timeval_ms() - target->halt_issued_time;
+			int64_t t = timeval_ms() - target->halt_issued_time;
 			if (t > DEFAULT_HALT_TIMEOUT) {
 				target->halt_issued = false;
 				LOG_INFO("Halt timed out, wake up GDB.");
@@ -727,6 +734,9 @@ int target_examine(void)
 					target);
 			continue;
 		}
+
+		if (target->defer_examine)
+			continue;
 
 		retval = target_examine_one(target);
 		if (retval != ERROR_OK)
@@ -1011,6 +1021,15 @@ int target_run_flash_async_algorithm(struct target *target,
 		retval = retval2;
 	}
 
+	if (retval == ERROR_OK) {
+		/* check if algorithm set rp = 0 after fifo writer loop finished */
+		retval = target_read_u32(target, rp_addr, &rp);
+		if (retval == ERROR_OK && rp == 0) {
+			LOG_ERROR("flash write algorithm aborted by target");
+			retval = ERROR_FLASH_OPERATION_FAILED;
+		}
+	}
+
 	return retval;
 }
 
@@ -1019,6 +1038,10 @@ int target_read_memory(struct target *target,
 {
 	if (!target_was_examined(target)) {
 		LOG_ERROR("Target not examined yet");
+		return ERROR_FAIL;
+	}
+	if (!target->type->read_memory) {
+		LOG_ERROR("Target %s doesn't support read_memory", target_name(target));
 		return ERROR_FAIL;
 	}
 	return target->type->read_memory(target, address, size, count, buffer);
@@ -1031,6 +1054,10 @@ int target_read_phys_memory(struct target *target,
 		LOG_ERROR("Target not examined yet");
 		return ERROR_FAIL;
 	}
+	if (!target->type->read_phys_memory) {
+		LOG_ERROR("Target %s doesn't support read_phys_memory", target_name(target));
+		return ERROR_FAIL;
+	}
 	return target->type->read_phys_memory(target, address, size, count, buffer);
 }
 
@@ -1041,6 +1068,10 @@ int target_write_memory(struct target *target,
 		LOG_ERROR("Target not examined yet");
 		return ERROR_FAIL;
 	}
+	if (!target->type->write_memory) {
+		LOG_ERROR("Target %s doesn't support write_memory", target_name(target));
+		return ERROR_FAIL;
+	}
 	return target->type->write_memory(target, address, size, count, buffer);
 }
 
@@ -1049,6 +1080,10 @@ int target_write_phys_memory(struct target *target,
 {
 	if (!target_was_examined(target)) {
 		LOG_ERROR("Target not examined yet");
+		return ERROR_FAIL;
+	}
+	if (!target->type->write_phys_memory) {
+		LOG_ERROR("Target %s doesn't support write_phys_memory", target_name(target));
 		return ERROR_FAIL;
 	}
 	return target->type->write_phys_memory(target, address, size, count, buffer);
@@ -1172,20 +1207,6 @@ static void target_reset_examined(struct target *target)
 	target->examined = false;
 }
 
-static int err_read_phys_memory(struct target *target, uint32_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
-{
-	LOG_ERROR("Not implemented: %s", __func__);
-	return ERROR_FAIL;
-}
-
-static int err_write_phys_memory(struct target *target, uint32_t address,
-		uint32_t size, uint32_t count, const uint8_t *buffer)
-{
-	LOG_ERROR("Not implemented: %s", __func__);
-	return ERROR_FAIL;
-}
-
 static int handle_target(void *priv);
 
 static int target_init_one(struct command_context *cmd_ctx,
@@ -1212,16 +1233,6 @@ static int target_init_one(struct command_context *cmd_ctx,
 	 * implement it in stages, but warn if we need to do so.
 	 */
 	if (type->mmu) {
-		if (type->write_phys_memory == NULL) {
-			LOG_ERROR("type '%s' is missing write_phys_memory",
-					type->name);
-			type->write_phys_memory = err_write_phys_memory;
-		}
-		if (type->read_phys_memory == NULL) {
-			LOG_ERROR("type '%s' is missing read_phys_memory",
-					type->name);
-			type->read_phys_memory = err_read_phys_memory;
-		}
 		if (type->virt2phys == NULL) {
 			LOG_ERROR("type '%s' is missing virt2phys", type->name);
 			type->virt2phys = identity_virt2phys;
@@ -1358,6 +1369,28 @@ int target_register_reset_callback(int (*callback)(struct target *target,
 	return ERROR_OK;
 }
 
+int target_register_trace_callback(int (*callback)(struct target *target,
+		size_t len, uint8_t *data, void *priv), void *priv)
+{
+	struct target_trace_callback *entry;
+
+	if (callback == NULL)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	entry = malloc(sizeof(struct target_trace_callback));
+	if (entry == NULL) {
+		LOG_ERROR("error allocating buffer for trace callback entry");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	entry->callback = callback;
+	entry->priv = priv;
+	list_add(&entry->list, &target_trace_callback_list);
+
+
+	return ERROR_OK;
+}
+
 int target_register_timer_callback(int (*callback)(void *priv), int time_ms, int periodic, void *priv)
 {
 	struct target_timer_callback **callbacks_p = &target_timer_callbacks;
@@ -1435,6 +1468,25 @@ int target_unregister_reset_callback(int (*callback)(struct target *target,
 	return ERROR_OK;
 }
 
+int target_unregister_trace_callback(int (*callback)(struct target *target,
+		size_t len, uint8_t *data, void *priv), void *priv)
+{
+	struct target_trace_callback *entry;
+
+	if (callback == NULL)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	list_for_each_entry(entry, &target_trace_callback_list, list) {
+		if (entry->callback == callback && entry->priv == priv) {
+			list_del(&entry->list);
+			free(entry);
+			break;
+		}
+	}
+
+	return ERROR_OK;
+}
+
 int target_unregister_timer_callback(int (*callback)(void *priv), void *priv)
 {
 	if (callback == NULL)
@@ -1484,6 +1536,16 @@ int target_call_reset_callbacks(struct target *target, enum target_reset_mode re
 
 	list_for_each_entry(callback, &target_reset_callback_list, list)
 		callback->callback(target, reset_mode, callback->priv);
+
+	return ERROR_OK;
+}
+
+int target_call_trace_callbacks(struct target *target, size_t len, uint8_t *data)
+{
+	struct target_trace_callback *callback;
+
+	list_for_each_entry(callback, &target_trace_callback_list, list)
+		callback->callback(target, len, data, callback->priv);
 
 	return ERROR_OK;
 }
@@ -1882,11 +1944,9 @@ int target_arch_state(struct target *target)
 {
 	int retval;
 	if (target == NULL) {
-		LOG_USER("No target has been configured");
+		LOG_WARNING("No target has been configured");
 		return ERROR_OK;
 	}
-
-	LOG_USER("target state: %s", target_state_name(target));
 
 	if (target->state != TARGET_HALTED)
 		return ERROR_OK;
@@ -1966,8 +2026,8 @@ static int target_profiling_default(struct target *target, uint32_t *samples,
  */
 int target_write_buffer(struct target *target, uint32_t address, uint32_t size, const uint8_t *buffer)
 {
-	LOG_DEBUG("writing buffer of %i byte at 0x%8.8x",
-			(int)size, (unsigned)address);
+	LOG_DEBUG("writing buffer of %" PRIi32 " byte at 0x%8.8" PRIx32,
+			  size, address);
 
 	if (!target_was_examined(target)) {
 		LOG_ERROR("Target not examined yet");
@@ -1978,10 +2038,10 @@ int target_write_buffer(struct target *target, uint32_t address, uint32_t size, 
 		return ERROR_OK;
 
 	if ((address + size - 1) < address) {
-		/* GDB can request this when e.g. PC is 0xfffffffc*/
-		LOG_ERROR("address + size wrapped(0x%08x, 0x%08x)",
-				  (unsigned)address,
-				  (unsigned)size);
+		/* GDB can request this when e.g. PC is 0xfffffffc */
+		LOG_ERROR("address + size wrapped (0x%08" PRIx32 ", 0x%08" PRIx32 ")",
+				  address,
+				  size);
 		return ERROR_FAIL;
 	}
 
@@ -2027,8 +2087,8 @@ static int target_write_buffer_default(struct target *target, uint32_t address, 
  */
 int target_read_buffer(struct target *target, uint32_t address, uint32_t size, uint8_t *buffer)
 {
-	LOG_DEBUG("reading buffer of %i byte at 0x%8.8x",
-			  (int)size, (unsigned)address);
+	LOG_DEBUG("reading buffer of %" PRIi32 " byte at 0x%8.8" PRIx32,
+			  size, address);
 
 	if (!target_was_examined(target)) {
 		LOG_ERROR("Target not examined yet");
@@ -2039,8 +2099,8 @@ int target_read_buffer(struct target *target, uint32_t address, uint32_t size, u
 		return ERROR_OK;
 
 	if ((address + size - 1) < address) {
-		/* GDB can request this when e.g. PC is 0xfffffffc*/
-		LOG_ERROR("address + size wrapped(0x%08" PRIx32 ", 0x%08" PRIx32 ")",
+		/* GDB can request this when e.g. PC is 0xfffffffc */
+		LOG_ERROR("address + size wrapped (0x%08" PRIx32 ", 0x%08" PRIx32 ")",
 				  address,
 				  size);
 		return ERROR_FAIL;
@@ -2097,7 +2157,7 @@ int target_checksum_memory(struct target *target, uint32_t address, uint32_t siz
 	if (retval != ERROR_OK) {
 		buffer = malloc(size);
 		if (buffer == NULL) {
-			LOG_ERROR("error allocating buffer for section (%d bytes)", (int)size);
+			LOG_ERROR("error allocating buffer for section (%" PRId32 " bytes)", size);
 			return ERROR_COMMAND_SYNTAX_ERROR;
 		}
 		retval = target_read_buffer(target, address, size, buffer);
@@ -2122,7 +2182,8 @@ int target_checksum_memory(struct target *target, uint32_t address, uint32_t siz
 	return retval;
 }
 
-int target_blank_check_memory(struct target *target, uint32_t address, uint32_t size, uint32_t* blank)
+int target_blank_check_memory(struct target *target, uint32_t address, uint32_t size, uint32_t* blank,
+	uint8_t erased_value)
 {
 	int retval;
 	if (!target_was_examined(target)) {
@@ -2133,7 +2194,7 @@ int target_blank_check_memory(struct target *target, uint32_t address, uint32_t 
 	if (target->type->blank_check_memory == 0)
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 
-	retval = target->type->blank_check_memory(target, address, size, blank);
+	retval = target->type->blank_check_memory(target, address, size, blank, erased_value);
 
 	return retval;
 }
@@ -2198,7 +2259,7 @@ int target_read_u16(struct target *target, uint32_t address, uint16_t *value)
 
 	if (retval == ERROR_OK) {
 		*value = target_buffer_get_u16(target, value_buf);
-		LOG_DEBUG("address: 0x%8.8" PRIx32 ", value: 0x%4.4x",
+		LOG_DEBUG("address: 0x%8.8" PRIx32 ", value: 0x%4.4" PRIx16,
 				  address,
 				  *value);
 	} else {
@@ -2220,7 +2281,7 @@ int target_read_u8(struct target *target, uint32_t address, uint8_t *value)
 	int retval = target_read_memory(target, address, 1, 1, value);
 
 	if (retval == ERROR_OK) {
-		LOG_DEBUG("address: 0x%8.8" PRIx32 ", value: 0x%2.2x",
+		LOG_DEBUG("address: 0x%8.8" PRIx32 ", value: 0x%2.2" PRIx8,
 				  address,
 				  *value);
 	} else {
@@ -2283,7 +2344,7 @@ int target_write_u16(struct target *target, uint32_t address, uint16_t value)
 		return ERROR_FAIL;
 	}
 
-	LOG_DEBUG("address: 0x%8.8" PRIx32 ", value: 0x%8.8x",
+	LOG_DEBUG("address: 0x%8.8" PRIx32 ", value: 0x%8.8" PRIx16,
 			  address,
 			  value);
 
@@ -2303,7 +2364,7 @@ int target_write_u8(struct target *target, uint32_t address, uint8_t value)
 		return ERROR_FAIL;
 	}
 
-	LOG_DEBUG("address: 0x%8.8" PRIx32 ", value: 0x%2.2x",
+	LOG_DEBUG("address: 0x%8.8" PRIx32 ", value: 0x%2.2" PRIx8,
 			  address, value);
 
 	retval = target_write_memory(target, address, 1, 1, &value);
@@ -2399,9 +2460,9 @@ static int sense_handler(void)
 	if (powerRestored)
 		runPowerRestore = 1;
 
-	long long current = timeval_ms();
-	static long long lastPower;
-	int waitMore = lastPower + 2000 > current;
+	int64_t current = timeval_ms();
+	static int64_t lastPower;
+	bool waitMore = lastPower + 2000 > current;
 	if (powerDropout && !waitMore) {
 		runPowerDropout = 1;
 		lastPower = current;
@@ -2414,7 +2475,7 @@ static int sense_handler(void)
 	int srstDeasserted;
 	srstDeasserted = prevSrstAsserted && !srstAsserted;
 
-	static long long lastSrst;
+	static int64_t lastSrst;
 	waitMore = lastSrst + 2000 > current;
 	if (srstDeasserted && !waitMore) {
 		runSrstDeasserted = 1;
@@ -2724,8 +2785,8 @@ COMMAND_HANDLER(handle_wait_halt_command)
 int target_wait_state(struct target *target, enum target_state state, int ms)
 {
 	int retval;
-	long long then = 0, cur;
-	int once = 1;
+	int64_t then = 0, cur;
+	bool once = true;
 
 	for (;;) {
 		retval = target_poll(target);
@@ -2735,7 +2796,7 @@ int target_wait_state(struct target *target, enum target_state state, int ms)
 			break;
 		cur = timeval_ms();
 		if (once) {
-			once = 0;
+			once = false;
 			then = timeval_ms();
 			LOG_DEBUG("waiting for target %s...",
 				Jim_Nvp_value2name_simple(nvp_target_state, state)->name);
@@ -3109,7 +3170,7 @@ COMMAND_HANDLER(handle_load_image_command)
 	duration_start(&bench);
 
 	if (image_open(&image, CMD_ARGV[0], (CMD_ARGC >= 3) ? CMD_ARGV[2] : NULL) != ERROR_OK)
-		return ERROR_OK;
+		return ERROR_FAIL;
 
 	image_size = 0x0;
 	retval = ERROR_OK;
@@ -3119,6 +3180,7 @@ COMMAND_HANDLER(handle_load_image_command)
 			command_print(CMD_CTX,
 						  "error allocating buffer for section (%d bytes)",
 						  (int)(image.sections[i].size));
+			retval = ERROR_FAIL;
 			break;
 		}
 
@@ -3174,7 +3236,7 @@ COMMAND_HANDLER(handle_load_image_command)
 
 COMMAND_HANDLER(handle_dump_image_command)
 {
-	struct fileio fileio;
+	struct fileio *fileio;
 	uint8_t *buffer;
 	int retval, retvaltemp;
 	uint32_t address, size;
@@ -3207,7 +3269,7 @@ COMMAND_HANDLER(handle_dump_image_command)
 		if (retval != ERROR_OK)
 			break;
 
-		retval = fileio_write(&fileio, this_run_size, buffer, &size_written);
+		retval = fileio_write(fileio, this_run_size, buffer, &size_written);
 		if (retval != ERROR_OK)
 			break;
 
@@ -3218,23 +3280,29 @@ COMMAND_HANDLER(handle_dump_image_command)
 	free(buffer);
 
 	if ((ERROR_OK == retval) && (duration_measure(&bench) == ERROR_OK)) {
-		int filesize;
-		retval = fileio_size(&fileio, &filesize);
+		size_t filesize;
+		retval = fileio_size(fileio, &filesize);
 		if (retval != ERROR_OK)
 			return retval;
 		command_print(CMD_CTX,
-				"dumped %ld bytes in %fs (%0.3f KiB/s)", (long)filesize,
+				"dumped %zu bytes in %fs (%0.3f KiB/s)", filesize,
 				duration_elapsed(&bench), duration_kbps(&bench, filesize));
 	}
 
-	retvaltemp = fileio_close(&fileio);
+	retvaltemp = fileio_close(fileio);
 	if (retvaltemp != ERROR_OK)
 		return retvaltemp;
 
 	return retval;
 }
 
-static COMMAND_HELPER(handle_verify_image_command_internal, int verify)
+enum verify_mode {
+	IMAGE_TEST = 0,
+	IMAGE_VERIFY = 1,
+	IMAGE_CHECKSUM_ONLY = 2
+};
+
+static COMMAND_HELPER(handle_verify_image_command_internal, enum verify_mode verify)
 {
 	uint8_t *buffer;
 	size_t buf_cnt;
@@ -3292,7 +3360,7 @@ static COMMAND_HELPER(handle_verify_image_command_internal, int verify)
 			break;
 		}
 
-		if (verify) {
+		if (verify >= IMAGE_VERIFY) {
 			/* calculate checksum of image */
 			retval = image_calculate_checksum(buffer, buf_cnt, &checksum);
 			if (retval != ERROR_OK) {
@@ -3305,7 +3373,12 @@ static COMMAND_HELPER(handle_verify_image_command_internal, int verify)
 				free(buffer);
 				break;
 			}
-
+			if ((checksum != mem_checksum) && (verify == IMAGE_CHECKSUM_ONLY)) {
+				LOG_ERROR("checksum mismatch");
+				free(buffer);
+				retval = ERROR_FAIL;
+				goto done;
+			}
 			if (checksum != mem_checksum) {
 				/* failed crc checksum, fall back to a binary compare */
 				uint8_t *data;
@@ -3370,14 +3443,19 @@ done:
 	return retval;
 }
 
+COMMAND_HANDLER(handle_verify_image_checksum_command)
+{
+	return CALL_COMMAND_HANDLER(handle_verify_image_command_internal, IMAGE_CHECKSUM_ONLY);
+}
+
 COMMAND_HANDLER(handle_verify_image_command)
 {
-	return CALL_COMMAND_HANDLER(handle_verify_image_command_internal, 1);
+	return CALL_COMMAND_HANDLER(handle_verify_image_command_internal, IMAGE_VERIFY);
 }
 
 COMMAND_HANDLER(handle_test_image_command)
 {
-	return CALL_COMMAND_HANDLER(handle_verify_image_command_internal, 0);
+	return CALL_COMMAND_HANDLER(handle_verify_image_command_internal, IMAGE_TEST);
 }
 
 static int handle_bp_command_list(struct command_context *cmd_ctx)
@@ -3866,6 +3944,8 @@ static int target_mem2array(Jim_Interp *interp, struct target *target, int argc,
 	uint32_t count;
 	uint32_t v;
 	const char *varname;
+	const char *phys;
+	bool is_phys;
 	int  n, e, retval;
 	uint32_t i;
 
@@ -3874,8 +3954,8 @@ static int target_mem2array(Jim_Interp *interp, struct target *target, int argc,
 	 * argv[3] = memory address
 	 * argv[4] = count of times to read
 	 */
-	if (argc != 4) {
-		Jim_WrongNumArgs(interp, 1, argv, "varname width addr nelems");
+	if (argc < 4 || argc > 5) {
+		Jim_WrongNumArgs(interp, 1, argv, "varname width addr nelems [phys]");
 		return JIM_ERR;
 	}
 	varname = Jim_GetString(argv[0], &len);
@@ -3894,6 +3974,14 @@ static int target_mem2array(Jim_Interp *interp, struct target *target, int argc,
 	len = l;
 	if (e != JIM_OK)
 		return e;
+	is_phys = false;
+	if (argc > 4) {
+		phys = Jim_GetString(argv[4], &n);
+		if (!strncmp(phys, "phys", n))
+			is_phys = true;
+		else
+			return JIM_ERR;
+	}
 	switch (width) {
 		case 8:
 			width = 1;
@@ -3936,7 +4024,7 @@ static int target_mem2array(Jim_Interp *interp, struct target *target, int argc,
 		sprintf(buf, "mem2array address: 0x%08" PRIx32 " is not aligned for %" PRId32 " byte reads",
 				addr,
 				width);
-		Jim_AppendStrings(interp, Jim_GetResult(interp), buf , NULL);
+		Jim_AppendStrings(interp, Jim_GetResult(interp), buf, NULL);
 		return JIM_ERR;
 	}
 
@@ -3959,13 +4047,16 @@ static int target_mem2array(Jim_Interp *interp, struct target *target, int argc,
 		if (count > (buffersize / width))
 			count = (buffersize / width);
 
-		retval = target_read_memory(target, addr, width, count, buffer);
+		if (is_phys)
+			retval = target_read_phys_memory(target, addr, width, count, buffer);
+		else
+			retval = target_read_memory(target, addr, width, count, buffer);
 		if (retval != ERROR_OK) {
 			/* BOO !*/
-			LOG_ERROR("mem2array: Read @ 0x%08x, w=%d, cnt=%d, failed",
-					  (unsigned int)addr,
-					  (int)width,
-					  (int)count);
+			LOG_ERROR("mem2array: Read @ 0x%08" PRIx32 ", w=%" PRId32 ", cnt=%" PRId32 ", failed",
+					  addr,
+					  width,
+					  count);
 			Jim_SetResult(interp, Jim_NewEmptyStringObj(interp));
 			Jim_AppendStrings(interp, Jim_GetResult(interp), "mem2array: cannot read memory", NULL);
 			e = JIM_ERR;
@@ -4055,6 +4146,8 @@ static int target_array2mem(Jim_Interp *interp, struct target *target,
 	uint32_t count;
 	uint32_t v;
 	const char *varname;
+	const char *phys;
+	bool is_phys;
 	int  n, e, retval;
 	uint32_t i;
 
@@ -4063,8 +4156,8 @@ static int target_array2mem(Jim_Interp *interp, struct target *target,
 	 * argv[3] = memory address
 	 * argv[4] = count to write
 	 */
-	if (argc != 4) {
-		Jim_WrongNumArgs(interp, 0, argv, "varname width addr nelems");
+	if (argc < 4 || argc > 5) {
+		Jim_WrongNumArgs(interp, 0, argv, "varname width addr nelems [phys]");
 		return JIM_ERR;
 	}
 	varname = Jim_GetString(argv[0], &len);
@@ -4083,6 +4176,14 @@ static int target_array2mem(Jim_Interp *interp, struct target *target,
 	len = l;
 	if (e != JIM_OK)
 		return e;
+	is_phys = false;
+	if (argc > 4) {
+		phys = Jim_GetString(argv[4], &n);
+		if (!strncmp(phys, "phys", n))
+			is_phys = true;
+		else
+			return JIM_ERR;
+	}
 	switch (width) {
 		case 8:
 			width = 1;
@@ -4126,10 +4227,10 @@ static int target_array2mem(Jim_Interp *interp, struct target *target,
 	} else {
 		char buf[100];
 		Jim_SetResult(interp, Jim_NewEmptyStringObj(interp));
-		sprintf(buf, "array2mem address: 0x%08x is not aligned for %d byte reads",
-				(unsigned int)addr,
-				(int)width);
-		Jim_AppendStrings(interp, Jim_GetResult(interp), buf , NULL);
+		sprintf(buf, "array2mem address: 0x%08" PRIx32 " is not aligned for %" PRId32 " byte reads",
+				addr,
+				width);
+		Jim_AppendStrings(interp, Jim_GetResult(interp), buf, NULL);
 		return JIM_ERR;
 	}
 
@@ -4169,13 +4270,16 @@ static int target_array2mem(Jim_Interp *interp, struct target *target,
 		}
 		len -= count;
 
-		retval = target_write_memory(target, addr, width, count, buffer);
+		if (is_phys)
+			retval = target_write_phys_memory(target, addr, width, count, buffer);
+		else
+			retval = target_write_memory(target, addr, width, count, buffer);
 		if (retval != ERROR_OK) {
 			/* BOO !*/
-			LOG_ERROR("array2mem: Write @ 0x%08x, w=%d, cnt=%d, failed",
-					  (unsigned int)addr,
-					  (int)width,
-					  (int)count);
+			LOG_ERROR("array2mem: Write @ 0x%08" PRIx32 ", w=%" PRId32 ", cnt=%" PRId32 ", failed",
+					  addr,
+					  width,
+					  count);
 			Jim_SetResult(interp, Jim_NewEmptyStringObj(interp));
 			Jim_AppendStrings(interp, Jim_GetResult(interp), "array2mem: cannot read memory", NULL);
 			e = JIM_ERR;
@@ -4241,6 +4345,7 @@ enum target_cfg_param {
 	TCFG_CHAIN_POSITION,
 	TCFG_DBGBASE,
 	TCFG_RTOS,
+	TCFG_DEFER_EXAMINE,
 };
 
 static Jim_Nvp nvp_config_opts[] = {
@@ -4255,6 +4360,7 @@ static Jim_Nvp nvp_config_opts[] = {
 	{ .name = "-chain-position",   .value = TCFG_CHAIN_POSITION },
 	{ .name = "-dbgbase",          .value = TCFG_DBGBASE },
 	{ .name = "-rtos",             .value = TCFG_RTOS },
+	{ .name = "-defer-examine",    .value = TCFG_DEFER_EXAMINE },
 	{ .name = NULL, .value = -1 }
 };
 
@@ -4529,6 +4635,13 @@ no_params:
 			}
 			/* loop for more */
 			break;
+
+		case TCFG_DEFER_EXAMINE:
+			/* DEFER_EXAMINE */
+			target->defer_examine = true;
+			/* loop for more */
+			break;
+
 		}
 	} /* while (goi->argc) */
 
@@ -4543,12 +4656,9 @@ static int jim_target_configure(Jim_Interp *interp, int argc, Jim_Obj * const *a
 
 	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
 	goi.isconfigure = !strcmp(Jim_GetString(argv[0], NULL), "configure");
-	int need_args = 1 + goi.isconfigure;
-	if (goi.argc < need_args) {
+	if (goi.argc < 1) {
 		Jim_WrongNumArgs(goi.interp, goi.argc, goi.argv,
-			goi.isconfigure
-				? "missing: -option VALUE ..."
-				: "missing: -option ...");
+				 "missing: -option ...");
 		return JIM_ERR;
 	}
 	struct target *target = Jim_CmdPrivData(goi.interp);
@@ -4799,17 +4909,55 @@ static int jim_target_tap_disabled(Jim_Interp *interp)
 
 static int jim_target_examine(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 {
-	if (argc != 1) {
-		Jim_WrongNumArgs(interp, 1, argv, "[no parameters]");
+	bool allow_defer = false;
+
+	Jim_GetOptInfo goi;
+	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
+	if (goi.argc > 1) {
+		const char *cmd_name = Jim_GetString(argv[0], NULL);
+		Jim_SetResultFormatted(goi.interp,
+				"usage: %s ['allow-defer']", cmd_name);
 		return JIM_ERR;
 	}
+	if (goi.argc > 0 &&
+	    strcmp(Jim_GetString(argv[1], NULL), "allow-defer") == 0) {
+		/* consume it */
+		struct Jim_Obj *obj;
+		int e = Jim_GetOpt_Obj(&goi, &obj);
+		if (e != JIM_OK)
+			return e;
+		allow_defer = true;
+	}
+
 	struct target *target = Jim_CmdPrivData(interp);
 	if (!target->tap->enabled)
 		return jim_target_tap_disabled(interp);
 
+	if (allow_defer && target->defer_examine) {
+		LOG_INFO("Deferring arp_examine of %s", target_name(target));
+		LOG_INFO("Use arp_examine command to examine it manually!");
+		return JIM_OK;
+	}
+
 	int e = target->type->examine(target);
 	if (e != ERROR_OK)
 		return JIM_ERR;
+	return JIM_OK;
+}
+
+static int jim_target_was_examined(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
+{
+	struct target *target = Jim_CmdPrivData(interp);
+
+	Jim_SetResultBool(interp, target_was_examined(target));
+	return JIM_OK;
+}
+
+static int jim_target_examine_deferred(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
+{
+	struct target *target = Jim_CmdPrivData(interp);
+
+	Jim_SetResultBool(interp, target->defer_examine);
 	return JIM_OK;
 }
 
@@ -4873,16 +5021,17 @@ static int jim_target_reset(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 	struct target *target = Jim_CmdPrivData(goi.interp);
 	if (!target->tap->enabled)
 		return jim_target_tap_disabled(interp);
-	if (!(target_was_examined(target))) {
-		LOG_ERROR("Target not examined yet");
-		return ERROR_TARGET_NOT_EXAMINED;
-	}
+
 	if (!target->type->assert_reset || !target->type->deassert_reset) {
 		Jim_SetResultFormatted(interp,
 				"No target-specific reset for %s",
 				target_name(target));
 		return JIM_ERR;
 	}
+
+	if (target->defer_examine)
+		target_reset_examined(target);
+
 	/* determine if we should halt or not. */
 	target->reset_halt = !!a;
 	/* When this happens - all workareas are invalid. */
@@ -5093,6 +5242,21 @@ static const struct command_registration target_instance_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.jim_handler = jim_target_examine,
 		.help = "used internally for reset processing",
+		.usage = "arp_examine ['allow-defer']",
+	},
+	{
+		.name = "was_examined",
+		.mode = COMMAND_EXEC,
+		.jim_handler = jim_target_was_examined,
+		.help = "used internally for reset processing",
+		.usage = "was_examined",
+	},
+	{
+		.name = "examine_deferred",
+		.mode = COMMAND_EXEC,
+		.jim_handler = jim_target_examine_deferred,
+		.help = "used internally for reset processing",
+		.usage = "examine_deferred",
 	},
 	{
 		.name = "arp_halt_gdb",
@@ -5139,7 +5303,6 @@ static int target_create(Jim_GetOptInfo *goi)
 	Jim_Obj *new_cmd;
 	Jim_Cmd *cmd;
 	const char *cp;
-	char *cp2;
 	int e;
 	int x;
 	struct target *target;
@@ -5164,10 +5327,9 @@ static int target_create(Jim_GetOptInfo *goi)
 	}
 
 	/* TYPE */
-	e = Jim_GetOpt_String(goi, &cp2, NULL);
+	e = Jim_GetOpt_String(goi, &cp, NULL);
 	if (e != JIM_OK)
 		return e;
-	cp = cp2;
 	struct transport *tr = get_current_transport();
 	if (tr->override_target) {
 		e = tr->override_target(&cp);
@@ -5246,14 +5408,7 @@ static int target_create(Jim_GetOptInfo *goi)
 	target->halt_issued			= false;
 
 	/* initialize trace information */
-	target->trace_info = malloc(sizeof(struct trace));
-	target->trace_info->num_trace_points         = 0;
-	target->trace_info->trace_points_size        = 0;
-	target->trace_info->trace_points             = NULL;
-	target->trace_info->trace_history_size       = 0;
-	target->trace_info->trace_history            = NULL;
-	target->trace_info->trace_history_pos        = 0;
-	target->trace_info->trace_history_overflowed = 0;
+	target->trace_info = calloc(1, sizeof(struct trace));
 
 	target->dbgmsg          = NULL;
 	target->dbg_msg_enabled = 0;
@@ -5622,7 +5777,7 @@ COMMAND_HANDLER(handle_fast_load_command)
 		return ERROR_FAIL;
 	}
 	int i;
-	int ms = timeval_ms();
+	int64_t ms = timeval_ms();
 	int size = 0;
 	int retval = ERROR_OK;
 	for (i = 0; i < fastload_num; i++) {
@@ -5636,7 +5791,7 @@ COMMAND_HANDLER(handle_fast_load_command)
 		size += fastload[i].length;
 	}
 	if (retval == ERROR_OK) {
-		int after = timeval_ms();
+		int64_t after = timeval_ms();
 		command_print(CMD_CTX, "Loaded image %f kBytes/s", (float)(size/1024.0)/((float)(after-ms)/1000.0));
 	}
 	return retval;
@@ -6068,6 +6223,12 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.handler = handle_dump_image_command,
 		.mode = COMMAND_EXEC,
 		.usage = "filename address size",
+	},
+	{
+		.name = "verify_image_checksum",
+		.handler = handle_verify_image_checksum_command,
+		.mode = COMMAND_EXEC,
+		.usage = "filename [offset [type]]",
 	},
 	{
 		.name = "verify_image",

@@ -11,10 +11,13 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef OR1K_DU
-#define OR1K_DU
+#ifndef OPENOCD_TARGET_OPENRISC_OR1K_DU_H
+#define OPENOCD_TARGET_OPENRISC_OR1K_DU_H
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -72,5 +75,4 @@ int or1k_adv_jtag_jsp_xfer(struct or1k_jtag *jtag_info,
 				  int *out_len, unsigned char *out_buffer,
 				  int *in_len, unsigned char *in_buffer);
 
-#endif
-
+#endif /* OPENOCD_TARGET_OPENRISC_OR1K_DU_H */

@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARM926EJS_H
-#define ARM926EJS_H
+#ifndef OPENOCD_TARGET_ARM926EJS_H
+#define OPENOCD_TARGET_ARM926EJS_H
 
 #include "arm9tdmi.h"
 #include "armv4_5_mmu.h"
@@ -54,4 +52,4 @@ int arm926ejs_soft_reset_halt(struct target *target);
 
 extern const struct command_registration arm926ejs_command_handlers[];
 
-#endif /* ARM926EJS_H */
+#endif /* OPENOCD_TARGET_ARM926EJS_H */

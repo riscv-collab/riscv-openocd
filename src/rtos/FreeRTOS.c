@@ -13,9 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -30,6 +28,10 @@
 #include "helper/log.h"
 #include "helper/types.h"
 #include "rtos_standard_stackings.h"
+#include "target/armv7m.h"
+#include "target/cortex_m.h"
+
+
 
 #define FREERTOS_MAX_PRIORITIES	63
 
@@ -45,7 +47,9 @@ struct FreeRTOS_params {
 	const unsigned char list_elem_content_offset;
 	const unsigned char thread_stack_offset;
 	const unsigned char thread_name_offset;
-	const struct rtos_register_stacking *stacking_info;
+	const struct rtos_register_stacking *stacking_info_cm3;
+	const struct rtos_register_stacking *stacking_info_cm4f;
+	const struct rtos_register_stacking *stacking_info_cm4f_fpu;
 };
 
 static const struct FreeRTOS_params FreeRTOS_params_list[] = {
@@ -60,6 +64,8 @@ static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	0,						/* thread_stack_offset; */
 	52,						/* thread_name_offset; */
 	&rtos_standard_Cortex_M3_stacking,	/* stacking_info */
+	&rtos_standard_Cortex_M4F_stacking,
+	&rtos_standard_Cortex_M4F_FPU_stacking,
 	},
 	{
 	"hla_target",			/* target_name */
@@ -72,6 +78,8 @@ static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	0,						/* thread_stack_offset; */
 	52,						/* thread_name_offset; */
 	&rtos_standard_Cortex_M3_stacking,	/* stacking_info */
+	&rtos_standard_Cortex_M4F_stacking,
+	&rtos_standard_Cortex_M4F_FPU_stacking,
 	},
 	{
 	"nds32_v3",			/* target_name */
@@ -84,6 +92,8 @@ static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	0,						/* thread_stack_offset; */
 	52,						/* thread_name_offset; */
 	&rtos_standard_NDS32_N1068_stacking,	/* stacking_info */
+	&rtos_standard_Cortex_M4F_stacking,
+	&rtos_standard_Cortex_M4F_FPU_stacking,
 	},
 };
 
@@ -211,7 +221,6 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 		}
 		rtos->thread_details->threadid = 1;
 		rtos->thread_details->exists = true;
-		rtos->thread_details->display_str = NULL;
 		rtos->thread_details->extra_info_str = NULL;
 		rtos->thread_details->thread_name_str = malloc(sizeof(tmp_str));
 		strcpy(rtos->thread_details->thread_name_str, tmp_str);
@@ -350,11 +359,10 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 			rtos->thread_details[tasks_found].thread_name_str =
 				malloc(strlen(tmp_str)+1);
 			strcpy(rtos->thread_details[tasks_found].thread_name_str, tmp_str);
-			rtos->thread_details[tasks_found].display_str = NULL;
 			rtos->thread_details[tasks_found].exists = true;
 
 			if (rtos->thread_details[tasks_found].threadid == rtos->current_thread) {
-				char running_str[] = "Running";
+				char running_str[] = "State: Running";
 				rtos->thread_details[tasks_found].extra_info_str = malloc(
 						sizeof(running_str));
 				strcpy(rtos->thread_details[tasks_found].extra_info_str,
@@ -418,7 +426,45 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, int64_t thread_id, ch
 										thread_id + param->thread_stack_offset,
 										stack_ptr);
 
-	return rtos_generic_stack_read(rtos->target, param->stacking_info, stack_ptr, hex_reg_list);
+	/* Check for armv7m with *enabled* FPU, i.e. a Cortex-M4F */
+	int cm4_fpu_enabled = 0;
+	struct armv7m_common *armv7m_target = target_to_armv7m(rtos->target);
+	if (is_armv7m(armv7m_target)) {
+		if (armv7m_target->fp_feature == FPv4_SP) {
+			/* Found ARM v7m target which includes a FPU */
+			uint32_t cpacr;
+
+			retval = target_read_u32(rtos->target, FPU_CPACR, &cpacr);
+			if (retval != ERROR_OK) {
+				LOG_ERROR("Could not read CPACR register to check FPU state");
+				return -1;
+			}
+
+			/* Check if CP10 and CP11 are set to full access. */
+			if (cpacr & 0x00F00000) {
+				/* Found target with enabled FPU */
+				cm4_fpu_enabled = 1;
+			}
+		}
+	}
+
+	if (cm4_fpu_enabled == 1) {
+		/* Read the LR to decide between stacking with or without FPU */
+		uint32_t LR_svc = 0;
+		retval = target_read_buffer(rtos->target,
+				stack_ptr + 0x20,
+				param->pointer_width,
+				(uint8_t *)&LR_svc);
+		if (retval != ERROR_OK) {
+			LOG_OUTPUT("Error reading stack frame from FreeRTOS thread\r\n");
+			return retval;
+		}
+		if ((LR_svc & 0x10) == 0)
+			return rtos_generic_stack_read(rtos->target, param->stacking_info_cm4f_fpu, stack_ptr, hex_reg_list);
+		else
+			return rtos_generic_stack_read(rtos->target, param->stacking_info_cm4f, stack_ptr, hex_reg_list);
+	} else
+		return rtos_generic_stack_read(rtos->target, param->stacking_info_cm3, stack_ptr, hex_reg_list);
 }
 
 static int FreeRTOS_get_symbol_list_to_lookup(symbol_table_elem_t *symbol_list[])

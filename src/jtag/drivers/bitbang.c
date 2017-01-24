@@ -16,9 +16,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 /* 2014-12: Addition of the SWD protocol support is based on the initial work
@@ -44,6 +42,8 @@ extern struct jtag_interface *jtag_interface;
  * to use.
  */
 static void bitbang_stableclocks(int num_cycles);
+
+static void bitbang_swd_write_reg(uint8_t cmd, uint32_t value, uint32_t ap_delay_clk);
 
 struct bitbang_interface *bitbang_interface;
 
@@ -378,7 +378,7 @@ static void bitbang_exchange(bool rnw, uint8_t buf[], unsigned int offset, unsig
 	}
 }
 
-int bitbang_swd_switch_seq(struct adiv5_dap *dap, enum swd_special_seq seq)
+int bitbang_swd_switch_seq(enum swd_special_seq seq)
 {
 	LOG_DEBUG("bitbang_swd_switch_seq");
 
@@ -409,16 +409,13 @@ void bitbang_switch_to_swd(void)
 	bitbang_exchange(false, (uint8_t *)swd_seq_jtag_to_swd, 0, swd_seq_jtag_to_swd_len);
 }
 
-static void swd_clear_sticky_errors(struct adiv5_dap *dap)
+static void swd_clear_sticky_errors(void)
 {
-	const struct swd_driver *swd = jtag_interface->swd;
-	assert(swd);
-
-	swd->write_reg(dap, swd_cmd(false,  false, DP_ABORT),
-		STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR);
+	bitbang_swd_write_reg(swd_cmd(false,  false, DP_ABORT),
+		STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR, 0);
 }
 
-static void bitbang_swd_read_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t *value)
+static void bitbang_swd_read_reg(uint8_t cmd, uint32_t *value, uint32_t ap_delay_clk)
 {
 	LOG_DEBUG("bitbang_swd_read_reg");
 	assert(cmd & SWD_CMD_RnW);
@@ -459,11 +456,11 @@ static void bitbang_swd_read_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t *v
 			if (value)
 				*value = data;
 			if (cmd & SWD_CMD_APnDP)
-				bitbang_exchange(true, NULL, 0, dap->memaccess_tck);
+				bitbang_exchange(true, NULL, 0, ap_delay_clk);
 			return;
 		 case SWD_ACK_WAIT:
 			LOG_DEBUG("SWD_ACK_WAIT");
-			swd_clear_sticky_errors(dap);
+			swd_clear_sticky_errors();
 			break;
 		 case SWD_ACK_FAULT:
 			LOG_DEBUG("SWD_ACK_FAULT");
@@ -477,7 +474,7 @@ static void bitbang_swd_read_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t *v
 	}
 }
 
-static void bitbang_swd_write_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t value)
+static void bitbang_swd_write_reg(uint8_t cmd, uint32_t value, uint32_t ap_delay_clk)
 {
 	LOG_DEBUG("bitbang_swd_write_reg");
 	assert(!(cmd & SWD_CMD_RnW));
@@ -511,11 +508,11 @@ static void bitbang_swd_write_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t v
 		switch (ack) {
 		 case SWD_ACK_OK:
 			if (cmd & SWD_CMD_APnDP)
-				bitbang_exchange(true, NULL, 0, dap->memaccess_tck);
+				bitbang_exchange(true, NULL, 0, ap_delay_clk);
 			return;
 		 case SWD_ACK_WAIT:
 			LOG_DEBUG("SWD_ACK_WAIT");
-			swd_clear_sticky_errors(dap);
+			swd_clear_sticky_errors();
 			break;
 		 case SWD_ACK_FAULT:
 			LOG_DEBUG("SWD_ACK_FAULT");
@@ -529,7 +526,7 @@ static void bitbang_swd_write_reg(struct adiv5_dap *dap, uint8_t cmd, uint32_t v
 	}
 }
 
-static int bitbang_swd_run_queue(struct adiv5_dap *dap)
+static int bitbang_swd_run_queue(void)
 {
 	LOG_DEBUG("bitbang_swd_run_queue");
 	/* A transaction must be followed by another transaction or at least 8 idle cycles to

@@ -16,9 +16,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -87,7 +85,7 @@ static int arm966e_read_cp15(struct target *target, int reg_addr, uint32_t *valu
 	retval = arm_jtag_scann(jtag_info, 0xf, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = arm_jtag_set_instr(jtag_info, jtag_info->intest_instr, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, jtag_info->intest_instr, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -141,7 +139,7 @@ int arm966e_write_cp15(struct target *target, int reg_addr, uint32_t value)
 	retval = arm_jtag_scann(jtag_info, 0xf, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = arm_jtag_set_instr(jtag_info, jtag_info->intest_instr, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, jtag_info->intest_instr, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 

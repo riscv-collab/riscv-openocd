@@ -25,13 +25,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef TARGET_H
-#define TARGET_H
+#ifndef OPENOCD_TARGET_TARGET_H
+#define OPENOCD_TARGET_TARGET_H
 
 #include <helper/list.h>
 
@@ -132,6 +130,9 @@ struct target {
 	struct jtag_tap *tap;				/* where on the jtag chain is this */
 	int32_t coreid;						/* which device on the TAP? */
 
+	/** Should we defer examine to later */
+	bool defer_examine;
+
 	/**
 	 * Indicates whether this target has been examined.
 	 *
@@ -156,7 +157,7 @@ struct target {
 										 * upon first allocation from virtual/physical address. */
 	bool working_area_virt_spec;		/* virtual address specified? */
 	uint32_t working_area_virt;			/* virtual address */
-	bool working_area_phys_spec;		/* virtual address specified? */
+	bool working_area_phys_spec;		/* physical address specified? */
 	uint32_t working_area_phys;			/* physical address */
 	uint32_t working_area_size;			/* size in bytes */
 	uint32_t backup_working_area;		/* whether the content of the working area has to be preserved */
@@ -172,12 +173,13 @@ struct target {
 	struct debug_msg_receiver *dbgmsg;	/* list of debug message receivers */
 	uint32_t dbg_msg_enabled;			/* debug message status */
 	void *arch_info;					/* architecture specific information */
+	void *private_config;				/* pointer to target specific config data (for jim_configure hook) */
 	struct target *next;				/* next target in list */
 
 	int display;						/* display async info in telnet session. Do not display
 										 * lots of halted/resumed info when stepping in debugger. */
 	bool halt_issued;					/* did we transition to halted state? */
-	long long halt_issued_time;			/* Note time when halt was issued */
+	int64_t halt_issued_time;			/* Note time when halt was issued */
 
 	bool dbgbase_set;					/* By default the debug base is not set */
 	uint32_t dbgbase;					/* Really a Cortex-A specific option, but there is no
@@ -292,6 +294,12 @@ struct target_reset_callback {
 	int (*callback)(struct target *target, enum target_reset_mode reset_mode, void *priv);
 };
 
+struct target_trace_callback {
+	struct list_head list;
+	void *priv;
+	int (*callback)(struct target *target, size_t len, uint8_t *data, void *priv);
+};
+
 struct target_timer_callback {
 	int (*callback)(void *priv);
 	int time_ms;
@@ -323,6 +331,15 @@ int target_unregister_reset_callback(
 		enum target_reset_mode reset_mode, void *priv),
 		void *priv);
 
+int target_register_trace_callback(
+		int (*callback)(struct target *target,
+		size_t len, uint8_t *data, void *priv),
+		void *priv);
+int target_unregister_trace_callback(
+		int (*callback)(struct target *target,
+		size_t len, uint8_t *data, void *priv),
+		void *priv);
+
 /* Poll the status of the target, detect any error conditions and report them.
  *
  * Also note that this fn will clear such error conditions, so a subsequent
@@ -341,6 +358,7 @@ int target_resume(struct target *target, int current, uint32_t address,
 int target_halt(struct target *target);
 int target_call_event_callbacks(struct target *target, enum target_event event);
 int target_call_reset_callbacks(struct target *target, enum target_reset_mode reset_mode);
+int target_call_trace_callbacks(struct target *target, size_t len, uint8_t *data);
 
 /**
  * The period is very approximate, the callback can happen much more often
@@ -565,7 +583,7 @@ int target_read_buffer(struct target *target,
 int target_checksum_memory(struct target *target,
 		uint32_t address, uint32_t size, uint32_t *crc);
 int target_blank_check_memory(struct target *target,
-		uint32_t address, uint32_t size, uint32_t *blank);
+		uint32_t address, uint32_t size, uint32_t *blank, uint8_t erased_value);
 int target_wait_state(struct target *target, enum target_state state, int ms);
 
 /**
@@ -669,4 +687,4 @@ void target_handle_event(struct target *t, enum target_event e);
 
 extern bool get_target_reset_nag(void);
 
-#endif /* TARGET_H */
+#endif /* OPENOCD_TARGET_TARGET_H */

@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef NON_CFI_H
-#define NON_CFI_H
+#ifndef OPENOCD_FLASH_NOR_NON_CFI_H
+#define OPENOCD_FLASH_NOR_NON_CFI_H
 
 struct non_cfi {
 	uint16_t mfr;
@@ -35,4 +33,4 @@ struct non_cfi {
 
 void cfi_fixup_non_cfi(struct flash_bank *bank);
 
-#endif /* NON_CFI_H */
+#endif /* OPENOCD_FLASH_NOR_NON_CFI_H */

@@ -16,13 +16,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef CONFIGURATION_H
-#define CONFIGURATION_H
+#ifndef OPENOCD_HELPER_CONFIGURATION_H
+#define OPENOCD_HELPER_CONFIGURATION_H
 
 #include <helper/command.h>
 
@@ -42,4 +40,4 @@ FILE *open_file_from_path(const char *file, const char *mode);
 char *find_file(const char *name);
 char *get_home_dir(const char *append_path);
 
-#endif	/* CONFIGURATION_H */
+#endif /* OPENOCD_HELPER_CONFIGURATION_H */

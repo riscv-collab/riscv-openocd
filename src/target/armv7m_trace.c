@@ -10,6 +10,9 @@
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -35,11 +38,15 @@ static int armv7m_poll_trace(void *target)
 	if (retval != ERROR_OK || !size)
 		return retval;
 
-	if (fwrite(buf, 1, size, armv7m->trace_config.trace_file) == size)
-		fflush(armv7m->trace_config.trace_file);
-	else {
-		LOG_ERROR("Error writing to the trace destination file");
-		return ERROR_FAIL;
+	target_call_trace_callbacks(target, size, buf);
+
+	if (armv7m->trace_config.trace_file != NULL) {
+		if (fwrite(buf, 1, size, armv7m->trace_config.trace_file) == size)
+			fflush(armv7m->trace_config.trace_file);
+		else {
+			LOG_ERROR("Error writing to the trace destination file");
+			return ERROR_FAIL;
+		}
 	}
 
 	return ERROR_OK;
@@ -183,10 +190,13 @@ COMMAND_HANDLER(handle_tpiu_config_command)
 				return ERROR_COMMAND_SYNTAX_ERROR;
 
 			armv7m->trace_config.config_type = INTERNAL;
-			armv7m->trace_config.trace_file = fopen(CMD_ARGV[cmd_idx], "ab");
-			if (!armv7m->trace_config.trace_file) {
-				LOG_ERROR("Can't open trace destination file");
-				return ERROR_FAIL;
+
+			if (strcmp(CMD_ARGV[cmd_idx], "-") != 0) {
+				armv7m->trace_config.trace_file = fopen(CMD_ARGV[cmd_idx], "ab");
+				if (!armv7m->trace_config.trace_file) {
+					LOG_ERROR("Can't open trace destination file");
+					return ERROR_FAIL;
+				}
 			}
 		}
 		cmd_idx++;

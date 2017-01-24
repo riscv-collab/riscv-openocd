@@ -22,9 +22,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 /* The specification for SVF is available here:
@@ -273,6 +271,7 @@ COMMAND_HANDLER(handle_xsvf_command)
 	if ((CMD_ARGC > 2) && (strcmp(CMD_ARGV[2], "quiet") == 0))
 		verbose = 0;
 
+	LOG_WARNING("XSVF support in OpenOCD is limited. Consider using SVF instead");
 	LOG_USER("xsvf processing file: \"%s\"", filename);
 
 	while (read(xsvf_fd, &opcode, 1) > 0) {

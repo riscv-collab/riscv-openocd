@@ -12,9 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the
- * Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -228,6 +226,18 @@ static int dpm_write_reg(struct arm_dpm *dpm, struct reg *r, unsigned regnum)
 	}
 
 	return retval;
+}
+
+/**
+ * Write to program counter and switch the core state (arm/thumb) according to
+ * the address.
+ */
+static int dpm_write_pc_core_state(struct arm_dpm *dpm, struct reg *r)
+{
+	uint32_t value = buf_get_u32(r->value, 0, 32);
+
+	/* read r0 from DCC; then "BX r0" */
+	return dpm->instr_write_data_r0(dpm, ARMV4_5_BX(0), value);
 }
 
 /**
@@ -467,6 +477,19 @@ int arm_dpm_write_dirty_registers(struct arm_dpm *dpm, bool bpwp)
 		goto done;
 	arm->cpsr->dirty = false;
 
+	/* restore the PC, make sure to also switch the core state
+	 * to whatever it was set to with "arm core_state" command.
+	 * target code will have set PC to an appropriate resume address.
+	 */
+	retval = dpm_write_pc_core_state(dpm, arm->pc);
+	if (retval != ERROR_OK)
+		goto done;
+	/* on Cortex-A5 (as found on NXP VF610 SoC), BX instruction
+	 * executed in debug state doesn't appear to set the PC,
+	 * explicitly set it with a "MOV pc, r0". This doesn't influence
+	 * CPSR on Cortex-A9 so it should be OK. Maybe due to different
+	 * debug version?
+	 */
 	retval = dpm_write_reg(dpm, arm->pc, 15);
 	if (retval != ERROR_OK)
 		goto done;
@@ -949,11 +972,14 @@ int arm_dpm_setup(struct arm_dpm *dpm)
 	arm->read_core_reg = arm_dpm_read_core_reg;
 	arm->write_core_reg = arm_dpm_write_core_reg;
 
-	cache = arm_build_reg_cache(target, arm);
-	if (!cache)
-		return ERROR_FAIL;
+	/* avoid duplicating the register cache */
+	if (arm->core_cache == NULL) {
+		cache = arm_build_reg_cache(target, arm);
+		if (!cache)
+			return ERROR_FAIL;
 
-	*register_get_last_cache_p(&target->reg_cache) = cache;
+		*register_get_last_cache_p(&target->reg_cache) = cache;
+	}
 
 	/* coprocessor access setup */
 	arm->mrc = dpm_mrc;

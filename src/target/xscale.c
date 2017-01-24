@@ -19,9 +19,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -75,7 +73,7 @@ static int xscale_read_trace(struct target *);
  * mini-ICache, which is 2K of code writable only via JTAG.
  */
 static const uint8_t xscale_debug_handler[] = {
-#include "xscale_debug.inc"
+#include "../../contrib/loaders/debug/xscale/debug_handler.inc"
 };
 
 static const char *const xscale_reg_list[] = {
@@ -1446,6 +1444,13 @@ static int xscale_assert_reset(struct target *target)
 {
 	struct xscale_common *xscale = target_to_xscale(target);
 
+	/* TODO: apply hw reset signal in not examined state */
+	if (!(target_was_examined(target))) {
+		LOG_WARNING("Reset is not asserted because the target is not examined.");
+		LOG_WARNING("Use a reset button or power cycle the target.");
+		return ERROR_TARGET_NOT_EXAMINED;
+	}
+
 	LOG_DEBUG("target->state: %s",
 		target_state_name(target));
 
@@ -1573,7 +1578,6 @@ static int xscale_deassert_reset(struct target *target)
 
 			address += buf_cnt;
 		}
-		;
 
 		retval = xscale_load_ic(target, 0x0,
 				xscale->low_vectors);
@@ -2663,7 +2667,7 @@ static int xscale_analyze_trace(struct target *target, struct command_context *c
 	struct xscale_common *xscale = target_to_xscale(target);
 	struct xscale_trace_data *trace_data = xscale->trace.data;
 	int i, retval;
-	uint32_t breakpoint_pc;
+	uint32_t breakpoint_pc = 0;
 	struct arm_instruction instruction;
 	uint32_t current_pc = 0;/* initialized when address determined */
 
@@ -3426,7 +3430,7 @@ COMMAND_HANDLER(xscale_handle_dump_trace_command)
 	struct target *target = get_current_target(CMD_CTX);
 	struct xscale_common *xscale = target_to_xscale(target);
 	struct xscale_trace_data *trace_data;
-	struct fileio file;
+	struct fileio *file;
 	int retval;
 
 	retval = xscale_verify_pointer(CMD_CTX, xscale);
@@ -3454,19 +3458,19 @@ COMMAND_HANDLER(xscale_handle_dump_trace_command)
 	while (trace_data) {
 		int i;
 
-		fileio_write_u32(&file, trace_data->chkpt0);
-		fileio_write_u32(&file, trace_data->chkpt1);
-		fileio_write_u32(&file, trace_data->last_instruction);
-		fileio_write_u32(&file, trace_data->depth);
+		fileio_write_u32(file, trace_data->chkpt0);
+		fileio_write_u32(file, trace_data->chkpt1);
+		fileio_write_u32(file, trace_data->last_instruction);
+		fileio_write_u32(file, trace_data->depth);
 
 		for (i = 0; i < trace_data->depth; i++)
-			fileio_write_u32(&file, trace_data->entries[i].data |
+			fileio_write_u32(file, trace_data->entries[i].data |
 				((trace_data->entries[i].type & 0xffff) << 16));
 
 		trace_data = trace_data->next;
 	}
 
-	fileio_close(&file);
+	fileio_close(file);
 
 	return ERROR_OK;
 }

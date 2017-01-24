@@ -19,9 +19,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -38,6 +36,10 @@
 
 #include <signal.h>
 
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+
 #ifndef _WIN32
 #include <netinet/tcp.h>
 #endif
@@ -53,6 +55,9 @@ static int last_signal;
 
 /* set the polling period to 100ms */
 static int polling_period = 100;
+
+/* address by name on which to listen for incoming TCP/IP connections */
+static char *bindto_name;
 
 static int add_connection(struct service *service, struct command_context *cmd_ctx)
 {
@@ -145,7 +150,8 @@ static int add_connection(struct service *service, struct command_context *cmd_c
 		;
 	*p = c;
 
-	service->max_connections--;
+	if (service->max_connections != CONNECTION_LIMIT_UNLIMITED)
+		service->max_connections--;
 
 	return ERROR_OK;
 }
@@ -172,7 +178,9 @@ static int remove_connection(struct service *service, struct connection *connect
 			*p = c->next;
 			free(c);
 
-			service->max_connections++;
+			if (service->max_connections != CONNECTION_LIMIT_UNLIMITED)
+				service->max_connections++;
+
 			break;
 		}
 
@@ -193,6 +201,7 @@ int add_service(char *name,
 	void *priv)
 {
 	struct service *c, **p;
+	struct hostent *hp;
 	int so_reuseaddr_option = 1;
 
 	c = malloc(sizeof(struct service));
@@ -239,11 +248,21 @@ int add_service(char *name,
 
 		memset(&c->sin, 0, sizeof(c->sin));
 		c->sin.sin_family = AF_INET;
-		c->sin.sin_addr.s_addr = INADDR_ANY;
+
+		if (bindto_name == NULL)
+			c->sin.sin_addr.s_addr = INADDR_ANY;
+		else {
+			hp = gethostbyname(bindto_name);
+			if (hp == NULL) {
+				LOG_ERROR("couldn't resolve bindto address: %s", bindto_name);
+				exit(-1);
+			}
+			memcpy(&c->sin.sin_addr, hp->h_addr_list[0], hp->h_length);
+		}
 		c->sin.sin_port = htons(c->portnumber);
 
 		if (bind(c->fd, (struct sockaddr *)&c->sin, sizeof(c->sin)) == -1) {
-			LOG_ERROR("couldn't bind to socket: %s", strerror(errno));
+			LOG_ERROR("couldn't bind %s to socket: %s", name, strerror(errno));
 			exit(-1);
 		}
 
@@ -446,7 +465,7 @@ int server_loop(struct command_context *command_context)
 			/* handle new connections on listeners */
 			if ((service->fd != -1)
 			    && (FD_ISSET(service->fd, &read_fds))) {
-				if (service->max_connections > 0)
+				if (service->max_connections != 0)
 					add_connection(service, command_context);
 				else {
 					if (service->type == CONNECTION_TCP) {
@@ -631,6 +650,22 @@ COMMAND_HANDLER(handle_poll_period_command)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(handle_bindto_command)
+{
+	switch (CMD_ARGC) {
+		case 0:
+			command_print(CMD_CTX, "bindto name: %s", bindto_name);
+			break;
+		case 1:
+			free(bindto_name);
+			bindto_name = strdup(CMD_ARGV[0]);
+			break;
+		default:
+			return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+	return ERROR_OK;
+}
+
 static const struct command_registration server_command_handlers[] = {
 	{
 		.name = "shutdown",
@@ -645,6 +680,14 @@ static const struct command_registration server_command_handlers[] = {
 		.mode = COMMAND_ANY,
 		.usage = "",
 		.help = "set the servers polling period",
+	},
+	{
+		.name = "bindto",
+		.handler = &handle_bindto_command,
+		.mode = COMMAND_ANY,
+		.usage = "[name]",
+		.help = "Specify address by name on which to listen for "
+		    "incoming TCP/IP connections",
 	},
 	COMMAND_REGISTRATION_DONE
 };

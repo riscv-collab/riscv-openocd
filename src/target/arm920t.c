@@ -14,9 +14,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -96,7 +94,7 @@ static int arm920t_read_cp15_physical(struct target *target,
 	retval = arm_jtag_scann(jtag_info, 0xf, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = arm_jtag_set_instr(jtag_info, jtag_info->intest_instr, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, jtag_info->intest_instr, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -151,7 +149,7 @@ static int arm920t_write_cp15_physical(struct target *target,
 	retval = arm_jtag_scann(jtag_info, 0xf, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = arm_jtag_set_instr(jtag_info, jtag_info->intest_instr, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, jtag_info->intest_instr, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -204,7 +202,7 @@ static int arm920t_execute_cp15(struct target *target, uint32_t cp15_opcode,
 	retval = arm_jtag_scann(jtag_info, 0xf, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = arm_jtag_set_instr(jtag_info, jtag_info->intest_instr, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, jtag_info->intest_instr, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -753,8 +751,8 @@ int arm920t_soft_reset_halt(struct target *target)
 	if (retval != ERROR_OK)
 		return retval;
 
-	long long then = timeval_ms();
-	int timeout;
+	int64_t then = timeval_ms();
+	bool timeout;
 	while (!(timeout = ((timeval_ms()-then) > 1000))) {
 		if (buf_get_u32(dbg_stat->value, EICE_DBG_STATUS_DBGACK, 1) == 0) {
 			embeddedice_read_reg(dbg_stat);

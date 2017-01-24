@@ -13,12 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
-#ifndef __AICE_INTERFACE_H__
-#define __AICE_INTERFACE_H__
+
+#ifndef OPENOCD_JTAG_AICE_AICE_INTERFACE_H
+#define OPENOCD_JTAG_AICE_AICE_INTERFACE_H
 
 struct aice_interface_param_s {
 	/** */
@@ -33,4 +32,4 @@ struct aice_interface_param_s {
 
 int aice_init_targets(void);
 
-#endif
+#endif /* OPENOCD_JTAG_AICE_AICE_INTERFACE_H */

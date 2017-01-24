@@ -25,9 +25,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -47,6 +45,7 @@
 #define EFM_FAMILY_ID_LEOPARD_GECKO     74
 #define EFM_FAMILY_ID_WONDER_GECKO      75
 #define EFM_FAMILY_ID_ZERO_GECKO        76
+#define EFM_FAMILY_ID_HAPPY_GECKO	77
 #define EZR_FAMILY_ID_WONDER_GECKO		120
 #define EZR_FAMILY_ID_LEOPARD_GECKO		121
 
@@ -145,11 +144,11 @@ static int efm32x_read_info(struct flash_bank *bank,
 		return ret;
 
 	if (((cpuid >> 4) & 0xfff) == 0xc23) {
-		/* Cortex M3 device */
+		/* Cortex-M3 device */
 	} else if (((cpuid >> 4) & 0xfff) == 0xc24) {
-		/* Cortex M4 device(WONDER GECKO) */
+		/* Cortex-M4 device (WONDER GECKO) */
 	} else if (((cpuid >> 4) & 0xfff) == 0xc60) {
-		/* Cortex M0plus device(ZERO GECKO) */
+		/* Cortex-M0+ device */
 	} else {
 		LOG_ERROR("Target is not Cortex-Mx Device");
 		return ERROR_FAIL;
@@ -178,7 +177,8 @@ static int efm32x_read_info(struct flash_bank *bank,
 	if (EFM_FAMILY_ID_GECKO == efm32_info->part_family ||
 			EFM_FAMILY_ID_TINY_GECKO == efm32_info->part_family)
 		efm32_info->page_size = 512;
-	else if (EFM_FAMILY_ID_ZERO_GECKO == efm32_info->part_family)
+	else if (EFM_FAMILY_ID_ZERO_GECKO == efm32_info->part_family ||
+			EFM_FAMILY_ID_HAPPY_GECKO == efm32_info->part_family)
 		efm32_info->page_size = 1024;
 	else if (EFM_FAMILY_ID_GIANT_GECKO == efm32_info->part_family ||
 			EFM_FAMILY_ID_LEOPARD_GECKO == efm32_info->part_family) {
@@ -222,6 +222,70 @@ static int efm32x_read_info(struct flash_bank *bank,
 		LOG_ERROR("Unknown MCU family %d", efm32_info->part_family);
 		return ERROR_FAIL;
 	}
+
+	return ERROR_OK;
+}
+
+/*
+ * Helper to create a human friendly string describing a part
+ */
+static int efm32x_decode_info(struct efm32_info *info, char *buf, int buf_size)
+{
+	int printed = 0;
+
+	switch (info->part_family) {
+		case EZR_FAMILY_ID_WONDER_GECKO:
+		case EZR_FAMILY_ID_LEOPARD_GECKO:
+			printed = snprintf(buf, buf_size, "EZR32 ");
+			break;
+		default:
+			printed = snprintf(buf, buf_size, "EFM32 ");
+	}
+
+	buf += printed;
+	buf_size -= printed;
+
+	if (0 >= buf_size)
+		return ERROR_BUF_TOO_SMALL;
+
+	switch (info->part_family) {
+		case EFM_FAMILY_ID_GECKO:
+			printed = snprintf(buf, buf_size, "Gecko");
+			break;
+		case EFM_FAMILY_ID_GIANT_GECKO:
+			printed = snprintf(buf, buf_size, "Giant Gecko");
+			break;
+		case EFM_FAMILY_ID_TINY_GECKO:
+			printed = snprintf(buf, buf_size, "Tiny Gecko");
+			break;
+		case EFM_FAMILY_ID_LEOPARD_GECKO:
+		case EZR_FAMILY_ID_LEOPARD_GECKO:
+			printed = snprintf(buf, buf_size, "Leopard Gecko");
+			break;
+		case EFM_FAMILY_ID_WONDER_GECKO:
+		case EZR_FAMILY_ID_WONDER_GECKO:
+			printed = snprintf(buf, buf_size, "Wonder Gecko");
+			break;
+		case EFM_FAMILY_ID_ZERO_GECKO:
+			printed = snprintf(buf, buf_size, "Zero Gecko");
+			break;
+		case EFM_FAMILY_ID_HAPPY_GECKO:
+			printed = snprintf(buf, buf_size, "Happy Gecko");
+			break;
+	}
+
+	buf += printed;
+	buf_size -= printed;
+
+	if (0 >= buf_size)
+		return ERROR_BUF_TOO_SMALL;
+
+	printed = snprintf(buf, buf_size, " - Rev: %d", info->prod_rev);
+	buf += printed;
+	buf_size -= printed;
+
+	if (0 >= buf_size)
+		return ERROR_BUF_TOO_SMALL;
 
 	return ERROR_OK;
 }
@@ -392,10 +456,10 @@ static int efm32x_read_lock_data(struct flash_bank *bank)
 	uint32_t *ptr = NULL;
 	int ret = 0;
 
-	assert(!(bank->num_sectors & 0x1f));
+	assert(bank->num_sectors > 0);
 
-	data_size = bank->num_sectors / 8; /* number of data bytes */
-	data_size /= 4; /* ...and data dwords */
+	/* calculate the number of 32-bit words to read (one lock bit per sector) */
+	data_size = (bank->num_sectors + 31) / 32;
 
 	ptr = efm32x_info->lb_page;
 
@@ -602,7 +666,7 @@ static int efm32x_write_block(struct flash_bank *bank, const uint8_t *buf,
 			&write_algorithm) != ERROR_OK) {
 		LOG_WARNING("no working area available, can't do block memory writes");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	};
+	}
 
 	ret = target_write_buffer(target, write_algorithm->address,
 			sizeof(efm32x_flash_write_code), efm32x_flash_write_code);
@@ -621,7 +685,7 @@ static int efm32x_write_block(struct flash_bank *bank, const uint8_t *buf,
 			LOG_WARNING("no large enough working area available, can't do block memory writes");
 			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 		}
-	};
+	}
 
 	init_reg_param(&reg_params[0], "r0", 32, PARAM_IN_OUT);	/* flash base (in), status (out) */
 	init_reg_param(&reg_params[1], "r1", 32, PARAM_OUT);	/* count (word-32bit) */
@@ -831,6 +895,7 @@ static int efm32x_probe(struct flash_bank *bank)
 	int ret;
 	int i;
 	uint32_t base_address = 0x00000000;
+	char buf[256];
 
 	efm32x_info->probed = 0;
 	memset(efm32x_info->lb_page, 0xff, LOCKBITS_PAGE_SZ);
@@ -839,33 +904,11 @@ static int efm32x_probe(struct flash_bank *bank)
 	if (ERROR_OK != ret)
 		return ret;
 
-	switch (efm32_mcu_info.part_family) {
-		case EFM_FAMILY_ID_GECKO:
-			LOG_INFO("Gecko MCU detected");
-			break;
-		case EFM_FAMILY_ID_GIANT_GECKO:
-			LOG_INFO("Giant Gecko MCU detected");
-			break;
-		case EFM_FAMILY_ID_TINY_GECKO:
-			LOG_INFO("Tiny Gecko MCU detected");
-			break;
-		case EFM_FAMILY_ID_LEOPARD_GECKO:
-		case EZR_FAMILY_ID_LEOPARD_GECKO:
-			LOG_INFO("Leopard Gecko MCU detected");
-			break;
-		case EFM_FAMILY_ID_WONDER_GECKO:
-		case EZR_FAMILY_ID_WONDER_GECKO:
-			LOG_INFO("Wonder Gecko MCU detected");
-			break;
-		case EFM_FAMILY_ID_ZERO_GECKO:
-			LOG_INFO("Zero Gecko MCU detected");
-			break;
-		default:
-			LOG_ERROR("Unsupported MCU family %d",
-				efm32_mcu_info.part_family);
-			return ERROR_FAIL;
-	}
+	ret = efm32x_decode_info(&efm32_mcu_info, buf, sizeof(buf));
+	if (ERROR_OK != ret)
+		return ret;
 
+	LOG_INFO("detected part: %s", buf);
 	LOG_INFO("flash size = %dkbytes", efm32_mcu_info.flash_sz_kib);
 	LOG_INFO("flash page size = %dbytes", efm32_mcu_info.page_size);
 
@@ -942,7 +985,6 @@ static int get_efm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 {
 	struct efm32_info info;
 	int ret = 0;
-	int printed = 0;
 
 	ret = efm32x_read_info(bank, &info);
 	if (ERROR_OK != ret) {
@@ -950,61 +992,53 @@ static int get_efm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 		return ret;
 	}
 
-	switch (info.part_family) {
-		case EZR_FAMILY_ID_WONDER_GECKO:
-		case EZR_FAMILY_ID_LEOPARD_GECKO:
-			printed = snprintf(buf, buf_size, "EZR32 ");
-			break;
-		default:
-			printed = snprintf(buf, buf_size, "EFM32 ");
+	return efm32x_decode_info(&info, buf, buf_size);
+}
+
+COMMAND_HANDLER(efm32x_handle_debuglock_command)
+{
+	struct target *target = NULL;
+
+	if (CMD_ARGC < 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	struct flash_bank *bank;
+	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
+	if (ERROR_OK != retval)
+		return retval;
+
+	struct efm32x_flash_bank *efm32x_info = bank->driver_priv;
+
+	target = bank->target;
+
+	if (target->state != TARGET_HALTED) {
+		LOG_ERROR("Target not halted");
+		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	buf += printed;
-	buf_size -= printed;
+	uint32_t *ptr;
+	ptr = efm32x_info->lb_page + 127;
+	*ptr = 0;
 
-	if (0 >= buf_size)
-		return ERROR_BUF_TOO_SMALL;
-
-	switch (info.part_family) {
-		case EFM_FAMILY_ID_GECKO:
-			printed = snprintf(buf, buf_size, "Gecko");
-			break;
-		case EFM_FAMILY_ID_GIANT_GECKO:
-			printed = snprintf(buf, buf_size, "Giant Gecko");
-			break;
-		case EFM_FAMILY_ID_TINY_GECKO:
-			printed = snprintf(buf, buf_size, "Tiny Gecko");
-			break;
-		case EFM_FAMILY_ID_LEOPARD_GECKO:
-		case EZR_FAMILY_ID_LEOPARD_GECKO:
-			printed = snprintf(buf, buf_size, "Leopard Gecko");
-			break;
-		case EFM_FAMILY_ID_WONDER_GECKO:
-		case EZR_FAMILY_ID_WONDER_GECKO:
-			printed = snprintf(buf, buf_size, "Wonder Gecko");
-			break;
-		case EFM_FAMILY_ID_ZERO_GECKO:
-			printed = snprintf(buf, buf_size, "Zero Gecko");
-			break;
+	retval = efm32x_write_lock_data(bank);
+	if (ERROR_OK != retval) {
+		LOG_ERROR("Failed to write LB page");
+		return retval;
 	}
 
-	buf += printed;
-	buf_size -= printed;
-
-	if (0 >= buf_size)
-		return ERROR_BUF_TOO_SMALL;
-
-	printed = snprintf(buf, buf_size, " - Rev: %d", info.prod_rev);
-	buf += printed;
-	buf_size -= printed;
-
-	if (0 >= buf_size)
-		return ERROR_BUF_TOO_SMALL;
+	command_print(CMD_CTX, "efm32x debug interface locked, reset the device to apply");
 
 	return ERROR_OK;
 }
 
 static const struct command_registration efm32x_exec_command_handlers[] = {
+	{
+		.name = "debuglock",
+		.handler = efm32x_handle_debuglock_command,
+		.mode = COMMAND_EXEC,
+		.usage = "bank_id",
+		.help = "Lock the debug interface of the device.",
+	},
 	COMMAND_REGISTRATION_DONE
 };
 

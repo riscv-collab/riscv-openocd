@@ -24,9 +24,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -350,12 +348,12 @@ static int arm7_9_unset_breakpoint(struct target *target, struct breakpoint *bre
 			if (retval != ERROR_OK)
 				return retval;
 			current_instr = target_buffer_get_u16(target, (uint8_t *)&current_instr);
-			if (current_instr == arm7_9->thumb_bkpt)
+			if (current_instr == arm7_9->thumb_bkpt) {
 				retval = target_write_memory(target,
 						breakpoint->address, 2, 1, breakpoint->orig_instr);
 				if (retval != ERROR_OK)
 					return retval;
-
+			}
 		}
 
 		if (--arm7_9->sw_breakpoint_count == 0) {
@@ -628,16 +626,16 @@ int arm7_9_execute_sys_speed(struct target *target)
 	/* set RESTART instruction */
 	if (arm7_9->need_bypass_before_restart) {
 		arm7_9->need_bypass_before_restart = 0;
-		retval = arm_jtag_set_instr(jtag_info, 0xf, NULL, TAP_IDLE);
+		retval = arm_jtag_set_instr(jtag_info->tap, 0xf, NULL, TAP_IDLE);
 		if (retval != ERROR_OK)
 			return retval;
 	}
-	retval = arm_jtag_set_instr(jtag_info, 0x4, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, 0x4, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
-	long long then = timeval_ms();
-	int timeout;
+	int64_t then = timeval_ms();
+	bool timeout;
 	while (!(timeout = ((timeval_ms()-then) > 1000))) {
 		/* read debug status register */
 		embeddedice_read_reg(dbg_stat);
@@ -682,11 +680,11 @@ static int arm7_9_execute_fast_sys_speed(struct target *target)
 	/* set RESTART instruction */
 	if (arm7_9->need_bypass_before_restart) {
 		arm7_9->need_bypass_before_restart = 0;
-		retval = arm_jtag_set_instr(jtag_info, 0xf, NULL, TAP_IDLE);
+		retval = arm_jtag_set_instr(jtag_info->tap, 0xf, NULL, TAP_IDLE);
 		if (retval != ERROR_OK)
 			return retval;
 	}
-	retval = arm_jtag_set_instr(jtag_info, 0x4, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, 0x4, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -874,6 +872,13 @@ int arm7_9_assert_reset(struct target *target)
 	struct arm7_9_common *arm7_9 = target_to_arm7_9(target);
 	enum reset_types jtag_reset_config = jtag_get_reset_config();
 	bool use_event = false;
+
+	/* TODO: apply hw reset signal in not examined state */
+	if (!(target_was_examined(target))) {
+		LOG_WARNING("Reset is not asserted because the target is not examined.");
+		LOG_WARNING("Use a reset button or power cycle the target.");
+		return ERROR_TARGET_NOT_EXAMINED;
+	}
 
 	LOG_DEBUG("target->state: %s", target_state_name(target));
 
@@ -1639,11 +1644,11 @@ static int arm7_9_restart_core(struct target *target)
 	if (arm7_9->need_bypass_before_restart) {
 		arm7_9->need_bypass_before_restart = 0;
 
-		retval = arm_jtag_set_instr(jtag_info, 0xf, NULL, TAP_IDLE);
+		retval = arm_jtag_set_instr(jtag_info->tap, 0xf, NULL, TAP_IDLE);
 		if (retval != ERROR_OK)
 			return retval;
 	}
-	retval = arm_jtag_set_instr(jtag_info, 0x4, NULL, TAP_IDLE);
+	retval = arm_jtag_set_instr(jtag_info->tap, 0x4, NULL, TAP_IDLE);
 	if (retval != ERROR_OK)
 		return retval;
 

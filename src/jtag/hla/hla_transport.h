@@ -16,13 +16,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef _HL_TRANSPORT
-#define _HL_TRANSPORT
+#ifndef OPENOCD_JTAG_HLA_HLA_TRANSPORT_H
+#define OPENOCD_JTAG_HLA_HLA_TRANSPORT_H
 
 enum hl_transports {
 	HL_TRANSPORT_UNKNOWN = 0,
@@ -31,4 +29,4 @@ enum hl_transports {
 	HL_TRANSPORT_SWIM
 };
 
-#endif /* _HL_TRANSPORT */
+#endif /* OPENOCD_JTAG_HLA_HLA_TRANSPORT_H */

@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef AVRT_H
-#define AVRT_H
+#ifndef OPENOCD_TARGET_AVRT_H
+#define OPENOCD_TARGET_AVRT_H
 
 #include <jtag/jtag.h>
 
@@ -36,4 +34,4 @@ int avr_jtag_sendinstr(struct jtag_tap *tap, uint8_t *ir_in, uint8_t ir_out);
 int avr_jtag_senddat(struct jtag_tap *tap, uint32_t *dr_in, uint32_t dr_out,
 		int len);
 
-#endif /* AVRT_H */
+#endif /* OPENOCD_TARGET_AVRT_H */

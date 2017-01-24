@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ARM_DISASSEMBLER_H
-#define ARM_DISASSEMBLER_H
+#ifndef OPENOCD_TARGET_ARM_DISASSEMBLER_H
+#define OPENOCD_TARGET_ARM_DISASSEMBLER_H
 
 enum arm_instruction_type {
 	ARM_UNKNOWN_INSTUCTION,
@@ -203,4 +201,4 @@ int arm_access_size(struct arm_instruction *instruction);
 
 #define COND(opcode) (arm_condition_strings[(opcode & 0xf0000000) >> 28])
 
-#endif /* ARM_DISASSEMBLER_H */
+#endif /* OPENOCD_TARGET_ARM_DISASSEMBLER_H */

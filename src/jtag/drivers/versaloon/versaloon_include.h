@@ -12,10 +12,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
+
+#ifndef OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_INCLUDE_H
+#define OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_INCLUDE_H
 
 /* This file is used to include different header and macros */
 /* according to different platform */
@@ -97,3 +98,5 @@
 #define SET_LE_U32(p, v)			SET_U32_LSBFIRST(p, v)
 #define SET_BE_U16(p, v)			SET_U16_MSBFIRST(p, v)
 #define SET_BE_U32(p, v)			SET_U32_MSBFIRST(p, v)
+
+#endif /* OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_INCLUDE_H */

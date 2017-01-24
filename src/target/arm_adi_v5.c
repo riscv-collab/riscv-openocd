@@ -24,9 +24,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 /**
@@ -75,7 +73,9 @@
 #include "jtag/interface.h"
 #include "arm.h"
 #include "arm_adi_v5.h"
+#include <helper/jep106.h>
 #include <helper/time_support.h>
+#include <helper/list.h>
 
 /* ARM ADI Specification requires at least 10 bits used for TAR autoincrement  */
 
@@ -94,53 +94,30 @@ static uint32_t max_tar_block_size(uint32_t tar_autoincr_block, uint32_t address
  *                                                                         *
 ***************************************************************************/
 
-/**
- * Select one of the APs connected to the specified DAP.  The
- * selection is implicitly used with future AP transactions.
- * This is a NOP if the specified AP is already selected.
- *
- * @param dap The DAP
- * @param apsel Number of the AP to (implicitly) use with further
- *	transactions.  This normally identifies a MEM-AP.
- */
-void dap_ap_select(struct adiv5_dap *dap, uint8_t ap)
-{
-	uint32_t new_ap = (ap << 24) & 0xFF000000;
-
-	if (new_ap != dap->ap_current) {
-		dap->ap_current = new_ap;
-		/* Switching AP invalidates cached values.
-		 * Values MUST BE UPDATED BEFORE AP ACCESS.
-		 */
-		dap->ap_bank_value = -1;
-		dap->ap_csw_value = -1;
-		dap->ap_tar_value = -1;
-	}
-}
-
-static int dap_setup_accessport_csw(struct adiv5_dap *dap, uint32_t csw)
+static int mem_ap_setup_csw(struct adiv5_ap *ap, uint32_t csw)
 {
 	csw = csw | CSW_DBGSWENABLE | CSW_MASTER_DEBUG | CSW_HPROT |
-		dap->apcsw[dap->ap_current >> 24];
+		ap->csw_default;
 
-	if (csw != dap->ap_csw_value) {
+	if (csw != ap->csw_value) {
 		/* LOG_DEBUG("DAP: Set CSW %x",csw); */
-		int retval = dap_queue_ap_write(dap, AP_REG_CSW, csw);
+		int retval = dap_queue_ap_write(ap, MEM_AP_REG_CSW, csw);
 		if (retval != ERROR_OK)
 			return retval;
-		dap->ap_csw_value = csw;
+		ap->csw_value = csw;
 	}
 	return ERROR_OK;
 }
 
-static int dap_setup_accessport_tar(struct adiv5_dap *dap, uint32_t tar)
+static int mem_ap_setup_tar(struct adiv5_ap *ap, uint32_t tar)
 {
-	if (tar != dap->ap_tar_value || dap->ap_csw_value & CSW_ADDRINC_MASK) {
+	if (tar != ap->tar_value ||
+			(ap->csw_value & CSW_ADDRINC_MASK)) {
 		/* LOG_DEBUG("DAP: Set TAR %x",tar); */
-		int retval = dap_queue_ap_write(dap, AP_REG_TAR, tar);
+		int retval = dap_queue_ap_write(ap, MEM_AP_REG_TAR, tar);
 		if (retval != ERROR_OK)
 			return retval;
-		dap->ap_tar_value = tar;
+		ap->tar_value = tar;
 	}
 	return ERROR_OK;
 }
@@ -149,14 +126,12 @@ static int dap_setup_accessport_tar(struct adiv5_dap *dap, uint32_t tar)
  * Queue transactions setting up transfer parameters for the
  * currently selected MEM-AP.
  *
- * Subsequent transfers using registers like AP_REG_DRW or AP_REG_BD2
+ * Subsequent transfers using registers like MEM_AP_REG_DRW or MEM_AP_REG_BD2
  * initiate data reads or writes using memory or peripheral addresses.
  * If the CSW is configured for it, the TAR may be automatically
  * incremented after each transfer.
  *
- * @todo Rename to reflect it being specifically a MEM-AP function.
- *
- * @param dap The DAP connected to the MEM-AP.
+ * @param ap The MEM-AP.
  * @param csw MEM-AP Control/Status Word (CSW) register to assign.  If this
  *	matches the cached value, the register is not changed.
  * @param tar MEM-AP Transfer Address Register (TAR) to assign.  If this
@@ -164,13 +139,13 @@ static int dap_setup_accessport_tar(struct adiv5_dap *dap, uint32_t tar)
  *
  * @return ERROR_OK if the transaction was properly queued, else a fault code.
  */
-int dap_setup_accessport(struct adiv5_dap *dap, uint32_t csw, uint32_t tar)
+static int mem_ap_setup_transfer(struct adiv5_ap *ap, uint32_t csw, uint32_t tar)
 {
 	int retval;
-	retval = dap_setup_accessport_csw(dap, csw);
+	retval = mem_ap_setup_csw(ap, csw);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = dap_setup_accessport_tar(dap, tar);
+	retval = mem_ap_setup_tar(ap, tar);
 	if (retval != ERROR_OK)
 		return retval;
 	return ERROR_OK;
@@ -179,7 +154,7 @@ int dap_setup_accessport(struct adiv5_dap *dap, uint32_t csw, uint32_t tar)
 /**
  * Asynchronous (queued) read of a word from memory or a system register.
  *
- * @param dap The DAP connected to the MEM-AP performing the read.
+ * @param ap The MEM-AP to access.
  * @param address Address of the 32-bit word to read; it must be
  *	readable by the currently selected MEM-AP.
  * @param value points to where the word will be stored when the
@@ -187,7 +162,7 @@ int dap_setup_accessport(struct adiv5_dap *dap, uint32_t csw, uint32_t tar)
  *
  * @return ERROR_OK for success.  Otherwise a fault code.
  */
-int mem_ap_read_u32(struct adiv5_dap *dap, uint32_t address,
+int mem_ap_read_u32(struct adiv5_ap *ap, uint32_t address,
 		uint32_t *value)
 {
 	int retval;
@@ -195,19 +170,19 @@ int mem_ap_read_u32(struct adiv5_dap *dap, uint32_t address,
 	/* Use banked addressing (REG_BDx) to avoid some link traffic
 	 * (updating TAR) when reading several consecutive addresses.
 	 */
-	retval = dap_setup_accessport(dap, CSW_32BIT | CSW_ADDRINC_OFF,
+	retval = mem_ap_setup_transfer(ap, CSW_32BIT | CSW_ADDRINC_OFF,
 			address & 0xFFFFFFF0);
 	if (retval != ERROR_OK)
 		return retval;
 
-	return dap_queue_ap_read(dap, AP_REG_BD0 | (address & 0xC), value);
+	return dap_queue_ap_read(ap, MEM_AP_REG_BD0 | (address & 0xC), value);
 }
 
 /**
  * Synchronous read of a word from memory or a system register.
  * As a side effect, this flushes any queued transactions.
  *
- * @param dap The DAP connected to the MEM-AP performing the read.
+ * @param ap The MEM-AP to access.
  * @param address Address of the 32-bit word to read; it must be
  *	readable by the currently selected MEM-AP.
  * @param value points to where the result will be stored.
@@ -215,22 +190,22 @@ int mem_ap_read_u32(struct adiv5_dap *dap, uint32_t address,
  * @return ERROR_OK for success; *value holds the result.
  * Otherwise a fault code.
  */
-int mem_ap_read_atomic_u32(struct adiv5_dap *dap, uint32_t address,
+int mem_ap_read_atomic_u32(struct adiv5_ap *ap, uint32_t address,
 		uint32_t *value)
 {
 	int retval;
 
-	retval = mem_ap_read_u32(dap, address, value);
+	retval = mem_ap_read_u32(ap, address, value);
 	if (retval != ERROR_OK)
 		return retval;
 
-	return dap_run(dap);
+	return dap_run(ap->dap);
 }
 
 /**
  * Asynchronous (queued) write of a word to memory or a system register.
  *
- * @param dap The DAP connected to the MEM-AP.
+ * @param ap The MEM-AP to access.
  * @param address Address to be written; it must be writable by
  *	the currently selected MEM-AP.
  * @param value Word that will be written to the address when transaction
@@ -238,7 +213,7 @@ int mem_ap_read_atomic_u32(struct adiv5_dap *dap, uint32_t address,
  *
  * @return ERROR_OK for success.  Otherwise a fault code.
  */
-int mem_ap_write_u32(struct adiv5_dap *dap, uint32_t address,
+int mem_ap_write_u32(struct adiv5_ap *ap, uint32_t address,
 		uint32_t value)
 {
 	int retval;
@@ -246,12 +221,12 @@ int mem_ap_write_u32(struct adiv5_dap *dap, uint32_t address,
 	/* Use banked addressing (REG_BDx) to avoid some link traffic
 	 * (updating TAR) when writing several consecutive addresses.
 	 */
-	retval = dap_setup_accessport(dap, CSW_32BIT | CSW_ADDRINC_OFF,
+	retval = mem_ap_setup_transfer(ap, CSW_32BIT | CSW_ADDRINC_OFF,
 			address & 0xFFFFFFF0);
 	if (retval != ERROR_OK)
 		return retval;
 
-	return dap_queue_ap_write(dap, AP_REG_BD0 | (address & 0xC),
+	return dap_queue_ap_write(ap, MEM_AP_REG_BD0 | (address & 0xC),
 			value);
 }
 
@@ -259,28 +234,28 @@ int mem_ap_write_u32(struct adiv5_dap *dap, uint32_t address,
  * Synchronous write of a word to memory or a system register.
  * As a side effect, this flushes any queued transactions.
  *
- * @param dap The DAP connected to the MEM-AP.
+ * @param ap The MEM-AP to access.
  * @param address Address to be written; it must be writable by
  *	the currently selected MEM-AP.
  * @param value Word that will be written.
  *
  * @return ERROR_OK for success; the data was written.  Otherwise a fault code.
  */
-int mem_ap_write_atomic_u32(struct adiv5_dap *dap, uint32_t address,
+int mem_ap_write_atomic_u32(struct adiv5_ap *ap, uint32_t address,
 		uint32_t value)
 {
-	int retval = mem_ap_write_u32(dap, address, value);
+	int retval = mem_ap_write_u32(ap, address, value);
 
 	if (retval != ERROR_OK)
 		return retval;
 
-	return dap_run(dap);
+	return dap_run(ap->dap);
 }
 
 /**
  * Synchronous write of a block of memory, using a specific access size.
  *
- * @param dap The DAP connected to the MEM-AP.
+ * @param ap The MEM-AP to access.
  * @param buffer The data buffer to write. No particular alignment is assumed.
  * @param size Which access size to use, in bytes. 1, 2 or 4.
  * @param count The number of writes to do (in size units, not bytes).
@@ -289,9 +264,10 @@ int mem_ap_write_atomic_u32(struct adiv5_dap *dap, uint32_t address,
  *  should normally be true, except when writing to e.g. a FIFO.
  * @return ERROR_OK on success, otherwise an error code.
  */
-int mem_ap_write(struct adiv5_dap *dap, const uint8_t *buffer, uint32_t size, uint32_t count,
+static int mem_ap_write(struct adiv5_ap *ap, const uint8_t *buffer, uint32_t size, uint32_t count,
 		uint32_t address, bool addrinc)
 {
+	struct adiv5_dap *dap = ap->dap;
 	size_t nbytes = size * count;
 	const uint32_t csw_addrincr = addrinc ? CSW_ADDRINC_SINGLE : CSW_ADDRINC_OFF;
 	uint32_t csw_size;
@@ -324,10 +300,10 @@ int mem_ap_write(struct adiv5_dap *dap, const uint8_t *buffer, uint32_t size, ui
 		return ERROR_TARGET_UNALIGNED_ACCESS;
 	}
 
-	if (dap->unaligned_access_bad && (address % size != 0))
+	if (ap->unaligned_access_bad && (address % size != 0))
 		return ERROR_TARGET_UNALIGNED_ACCESS;
 
-	retval = dap_setup_accessport_tar(dap, address ^ addr_xor);
+	retval = mem_ap_setup_tar(ap, address ^ addr_xor);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -335,12 +311,12 @@ int mem_ap_write(struct adiv5_dap *dap, const uint8_t *buffer, uint32_t size, ui
 		uint32_t this_size = size;
 
 		/* Select packed transfer if possible */
-		if (addrinc && dap->packed_transfers && nbytes >= 4
-				&& max_tar_block_size(dap->tar_autoincr_block, address) >= 4) {
+		if (addrinc && ap->packed_transfers && nbytes >= 4
+				&& max_tar_block_size(ap->tar_autoincr_block, address) >= 4) {
 			this_size = 4;
-			retval = dap_setup_accessport_csw(dap, csw_size | CSW_ADDRINC_PACKED);
+			retval = mem_ap_setup_csw(ap, csw_size | CSW_ADDRINC_PACKED);
 		} else {
-			retval = dap_setup_accessport_csw(dap, csw_size | csw_addrincr);
+			retval = mem_ap_setup_csw(ap, csw_size | csw_addrincr);
 		}
 
 		if (retval != ERROR_OK)
@@ -379,13 +355,13 @@ int mem_ap_write(struct adiv5_dap *dap, const uint8_t *buffer, uint32_t size, ui
 
 		nbytes -= this_size;
 
-		retval = dap_queue_ap_write(dap, AP_REG_DRW, outvalue);
+		retval = dap_queue_ap_write(ap, MEM_AP_REG_DRW, outvalue);
 		if (retval != ERROR_OK)
 			break;
 
 		/* Rewrite TAR if it wrapped or we're xoring addresses */
-		if (addrinc && (addr_xor || (address % dap->tar_autoincr_block < size && nbytes > 0))) {
-			retval = dap_setup_accessport_tar(dap, address ^ addr_xor);
+		if (addrinc && (addr_xor || (address % ap->tar_autoincr_block < size && nbytes > 0))) {
+			retval = mem_ap_setup_tar(ap, address ^ addr_xor);
 			if (retval != ERROR_OK)
 				break;
 		}
@@ -397,7 +373,7 @@ int mem_ap_write(struct adiv5_dap *dap, const uint8_t *buffer, uint32_t size, ui
 
 	if (retval != ERROR_OK) {
 		uint32_t tar;
-		if (dap_queue_ap_read(dap, AP_REG_TAR, &tar) == ERROR_OK
+		if (dap_queue_ap_read(ap, MEM_AP_REG_TAR, &tar) == ERROR_OK
 				&& dap_run(dap) == ERROR_OK)
 			LOG_ERROR("Failed to write memory at 0x%08"PRIx32, tar);
 		else
@@ -410,7 +386,7 @@ int mem_ap_write(struct adiv5_dap *dap, const uint8_t *buffer, uint32_t size, ui
 /**
  * Synchronous read of a block of memory, using a specific access size.
  *
- * @param dap The DAP connected to the MEM-AP.
+ * @param ap The MEM-AP to access.
  * @param buffer The data buffer to receive the data. No particular alignment is assumed.
  * @param size Which access size to use, in bytes. 1, 2 or 4.
  * @param count The number of reads to do (in size units, not bytes).
@@ -419,9 +395,10 @@ int mem_ap_write(struct adiv5_dap *dap, const uint8_t *buffer, uint32_t size, ui
  *  should normally be true, except when reading from e.g. a FIFO.
  * @return ERROR_OK on success, otherwise an error code.
  */
-int mem_ap_read(struct adiv5_dap *dap, uint8_t *buffer, uint32_t size, uint32_t count,
+static int mem_ap_read(struct adiv5_ap *ap, uint8_t *buffer, uint32_t size, uint32_t count,
 		uint32_t adr, bool addrinc)
 {
+	struct adiv5_dap *dap = ap->dap;
 	size_t nbytes = size * count;
 	const uint32_t csw_addrincr = addrinc ? CSW_ADDRINC_SINGLE : CSW_ADDRINC_OFF;
 	uint32_t csw_size;
@@ -444,7 +421,7 @@ int mem_ap_read(struct adiv5_dap *dap, uint8_t *buffer, uint32_t size, uint32_t 
 	else
 		return ERROR_TARGET_UNALIGNED_ACCESS;
 
-	if (dap->unaligned_access_bad && (adr % size != 0))
+	if (ap->unaligned_access_bad && (adr % size != 0))
 		return ERROR_TARGET_UNALIGNED_ACCESS;
 
 	/* Allocate buffer to hold the sequence of DRW reads that will be made. This is a significant
@@ -457,7 +434,7 @@ int mem_ap_read(struct adiv5_dap *dap, uint8_t *buffer, uint32_t size, uint32_t 
 		return ERROR_FAIL;
 	}
 
-	retval = dap_setup_accessport_tar(dap, address);
+	retval = mem_ap_setup_tar(ap, address);
 	if (retval != ERROR_OK) {
 		free(read_buf);
 		return retval;
@@ -470,17 +447,17 @@ int mem_ap_read(struct adiv5_dap *dap, uint8_t *buffer, uint32_t size, uint32_t 
 		uint32_t this_size = size;
 
 		/* Select packed transfer if possible */
-		if (addrinc && dap->packed_transfers && nbytes >= 4
-				&& max_tar_block_size(dap->tar_autoincr_block, address) >= 4) {
+		if (addrinc && ap->packed_transfers && nbytes >= 4
+				&& max_tar_block_size(ap->tar_autoincr_block, address) >= 4) {
 			this_size = 4;
-			retval = dap_setup_accessport_csw(dap, csw_size | CSW_ADDRINC_PACKED);
+			retval = mem_ap_setup_csw(ap, csw_size | CSW_ADDRINC_PACKED);
 		} else {
-			retval = dap_setup_accessport_csw(dap, csw_size | csw_addrincr);
+			retval = mem_ap_setup_csw(ap, csw_size | csw_addrincr);
 		}
 		if (retval != ERROR_OK)
 			break;
 
-		retval = dap_queue_ap_read(dap, AP_REG_DRW, read_ptr++);
+		retval = dap_queue_ap_read(ap, MEM_AP_REG_DRW, read_ptr++);
 		if (retval != ERROR_OK)
 			break;
 
@@ -488,8 +465,8 @@ int mem_ap_read(struct adiv5_dap *dap, uint8_t *buffer, uint32_t size, uint32_t 
 		address += this_size;
 
 		/* Rewrite TAR if it wrapped */
-		if (addrinc && address % dap->tar_autoincr_block < size && nbytes > 0) {
-			retval = dap_setup_accessport_tar(dap, address);
+		if (addrinc && address % ap->tar_autoincr_block < size && nbytes > 0) {
+			retval = mem_ap_setup_tar(ap, address);
 			if (retval != ERROR_OK)
 				break;
 		}
@@ -507,7 +484,7 @@ int mem_ap_read(struct adiv5_dap *dap, uint8_t *buffer, uint32_t size, uint32_t 
 	 * at least give the caller what we have. */
 	if (retval != ERROR_OK) {
 		uint32_t tar;
-		if (dap_queue_ap_read(dap, AP_REG_TAR, &tar) == ERROR_OK
+		if (dap_queue_ap_read(ap, MEM_AP_REG_TAR, &tar) == ERROR_OK
 				&& dap_run(dap) == ERROR_OK) {
 			LOG_ERROR("Failed to read memory at 0x%08"PRIx32, tar);
 			if (nbytes > tar - address)
@@ -522,8 +499,8 @@ int mem_ap_read(struct adiv5_dap *dap, uint8_t *buffer, uint32_t size, uint32_t 
 	while (nbytes > 0) {
 		uint32_t this_size = size;
 
-		if (addrinc && dap->packed_transfers && nbytes >= 4
-				&& max_tar_block_size(dap->tar_autoincr_block, address) >= 4) {
+		if (addrinc && ap->packed_transfers && nbytes >= 4
+				&& max_tar_block_size(ap->tar_autoincr_block, address) >= 4) {
 			this_size = 4;
 		}
 
@@ -557,63 +534,28 @@ int mem_ap_read(struct adiv5_dap *dap, uint8_t *buffer, uint32_t size, uint32_t 
 	return retval;
 }
 
-/*--------------------------------------------------------------------*/
-/*          Wrapping function with selection of AP                    */
-/*--------------------------------------------------------------------*/
-int mem_ap_sel_read_u32(struct adiv5_dap *swjdp, uint8_t ap,
-		uint32_t address, uint32_t *value)
-{
-	dap_ap_select(swjdp, ap);
-	return mem_ap_read_u32(swjdp, address, value);
-}
-
-int mem_ap_sel_write_u32(struct adiv5_dap *swjdp, uint8_t ap,
-		uint32_t address, uint32_t value)
-{
-	dap_ap_select(swjdp, ap);
-	return mem_ap_write_u32(swjdp, address, value);
-}
-
-int mem_ap_sel_read_atomic_u32(struct adiv5_dap *swjdp, uint8_t ap,
-		uint32_t address, uint32_t *value)
-{
-	dap_ap_select(swjdp, ap);
-	return mem_ap_read_atomic_u32(swjdp, address, value);
-}
-
-int mem_ap_sel_write_atomic_u32(struct adiv5_dap *swjdp, uint8_t ap,
-		uint32_t address, uint32_t value)
-{
-	dap_ap_select(swjdp, ap);
-	return mem_ap_write_atomic_u32(swjdp, address, value);
-}
-
-int mem_ap_sel_read_buf(struct adiv5_dap *swjdp, uint8_t ap,
+int mem_ap_read_buf(struct adiv5_ap *ap,
 		uint8_t *buffer, uint32_t size, uint32_t count, uint32_t address)
 {
-	dap_ap_select(swjdp, ap);
-	return mem_ap_read(swjdp, buffer, size, count, address, true);
+	return mem_ap_read(ap, buffer, size, count, address, true);
 }
 
-int mem_ap_sel_write_buf(struct adiv5_dap *swjdp, uint8_t ap,
+int mem_ap_write_buf(struct adiv5_ap *ap,
 		const uint8_t *buffer, uint32_t size, uint32_t count, uint32_t address)
 {
-	dap_ap_select(swjdp, ap);
-	return mem_ap_write(swjdp, buffer, size, count, address, true);
+	return mem_ap_write(ap, buffer, size, count, address, true);
 }
 
-int mem_ap_sel_read_buf_noincr(struct adiv5_dap *swjdp, uint8_t ap,
+int mem_ap_read_buf_noincr(struct adiv5_ap *ap,
 		uint8_t *buffer, uint32_t size, uint32_t count, uint32_t address)
 {
-	dap_ap_select(swjdp, ap);
-	return mem_ap_read(swjdp, buffer, size, count, address, false);
+	return mem_ap_read(ap, buffer, size, count, address, false);
 }
 
-int mem_ap_sel_write_buf_noincr(struct adiv5_dap *swjdp, uint8_t ap,
+int mem_ap_write_buf_noincr(struct adiv5_ap *ap,
 		const uint8_t *buffer, uint32_t size, uint32_t count, uint32_t address)
 {
-	dap_ap_select(swjdp, ap);
-	return mem_ap_write(swjdp, buffer, size, count, address, false);
+	return mem_ap_write(ap, buffer, size, count, address, false);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -629,125 +571,145 @@ extern const struct dap_ops jtag_dp_ops;
 /*--------------------------------------------------------------------------*/
 
 /**
+ * Create a new DAP
+ */
+struct adiv5_dap *dap_init(void)
+{
+	struct adiv5_dap *dap = calloc(1, sizeof(struct adiv5_dap));
+	int i;
+	/* Set up with safe defaults */
+	for (i = 0; i <= 255; i++) {
+		dap->ap[i].dap = dap;
+		dap->ap[i].ap_num = i;
+		/* memaccess_tck max is 255 */
+		dap->ap[i].memaccess_tck = 255;
+		/* Number of bits for tar autoincrement, impl. dep. at least 10 */
+		dap->ap[i].tar_autoincr_block = (1<<10);
+	}
+	INIT_LIST_HEAD(&dap->cmd_journal);
+	return dap;
+}
+
+/**
  * Initialize a DAP.  This sets up the power domains, prepares the DP
- * for further use, and arranges to use AP #0 for all AP operations
- * until dap_ap-select() changes that policy.
+ * for further use and activates overrun checking.
  *
  * @param dap The DAP being initialized.
- *
- * @todo Rename this.  We also need an initialization scheme which account
- * for SWD transports not just JTAG; that will need to address differences
- * in layering.  (JTAG is useful without any debug target; but not SWD.)
- * And this may not even use an AHB-AP ... e.g. DAP-Lite uses an APB-AP.
  */
-int ahbap_debugport_init(struct adiv5_dap *dap)
+int dap_dp_init(struct adiv5_dap *dap)
 {
-	/* check that we support packed transfers */
-	uint32_t csw, cfg;
 	int retval;
 
 	LOG_DEBUG(" ");
-
 	/* JTAG-DP or SWJ-DP, in JTAG mode
 	 * ... for SWD mode this is patched as part
 	 * of link switchover
+	 * FIXME: This should already be setup by the respective transport specific DAP creation.
 	 */
 	if (!dap->ops)
 		dap->ops = &jtag_dp_ops;
 
-	/* Default MEM-AP setup.
-	 *
-	 * REVISIT AP #0 may be an inappropriate default for this.
-	 * Should we probe, or take a hint from the caller?
-	 * Presumably we can ignore the possibility of multiple APs.
-	 */
-	dap->ap_current = !0;
-	dap_ap_select(dap, 0);
+	dap->select = DP_SELECT_INVALID;
 	dap->last_read = NULL;
 
-	for (size_t i = 0; i < 10; i++) {
+	for (size_t i = 0; i < 30; i++) {
 		/* DP initialization */
 
-		dap->dp_bank_value = 0;
-
-		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
-		if (retval != ERROR_OK)
-			continue;
-
-		retval = dap_queue_dp_write(dap, DP_CTRL_STAT, SSTICKYERR);
-		if (retval != ERROR_OK)
-			continue;
-
-		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
-		if (retval != ERROR_OK)
-			continue;
-
-		dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ;
-		retval = dap_queue_dp_write(dap, DP_CTRL_STAT, dap->dp_ctrl_stat);
-		if (retval != ERROR_OK)
-			continue;
-
-		/* Check that we have debug power domains activated */
-		LOG_DEBUG("DAP: wait CDBGPWRUPACK");
-		retval = dap_dp_poll_register(dap, DP_CTRL_STAT,
-					      CDBGPWRUPACK, CDBGPWRUPACK,
-					      DAP_POWER_DOMAIN_TIMEOUT);
-		if (retval != ERROR_OK)
-			continue;
-
-		LOG_DEBUG("DAP: wait CSYSPWRUPACK");
-		retval = dap_dp_poll_register(dap, DP_CTRL_STAT,
-					      CSYSPWRUPACK, CSYSPWRUPACK,
-					      DAP_POWER_DOMAIN_TIMEOUT);
-		if (retval != ERROR_OK)
-			continue;
-
-		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
-		if (retval != ERROR_OK)
-			continue;
-		/* With debug power on we can activate OVERRUN checking */
-		dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ | CORUNDETECT;
-		retval = dap_queue_dp_write(dap, DP_CTRL_STAT, dap->dp_ctrl_stat);
-		if (retval != ERROR_OK)
-			continue;
-		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
-		if (retval != ERROR_OK)
-			continue;
-
-		retval = dap_setup_accessport(dap, CSW_8BIT | CSW_ADDRINC_PACKED, 0);
-		if (retval != ERROR_OK)
-			continue;
-
-		retval = dap_queue_ap_read(dap, AP_REG_CSW, &csw);
-		if (retval != ERROR_OK)
-			continue;
-
-		retval = dap_queue_ap_read(dap, AP_REG_CFG, &cfg);
-		if (retval != ERROR_OK)
-			continue;
-
-		retval = dap_run(dap);
-		if (retval != ERROR_OK)
-			continue;
-
-		break;
+		retval = dap_dp_read_atomic(dap, DP_CTRL_STAT, NULL);
+		if (retval == ERROR_OK)
+			break;
 	}
 
+	retval = dap_queue_dp_write(dap, DP_CTRL_STAT, SSTICKYERR);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
+	if (retval != ERROR_OK)
+		return retval;
+
+	dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ;
+	retval = dap_queue_dp_write(dap, DP_CTRL_STAT, dap->dp_ctrl_stat);
+	if (retval != ERROR_OK)
+		return retval;
+
+	/* Check that we have debug power domains activated */
+	LOG_DEBUG("DAP: wait CDBGPWRUPACK");
+	retval = dap_dp_poll_register(dap, DP_CTRL_STAT,
+				      CDBGPWRUPACK, CDBGPWRUPACK,
+				      DAP_POWER_DOMAIN_TIMEOUT);
+	if (retval != ERROR_OK)
+		return retval;
+
+	LOG_DEBUG("DAP: wait CSYSPWRUPACK");
+	retval = dap_dp_poll_register(dap, DP_CTRL_STAT,
+				      CSYSPWRUPACK, CSYSPWRUPACK,
+				      DAP_POWER_DOMAIN_TIMEOUT);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
+	if (retval != ERROR_OK)
+		return retval;
+
+	/* With debug power on we can activate OVERRUN checking */
+	dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ | CORUNDETECT;
+	retval = dap_queue_dp_write(dap, DP_CTRL_STAT, dap->dp_ctrl_stat);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = dap_run(dap);
+	if (retval != ERROR_OK)
+		return retval;
+
+	return retval;
+}
+
+/**
+ * Initialize a DAP.  This sets up the power domains, prepares the DP
+ * for further use, and arranges to use AP #0 for all AP operations
+ * until dap_ap-select() changes that policy.
+ *
+ * @param ap The MEM-AP being initialized.
+ */
+int mem_ap_init(struct adiv5_ap *ap)
+{
+	/* check that we support packed transfers */
+	uint32_t csw, cfg;
+	int retval;
+	struct adiv5_dap *dap = ap->dap;
+
+	retval = mem_ap_setup_transfer(ap, CSW_8BIT | CSW_ADDRINC_PACKED, 0);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = dap_queue_ap_read(ap, MEM_AP_REG_CSW, &csw);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = dap_queue_ap_read(ap, MEM_AP_REG_CFG, &cfg);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = dap_run(dap);
 	if (retval != ERROR_OK)
 		return retval;
 
 	if (csw & CSW_ADDRINC_PACKED)
-		dap->packed_transfers = true;
+		ap->packed_transfers = true;
 	else
-		dap->packed_transfers = false;
+		ap->packed_transfers = false;
 
 	/* Packed transfers on TI BE-32 processors do not work correctly in
 	 * many cases. */
 	if (dap->ti_be_32_quirks)
-		dap->packed_transfers = false;
+		ap->packed_transfers = false;
 
 	LOG_DEBUG("MEM_AP Packed Transfers: %s",
-			dap->packed_transfers ? "enabled" : "disabled");
+			ap->packed_transfers ? "enabled" : "disabled");
 
 	/* The ARM ADI spec leaves implementation-defined whether unaligned
 	 * memory accesses work, only work partially, or cause a sticky error.
@@ -755,7 +717,7 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 	 * and unaligned writes seem to cause a sticky error.
 	 * TODO: it would be nice to have a way to detect whether unaligned
 	 * operations are supported on other processors. */
-	dap->unaligned_access_bad = dap->ti_be_32_quirks;
+	ap->unaligned_access_bad = dap->ti_be_32_quirks;
 
 	LOG_DEBUG("MEM_AP CFG: large data %d, long address %d, big-endian %d",
 			!!(cfg & 0x04), !!(cfg & 0x02), !!(cfg & 0x01));
@@ -774,27 +736,25 @@ static const char *class_description[16] = {
 	"Generic IP component", "PrimeCell or System component"
 };
 
-static bool is_dap_cid_ok(uint32_t cid3, uint32_t cid2, uint32_t cid1, uint32_t cid0)
+static bool is_dap_cid_ok(uint32_t cid)
 {
-	return cid3 == 0xb1 && cid2 == 0x05
-			&& ((cid1 & 0x0f) == 0) && cid0 == 0x0d;
+	return (cid & 0xffff0fff) == 0xb105000d;
 }
 
 /*
  * This function checks the ID for each access port to find the requested Access Port type
  */
-int dap_find_ap(struct adiv5_dap *dap, enum ap_type type_to_find, uint8_t *ap_num_out)
+int dap_find_ap(struct adiv5_dap *dap, enum ap_type type_to_find, struct adiv5_ap **ap_out)
 {
-	int ap;
+	int ap_num;
 
 	/* Maximum AP number is 255 since the SELECT register is 8 bits */
-	for (ap = 0; ap <= 255; ap++) {
+	for (ap_num = 0; ap_num <= 255; ap_num++) {
 
 		/* read the IDR register of the Access Port */
 		uint32_t id_val = 0;
-		dap_ap_select(dap, ap);
 
-		int retval = dap_queue_ap_read(dap, AP_REG_IDR, &id_val);
+		int retval = dap_queue_ap_read(dap_ap(dap, ap_num), AP_REG_IDR, &id_val);
 		if (retval != ERROR_OK)
 			return retval;
 
@@ -804,25 +764,27 @@ int dap_find_ap(struct adiv5_dap *dap, enum ap_type type_to_find, uint8_t *ap_nu
 		 * 31-28 : Revision
 		 * 27-24 : JEDEC bank (0x4 for ARM)
 		 * 23-17 : JEDEC code (0x3B for ARM)
-		 * 16    : Mem-AP
-		 * 15-8  : Reserved
-		 *  7-0  : AP Identity (1=AHB-AP 2=APB-AP 0x10=JTAG-AP)
+		 * 16-13 : Class (0b1000=Mem-AP)
+		 * 12-8  : Reserved
+		 *  7-4  : AP Variant (non-zero for JTAG-AP)
+		 *  3-0  : AP Type (0=JTAG-AP 1=AHB-AP 2=APB-AP 4=AXI-AP)
 		 */
 
 		/* Reading register for a non-existant AP should not cause an error,
 		 * but just to be sure, try to continue searching if an error does happen.
 		 */
 		if ((retval == ERROR_OK) &&                  /* Register read success */
-			((id_val & 0x0FFF0000) == 0x04770000) && /* Jedec codes match */
-			((id_val & 0xFF) == type_to_find)) {     /* type matches*/
+			((id_val & IDR_JEP106) == IDR_JEP106_ARM) && /* Jedec codes match */
+			((id_val & IDR_TYPE) == type_to_find)) {      /* type matches*/
 
 			LOG_DEBUG("Found %s at AP index: %d (IDR=0x%08" PRIX32 ")",
 						(type_to_find == AP_TYPE_AHB_AP)  ? "AHB-AP"  :
 						(type_to_find == AP_TYPE_APB_AP)  ? "APB-AP"  :
+						(type_to_find == AP_TYPE_AXI_AP)  ? "AXI-AP"  :
 						(type_to_find == AP_TYPE_JTAG_AP) ? "JTAG-AP" : "Unknown",
-						ap, id_val);
+						ap_num, id_val);
 
-			*ap_num_out = ap;
+			*ap_out = &dap->ap[ap_num];
 			return ERROR_OK;
 		}
 	}
@@ -830,54 +792,40 @@ int dap_find_ap(struct adiv5_dap *dap, enum ap_type type_to_find, uint8_t *ap_nu
 	LOG_DEBUG("No %s found",
 				(type_to_find == AP_TYPE_AHB_AP)  ? "AHB-AP"  :
 				(type_to_find == AP_TYPE_APB_AP)  ? "APB-AP"  :
+				(type_to_find == AP_TYPE_AXI_AP)  ? "AXI-AP"  :
 				(type_to_find == AP_TYPE_JTAG_AP) ? "JTAG-AP" : "Unknown");
 	return ERROR_FAIL;
 }
 
-int dap_get_debugbase(struct adiv5_dap *dap, int ap,
+int dap_get_debugbase(struct adiv5_ap *ap,
 			uint32_t *dbgbase, uint32_t *apid)
 {
-	uint32_t ap_old;
+	struct adiv5_dap *dap = ap->dap;
 	int retval;
 
-	/* AP address is in bits 31:24 of DP_SELECT */
-	if (ap >= 256)
-		return ERROR_COMMAND_SYNTAX_ERROR;
-
-	ap_old = dap->ap_current;
-	dap_ap_select(dap, ap);
-
-	retval = dap_queue_ap_read(dap, AP_REG_BASE, dbgbase);
+	retval = dap_queue_ap_read(ap, MEM_AP_REG_BASE, dbgbase);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = dap_queue_ap_read(dap, AP_REG_IDR, apid);
+	retval = dap_queue_ap_read(ap, AP_REG_IDR, apid);
 	if (retval != ERROR_OK)
 		return retval;
 	retval = dap_run(dap);
 	if (retval != ERROR_OK)
 		return retval;
 
-	dap_ap_select(dap, ap_old);
-
 	return ERROR_OK;
 }
 
-int dap_lookup_cs_component(struct adiv5_dap *dap, int ap,
+int dap_lookup_cs_component(struct adiv5_ap *ap,
 			uint32_t dbgbase, uint8_t type, uint32_t *addr, int32_t *idx)
 {
-	uint32_t ap_old;
 	uint32_t romentry, entry_offset = 0, component_base, devtype;
 	int retval;
 
-	if (ap >= 256)
-		return ERROR_COMMAND_SYNTAX_ERROR;
-
 	*addr = 0;
-	ap_old = dap->ap_current;
-	dap_ap_select(dap, ap);
 
 	do {
-		retval = mem_ap_read_atomic_u32(dap, (dbgbase&0xFFFFF000) |
+		retval = mem_ap_read_atomic_u32(ap, (dbgbase&0xFFFFF000) |
 						entry_offset, &romentry);
 		if (retval != ERROR_OK)
 			return retval;
@@ -887,14 +835,14 @@ int dap_lookup_cs_component(struct adiv5_dap *dap, int ap,
 
 		if (romentry & 0x1) {
 			uint32_t c_cid1;
-			retval = mem_ap_read_atomic_u32(dap, component_base | 0xff4, &c_cid1);
+			retval = mem_ap_read_atomic_u32(ap, component_base | 0xff4, &c_cid1);
 			if (retval != ERROR_OK) {
 				LOG_ERROR("Can't read component with base address 0x%" PRIx32
 					  ", the corresponding core might be turned off", component_base);
 				return retval;
 			}
 			if (((c_cid1 >> 4) & 0x0f) == 1) {
-				retval = dap_lookup_cs_component(dap, ap, component_base,
+				retval = dap_lookup_cs_component(ap, component_base,
 							type, addr, idx);
 				if (retval == ERROR_OK)
 					break;
@@ -902,7 +850,7 @@ int dap_lookup_cs_component(struct adiv5_dap *dap, int ap,
 					return retval;
 			}
 
-			retval = mem_ap_read_atomic_u32(dap,
+			retval = mem_ap_read_atomic_u32(ap,
 					(component_base & 0xfffff000) | 0xfcc,
 					&devtype);
 			if (retval != ERROR_OK)
@@ -918,20 +866,193 @@ int dap_lookup_cs_component(struct adiv5_dap *dap, int ap,
 		entry_offset += 4;
 	} while (romentry > 0);
 
-	dap_ap_select(dap, ap_old);
-
 	if (!*addr)
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 
 	return ERROR_OK;
 }
 
+static int dap_read_part_id(struct adiv5_ap *ap, uint32_t component_base, uint32_t *cid, uint64_t *pid)
+{
+	assert((component_base & 0xFFF) == 0);
+	assert(ap != NULL && cid != NULL && pid != NULL);
+
+	uint32_t cid0, cid1, cid2, cid3;
+	uint32_t pid0, pid1, pid2, pid3, pid4;
+	int retval;
+
+	/* IDs are in last 4K section */
+	retval = mem_ap_read_u32(ap, component_base + 0xFE0, &pid0);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFE4, &pid1);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFE8, &pid2);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFEC, &pid3);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFD0, &pid4);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFF0, &cid0);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFF4, &cid1);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFF8, &cid2);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = mem_ap_read_u32(ap, component_base + 0xFFC, &cid3);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = dap_run(ap->dap);
+	if (retval != ERROR_OK)
+		return retval;
+
+	*cid = (cid3 & 0xff) << 24
+			| (cid2 & 0xff) << 16
+			| (cid1 & 0xff) << 8
+			| (cid0 & 0xff);
+	*pid = (uint64_t)(pid4 & 0xff) << 32
+			| (pid3 & 0xff) << 24
+			| (pid2 & 0xff) << 16
+			| (pid1 & 0xff) << 8
+			| (pid0 & 0xff);
+
+	return ERROR_OK;
+}
+
+/* The designer identity code is encoded as:
+ * bits 11:8 : JEP106 Bank (number of continuation codes), only valid when bit 7 is 1.
+ * bit 7     : Set when bits 6:0 represent a JEP106 ID and cleared when bits 6:0 represent
+ *             a legacy ASCII Identity Code.
+ * bits 6:0  : JEP106 Identity Code (without parity) or legacy ASCII code according to bit 7.
+ * JEP106 is a standard available from jedec.org
+ */
+
+/* Part number interpretations are from Cortex
+ * core specs, the CoreSight components TRM
+ * (ARM DDI 0314H), CoreSight System Design
+ * Guide (ARM DGI 0012D) and ETM specs; also
+ * from chip observation (e.g. TI SDTI).
+ */
+
+/* The legacy code only used the part number field to identify CoreSight peripherals.
+ * This meant that the same part number from two different manufacturers looked the same.
+ * It is desirable for all future additions to identify with both part number and JEP106.
+ * "ANY_ID" is a wildcard (any JEP106) only to preserve legacy behavior for legacy entries.
+ */
+
+#define ANY_ID 0x1000
+
+#define ARM_ID 0x4BB
+
+static const struct {
+	uint16_t designer_id;
+	uint16_t part_num;
+	const char *type;
+	const char *full;
+} dap_partnums[] = {
+	{ ARM_ID, 0x000, "Cortex-M3 SCS",              "(System Control Space)", },
+	{ ARM_ID, 0x001, "Cortex-M3 ITM",              "(Instrumentation Trace Module)", },
+	{ ARM_ID, 0x002, "Cortex-M3 DWT",              "(Data Watchpoint and Trace)", },
+	{ ARM_ID, 0x003, "Cortex-M3 FPB",              "(Flash Patch and Breakpoint)", },
+	{ ARM_ID, 0x008, "Cortex-M0 SCS",              "(System Control Space)", },
+	{ ARM_ID, 0x00a, "Cortex-M0 DWT",              "(Data Watchpoint and Trace)", },
+	{ ARM_ID, 0x00b, "Cortex-M0 BPU",              "(Breakpoint Unit)", },
+	{ ARM_ID, 0x00c, "Cortex-M4 SCS",              "(System Control Space)", },
+	{ ARM_ID, 0x00d, "CoreSight ETM11",            "(Embedded Trace)", },
+	{ ARM_ID, 0x00e, "Cortex-M7 FPB",              "(Flash Patch and Breakpoint)", },
+	{ ARM_ID, 0x490, "Cortex-A15 GIC",             "(Generic Interrupt Controller)", },
+	{ ARM_ID, 0x4a1, "Cortex-A53 ROM",             "(v8 Memory Map ROM Table)", },
+	{ ARM_ID, 0x4a2, "Cortex-A57 ROM",             "(ROM Table)", },
+	{ ARM_ID, 0x4a3, "Cortex-A53 ROM",             "(v7 Memory Map ROM Table)", },
+	{ ARM_ID, 0x4a4, "Cortex-A72 ROM",             "(ROM Table)", },
+	{ ARM_ID, 0x4af, "Cortex-A15 ROM",             "(ROM Table)", },
+	{ ARM_ID, 0x4c0, "Cortex-M0+ ROM",             "(ROM Table)", },
+	{ ARM_ID, 0x4c3, "Cortex-M3 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x4c4, "Cortex-M4 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x4c7, "Cortex-M7 PPB ROM",          "(Private Peripheral Bus ROM Table)", },
+	{ ARM_ID, 0x4c8, "Cortex-M7 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x470, "Cortex-M1 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x471, "Cortex-M0 ROM",              "(ROM Table)", },
+	{ ARM_ID, 0x906, "CoreSight CTI",              "(Cross Trigger)", },
+	{ ARM_ID, 0x907, "CoreSight ETB",              "(Trace Buffer)", },
+	{ ARM_ID, 0x908, "CoreSight CSTF",             "(Trace Funnel)", },
+	{ ARM_ID, 0x909, "CoreSight ATBR",             "(Advanced Trace Bus Replicator)", },
+	{ ARM_ID, 0x910, "CoreSight ETM9",             "(Embedded Trace)", },
+	{ ARM_ID, 0x912, "CoreSight TPIU",             "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x913, "CoreSight ITM",              "(Instrumentation Trace Macrocell)", },
+	{ ARM_ID, 0x914, "CoreSight SWO",              "(Single Wire Output)", },
+	{ ARM_ID, 0x917, "CoreSight HTM",              "(AHB Trace Macrocell)", },
+	{ ARM_ID, 0x920, "CoreSight ETM11",            "(Embedded Trace)", },
+	{ ARM_ID, 0x921, "Cortex-A8 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x922, "Cortex-A8 CTI",              "(Cross Trigger)", },
+	{ ARM_ID, 0x923, "Cortex-M3 TPIU",             "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x924, "Cortex-M3 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x925, "Cortex-M4 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x930, "Cortex-R4 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x931, "Cortex-R5 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x932, "CoreSight MTB-M0+",          "(Micro Trace Buffer)", },
+	{ ARM_ID, 0x941, "CoreSight TPIU-Lite",        "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x950, "Cortex-A9 PTM",              "(Program Trace Macrocell)", },
+	{ ARM_ID, 0x955, "Cortex-A5 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x95a, "Cortex-A72 ETM",             "(Embedded Trace)", },
+	{ ARM_ID, 0x95b, "Cortex-A17 PTM",             "(Program Trace Macrocell)", },
+	{ ARM_ID, 0x95d, "Cortex-A53 ETM",             "(Embedded Trace)", },
+	{ ARM_ID, 0x95e, "Cortex-A57 ETM",             "(Embedded Trace)", },
+	{ ARM_ID, 0x95f, "Cortex-A15 PTM",             "(Program Trace Macrocell)", },
+	{ ARM_ID, 0x961, "CoreSight TMC",              "(Trace Memory Controller)", },
+	{ ARM_ID, 0x962, "CoreSight STM",              "(System Trace Macrocell)", },
+	{ ARM_ID, 0x975, "Cortex-M7 ETM",              "(Embedded Trace)", },
+	{ ARM_ID, 0x9a0, "CoreSight PMU",              "(Performance Monitoring Unit)", },
+	{ ARM_ID, 0x9a1, "Cortex-M4 TPIU",             "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x9a4, "CoreSight GPR",              "(Granular Power Requester)", },
+	{ ARM_ID, 0x9a5, "Cortex-A5 PMU",              "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9a7, "Cortex-A7 PMU",              "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9a8, "Cortex-A53 CTI",             "(Cross Trigger)", },
+	{ ARM_ID, 0x9a9, "Cortex-M7 TPIU",             "(Trace Port Interface Unit)", },
+	{ ARM_ID, 0x9ae, "Cortex-A17 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9af, "Cortex-A15 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9b7, "Cortex-R7 PMU",              "(Performance Monitoring Unit)", },
+	{ ARM_ID, 0x9d3, "Cortex-A53 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9d7, "Cortex-A57 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0x9d8, "Cortex-A72 PMU",             "(Performance Monitor Unit)", },
+	{ ARM_ID, 0xc05, "Cortex-A5 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc07, "Cortex-A7 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc08, "Cortex-A8 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc09, "Cortex-A9 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc0e, "Cortex-A17 Debug",           "(Debug Unit)", },
+	{ ARM_ID, 0xc0f, "Cortex-A15 Debug",           "(Debug Unit)", },
+	{ ARM_ID, 0xc14, "Cortex-R4 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc15, "Cortex-R5 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xc17, "Cortex-R7 Debug",            "(Debug Unit)", },
+	{ ARM_ID, 0xd03, "Cortex-A53 Debug",           "(Debug Unit)", },
+	{ ARM_ID, 0xd07, "Cortex-A57 Debug",           "(Debug Unit)", },
+	{ ARM_ID, 0xd08, "Cortex-A72 Debug",           "(Debug Unit)", },
+	{ 0x097,  0x9af, "MSP432 ROM",                 "(ROM Table)" },
+	{ 0x09f,  0xcd0, "Atmel CPU with DSU",         "(CPU)" },
+	{ 0x0c1,  0x1db, "XMC4500 ROM",                "(ROM Table)" },
+	{ 0x0c1,  0x1df, "XMC4700/4800 ROM",           "(ROM Table)" },
+	{ 0x0c1,  0x1ed, "XMC1000 ROM",                "(ROM Table)" },
+	{ 0x0E5,  0x000, "SHARC+/Blackfin+",           "", },
+	{ 0x0F0,  0x440, "Qualcomm QDSS Component v1", "(Qualcomm Designed CoreSight Component v1)", },
+	/* legacy comment: 0x113: what? */
+	{ ANY_ID, 0x120, "TI SDTI",                    "(System Debug Trace Interface)", }, /* from OMAP3 memmap */
+	{ ANY_ID, 0x343, "TI DAPCTL",                  "", }, /* from OMAP3 memmap */
+};
+
 static int dap_rom_display(struct command_context *cmd_ctx,
-				struct adiv5_dap *dap, int ap, uint32_t dbgbase, int depth)
+				struct adiv5_ap *ap, uint32_t dbgbase, int depth)
 {
 	int retval;
-	uint32_t cid0, cid1, cid2, cid3, memtype, romentry;
-	uint16_t entry_offset;
+	uint64_t pid;
+	uint32_t cid;
 	char tabs[7] = "";
 
 	if (depth > 16) {
@@ -942,510 +1063,335 @@ static int dap_rom_display(struct command_context *cmd_ctx,
 	if (depth)
 		snprintf(tabs, sizeof(tabs), "[L%02d] ", depth);
 
-	/* bit 16 of apid indicates a memory access port */
-	if (dbgbase & 0x02)
-		command_print(cmd_ctx, "\t%sValid ROM table present", tabs);
-	else
-		command_print(cmd_ctx, "\t%sROM table in legacy format", tabs);
+	uint32_t base_addr = dbgbase & 0xFFFFF000;
+	command_print(cmd_ctx, "\t\tComponent base address 0x%08" PRIx32, base_addr);
 
-	/* Now we read ROM table ID registers, ref. ARM IHI 0029B sec  */
-	retval = mem_ap_read_u32(dap, (dbgbase&0xFFFFF000) | 0xFF0, &cid0);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = mem_ap_read_u32(dap, (dbgbase&0xFFFFF000) | 0xFF4, &cid1);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = mem_ap_read_u32(dap, (dbgbase&0xFFFFF000) | 0xFF8, &cid2);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = mem_ap_read_u32(dap, (dbgbase&0xFFFFF000) | 0xFFC, &cid3);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = mem_ap_read_u32(dap, (dbgbase&0xFFFFF000) | 0xFCC, &memtype);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = dap_run(dap);
-	if (retval != ERROR_OK)
-		return retval;
+	retval = dap_read_part_id(ap, base_addr, &cid, &pid);
+	if (retval != ERROR_OK) {
+		command_print(cmd_ctx, "\t\tCan't read component, the corresponding core might be turned off");
+		return ERROR_OK; /* Don't abort recursion */
+	}
 
-	if (!is_dap_cid_ok(cid3, cid2, cid1, cid0))
-		command_print(cmd_ctx, "\t%sCID3 0x%02x"
-				", CID2 0x%02x"
-				", CID1 0x%02x"
-				", CID0 0x%02x",
-				tabs,
-				(unsigned)cid3, (unsigned)cid2,
-				(unsigned)cid1, (unsigned)cid0);
-	if (memtype & 0x01)
-		command_print(cmd_ctx, "\t%sMEMTYPE system memory present on bus", tabs);
-	else
-		command_print(cmd_ctx, "\t%sMEMTYPE system memory not present: dedicated debug bus", tabs);
+	if (!is_dap_cid_ok(cid)) {
+		command_print(cmd_ctx, "\t\tInvalid CID 0x%08" PRIx32, cid);
+		return ERROR_OK; /* Don't abort recursion */
+	}
 
-	/* Now we read ROM table entries from dbgbase&0xFFFFF000) | 0x000 until we get 0x00000000 */
-	for (entry_offset = 0; ; entry_offset += 4) {
-		retval = mem_ap_read_atomic_u32(dap, (dbgbase&0xFFFFF000) | entry_offset, &romentry);
+	/* component may take multiple 4K pages */
+	uint32_t size = (pid >> 36) & 0xf;
+	if (size > 0)
+		command_print(cmd_ctx, "\t\tStart address 0x%08" PRIx32, (uint32_t)(base_addr - 0x1000 * size));
+
+	command_print(cmd_ctx, "\t\tPeripheral ID 0x%010" PRIx64, pid);
+
+	uint8_t class = (cid >> 12) & 0xf;
+	uint16_t part_num = pid & 0xfff;
+	uint16_t designer_id = ((pid >> 32) & 0xf) << 8 | ((pid >> 12) & 0xff);
+
+	if (designer_id & 0x80) {
+		/* JEP106 code */
+		command_print(cmd_ctx, "\t\tDesigner is 0x%03" PRIx16 ", %s",
+				designer_id, jep106_manufacturer(designer_id >> 8, designer_id & 0x7f));
+	} else {
+		/* Legacy ASCII ID, clear invalid bits */
+		designer_id &= 0x7f;
+		command_print(cmd_ctx, "\t\tDesigner ASCII code 0x%02" PRIx16 ", %s",
+				designer_id, designer_id == 0x41 ? "ARM" : "<unknown>");
+	}
+
+	/* default values to be overwritten upon finding a match */
+	const char *type = "Unrecognized";
+	const char *full = "";
+
+	/* search dap_partnums[] array for a match */
+	for (unsigned entry = 0; entry < ARRAY_SIZE(dap_partnums); entry++) {
+
+		if ((dap_partnums[entry].designer_id != designer_id) && (dap_partnums[entry].designer_id != ANY_ID))
+			continue;
+
+		if (dap_partnums[entry].part_num != part_num)
+			continue;
+
+		type = dap_partnums[entry].type;
+		full = dap_partnums[entry].full;
+		break;
+	}
+
+	command_print(cmd_ctx, "\t\tPart is 0x%" PRIx16", %s %s", part_num, type, full);
+	command_print(cmd_ctx, "\t\tComponent class is 0x%" PRIx8 ", %s", class, class_description[class]);
+
+	if (class == 1) { /* ROM Table */
+		uint32_t memtype;
+		retval = mem_ap_read_atomic_u32(ap, base_addr | 0xFCC, &memtype);
 		if (retval != ERROR_OK)
 			return retval;
-		command_print(cmd_ctx, "\t%sROMTABLE[0x%x] = 0x%" PRIx32 "",
-				tabs, entry_offset, romentry);
-		if (romentry & 0x01) {
-			uint32_t c_cid0, c_cid1, c_cid2, c_cid3;
-			uint32_t c_pid0, c_pid1, c_pid2, c_pid3, c_pid4;
-			uint32_t component_base;
-			uint32_t part_num;
-			const char *type, *full;
 
-			component_base = (dbgbase & 0xFFFFF000) + (romentry & 0xFFFFF000);
+		if (memtype & 0x01)
+			command_print(cmd_ctx, "\t\tMEMTYPE system memory present on bus");
+		else
+			command_print(cmd_ctx, "\t\tMEMTYPE system memory not present: dedicated debug bus");
 
-			/* IDs are in last 4K section */
-			retval = mem_ap_read_atomic_u32(dap, component_base + 0xFE0, &c_pid0);
-			if (retval != ERROR_OK) {
-				command_print(cmd_ctx, "\t%s\tCan't read component with base address 0x%" PRIx32
-					      ", the corresponding core might be turned off", tabs, component_base);
-				continue;
-			}
-			c_pid0 &= 0xff;
-			retval = mem_ap_read_atomic_u32(dap, component_base + 0xFE4, &c_pid1);
+		/* Read ROM table entries from base address until we get 0x00000000 or reach the reserved area */
+		for (uint16_t entry_offset = 0; entry_offset < 0xF00; entry_offset += 4) {
+			uint32_t romentry;
+			retval = mem_ap_read_atomic_u32(ap, base_addr | entry_offset, &romentry);
 			if (retval != ERROR_OK)
 				return retval;
-			c_pid1 &= 0xff;
-			retval = mem_ap_read_atomic_u32(dap, component_base + 0xFE8, &c_pid2);
-			if (retval != ERROR_OK)
-				return retval;
-			c_pid2 &= 0xff;
-			retval = mem_ap_read_atomic_u32(dap, component_base + 0xFEC, &c_pid3);
-			if (retval != ERROR_OK)
-				return retval;
-			c_pid3 &= 0xff;
-			retval = mem_ap_read_atomic_u32(dap, component_base + 0xFD0, &c_pid4);
-			if (retval != ERROR_OK)
-				return retval;
-			c_pid4 &= 0xff;
-
-			retval = mem_ap_read_atomic_u32(dap, component_base + 0xFF0, &c_cid0);
-			if (retval != ERROR_OK)
-				return retval;
-			c_cid0 &= 0xff;
-			retval = mem_ap_read_atomic_u32(dap, component_base + 0xFF4, &c_cid1);
-			if (retval != ERROR_OK)
-				return retval;
-			c_cid1 &= 0xff;
-			retval = mem_ap_read_atomic_u32(dap, component_base + 0xFF8, &c_cid2);
-			if (retval != ERROR_OK)
-				return retval;
-			c_cid2 &= 0xff;
-			retval = mem_ap_read_atomic_u32(dap, component_base + 0xFFC, &c_cid3);
-			if (retval != ERROR_OK)
-				return retval;
-			c_cid3 &= 0xff;
-
-			command_print(cmd_ctx, "\t\tComponent base address 0x%" PRIx32 ", "
-				      "start address 0x%" PRIx32, component_base,
-				      /* component may take multiple 4K pages */
-				      (uint32_t)(component_base - 0x1000*(c_pid4 >> 4)));
-			command_print(cmd_ctx, "\t\tComponent class is 0x%" PRIx8 ", %s",
-					(uint8_t)((c_cid1 >> 4) & 0xf),
-					/* See ARM IHI 0029B Table 3-3 */
-					class_description[(c_cid1 >> 4) & 0xf]);
-
-			/* CoreSight component? */
-			if (((c_cid1 >> 4) & 0x0f) == 9) {
-				uint32_t devtype;
-				unsigned minor;
-				const char *major = "Reserved", *subtype = "Reserved";
-
-				retval = mem_ap_read_atomic_u32(dap,
-						(component_base & 0xfffff000) | 0xfcc,
-						&devtype);
+			command_print(cmd_ctx, "\t%sROMTABLE[0x%x] = 0x%" PRIx32 "",
+					tabs, entry_offset, romentry);
+			if (romentry & 0x01) {
+				/* Recurse */
+				retval = dap_rom_display(cmd_ctx, ap, base_addr + (romentry & 0xFFFFF000), depth + 1);
 				if (retval != ERROR_OK)
 					return retval;
-				minor = (devtype >> 4) & 0x0f;
-				switch (devtype & 0x0f) {
-				case 0:
-					major = "Miscellaneous";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 4:
-						subtype = "Validation component";
-						break;
-					}
-					break;
-				case 1:
-					major = "Trace Sink";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Port";
-						break;
-					case 2:
-						subtype = "Buffer";
-						break;
-					case 3:
-						subtype = "Router";
-						break;
-					}
-					break;
-				case 2:
-					major = "Trace Link";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Funnel, router";
-						break;
-					case 2:
-						subtype = "Filter";
-						break;
-					case 3:
-						subtype = "FIFO, buffer";
-						break;
-					}
-					break;
-				case 3:
-					major = "Trace Source";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Processor";
-						break;
-					case 2:
-						subtype = "DSP";
-						break;
-					case 3:
-						subtype = "Engine/Coprocessor";
-						break;
-					case 4:
-						subtype = "Bus";
-						break;
-					case 6:
-						subtype = "Software";
-						break;
-					}
-					break;
-				case 4:
-					major = "Debug Control";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Trigger Matrix";
-						break;
-					case 2:
-						subtype = "Debug Auth";
-						break;
-					case 3:
-						subtype = "Power Requestor";
-						break;
-					}
-					break;
-				case 5:
-					major = "Debug Logic";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Processor";
-						break;
-					case 2:
-						subtype = "DSP";
-						break;
-					case 3:
-						subtype = "Engine/Coprocessor";
-						break;
-					case 4:
-						subtype = "Bus";
-						break;
-					case 5:
-						subtype = "Memory";
-						break;
-					}
-					break;
-				case 6:
-					major = "Perfomance Monitor";
-					switch (minor) {
-					case 0:
-						subtype = "other";
-						break;
-					case 1:
-						subtype = "Processor";
-						break;
-					case 2:
-						subtype = "DSP";
-						break;
-					case 3:
-						subtype = "Engine/Coprocessor";
-						break;
-					case 4:
-						subtype = "Bus";
-						break;
-					case 5:
-						subtype = "Memory";
-						break;
-					}
-					break;
-				}
-				command_print(cmd_ctx, "\t\tType is 0x%02" PRIx8 ", %s, %s",
-						(uint8_t)(devtype & 0xff),
-						major, subtype);
-				/* REVISIT also show 0xfc8 DevId */
-			}
-
-			if (!is_dap_cid_ok(cid3, cid2, cid1, cid0))
-				command_print(cmd_ctx,
-						"\t\tCID3 0%02x"
-						", CID2 0%02x"
-						", CID1 0%02x"
-						", CID0 0%02x",
-						(int)c_cid3,
-						(int)c_cid2,
-						(int)c_cid1,
-						(int)c_cid0);
-			command_print(cmd_ctx,
-				"\t\tPeripheral ID[4..0] = hex "
-				"%02x %02x %02x %02x %02x",
-				(int)c_pid4, (int)c_pid3, (int)c_pid2,
-				(int)c_pid1, (int)c_pid0);
-
-			/* Part number interpretations are from Cortex
-			 * core specs, the CoreSight components TRM
-			 * (ARM DDI 0314H), CoreSight System Design
-			 * Guide (ARM DGI 0012D) and ETM specs; also
-			 * from chip observation (e.g. TI SDTI).
-			 */
-			part_num = (c_pid0 & 0xff);
-			part_num |= (c_pid1 & 0x0f) << 8;
-			switch (part_num) {
-			case 0x000:
-				type = "Cortex-M3 NVIC";
-				full = "(Interrupt Controller)";
-				break;
-			case 0x001:
-				type = "Cortex-M3 ITM";
-				full = "(Instrumentation Trace Module)";
-				break;
-			case 0x002:
-				type = "Cortex-M3 DWT";
-				full = "(Data Watchpoint and Trace)";
-				break;
-			case 0x003:
-				type = "Cortex-M3 FBP";
-				full = "(Flash Patch and Breakpoint)";
-				break;
-			case 0x008:
-				type = "Cortex-M0 SCS";
-				full = "(System Control Space)";
-				break;
-			case 0x00a:
-				type = "Cortex-M0 DWT";
-				full = "(Data Watchpoint and Trace)";
-				break;
-			case 0x00b:
-				type = "Cortex-M0 BPU";
-				full = "(Breakpoint Unit)";
-				break;
-			case 0x00c:
-				type = "Cortex-M4 SCS";
-				full = "(System Control Space)";
-				break;
-			case 0x00d:
-				type = "CoreSight ETM11";
-				full = "(Embedded Trace)";
-				break;
-			/* case 0x113: what? */
-			case 0x120:		/* from OMAP3 memmap */
-				type = "TI SDTI";
-				full = "(System Debug Trace Interface)";
-				break;
-			case 0x343:		/* from OMAP3 memmap */
-				type = "TI DAPCTL";
-				full = "";
-				break;
-			case 0x906:
-				type = "Coresight CTI";
-				full = "(Cross Trigger)";
-				break;
-			case 0x907:
-				type = "Coresight ETB";
-				full = "(Trace Buffer)";
-				break;
-			case 0x908:
-				type = "Coresight CSTF";
-				full = "(Trace Funnel)";
-				break;
-			case 0x910:
-				type = "CoreSight ETM9";
-				full = "(Embedded Trace)";
-				break;
-			case 0x912:
-				type = "Coresight TPIU";
-				full = "(Trace Port Interface Unit)";
-				break;
-			case 0x913:
-				type = "Coresight ITM";
-				full = "(Instrumentation Trace Macrocell)";
-				break;
-			case 0x914:
-				type = "Coresight SWO";
-				full = "(Single Wire Output)";
-				break;
-			case 0x917:
-				type = "Coresight HTM";
-				full = "(AHB Trace Macrocell)";
-				break;
-			case 0x920:
-				type = "CoreSight ETM11";
-				full = "(Embedded Trace)";
-				break;
-			case 0x921:
-				type = "Cortex-A8 ETM";
-				full = "(Embedded Trace)";
-				break;
-			case 0x922:
-				type = "Cortex-A8 CTI";
-				full = "(Cross Trigger)";
-				break;
-			case 0x923:
-				type = "Cortex-M3 TPIU";
-				full = "(Trace Port Interface Unit)";
-				break;
-			case 0x924:
-				type = "Cortex-M3 ETM";
-				full = "(Embedded Trace)";
-				break;
-			case 0x925:
-				type = "Cortex-M4 ETM";
-				full = "(Embedded Trace)";
-				break;
-			case 0x930:
-				type = "Cortex-R4 ETM";
-				full = "(Embedded Trace)";
-				break;
-			case 0x950:
-				type = "CoreSight Component";
-				full = "(unidentified Cortex-A9 component)";
-				break;
-			case 0x961:
-				type = "CoreSight TMC";
-				full = "(Trace Memory Controller)";
-				break;
-			case 0x962:
-				type = "CoreSight STM";
-				full = "(System Trace Macrocell)";
-				break;
-			case 0x9a0:
-				type = "CoreSight PMU";
-				full = "(Performance Monitoring Unit)";
-				break;
-			case 0x9a1:
-				type = "Cortex-M4 TPUI";
-				full = "(Trace Port Interface Unit)";
-				break;
-			case 0x9a5:
-				type = "Cortex-A5 ETM";
-				full = "(Embedded Trace)";
-				break;
-			case 0xc05:
-				type = "Cortex-A5 Debug";
-				full = "(Debug Unit)";
-				break;
-			case 0xc08:
-				type = "Cortex-A8 Debug";
-				full = "(Debug Unit)";
-				break;
-			case 0xc09:
-				type = "Cortex-A9 Debug";
-				full = "(Debug Unit)";
-				break;
-			case 0x4af:
-				type = "Cortex-A15 Debug";
-				full = "(Debug Unit)";
-				break;
-			default:
-				LOG_DEBUG("Unrecognized Part number 0x%" PRIx32, part_num);
-				type = "-*- unrecognized -*-";
-				full = "";
-				break;
-			}
-			command_print(cmd_ctx, "\t\tPart is %s %s",
-					type, full);
-
-			/* ROM Table? */
-			if (((c_cid1 >> 4) & 0x0f) == 1) {
-				retval = dap_rom_display(cmd_ctx, dap, ap, component_base, depth + 1);
-				if (retval != ERROR_OK)
-					return retval;
-			}
-		} else {
-			if (romentry)
+			} else if (romentry != 0) {
 				command_print(cmd_ctx, "\t\tComponent not present");
-			else
+			} else {
+				command_print(cmd_ctx, "\t%s\tEnd of ROM table", tabs);
 				break;
+			}
 		}
+	} else if (class == 9) { /* CoreSight component */
+		const char *major = "Reserved", *subtype = "Reserved";
+
+		uint32_t devtype;
+		retval = mem_ap_read_atomic_u32(ap, base_addr | 0xFCC, &devtype);
+		if (retval != ERROR_OK)
+			return retval;
+		unsigned minor = (devtype >> 4) & 0x0f;
+		switch (devtype & 0x0f) {
+		case 0:
+			major = "Miscellaneous";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 4:
+				subtype = "Validation component";
+				break;
+			}
+			break;
+		case 1:
+			major = "Trace Sink";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Port";
+				break;
+			case 2:
+				subtype = "Buffer";
+				break;
+			case 3:
+				subtype = "Router";
+				break;
+			}
+			break;
+		case 2:
+			major = "Trace Link";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Funnel, router";
+				break;
+			case 2:
+				subtype = "Filter";
+				break;
+			case 3:
+				subtype = "FIFO, buffer";
+				break;
+			}
+			break;
+		case 3:
+			major = "Trace Source";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Processor";
+				break;
+			case 2:
+				subtype = "DSP";
+				break;
+			case 3:
+				subtype = "Engine/Coprocessor";
+				break;
+			case 4:
+				subtype = "Bus";
+				break;
+			case 6:
+				subtype = "Software";
+				break;
+			}
+			break;
+		case 4:
+			major = "Debug Control";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Trigger Matrix";
+				break;
+			case 2:
+				subtype = "Debug Auth";
+				break;
+			case 3:
+				subtype = "Power Requestor";
+				break;
+			}
+			break;
+		case 5:
+			major = "Debug Logic";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Processor";
+				break;
+			case 2:
+				subtype = "DSP";
+				break;
+			case 3:
+				subtype = "Engine/Coprocessor";
+				break;
+			case 4:
+				subtype = "Bus";
+				break;
+			case 5:
+				subtype = "Memory";
+				break;
+			}
+			break;
+		case 6:
+			major = "Perfomance Monitor";
+			switch (minor) {
+			case 0:
+				subtype = "other";
+				break;
+			case 1:
+				subtype = "Processor";
+				break;
+			case 2:
+				subtype = "DSP";
+				break;
+			case 3:
+				subtype = "Engine/Coprocessor";
+				break;
+			case 4:
+				subtype = "Bus";
+				break;
+			case 5:
+				subtype = "Memory";
+				break;
+			}
+			break;
+		}
+		command_print(cmd_ctx, "\t\tType is 0x%02" PRIx8 ", %s, %s",
+				(uint8_t)(devtype & 0xff),
+				major, subtype);
+		/* REVISIT also show 0xfc8 DevId */
 	}
-	command_print(cmd_ctx, "\t%s\tEnd of ROM table", tabs);
+
 	return ERROR_OK;
 }
 
 static int dap_info_command(struct command_context *cmd_ctx,
-		struct adiv5_dap *dap, int ap)
+		struct adiv5_ap *ap)
 {
 	int retval;
 	uint32_t dbgbase, apid;
-	int romtable_present = 0;
 	uint8_t mem_ap;
-	uint32_t ap_old;
 
-	retval = dap_get_debugbase(dap, ap, &dbgbase, &apid);
+	/* Now we read ROM table ID registers, ref. ARM IHI 0029B sec  */
+	retval = dap_get_debugbase(ap, &dbgbase, &apid);
 	if (retval != ERROR_OK)
 		return retval;
 
-	ap_old = dap->ap_current;
-	dap_ap_select(dap, ap);
-
-	/* Now we read ROM table ID registers, ref. ARM IHI 0029B sec  */
-	mem_ap = ((apid&0x10000) && ((apid&0x0F) != 0));
 	command_print(cmd_ctx, "AP ID register 0x%8.8" PRIx32, apid);
-	if (apid) {
-		switch (apid&0x0F) {
-			case 0:
-				command_print(cmd_ctx, "\tType is JTAG-AP");
-				break;
-			case 1:
-				command_print(cmd_ctx, "\tType is MEM-AP AHB");
-				break;
-			case 2:
-				command_print(cmd_ctx, "\tType is MEM-AP APB");
-				break;
-			default:
-				command_print(cmd_ctx, "\tUnknown AP type");
-				break;
+	if (apid == 0) {
+		command_print(cmd_ctx, "No AP found at this ap 0x%x", ap->ap_num);
+		return ERROR_FAIL;
+	}
+
+	switch (apid & (IDR_JEP106 | IDR_TYPE)) {
+	case IDR_JEP106_ARM | AP_TYPE_JTAG_AP:
+		command_print(cmd_ctx, "\tType is JTAG-AP");
+		break;
+	case IDR_JEP106_ARM | AP_TYPE_AHB_AP:
+		command_print(cmd_ctx, "\tType is MEM-AP AHB");
+		break;
+	case IDR_JEP106_ARM | AP_TYPE_APB_AP:
+		command_print(cmd_ctx, "\tType is MEM-AP APB");
+		break;
+	case IDR_JEP106_ARM | AP_TYPE_AXI_AP:
+		command_print(cmd_ctx, "\tType is MEM-AP AXI");
+		break;
+	default:
+		command_print(cmd_ctx, "\tUnknown AP type");
+		break;
+	}
+
+	/* NOTE: a MEM-AP may have a single CoreSight component that's
+	 * not a ROM table ... or have no such components at all.
+	 */
+	mem_ap = (apid & IDR_CLASS) == AP_CLASS_MEM_AP;
+	if (mem_ap) {
+		command_print(cmd_ctx, "MEM-AP BASE 0x%8.8" PRIx32, dbgbase);
+
+		if (dbgbase == 0xFFFFFFFF || (dbgbase & 0x3) == 0x2) {
+			command_print(cmd_ctx, "\tNo ROM table present");
+		} else {
+			if (dbgbase & 0x01)
+				command_print(cmd_ctx, "\tValid ROM table present");
+			else
+				command_print(cmd_ctx, "\tROM table in legacy format");
+
+			dap_rom_display(cmd_ctx, ap, dbgbase & 0xFFFFF000, 0);
 		}
-
-		/* NOTE: a MEM-AP may have a single CoreSight component that's
-		 * not a ROM table ... or have no such components at all.
-		 */
-		if (mem_ap)
-			command_print(cmd_ctx, "AP BASE 0x%8.8" PRIx32, dbgbase);
-	} else
-		command_print(cmd_ctx, "No AP found at this ap 0x%x", ap);
-
-	romtable_present = ((mem_ap) && (dbgbase != 0xFFFFFFFF));
-	if (romtable_present)
-		dap_rom_display(cmd_ctx, dap, ap, dbgbase, 0);
-	else
-		command_print(cmd_ctx, "\tNo ROM table present");
-	dap_ap_select(dap, ap_old);
+	}
 
 	return ERROR_OK;
+}
+
+int adiv5_jim_configure(struct target *target, Jim_GetOptInfo *goi)
+{
+	struct adiv5_private_config *pc;
+	const char *arg;
+	jim_wide ap_num;
+	int e;
+
+	/* check if argv[0] is for us */
+	arg = Jim_GetString(goi->argv[0], NULL);
+	if (strcmp(arg, "-ap-num"))
+		return JIM_CONTINUE;
+
+	e = Jim_GetOpt_String(goi, &arg, NULL);
+	if (e != JIM_OK)
+		return e;
+
+	if (goi->argc == 0) {
+		Jim_WrongNumArgs(goi->interp, goi->argc, goi->argv, "-ap-num ?ap-number? ...");
+		return JIM_ERR;
+	}
+
+	e = Jim_GetOpt_Wide(goi, &ap_num);
+	if (e != JIM_OK)
+		return e;
+
+	if (target->private_config == NULL) {
+		pc = calloc(1, sizeof(struct adiv5_private_config));
+		target->private_config = pc;
+		pc->ap_num = ap_num;
+	}
+
+
+	return JIM_OK;
 }
 
 COMMAND_HANDLER(handle_dap_info_command)
@@ -1461,12 +1407,14 @@ COMMAND_HANDLER(handle_dap_info_command)
 		break;
 	case 1:
 		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], apsel);
+		if (apsel >= 256)
+			return ERROR_COMMAND_SYNTAX_ERROR;
 		break;
 	default:
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	return dap_info_command(CMD_CTX, dap, apsel);
+	return dap_info_command(CMD_CTX, &dap->ap[apsel]);
 }
 
 COMMAND_HANDLER(dap_baseaddr_command)
@@ -1492,14 +1440,12 @@ COMMAND_HANDLER(dap_baseaddr_command)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	dap_ap_select(dap, apsel);
-
 	/* NOTE:  assumes we're talking to a MEM-AP, which
 	 * has a base address.  There are other kinds of AP,
 	 * though they're not common for now.  This should
 	 * use the ID register to verify it's a MEM-AP.
 	 */
-	retval = dap_queue_ap_read(dap, AP_REG_BASE, &baseaddr);
+	retval = dap_queue_ap_read(dap_ap(dap, apsel), MEM_AP_REG_BASE, &baseaddr);
 	if (retval != ERROR_OK)
 		return retval;
 	retval = dap_run(dap);
@@ -1521,7 +1467,7 @@ COMMAND_HANDLER(dap_memaccess_command)
 
 	switch (CMD_ARGC) {
 	case 0:
-		memaccess_tck = dap->memaccess_tck;
+		memaccess_tck = dap->ap[dap->apsel].memaccess_tck;
 		break;
 	case 1:
 		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], memaccess_tck);
@@ -1529,10 +1475,10 @@ COMMAND_HANDLER(dap_memaccess_command)
 	default:
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
-	dap->memaccess_tck = memaccess_tck;
+	dap->ap[dap->apsel].memaccess_tck = memaccess_tck;
 
 	command_print(CMD_CTX, "memory bus access delay set to %" PRIi32 " tck",
-			dap->memaccess_tck);
+			dap->ap[dap->apsel].memaccess_tck);
 
 	return ERROR_OK;
 }
@@ -1548,7 +1494,7 @@ COMMAND_HANDLER(dap_apsel_command)
 
 	switch (CMD_ARGC) {
 	case 0:
-		apsel = 0;
+		apsel = dap->apsel;
 		break;
 	case 1:
 		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], apsel);
@@ -1561,9 +1507,8 @@ COMMAND_HANDLER(dap_apsel_command)
 	}
 
 	dap->apsel = apsel;
-	dap_ap_select(dap, apsel);
 
-	retval = dap_queue_ap_read(dap, AP_REG_IDR, &apid);
+	retval = dap_queue_ap_read(dap_ap(dap, apsel), AP_REG_IDR, &apid);
 	if (retval != ERROR_OK)
 		return retval;
 	retval = dap_run(dap);
@@ -1582,7 +1527,7 @@ COMMAND_HANDLER(dap_apcsw_command)
 	struct arm *arm = target_to_arm(target);
 	struct adiv5_dap *dap = arm->dap;
 
-	uint32_t apcsw = dap->apcsw[dap->apsel], sprot = 0;
+	uint32_t apcsw = dap->ap[dap->apsel].csw_default, sprot = 0;
 
 	switch (CMD_ARGC) {
 	case 0:
@@ -1602,7 +1547,7 @@ COMMAND_HANDLER(dap_apcsw_command)
 	default:
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
-	dap->apcsw[dap->apsel] = apcsw;
+	dap->ap[dap->apsel].csw_default = apcsw;
 
 	return 0;
 }
@@ -1632,9 +1577,7 @@ COMMAND_HANDLER(dap_apid_command)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	dap_ap_select(dap, apsel);
-
-	retval = dap_queue_ap_read(dap, AP_REG_IDR, &apid);
+	retval = dap_queue_ap_read(dap_ap(dap, apsel), AP_REG_IDR, &apid);
 	if (retval != ERROR_OK)
 		return retval;
 	retval = dap_run(dap);
@@ -1642,6 +1585,45 @@ COMMAND_HANDLER(dap_apid_command)
 		return retval;
 
 	command_print(CMD_CTX, "0x%8.8" PRIx32, apid);
+
+	return retval;
+}
+
+COMMAND_HANDLER(dap_apreg_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	struct arm *arm = target_to_arm(target);
+	struct adiv5_dap *dap = arm->dap;
+
+	uint32_t apsel, reg, value;
+	int retval;
+
+	if (CMD_ARGC < 2 || CMD_ARGC > 3)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], apsel);
+	/* AP address is in bits 31:24 of DP_SELECT */
+	if (apsel >= 256)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], reg);
+	if (reg >= 256 || (reg & 3))
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (CMD_ARGC == 3) {
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], value);
+		retval = dap_queue_ap_write(dap_ap(dap, apsel), reg, value);
+	} else {
+		retval = dap_queue_ap_read(dap_ap(dap, apsel), reg, &value);
+	}
+	if (retval == ERROR_OK)
+		retval = dap_run(dap);
+
+	if (retval != ERROR_OK)
+		return retval;
+
+	if (CMD_ARGC == 2)
+		command_print(CMD_CTX, "0x%08" PRIx32, value);
 
 	return retval;
 }
@@ -1704,6 +1686,14 @@ static const struct command_registration dap_commands[] = {
 		.help = "return ID register from AP "
 			"(default currently selected AP)",
 		.usage = "[ap_num]",
+	},
+	{
+		.name = "apreg",
+		.handler = dap_apreg_command,
+		.mode = COMMAND_EXEC,
+		.help = "read/write a register from AP "
+			"(reg is byte address of a word register, like 0 4 8...)",
+		.usage = "ap_num reg [value]",
 	},
 	{
 		.name = "baseaddr",

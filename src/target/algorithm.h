@@ -13,13 +13,11 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef ALGORITHM_H
-#define ALGORITHM_H
+#ifndef OPENOCD_TARGET_ALGORITHM_H
+#define OPENOCD_TARGET_ALGORITHM_H
 
 enum param_direction {
 	PARAM_IN,
@@ -49,4 +47,4 @@ void init_reg_param(struct reg_param *param,
 		char *reg_name, uint32_t size, enum param_direction dir);
 void destroy_reg_param(struct reg_param *param);
 
-#endif /* ALGORITHM_H */
+#endif /* OPENOCD_TARGET_ALGORITHM_H */

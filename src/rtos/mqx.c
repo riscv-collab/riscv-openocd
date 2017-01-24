@@ -13,8 +13,7 @@
  *   GNU General Public License for more details.                          *
  *                                                                         *
  *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.                                        *
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -109,7 +108,7 @@ static int mqx_valid_address_check(
 	enum mqx_arch arch_type = ((struct mqx_params *)rtos->rtos_specific_params)->target_arch;
 	const char * targetname = ((struct mqx_params *)rtos->rtos_specific_params)->target_name;
 
-	/* Cortex M address range */
+	/* Cortex-M address range */
 	if (arch_type == mqx_arch_cortexm) {
 		if (
 			/* code and sram area */
@@ -354,7 +353,7 @@ static int mqx_update_threads(
 		uint32_t task_name_addr = 0, task_id = 0, task_errno = 0;
 		uint32_t state_index = 0, state_max = 0;
 		uint32_t extra_info_length = 0;
-		char *state_name = "unknown state";
+		char *state_name = "Unknown";
 
 		/* set current taskpool address */
 		if (ERROR_OK != mqx_get_member(
@@ -424,7 +423,6 @@ static int mqx_update_threads(
 		/* setup thread details struct */
 		rtos->thread_details[i].threadid = task_id;
 		rtos->thread_details[i].exists = true;
-		rtos->thread_details[i].display_str = NULL;
 		/* set thread name */
 		rtos->thread_details[i].thread_name_str = malloc(strlen((void *)task_name) + 1);
 		if (NULL == rtos->thread_details[i].thread_name_str)
@@ -437,13 +435,13 @@ static int mqx_update_threads(
 		 * calculate length as:
 		 * state length + address length + errno length + formatter length
 		 */
-		extra_info_length += strlen((void *)state_name) + 8 + 8 + 8;
+		extra_info_length += strlen((void *)state_name) + 7 + 13 + 8 + 15 + 8;
 		rtos->thread_details[i].extra_info_str = malloc(extra_info_length + 1);
 		if (NULL == rtos->thread_details[i].extra_info_str)
 			return ERROR_FAIL;
-		snprintf(
-			rtos->thread_details[i].extra_info_str, extra_info_length, "%s : 0x%"PRIx32 " : %" PRIu32,
-			state_name, task_addr, task_errno
+		snprintf(rtos->thread_details[i].extra_info_str, extra_info_length,
+			 "State: %s, Address: 0x%" PRIx32 ",  Error Code: %" PRIu32,
+			 state_name, task_addr, task_errno
 		);
 		/* set active thread */
 		if (active_td_addr == task_addr)
@@ -544,7 +542,7 @@ static int mqx_get_thread_reg_list(
 /* API function, export list of required symbols */
 static int mqx_get_symbol_list_to_lookup(symbol_table_elem_t *symbol_list[])
 {
-	*symbol_list = malloc(sizeof(symbol_table_elem_t) * ARRAY_SIZE(mqx_symbol_list));
+	*symbol_list = calloc(ARRAY_SIZE(mqx_symbol_list), sizeof(symbol_table_elem_t));
 	if (NULL == *symbol_list)
 		return ERROR_FAIL;
 	/* export required symbols */
