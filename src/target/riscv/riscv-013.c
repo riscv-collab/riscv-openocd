@@ -493,6 +493,14 @@ static void dmi_write(struct target *target, uint16_t address, uint64_t value)
 	}
 }
 
+/** Selects the core id that cooresponds to the given hart */
+static void select_hart(struct target *target)
+{
+	uint64_t dmcontrol = dmi_read(target, DMI_DMCONTROL);
+	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL, target->coreid);
+	dmi_write(target, DMI_DMCONTROL, dmcontrol);
+}
+
 /** Convert register number (internal OpenOCD number) to the number expected by
  * the abstract command interface. */
 static unsigned reg_number_to_no(unsigned reg_num)
@@ -941,8 +949,13 @@ static int execute_resume(struct target *target, bool step)
 	}
 	program_delete(program);
 
-	dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_DMACTIVE |
-			DMI_DMCONTROL_RESUMEREQ);
+	dmi_write(
+		target,
+		DMI_DMCONTROL,
+		DMI_DMCONTROL_DMACTIVE
+		| DMI_DMCONTROL_RESUMEREQ
+		| (target->coreid << DMI_DMCONTROL_HARTSEL_OFFSET)
+	);
 
 	target->state = TARGET_RUNNING;
 	register_cache_invalidate(target->reg_cache);
@@ -1093,8 +1106,13 @@ static int halt(struct target *target)
 	LOG_DEBUG("riscv_halt()");
 	select_dmi(target);
 
-	dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_HALTREQ |
-			DMI_DMCONTROL_DMACTIVE);
+	dmi_write(
+		target,
+		DMI_DMCONTROL,
+		DMI_DMCONTROL_HALTREQ
+		| DMI_DMCONTROL_DMACTIVE
+		| (target->coreid << DMI_DMCONTROL_HARTSEL_OFFSET)
+	);
 
 	return ERROR_OK;
 }
@@ -1490,8 +1508,9 @@ static int examine(struct target *target)
 	}
 
 	// Reset the Debug Module.
-	dmi_write(target, DMI_DMCONTROL, 0);
-	dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_DMACTIVE);
+	//This means the DM isn't reset, but reseting the DM nukes other harts.
+	//dmi_write(target, DMI_DMCONTROL, 0);
+	dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_DMACTIVE | (target->coreid << DMI_DMCONTROL_HARTSEL_OFFSET));
 	dmcontrol = dmi_read(target, DMI_DMCONTROL);
 
 	LOG_DEBUG("dmcontrol: 0x%08x", dmcontrol);
@@ -1561,7 +1580,7 @@ static int examine(struct target *target)
 		should_attempt_resume = true;
 		LOG_DEBUG("Hart currently running. Requesting halt.\n");
 		dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_HALTREQ |
-				DMI_DMCONTROL_DMACTIVE);
+				DMI_DMCONTROL_DMACTIVE | (target->coreid << DMI_DMCONTROL_HARTSEL_OFFSET));
 		for (unsigned i = 0; i < 256; i++) {
 			dmcontrol = dmi_read(target, DMI_DMCONTROL);
 			dmstatus = dmi_read(target, DMI_DMSTATUS);
@@ -1602,7 +1621,7 @@ static int examine(struct target *target)
 		LOG_DEBUG("Resuming hart.\n");
 		// Resume if the hart had been running.
 		dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_DMACTIVE |
-				DMI_DMCONTROL_RESUMEREQ);
+				DMI_DMCONTROL_RESUMEREQ | (target->coreid << DMI_DMCONTROL_HARTSEL_OFFSET));
 		for (unsigned i = 0; i < 256; i++) {
 			dmcontrol = dmi_read(target, DMI_DMCONTROL);
 			dmstatus = dmi_read(target, DMI_DMSTATUS);
@@ -1631,6 +1650,7 @@ static int examine(struct target *target)
 static riscv_error_t handle_halt_routine(struct target *target)
 {
 	riscv013_info_t *info = get_info(target);
+	select_hart(target);
 
 	// Read all GPRs as fast as we can, because gdb is going to ask for them
 	// anyway. Reading them one at a time is much slower.
@@ -1749,6 +1769,12 @@ static int handle_halt(struct target *target, bool announce)
 static int poll_target(struct target *target, bool announce)
 {
 	select_dmi(target);
+	select_hart(target);
+
+	if (target->smp && target->gdb_service && target->gdb_service->core[1] == target->coreid) {
+		target->gdb_service->target = target;
+		target->gdb_service->core[0] = target->coreid;
+	}
 
 	// Inhibit debug logging during poll(), which isn't usually interesting and
 	// just fills up the screen/logs with clutter.
@@ -1795,6 +1821,7 @@ static int riscv013_resume(struct target *target, int current, uint32_t address,
 	riscv013_info_t *info = get_info(target);
 
 	select_dmi(target);
+	select_hart(target);
 
 	if (!current) {
 		if (xlen(target) > 32) {
@@ -1829,6 +1856,7 @@ static int read_memory(struct target *target, uint32_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	select_dmi(target);
+	select_hart(target);
 
         while (1) {
           abstract_write_register(target, S0, xlen(target), address);
@@ -1930,6 +1958,7 @@ static int write_memory(struct target *target, uint32_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	select_dmi(target);
+	select_hart(target);
 
 	while (1) {
 		abstract_write_register(target, S0, xlen(target), address);
