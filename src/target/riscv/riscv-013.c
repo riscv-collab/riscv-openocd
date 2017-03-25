@@ -1926,7 +1926,7 @@ static int read_memory(struct target *target, uint32_t address,
             dmi_write(target, DMI_ABSTRACTCS, 0);
             increase_ac_busy_delay(target);
           } else if (cmderr) {
-            LOG_ERROR("cmderr=%d", get_field(abstractcs, DMI_ABSTRACTCS_CMDERR));
+            LOG_ERROR("read_memory(): cmderr=%d", get_field(abstractcs, DMI_ABSTRACTCS_CMDERR));
             return ERROR_FAIL;
           } else {
             return ERROR_OK;
@@ -2033,7 +2033,7 @@ static int write_memory(struct target *target, uint32_t address,
 			dmi_write(target, DMI_ABSTRACTCS, 0);
 			increase_ac_busy_delay(target);
 		} else if (cmderr) {
-			LOG_ERROR("cmderr=%d", get_field(abstractcs, DMI_ABSTRACTCS_CMDERR));
+			LOG_ERROR("write_memory: cmderr=%d", get_field(abstractcs, DMI_ABSTRACTCS_CMDERR));
 			return ERROR_FAIL;
 		} else if (!dmi_error) {
 			break;
