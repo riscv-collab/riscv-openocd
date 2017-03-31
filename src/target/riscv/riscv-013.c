@@ -571,7 +571,7 @@ static int execute_abstract_command(struct target *target, uint32_t command)
 				command, errors[get_field(abstractcs, DMI_ABSTRACTCS_CMDERR)],
 				abstractcs);
 		// Clear the error.
-		dmi_write(target, DMI_ABSTRACTCS, 0);
+		dmi_write(target, DMI_ABSTRACTCS, DMI_ABSTRACTCS_CMDERR);
 		return ERROR_FAIL;
 	}
 
@@ -1886,7 +1886,6 @@ static int read_memory(struct target *target, uint32_t address,
                                        abstract_register_size(xlen(target)) | reg_number_to_no(S1)) != ERROR_OK) {
             return ERROR_FAIL;
           }
-          dmi_write(target, DMI_ABSTRACTCS, DMI_ABSTRACTCS_CMDERR);
 
           uint32_t abstractcs;
           for (uint32_t i = 0; i < count; i++) {
@@ -1919,11 +1918,11 @@ static int read_memory(struct target *target, uint32_t address,
             }
           }
           dmi_write(target, DMI_ABSTRACTAUTO, 0);
-          dmi_write(target, DMI_ABSTRACTCS, DMI_ABSTRACTCS_CMDERR);
-          abstractcs = dmi_read(target, DMI_ABSTRACTCS);
+	  abstractcs = dmi_read(target, DMI_ABSTRACTCS);
           unsigned cmderr = get_field(abstractcs, DMI_ABSTRACTCS_CMDERR);
           if (cmderr == CMDERR_BUSY) {
-            dmi_write(target, DMI_ABSTRACTCS, 0);
+	    // Clear the error and wait longer.
+            dmi_write(target, DMI_ABSTRACTCS, DMI_ABSTRACTCS_CMDERR);
             increase_ac_busy_delay(target);
           } else if (cmderr) {
             LOG_ERROR("read_memory(): cmderr=%d", get_field(abstractcs, DMI_ABSTRACTCS_CMDERR));
@@ -2009,9 +2008,6 @@ static int write_memory(struct target *target, uint32_t address,
 						AC_ACCESS_REGISTER_WRITE | AC_ACCESS_REGISTER_POSTEXEC
 						| abstract_register_size(xlen(target)) |
 						reg_number_to_no(S1), true);
-				scans_add_dmi_write(scans, DMI_ABSTRACTCS,
-						DMI_ABSTRACTCS_CMDERR,
-						false);
 				scans_add_dmi_write(scans, DMI_ABSTRACTAUTO,
 						0x1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET,
 						false);
@@ -2030,7 +2026,7 @@ static int write_memory(struct target *target, uint32_t address,
 		uint32_t abstractcs = dmi_read(target, DMI_ABSTRACTCS);
 		unsigned cmderr = get_field(abstractcs, DMI_ABSTRACTCS_CMDERR);
 		if (cmderr == CMDERR_BUSY) {
-			dmi_write(target, DMI_ABSTRACTCS, 0);
+			dmi_write(target, DMI_ABSTRACTCS, DMI_ABSTRACTCS_CMDERR);
 			increase_ac_busy_delay(target);
 		} else if (cmderr) {
 			LOG_ERROR("write_memory: cmderr=%d", get_field(abstractcs, DMI_ABSTRACTCS_CMDERR));
