@@ -271,3 +271,9 @@ static uint32_t srli(unsigned int dest, unsigned int src, uint8_t shamt)
 		(dest << 7) |
 		MATCH_SRLI;
 }
+
+static uint32_t fence(void) __attribute__((unused));
+static uint32_t fence(void)
+{
+	return MATCH_FENCE;
+}

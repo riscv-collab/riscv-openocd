@@ -34,6 +34,7 @@ extern struct rtos_type Linux_os;
 extern struct rtos_type ChibiOS_rtos;
 extern struct rtos_type embKernel_rtos;
 extern struct rtos_type mqx_rtos;
+extern struct rtos_type riscv_rtos;
 
 static struct rtos_type *rtos_types[] = {
 	&ThreadX_rtos,
@@ -43,6 +44,7 @@ static struct rtos_type *rtos_types[] = {
 	&ChibiOS_rtos,
 	&embKernel_rtos,
 	&mqx_rtos,
+	&riscv_rtos,
 	NULL
 };
 
@@ -418,7 +420,7 @@ int rtos_get_gdb_reg_list(struct connection *connection)
 			(target->smp))) {	/* in smp several current thread are possible */
 		char *hex_reg_list;
 
-		LOG_DEBUG("RTOS: getting register list for thread 0x%" PRIx64
+		LOG_INFO("RTOS: getting register list for thread 0x%" PRIx64
 				  ", target->rtos->current_thread=0x%" PRIx64 "\r\n",
 										current_threadid,
 										target->rtos->current_thread);
