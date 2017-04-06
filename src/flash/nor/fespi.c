@@ -42,6 +42,7 @@
 #include <jtag/jtag.h>
 #include <helper/time_support.h>
 #include <target/algorithm.h>
+#include "target/riscv/riscv.h"
 
 /* Register offsets */
 
@@ -767,12 +768,13 @@ static int steps_execute(struct algorithm_steps *as,
 	struct fespi_flash_bank *fespi_info = bank->driver_priv;
 	uint32_t ctrl_base = fespi_info->ctrl_base;
 	uint8_t *data_buf = malloc(data_wa->size);
+	int xlen = riscv_xlen(target);
 
 	struct reg_param reg_params[2];
-	init_reg_param(&reg_params[0], "x10", 32, PARAM_OUT);
-	init_reg_param(&reg_params[1], "x11", 32, PARAM_OUT);
-	buf_set_u32(reg_params[0].value, 0, 32, ctrl_base);
-	buf_set_u32(reg_params[1].value, 0, 32, data_wa->address);
+	init_reg_param(&reg_params[0], "x10", xlen, PARAM_OUT);
+	init_reg_param(&reg_params[1], "x11", xlen, PARAM_OUT);
+	buf_set_u64(reg_params[0].value, 0, xlen, ctrl_base);
+	buf_set_u64(reg_params[1].value, 0, xlen, data_wa->address);
 	while (!as_empty(as)) {
 		keep_alive();
 		unsigned bytes = as_compile(as, data_buf, data_wa->size);
