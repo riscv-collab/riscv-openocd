@@ -33,6 +33,9 @@ typedef struct {
 	struct command_context *cmd_ctx;
 	void *version_specific;
 
+	/* The number of harts on this system. */
+	int hart_count;
+
 	/* When the RTOS is enabled this target is expected to handle all the
 	 * harts in the system.  When it's disabled this just uses the regular
 	 * multi-target mode.  */

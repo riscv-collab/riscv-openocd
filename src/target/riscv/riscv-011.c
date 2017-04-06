@@ -1810,6 +1810,9 @@ static int examine(struct target *target)
 		return ERROR_FAIL;
 	}
 
+	RISCV_INFO(r);
+	r->hart_count = 1;
+
 	riscv011_info_t *info = get_info(target);
 	info->addrbits = get_field(dtmcontrol, DTMCONTROL_ADDRBITS);
 	info->dtmcontrol_idle = get_field(dtmcontrol, DTMCONTROL_IDLE);

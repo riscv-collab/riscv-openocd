@@ -1220,6 +1220,20 @@ static int examine(struct target *target)
 	info->datacount = get_field(abstractcs, DMI_ABSTRACTCS_DATACOUNT);
 	info->progsize = get_field(abstractcs, DMI_ABSTRACTCS_PROGSIZE);
 
+	/* Before doing anything else we must first enumerate the harts. */
+	RISCV_INFO(r);
+	for (int i = 0; i < RISCV_MAX_HARTS; ++i) {
+		riscv_set_current_hartid(target, i);
+		uint32_t s = dmi_read(target, DMI_DMSTATUS);
+		if (get_field(s, DMI_DMSTATUS_ANYNONEXISTENT))
+			break;
+		r->hart_count = i + 1;
+	}
+
+	/* FIXME: This is broken. */
+	LOG_ERROR("Enumerated %d harts, but there's an off-by-one error in the hardware", r->hart_count);
+	r->hart_count--;
+
 	/* Halt every hart so we can probe them. */
 	riscv_halt_all_harts(target);
 

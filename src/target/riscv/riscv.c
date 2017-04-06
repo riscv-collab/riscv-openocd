@@ -963,7 +963,10 @@ void riscv_set_rtos_hartid(struct target *target, int hartid)
 
 int riscv_count_harts(struct target *target)
 {
-	return 3;
+	if (target == NULL) return 1;
+	RISCV_INFO(r);
+	if (r == NULL) return 1;
+	return r->hart_count;
 }
 
 bool riscv_has_register(struct target *target, int hartid, int regid)
