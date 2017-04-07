@@ -139,8 +139,6 @@ typedef struct {
 	// unique_id of the breakpoint/watchpoint that is using it.
 	int trigger_unique_id[MAX_HWBPS];
 
-	unsigned int trigger_count;
-
 	// Number of run-test/idle cycles the target requests we do after each dbus
 	// access.
 	unsigned int dtmcontrol_idle;
@@ -929,11 +927,12 @@ static void deinit_target(struct target *target)
 static int add_trigger(struct target *target, struct trigger *trigger)
 {
 	riscv013_info_t *info = get_info(target);
+	RISCV_INFO(r);
 
 	maybe_read_tselect(target);
 
 	unsigned int i;
-	for (i = 0; i < info->trigger_count; i++) {
+	for (i = 0; i < riscv_count_triggers(target); i++) {
 		if (info->trigger_unique_id[i] != -1) {
 			continue;
 		}
@@ -994,7 +993,7 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 		info->trigger_unique_id[i] = trigger->unique_id;
 		break;
 	}
-	if (i >= info->trigger_count) {
+	if (i >= riscv_count_triggers(target)) {
 		LOG_ERROR("Couldn't find an available hardware trigger.");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -1009,12 +1008,12 @@ static int remove_trigger(struct target *target, struct trigger *trigger)
 	maybe_read_tselect(target);
 
 	unsigned int i;
-	for (i = 0; i < info->trigger_count; i++) {
+	for (i = 0; i < riscv_count_triggers(target); i++) {
 		if (info->trigger_unique_id[i] == trigger->unique_id) {
 			break;
 		}
 	}
-	if (i >= info->trigger_count) {
+	if (i >= riscv_count_triggers(target)) {
 		LOG_ERROR("Couldn't find the hardware resources used by hardware "
 				"trigger.");
 		return ERROR_FAIL;
@@ -1239,7 +1238,6 @@ static int examine(struct target *target)
 
 	/* Examines every hart, first checking XLEN. */
 	for (int i = 0; i < riscv_count_harts(target); ++i) {
-		RISCV_INFO(r);
 		riscv_set_current_hartid(target, i);
 
 		if (abstract_read_register(target, NULL, S0, 128) == ERROR_OK) {
@@ -1254,8 +1252,19 @@ static int examine(struct target *target)
 		}
 	}
 
-	/* FIXME: Are there 2 triggers? */
-	info->trigger_count = 2;
+	/* Then we check the number of triggers availiable to each hart. */
+	for (int i = 0; i < riscv_count_harts(target); ++i) {
+		for (int t = 0; t < RISCV_MAX_TRIGGERS; ++t) {
+			riscv_set_current_hartid(target, i);
+
+			r->trigger_count[i] = t;
+			register_write_direct(target, GDB_REGNO_TSELECT, t);
+			uint64_t tselect = t+1;
+			register_read_direct(target, &tselect, GDB_REGNO_TSELECT);
+			if (tselect != t)
+				break;
+		}
+	}
 
 	/* Resumes all the harts, so the debugger can later pause them. */
 	riscv_resume_all_harts(target);

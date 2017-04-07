@@ -7,6 +7,7 @@
 /* The register cache is staticly allocated. */
 #define RISCV_MAX_HARTS 32
 #define RISCV_MAX_REGISTERS 5000
+#define RISCV_MAX_TRIGGERS 32
 
 extern struct target_type riscv011_target;
 extern struct target_type riscv013_target;
@@ -63,6 +64,9 @@ typedef struct {
 
 	/* The state of every hart. */
 	enum riscv_hart_state hart_state[RISCV_MAX_HARTS];
+
+	/* The number of triggers per hart. */
+	int trigger_count[RISCV_MAX_HARTS];
 
 	/* Helper functions that target the various RISC-V debug spec
 	 * implementations. */
@@ -176,5 +180,10 @@ riscv_reg_t riscv_get_register(struct target *target, int hid, enum gdb_regno ri
 bool riscv_is_halted(struct target *target);
 bool riscv_was_halted(struct target *target);
 enum riscv_halt_reason riscv_halt_reason(struct target *target, int hartid);
+
+/* Returns the number of triggers availiable to either the current hart or to
+ * the given hart. */
+int riscv_count_triggers(struct target *target);
+int riscv_count_triggers_of_hart(struct target *target, int hartid);
 
 #endif

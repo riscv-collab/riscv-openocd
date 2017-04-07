@@ -1008,3 +1008,15 @@ enum riscv_halt_reason riscv_halt_reason(struct target *target, int hartid)
 	assert(riscv_is_halted(target));
 	return r->halt_reason(target);
 }
+
+int riscv_count_triggers(struct target *target)
+{
+	return riscv_count_triggers_of_hart(target, riscv_current_hartid(target));
+}
+
+int riscv_count_triggers_of_hart(struct target *target, int hartid)
+{
+	RISCV_INFO(r);
+	assert(hartid < riscv_count_harts(target));
+	return r->trigger_count[hartid];
+}
