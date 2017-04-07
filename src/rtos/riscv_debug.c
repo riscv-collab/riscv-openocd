@@ -19,7 +19,7 @@ static int riscv_detect_rtos(struct target *target)
 
 static int riscv_create_rtos(struct target *target)
 {
-	LOG_DEBUG("RISC-V Debug 'RTOS' created: this doesn't meat you're running an RTOS, just that you have multi-hart support on RISC-V");
+	LOG_DEBUG("RISC-V Debug 'RTOS' created: this doesn't mean you're running an RTOS, just that you have multi-hart support on RISC-V");
 
 	struct riscv_rtos *r = calloc(1, sizeof(*r));
 	target->rtos->rtos_specific_params = r;
