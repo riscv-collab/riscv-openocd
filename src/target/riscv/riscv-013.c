@@ -1355,8 +1355,6 @@ static int read_memory(struct target *target, uint32_t address,
 		  return ERROR_FAIL;
 		}
 
-		LOG_INFO("read 0x%08x from 0x%08x", value, t_addr);
-
 		if (check_dmi_error(target)) {
 			LOG_ERROR("DMI error");
 			return ERROR_FAIL;
@@ -1423,8 +1421,6 @@ static int write_memory(struct target *target, uint32_t address,
 		}
 		abstract_write_register(target, S1, riscv_xlen(target), value);
 		program_set_write(program, S1, value);
-
-		LOG_INFO("writing 0x%08x to 0x%08x", value, t_addr);
 
 		write_program(target, program);
 		execute_program(target, program);
@@ -1622,7 +1618,7 @@ static void riscv013_on_step_or_resume(struct target *target, bool step)
 static void riscv013_step_or_resume_current_hart(struct target *target, bool step)
 {
 	RISCV_INFO(r);
-	LOG_DEBUG("resuming hart %d", r->current_hartid);
+	LOG_DEBUG("resuming hart %d (for step?=%d)", r->current_hartid, step);
 	assert(riscv_is_halted(target));
 
 	/* Issue the halt command, and then wait for the current hart to halt. */
@@ -1654,4 +1650,7 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 
 	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_RESUMEREQ, 0);
 	dmi_write(target, DMI_DMCONTROL, dmcontrol);
+
+	/* When stepping we need to go and restore the relevant registers. */
+	if (step) riscv013_on_halt(target);
 }

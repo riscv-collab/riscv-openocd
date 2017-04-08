@@ -726,6 +726,8 @@ int riscv_openocd_step(
         uint32_t address,
         int handle_breakpoints
 ) {
+	RISCV_INFO(r);
+
 	if (!current) {
 		LOG_ERROR("step-at-pc unimplemented");
 		return ERROR_FAIL;
@@ -735,7 +737,11 @@ int riscv_openocd_step(
 	if (out != ERROR_OK)
 		return out;
 
+	/* step_rtos_hart blocks until the hart has actually stepped, but we
+	 * need to cycle through OpenOCD to  */
 	target->state = TARGET_RUNNING;
+	riscv_openocd_poll(target);
+
 	return out;
 }
 
@@ -888,8 +894,6 @@ int riscv_step_rtos_hart(struct target *target)
 	assert(r->hart_state[hartid] == RISCV_HART_HALTED);
 	r->on_step(target);
 	r->step_current_hart(target);
-	/* FIXME: There's a race condition with step. */
-	r->hart_state[hartid] = RISCV_HART_RUNNING;
 	return ERROR_OK;
 }
 
@@ -957,6 +961,7 @@ void riscv_set_all_rtos_harts(struct target *target)
 
 void riscv_set_rtos_hartid(struct target *target, int hartid)
 {
+	LOG_DEBUG("setting RTOS hartid %d", hartid);
 	RISCV_INFO(r);
 	r->rtos_hartid = hartid;
 }

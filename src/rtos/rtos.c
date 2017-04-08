@@ -72,6 +72,7 @@ static int os_alloc(struct target *target, struct rtos_type *ostype)
 
 	/* RTOS drivers can override the packet handler in _create(). */
 	os->gdb_thread_packet = rtos_thread_packet;
+	os->gdb_v_packet = NULL;
 
 	return JIM_OK;
 }

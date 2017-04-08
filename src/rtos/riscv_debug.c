@@ -10,6 +10,7 @@
 
 static int riscv_update_threads(struct rtos *rtos);
 static int riscv_gdb_thread_packet(struct connection *connection, const char *packet, int packet_size);
+static int riscv_gdb_v_packet(struct connection *connection, const char *packet, int packet_size);
 
 static int riscv_detect_rtos(struct target *target)
 {
@@ -34,6 +35,7 @@ static int riscv_create_rtos(struct target *target)
 	riscv_update_threads(target->rtos);
 
 	target->rtos->gdb_thread_packet = riscv_gdb_thread_packet;
+	target->rtos->gdb_v_packet = riscv_gdb_v_packet;
 
 	return JIM_OK;
 }
@@ -67,10 +69,10 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 	struct rtos *rtos = target->rtos;
 	struct riscv_rtos *r = (struct riscv_rtos *)(target->rtos->rtos_specific_params);
 
-		char *packet_stttrr = malloc(packet_size + 1);
-		memset(packet_stttrr, '\0', packet_size + 1);
-		memcpy(packet_stttrr, packet, packet_size);
-		LOG_DEBUG("riscv_gdb_thread_packet(%s)", packet_stttrr);
+	char *packet_stttrr = malloc(packet_size + 1);
+	memset(packet_stttrr, '\0', packet_size + 1);
+	memcpy(packet_stttrr, packet, packet_size);
+	LOG_DEBUG("handling packet '%s'", packet_stttrr);
 
 	switch (packet[0]) {
 	case 'q':
@@ -205,7 +207,6 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 		}
 	}
 
-
 	case 'c':
 	case 's':
 		target->state = TARGET_HALTED;
@@ -225,6 +226,44 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 		gdb_put_packet(connection, NULL, 0);
 		return JIM_OK;
 	}
+}
+
+static int riscv_gdb_v_packet(struct connection *connection, const char *packet, int packet_size)
+{
+	char *packet_stttrr = malloc(packet_size + 1);
+	memset(packet_stttrr, '\0', packet_size + 1);
+	memcpy(packet_stttrr, packet, packet_size);
+	LOG_DEBUG("handling packet '%s'", packet_stttrr);
+
+	struct target *target = get_target_from_connection(connection);
+
+	if (strcmp(packet_stttrr, "vCont?") == 0) {
+		static const char *message = "OK";
+		gdb_put_packet(connection, message, strlen(message));
+		return JIM_OK;
+	}
+
+	int threadid;
+	if (sscanf(packet_stttrr, "vCont;s:%d;c", &threadid) == 1) {
+		riscv_set_rtos_hartid(target, threadid - 1);
+		riscv_step_rtos_hart(target);
+
+		gdb_put_packet(connection, "S02", 3);
+		return JIM_OK;
+	}
+
+	if (strcmp(packet_stttrr, "vCont;c") == 0) {
+		riscv_resume_all_harts(target);
+		target->state = TARGET_RUNNING;
+		target_call_event_callbacks(target, TARGET_EVENT_GDB_START);
+		gdb_set_frontend_state_running(connection);
+		return JIM_OK;
+	}
+
+	if (strncmp(packet_stttrr, "vCont", 5) == 0)
+		LOG_ERROR("Got unknown vCont-type packet");
+
+	return GDB_THREAD_PACKET_NOT_CONSUMED;
 }
 
 static int riscv_get_thread_reg_list(struct rtos *rtos, int64_t thread_id, char **hex_reg_list)
