@@ -1229,9 +1229,7 @@ static int examine(struct target *target)
 		r->hart_count = i + 1;
 	}
 
-	/* FIXME: This is broken. */
-	LOG_ERROR("Enumerated %d harts, but there's an off-by-one error in the hardware", r->hart_count);
-	r->hart_count--;
+	LOG_DEBUG("Enumerated %d harts", r->hart_count);
 
 	/* Halt every hart so we can probe them. */
 	riscv_halt_all_harts(target);
