@@ -1194,6 +1194,11 @@ static int examine(struct target *target)
 	/* Resumes all the harts, so the debugger can later pause them. */
 	riscv_resume_all_harts(target);
 	target_set_examined(target);
+        
+        // This print is used by some regression suites to know when
+        // they can connect with gdb/telnet.
+        // We will need to update those suites if we want to remove this line.
+        LOG_INFO("Examined RISC-V core");
 	return ERROR_OK;
 }
 
