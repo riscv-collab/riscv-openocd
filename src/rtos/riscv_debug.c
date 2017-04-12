@@ -213,14 +213,9 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 		return JIM_OK;
 
 	case 'R':
-	{
-		char *packet_str = malloc(packet_size + 1);
-		memset(packet_str, '\0', packet_size + 1);
-		memcpy(packet_str, packet, packet_size);
-		LOG_WARNING("riscv_gdb_thread_packet(%s): unimplemented", packet_str);
-		gdb_put_packet(connection, NULL, 0);
+		gdb_put_packet(connection, "E00", 3);
 		return JIM_OK;
-	}
+
 	default:
 		LOG_ERROR("Unknown packet of type 0x%2.2x", packet[0]);
 		gdb_put_packet(connection, NULL, 0);
@@ -285,10 +280,10 @@ static int riscv_get_thread_reg_list(struct rtos *rtos, int64_t thread_id, char 
 	*hex_reg_list[0] = '\0';
 	for (size_t i = 0; i < n_regs; ++i) {
 		if (riscv_has_register(rtos->target, thread_id, i)) {
-			uint64_t reg_value = riscv_get_register(rtos->target, thread_id - 1, i);
+			uint64_t reg_value = riscv_get_register_on_hart(rtos->target, thread_id - 1, i);
 			for (size_t byte = 0; byte < xlen / 8; ++byte) {
 				uint8_t reg_byte = reg_value >> (byte * 8);
-				char hex[3];
+				char hex[3] = {'x', 'x', 'x'};
 				snprintf(hex, 3, "%02x", reg_byte);
 				strncat(*hex_reg_list, hex, hex_reg_list_length);
 			}
@@ -297,6 +292,7 @@ static int riscv_get_thread_reg_list(struct rtos *rtos, int64_t thread_id, char 
 				strncat(*hex_reg_list, "xx", hex_reg_list_length);
 		}
 	}
+	LOG_DEBUG(*hex_reg_list);
 	return JIM_OK;
 }
 
