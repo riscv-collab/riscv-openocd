@@ -1,6 +1,9 @@
 #ifndef RISCV_H
 #define RISCV_H
 
+struct riscv_program;
+
+#include <stdint.h>
 #include "opcodes.h"
 #include "gdb_regs.h"
 
@@ -16,6 +19,8 @@ extern struct target_type riscv013_target;
  * Definitions shared by code supporting all RISC-V versions.
  */
 typedef uint64_t riscv_reg_t;
+typedef uint32_t riscv_insn_t;
+typedef  int64_t riscv_addr_t;
 
 enum riscv_hart_state {
 	RISCV_HART_UNKNOWN,
@@ -68,6 +73,12 @@ typedef struct {
 	/* The number of triggers per hart. */
 	int trigger_count[RISCV_MAX_HARTS];
 
+	/* The address of the debug RAM buffer. */
+	riscv_addr_t debug_buffer_addr[RISCV_MAX_HARTS];
+
+	/* The number of entries in the debug buffer. */
+	int debug_buffer_size[RISCV_MAX_HARTS];
+
 	/* Helper functions that target the various RISC-V debug spec
 	 * implementations. */
 	riscv_reg_t (*get_register)(struct target *, int, int);
@@ -81,6 +92,11 @@ typedef struct {
 	void (*on_resume)(struct target *target);
 	void (*on_step)(struct target *target);
 	enum riscv_halt_reason (*halt_reason)(struct target *target);
+	void (*debug_buffer_enter)(struct target *target, struct riscv_program *program);
+	void (*debug_buffer_leave)(struct target *target, struct riscv_program *program);
+	void (*write_debug_buffer)(struct target *target, int i, riscv_insn_t d);
+	riscv_insn_t (*read_debug_buffer)(struct target *target, int i);
+	void (*execute_debug_buffer)(struct target *target);
 } riscv_info_t;
 
 /* Everything needs the RISC-V specific info structure, so here's a nice macro
@@ -121,12 +137,6 @@ int riscv_openocd_step(
 
 /* Initializes the shared RISC-V structure. */
 void riscv_info_init(riscv_info_t *r);
-
-/* Functions that save and restore registers.  */
-void riscv_save_register(struct target *target, int regno);
-uint64_t riscv_peek_register(struct target *target, int regno);
-void riscv_overwrite_register(struct target *target, int regno, uint64_t newval);
-void riscv_restore_register(struct target *target, int regno);
 
 /* Run control, possibly for multiple harts.  The _all_harts versions resume
  * all the enabled harts, which when running in RTOS mode is all the harts on
@@ -172,8 +182,10 @@ bool riscv_has_register(struct target *target, int hartid, int regid);
 
 /* Returns the value of the given register on the given hart.  32-bit registers
  * are zero extended to 64 bits.  */
-void riscv_set_register(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
-riscv_reg_t riscv_get_register(struct target *target, int hid, enum gdb_regno rid);
+void riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
+void riscv_set_register_on_hart(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
+riscv_reg_t riscv_get_register(struct target *target, enum gdb_regno i);
+riscv_reg_t riscv_get_register_on_hart(struct target *target, int hid, enum gdb_regno rid);
 
 /* Checks the state of the current hart -- "is_halted" checks the actual
  * on-device register, while "was_halted" checks the machine's state. */
@@ -185,5 +197,17 @@ enum riscv_halt_reason riscv_halt_reason(struct target *target, int hartid);
  * the given hart. */
 int riscv_count_triggers(struct target *target);
 int riscv_count_triggers_of_hart(struct target *target, int hartid);
+
+/* These helper functions let the generic program interface get target-specific
+ * information. */
+size_t riscv_debug_buffer_size(struct target *target);
+riscv_addr_t riscv_debug_buffer_addr(struct target *target);
+
+int riscv_debug_buffer_enter(struct target *target, struct riscv_program *program);
+int riscv_debug_buffer_leave(struct target *target, struct riscv_program *program);
+
+riscv_insn_t riscv_read_debug_buffer(struct target *target, int index);
+int riscv_write_debug_buffer(struct target *target, int index, riscv_insn_t insn);
+int riscv_execute_debug_buffer(struct target *target);
 
 #endif
