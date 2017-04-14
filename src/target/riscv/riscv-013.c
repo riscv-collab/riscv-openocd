@@ -1415,7 +1415,7 @@ static void riscv013_set_register(struct target *target, int hid, int rid, uint6
 	riscv013_info_t *info = get_info(target);
 
 	if (rid <= GDB_REGNO_XPR31) {
-		register_write_direct(target, rid, &value);
+		register_write_direct(target, rid, value);
 	} else if (rid == GDB_REGNO_PC) {
 		LOG_DEBUG("writing PC to DPC: 0x%016lx", value);
 		register_write_direct(target, GDB_REGNO_DPC, value);
@@ -1429,7 +1429,7 @@ static void riscv013_set_register(struct target *target, int hid, int rid, uint6
 		dcsr = set_field(dcsr, CSR_DCSR_PRV, value);
 		register_write_direct(target, CSR_DCSR, &dcsr);
 	} else {
-		register_write_direct(target, rid, &value);
+		register_write_direct(target, rid, value);
 	}
 }
 
