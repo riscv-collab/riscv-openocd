@@ -1597,6 +1597,12 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 	LOG_DEBUG("resuming hart %d (for step?=%d)", r->current_hartid, step);
 	assert(riscv_is_halted(target));
 
+	struct riscv_program program;
+	riscv_program_init(&program, target);
+	riscv_program_fence_i(&program);
+	if (riscv_program_exec(&program, target) != ERROR_OK)
+		abort();
+
 	/* Issue the halt command, and then wait for the current hart to halt. */
 	uint32_t dmcontrol = dmi_read(target, DMI_DMCONTROL);
 	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_RESUMEREQ, 1);
