@@ -1517,14 +1517,14 @@ void riscv013_debug_buffer_leave(struct target *target, struct riscv_program *pr
 
 void riscv013_write_debug_buffer(struct target *target, int index, riscv_insn_t data)
 {
-	if (index > riscv013_progbuf_size(target))
+	if (index >= riscv013_progbuf_size(target))
 		return dmi_write(target, DMI_DATA0 + index - riscv013_progbuf_size(target), data);
 	return dmi_write(target, DMI_PROGBUF0 + index, data);
 }
 
 riscv_insn_t riscv013_read_debug_buffer(struct target *target, int index)
 {
-	if (index > riscv013_progbuf_size(target))
+	if (index >= riscv013_progbuf_size(target))
 		return dmi_read(target, DMI_DATA0 + index - riscv013_progbuf_size(target));
 	return dmi_read(target, DMI_PROGBUF0 + index);
 }
