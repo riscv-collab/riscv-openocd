@@ -557,6 +557,8 @@ static int update_mstatus_actual(struct target *target)
 	return register_get(&target->reg_cache->reg_list[GDB_REGNO_MSTATUS]);
 }
 
+static int register_read_direct(struct target *target, uint64_t *value, uint32_t number);
+
 static int register_write_direct(struct target *target, unsigned number,
 		uint64_t value)
 {
@@ -595,6 +597,13 @@ static int register_write_direct(struct target *target, unsigned number,
 		return exec_out;
 	}
 
+	if (number >= GDB_REGNO_XPR0 && number <= GDB_REGNO_XPR31) {
+		uint64_t written_value;
+		register_read_direct(target, &written_value, number);
+		LOG_DEBUG("attempted to write 0x%016lx, actually wrote 0x%016lx", value, written_value);
+		assert(value == written_value);
+	}
+
 	return ERROR_OK;
 }
 
@@ -603,7 +612,7 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 {
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	riscv_addr_t output = riscv_program_alloc_d(&program);
+	riscv_addr_t output = riscv_program_alloc_x(&program);
 
 	if (number >= GDB_REGNO_XPR0 && number <= GDB_REGNO_XPR31) {
 		riscv_program_sx(&program, number, output);
@@ -626,6 +635,8 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 	}
 
 	*value = riscv_program_read_ram(&program, output);
+	if (riscv_xlen(target) == 64)
+		*value = *value | ((uint64_t)(riscv_program_read_ram(&program, output + 4)) << 32);
 	LOG_DEBUG("register 0x%x = 0x%" PRIx64, number, *value);
 	return ERROR_OK;
 }
@@ -664,54 +675,15 @@ static int register_get(struct reg *reg)
 {
 	struct target *target = (struct target *) reg->arch_info;
 	riscv013_info_t *info = get_info(target);
-
-	maybe_write_tselect(target);
-
-	if (reg->number <= GDB_REGNO_XPR31) {
-		register_read_direct(target, reg->value, reg->number);
-		return ERROR_OK;
-	} else if (reg->number == GDB_REGNO_PC) {
-		buf_set_u32(reg->value, 0, 32, riscv_get_register(target, GDB_REGNO_DPC));
-		reg->valid = true;
-		return ERROR_OK;
-	} else if (reg->number == GDB_REGNO_PRIV) {
-		uint64_t dcsr = riscv_get_register(target, CSR_DCSR);
-		buf_set_u64(reg->value, 0, 8, get_field(dcsr, CSR_DCSR_PRV));
-		riscv_set_register(target, CSR_DCSR, dcsr);
-		return ERROR_OK;
-	} else {
-		uint64_t value;
-		int result = register_read_direct(target, &value, reg->number);
-		if (result != ERROR_OK) {
-			return result;
-		}
-		LOG_DEBUG("%s=0x%" PRIx64, reg->name, value);
-		buf_set_u64(reg->value, 0, riscv_xlen(target), value);
-
-		if (reg->number == GDB_REGNO_MSTATUS) {
-			info->mstatus_actual = value;
-			reg->valid = true;
-		}
-	}
-
+	uint64_t value = riscv_get_register(target, reg->number);
+	buf_set_u64(reg->value, 0, 64, value);
 	return ERROR_OK;
 }
 
 static int register_write(struct target *target, unsigned int number,
 		uint64_t value)
 {
-	maybe_write_tselect(target);
-
-	if (number == GDB_REGNO_PC) {
-		riscv_set_register(target, GDB_REGNO_DPC, value);
-	} else if (number == GDB_REGNO_PRIV) {
-		uint64_t dcsr = riscv_get_register(target, CSR_DCSR);
-		dcsr = set_field(dcsr, CSR_DCSR_PRV, value);
-		riscv_set_register(target, GDB_REGNO_DCSR, dcsr);
-	} else {
-		return register_write_direct(target, number, value);
-	}
-
+	riscv_set_register(target, number, value);
 	return ERROR_OK;
 }
 
@@ -1403,18 +1375,62 @@ struct target_type riscv013_target =
 /*** 0.13-specific implementations of various RISC-V hepler functions. ***/
 static riscv_reg_t riscv013_get_register(struct target *target, int hid, int rid)
 {
+	LOG_DEBUG("reading register 0x%08x on hart %d", rid, hid);
+
 	riscv_set_current_hartid(target, hid);
 
 	uint64_t out;
-	register_read_direct(target, &out, rid);
+	riscv013_info_t *info = get_info(target);
+
+	if (rid <= GDB_REGNO_XPR31) {
+		register_read_direct(target, &out, rid);
+	} else if (rid == GDB_REGNO_PC) {
+		register_read_direct(target, &out, GDB_REGNO_DPC);
+		LOG_DEBUG("read PC from DPC: 0x%016lx", out);
+	} else if (rid == GDB_REGNO_PRIV) {
+		uint64_t dcsr;
+		register_read_direct(target, &dcsr, CSR_DCSR);
+		buf_set_u64(&out, 0, 8, get_field(dcsr, CSR_DCSR_PRV));
+	} else {
+		int result = register_read_direct(target, &out, rid);
+		if (result != ERROR_OK) {
+			LOG_ERROR("Whoops");
+			abort();
+		}
+
+		if (rid == GDB_REGNO_MSTATUS)
+			info->mstatus_actual = out;
+	}
+
 	return out;
 }
 
 static void riscv013_set_register(struct target *target, int hid, int rid, uint64_t value)
 {
+	LOG_DEBUG("writing register 0x%08x on hart %d", rid, hid);
+
 	riscv_set_current_hartid(target, hid);
 
-	register_write_direct(target, rid, value);
+	uint64_t out;
+	riscv013_info_t *info = get_info(target);
+
+	if (rid <= GDB_REGNO_XPR31) {
+		register_write_direct(target, rid, &value);
+	} else if (rid == GDB_REGNO_PC) {
+		LOG_DEBUG("writing PC to DPC: 0x%016lx", value);
+		register_write_direct(target, GDB_REGNO_DPC, value);
+		uint64_t actual_value;
+		register_read_direct(target, &actual_value, GDB_REGNO_DPC);
+		LOG_DEBUG("  actual DPC written: 0x%016lx", actual_value);
+		assert(value == actual_value);
+	} else if (rid == GDB_REGNO_PRIV) {
+		uint64_t dcsr;
+		register_read_direct(target, &dcsr, CSR_DCSR);
+		dcsr = set_field(dcsr, CSR_DCSR_PRV, value);
+		register_write_direct(target, CSR_DCSR, &dcsr);
+	} else {
+		register_write_direct(target, rid, &value);
+	}
 }
 
 static void riscv013_select_current_hart(struct target *target)
@@ -1605,6 +1621,10 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 	LOG_ERROR("unable to resume hart %d", r->current_hartid);
 	LOG_ERROR("  dmcontrol=0x%08x", dmcontrol);
 	LOG_ERROR("  dmstatus =0x%08x", dmstatus);
+
+	if (step)
+		halt_current_hart();
+
 	abort();
 }
 
