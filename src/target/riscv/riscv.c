@@ -767,10 +767,7 @@ void riscv_info_init(riscv_info_t *r)
 	r->rtos_enabled = true;
 
 	for (size_t h = 0; h < RISCV_MAX_HARTS; ++h) {
-		/* FIXME: I need to rip out Tim's probing sequence, as it
-		 * disrupts the running code.  For now, I'm just hard-coding
-		 * XLEN to 64 for all cores at reset. */
-		r->xlen[h] = 64;
+		r->xlen[h] = -1;
 		r->hart_state[h] = RISCV_HART_UNKNOWN;
 		r->debug_buffer_addr[h] = -1;
 
@@ -904,11 +901,16 @@ bool riscv_rtos_enabled(const struct target *target)
 void riscv_set_current_hartid(struct target *target, int hartid)
 {
 	RISCV_INFO(r);
-	register_cache_invalidate(target->reg_cache);
 	r->current_hartid = hartid;
 	r->select_current_hart(target);
 
+	/* This might get called during init, in which case we shouldn't be
+	 * setting up the register cache. */
+	if (!target_was_examined(target))
+		return;
+
 	/* Update the register list's widths. */
+	register_cache_invalidate(target->reg_cache);
 	for (size_t i = 0; i < GDB_REGNO_COUNT; ++i) {
 		struct reg *reg = &target->reg_cache->reg_list[i];
 
