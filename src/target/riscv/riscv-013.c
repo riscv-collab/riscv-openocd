@@ -569,6 +569,10 @@ static int register_write_direct(struct target *target, unsigned number,
 		riscv_program_write_ram(&program, input + 4, value >> 32);
 	case 32:
 		riscv_program_write_ram(&program, input, value);
+		break;
+	default:
+		LOG_ERROR("Unknown XLEN: %d\n", riscv_xlen(target));
+		abort();
 	}
 
 	if (number >= GDB_REGNO_XPR0 && number <= GDB_REGNO_XPR31) {
@@ -1132,6 +1136,9 @@ static int examine(struct target *target)
 		 * program buffer. */
 		r->debug_buffer_size[i] = riscv013_progbuf_size(target);
 
+		/* Guess this is a 32-bit system, we're probing it. */
+		r->xlen[i] = 32;
+
 		/* First find the low 32 bits of the program buffer.  This is
 		 * used to check for alignment. */
 		struct riscv_program program32;
@@ -1149,7 +1156,6 @@ static int examine(struct target *target)
 			r->xlen[i] = -1;
 			continue;
 		}
-		r->xlen[i] = 32;
 		r->debug_buffer_addr[i] = progbuf_addr;
 
 		/* Check to see if the core can execute 64 bit instructions.

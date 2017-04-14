@@ -3,7 +3,7 @@
 
 #include "riscv.h"
 
-#define RISCV_MAX_DEBUG_BUFFER_SIZE 16
+#define RISCV_MAX_DEBUG_BUFFER_SIZE 32
 #define RISCV_REGISTER_COUNT 32
 #define RISCV_DSCRATCH_COUNT 2
 
