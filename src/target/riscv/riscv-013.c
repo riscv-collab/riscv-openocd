@@ -1622,8 +1622,10 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 	LOG_ERROR("  dmcontrol=0x%08x", dmcontrol);
 	LOG_ERROR("  dmstatus =0x%08x", dmstatus);
 
+#if 0
 	if (step)
 		halt_current_hart();
+#endif
 
 	abort();
 }
