@@ -1584,6 +1584,10 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 		uint32_t dmstatus = dmi_read(target, DMI_DMSTATUS);
 		if (get_field(dmstatus, DMI_DMSTATUS_ALLRESUMEACK) == 0)
 			continue;
+		if (step && get_field(dmstatus, DMI_DMSTATUS_ALLHALTED) == 0)
+			continue;
+		if (!step && get_field(dmstatus, DMI_DMSTATUS_ALLRUNNING) == 0)
+			continue;
 
 		dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_RESUMEREQ, 0);
 		dmi_write(target, DMI_DMCONTROL, dmcontrol);
