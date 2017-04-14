@@ -1233,13 +1233,13 @@ static int read_memory(struct target *target, uint32_t address,
 		switch (size) {
 		case 1:
 			riscv_program_lb(&program, temp, t_addr);
-			outaddr = riscv_program_alloc_b(&program);
-			riscv_program_sb(&program, temp, outaddr);
+			outaddr = riscv_program_alloc_w(&program);
+			riscv_program_sw(&program, temp, outaddr);
 			break;
 		case 2:
 			riscv_program_lh(&program, temp, t_addr);
-			outaddr = riscv_program_alloc_h(&program);
-			riscv_program_sh(&program, temp, outaddr);
+			outaddr = riscv_program_alloc_w(&program);
+			riscv_program_sw(&program, temp, outaddr);
 			break;
 		case 4:
 			riscv_program_lw(&program, temp, t_addr);
