@@ -634,9 +634,14 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 		return exec_out;
 	}
 
-	*value = riscv_program_read_ram(&program, output);
-	if (riscv_xlen(target) == 64)
-		*value = *value | ((uint64_t)(riscv_program_read_ram(&program, output + 4)) << 32);
+	*value = 0;
+	switch (riscv_xlen(target)) {
+	case 64:
+		*value |= ((uint64_t)(riscv_program_read_ram(&program, output + 4))) << 32;
+	case 32:
+		*value |= riscv_program_read_ram(&program, output);
+	}
+
 	LOG_DEBUG("register 0x%x = 0x%" PRIx64, number, *value);
 	return ERROR_OK;
 }
