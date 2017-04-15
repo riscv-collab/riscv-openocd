@@ -22,12 +22,6 @@ typedef uint64_t riscv_reg_t;
 typedef uint32_t riscv_insn_t;
 typedef  int64_t riscv_addr_t;
 
-enum riscv_hart_state {
-	RISCV_HART_UNKNOWN,
-	RISCV_HART_HALTED,
-	RISCV_HART_RUNNING,
-};
-
 enum riscv_halt_reason {
 	RISCV_HALT_INTERRUPT,
 	RISCV_HALT_BREAKPOINT,
@@ -66,9 +60,6 @@ typedef struct {
 	
 	/* It's possible that each core has a different supported ISA set. */
 	int xlen[RISCV_MAX_HARTS];
-
-	/* The state of every hart. */
-	enum riscv_hart_state hart_state[RISCV_MAX_HARTS];
 
 	/* The number of triggers per hart. */
 	int trigger_count[RISCV_MAX_HARTS];
@@ -188,9 +179,8 @@ riscv_reg_t riscv_get_register(struct target *target, enum gdb_regno i);
 riscv_reg_t riscv_get_register_on_hart(struct target *target, int hid, enum gdb_regno rid);
 
 /* Checks the state of the current hart -- "is_halted" checks the actual
- * on-device register, while "was_halted" checks the machine's state. */
+ * on-device register. */
 bool riscv_is_halted(struct target *target);
-bool riscv_was_halted(struct target *target);
 enum riscv_halt_reason riscv_halt_reason(struct target *target, int hartid);
 
 /* Returns the number of triggers availiable to either the current hart or to

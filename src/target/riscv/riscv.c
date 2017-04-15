@@ -616,29 +616,19 @@ struct target_type riscv_target =
 static int riscv_poll_hart(struct target *target, int hartid)
 {
 	RISCV_INFO(r);
-	LOG_DEBUG("polling hart %d", hartid);
-
-	/* Polling can only detect one state change: a hart that was previously
-	 * running but has gone to sleep.  A state change in the other
-	 * direction is invalid and indicates that one of the previous calls
-	 * didn't correctly block. */
 	riscv_set_current_hartid(target, hartid);
-	if (riscv_was_halted(target) && !riscv_is_halted(target)) {
-		LOG_ERROR("unexpected wakeup on hart %d", hartid);
-		abort();
+
+	LOG_INFO("polling hart %d, target->state=%d (TARGET_HALTED=%d)", hartid, target->state, TARGET_HALTED);
+
+	/* If OpenOCD this we're running but this hart is halted then it's time
+	 * to raise an event. */
+	if (target->state != TARGET_HALTED && riscv_is_halted(target)) {
+		LOG_INFO("  triggered a halt");
+		r->on_halt(target);
+		return 1;
 	}
 
-	/* If there's no new event then there's nothing to do. */
-	if (riscv_was_halted(target) || !riscv_is_halted(target))
-		return 0;
-
-	/* If we got here then this must be the first poll during which this
-	 * hart halted.  We need to synchronize the hart's state with the
-	 * debugger, and inform the outer polling loop that there's something
-	 * to do. */
-	r->hart_state[hartid] = RISCV_HART_HALTED;
-	r->on_halt(target);
-	return 1;
+	return 0;
 }
 
 /*** OpenOCD Interface ***/
@@ -661,7 +651,7 @@ int riscv_openocd_poll(struct target *target)
 			}
 		}
 		if (triggered_hart == -1) {
-			LOG_DEBUG("  no harts halted");
+			LOG_DEBUG("  no harts just halted, target->state=%d", target->state);
 			return ERROR_OK;
 		}
 		LOG_DEBUG("  hart %d halted", triggered_hart);
@@ -691,6 +681,7 @@ int riscv_openocd_poll(struct target *target)
 		target->rtos->current_threadid = triggered_hart + 1;
 		target->rtos->current_thread = triggered_hart + 1;
 
+		target->state = TARGET_HALTED;
 		target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 		return ERROR_OK;
 	} else {
@@ -700,13 +691,16 @@ int riscv_openocd_poll(struct target *target)
 
 int riscv_openocd_halt(struct target *target)
 {
-	int out = riscv_halt_all_harts(target);
-	if (out != ERROR_OK)
-		return out;
+	LOG_DEBUG("halting all harts");
 
-	/* Don't change the target state right here, it'll get updated by the
-	 * poll. */
-	riscv_openocd_poll(target);
+	int out = riscv_halt_all_harts(target);
+	if (out != ERROR_OK) {
+		LOG_ERROR("Unable to halt all harts");
+		return out;
+	}
+
+	target->state = TARGET_HALTED;
+	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 	return out;
 }
 
@@ -717,17 +711,21 @@ int riscv_openocd_resume(
         int handle_breakpoints,
         int debug_execution
 ) {
+	LOG_DEBUG("resuming all harts");
+
 	if (!current) {
 		LOG_ERROR("resume-at-pc unimplemented");
 		return ERROR_FAIL;
 	}
 
 	int out = riscv_resume_all_harts(target);
-	if (out != ERROR_OK)
+	if (out != ERROR_OK) {
+		LOG_ERROR("unable to resume all harts");
 		return out;
+	}
 
 	target->state = TARGET_RUNNING;
-	riscv_openocd_poll(target);
+	target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
 	return out;
 }
 
@@ -737,6 +735,8 @@ int riscv_openocd_step(
         uint32_t address,
         int handle_breakpoints
 ) {
+	LOG_DEBUG("stepping rtos hart");
+
 	RISCV_INFO(r);
 
 	if (!current) {
@@ -745,13 +745,10 @@ int riscv_openocd_step(
 	}
 
 	int out = riscv_step_rtos_hart(target);
-	if (out != ERROR_OK)
+	if (out != ERROR_OK) {
+		LOG_ERROR("unable to step rtos hart");
 		return out;
-
-	/* step_rtos_hart blocks until the hart has actually stepped, but we
-	 * need to cycle through OpenOCD to actually get this to trigger. */
-	target->state = TARGET_RUNNING;
-	riscv_openocd_poll(target);
+	}
 
 	return out;
 }
@@ -768,7 +765,6 @@ void riscv_info_init(riscv_info_t *r)
 
 	for (size_t h = 0; h < RISCV_MAX_HARTS; ++h) {
 		r->xlen[h] = -1;
-		r->hart_state[h] = RISCV_HART_UNKNOWN;
 		r->debug_buffer_addr[h] = -1;
 
 		for (size_t e = 0; e < RISCV_MAX_REGISTERS; ++e)
@@ -793,23 +789,12 @@ int riscv_halt_one_hart(struct target *target, int hartid)
 	RISCV_INFO(r);
 	LOG_DEBUG("halting hart %d", hartid);
 	riscv_set_current_hartid(target, hartid);
-
-	if (r->hart_state[hartid] == RISCV_HART_UNKNOWN) {
-		r->hart_state[hartid] = riscv_is_halted(target) ? RISCV_HART_HALTED : RISCV_HART_RUNNING;
-		if (riscv_was_halted(target)) {
-			LOG_WARNING("Connected to hart %d, which was halted.  s0, s1, and pc were overwritten by your previous debugger session and cannot be restored.", hartid);
-			r->on_halt(target);
-		}
-	}
-
-	if (riscv_was_halted(target)) {
+	if (riscv_is_halted(target)) {
 		LOG_DEBUG("  hart %d requested halt, but was already halted", hartid);
 		return ERROR_OK;
 	}
 
 	r->halt_current_hart(target);
-	/* Here we don't actually update 'hart_state' because we want poll to
-	 * pick that up.  We can't actually wait until */
 	return ERROR_OK;
 }
 
@@ -830,23 +815,13 @@ int riscv_resume_one_hart(struct target *target, int hartid)
 	RISCV_INFO(r);
 	LOG_DEBUG("resuming hart %d", hartid);
 	riscv_set_current_hartid(target, hartid);
-
-	if (r->hart_state[hartid] == RISCV_HART_UNKNOWN) {
-		r->hart_state[hartid] = riscv_is_halted(target) ? RISCV_HART_HALTED : RISCV_HART_RUNNING;
-		if (!riscv_was_halted(target)) {
-			LOG_ERROR("Asked to resume hart %d, which was in an unknown state", hartid);
-			r->on_resume(target);
-		}
-	}
-
-	if (!riscv_was_halted(target)) {
+	if (!riscv_is_halted(target)) {
 		LOG_DEBUG("  hart %d requested resume, but was already resumed", hartid);
 		return ERROR_OK;
 	}
 
 	r->on_resume(target);
 	r->resume_current_hart(target);
-	r->hart_state[hartid] = RISCV_HART_RUNNING;
 	return ERROR_OK;
 }
 
@@ -864,12 +839,10 @@ int riscv_step_rtos_hart(struct target *target)
 	riscv_set_current_hartid(target, hartid);
 	LOG_DEBUG("stepping hart %d", hartid);
 
-	assert(r->hart_state[hartid] == RISCV_HART_HALTED);
+	assert(riscv_is_halted(target));
 	r->on_step(target);
 	r->step_current_hart(target);
-	r->hart_state[hartid] = RISCV_HART_RUNNING;
 	r->on_halt(target);
-	r->hart_state[hartid] = RISCV_HART_HALTED;
 	assert(riscv_is_halted(target));
 	return ERROR_OK;
 }
@@ -989,13 +962,6 @@ bool riscv_is_halted(struct target *target)
 {
 	RISCV_INFO(r);
 	return r->is_halted(target);
-}
-
-bool riscv_was_halted(struct target *target)
-{
-	RISCV_INFO(r);
-	assert(r->hart_state[r->current_hartid] != RISCV_HART_UNKNOWN);
-	return r->hart_state[r->current_hartid] == RISCV_HART_HALTED;
 }
 
 enum riscv_halt_reason riscv_halt_reason(struct target *target, int hartid)
