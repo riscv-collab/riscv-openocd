@@ -69,6 +69,8 @@ static void riscv013_execute_debug_buffer(struct target *target);
 #define CSR_DCSR_CAUSE_STEP		4
 #define CSR_DCSR_CAUSE_HALT		5
 
+#define RISCV013_INFO(r) riscv013_info_t *r = get_info(target)
+
 /*** JTAG registers. ***/
 
 typedef enum {
@@ -168,6 +170,9 @@ typedef struct {
 	unsigned int ac_busy_delay;
 
 	bool need_strict_step;
+
+	// Some memoized values
+	int progbuf_size, progbuf_addr, data_addr, data_size;
 } riscv013_info_t;
 
 static void dump_field(const struct scan_field *field)
@@ -739,6 +744,11 @@ static int init_target(struct command_context *cmd_ctx,
 	if (!generic_info->version_specific)
 		return ERROR_FAIL;
 	riscv013_info_t *info = get_info(target);
+
+	info->progbuf_size = -1;
+	info->progbuf_addr = -1;
+	info->data_size = -1;
+	info->data_addr = -1;
 
 	target->reg_cache = calloc(1, sizeof(*target->reg_cache));
 	target->reg_cache->name = "RISC-V registers";
@@ -1722,18 +1732,30 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 
 size_t riscv013_progbuf_size(struct target *target)
 {
-	uint32_t acs = dmi_read(target, DMI_ABSTRACTCS);
-	return get_field(acs, DMI_ABSTRACTCS_PROGSIZE);
+	RISCV013_INFO(info);
+	if (info->progbuf_size == -1) {
+		uint32_t acs = dmi_read(target, DMI_ABSTRACTCS);
+		info->progbuf_size = get_field(acs, DMI_ABSTRACTCS_PROGSIZE);
+	}
+	return info->progbuf_size;
 }
 
 size_t riscv013_data_size(struct target *target)
 {
-	uint32_t acs = dmi_read(target, DMI_HARTINFO);
-	return get_field(acs, DMI_HARTINFO_DATASIZE);
+	RISCV013_INFO(info);
+	if (info->data_size == -1) {
+		uint32_t acs = dmi_read(target, DMI_HARTINFO);
+		info->data_size = get_field(acs, DMI_HARTINFO_DATASIZE);
+	}
+	return info->data_size;
 }
 
 size_t riscv013_data_addr(struct target *target)
 {
-	uint32_t acs = dmi_read(target, DMI_HARTINFO);
-	return get_field(acs, DMI_HARTINFO_DATAACCESS) ? get_field(acs, DMI_HARTINFO_DATAADDR) : 0;
+	RISCV013_INFO(info);
+	if (info->data_addr == -1) {
+		uint32_t acs = dmi_read(target, DMI_HARTINFO);
+		info->data_addr = get_field(acs, DMI_HARTINFO_DATAACCESS) ? get_field(acs, DMI_HARTINFO_DATAADDR) : 0;
+	}
+	return info->data_addr;
 }
