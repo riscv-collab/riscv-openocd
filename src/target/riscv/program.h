@@ -90,6 +90,18 @@ int riscv_program_sw(struct riscv_program *p, enum gdb_regno s, riscv_addr_t add
 int riscv_program_sh(struct riscv_program *p, enum gdb_regno s, riscv_addr_t addr);
 int riscv_program_sb(struct riscv_program *p, enum gdb_regno s, riscv_addr_t addr);
 
+int riscv_program_lxr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno a, int o);
+int riscv_program_ldr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno a, int o);
+int riscv_program_lwr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno a, int o);
+int riscv_program_lhr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno a, int o);
+int riscv_program_lbr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno a, int o);
+
+int riscv_program_sxr(struct riscv_program *p, enum gdb_regno s, enum gdb_regno a, int o);
+int riscv_program_sdr(struct riscv_program *p, enum gdb_regno s, enum gdb_regno a, int o);
+int riscv_program_swr(struct riscv_program *p, enum gdb_regno s, enum gdb_regno a, int o);
+int riscv_program_shr(struct riscv_program *p, enum gdb_regno s, enum gdb_regno a, int o);
+int riscv_program_sbr(struct riscv_program *p, enum gdb_regno s, enum gdb_regno a, int o);
+
 int riscv_program_csrr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno csr);
 int riscv_program_csrw(struct riscv_program *p, enum gdb_regno s, enum gdb_regno csr);
 int riscv_program_csrrw(struct riscv_program *p, enum gdb_regno d, enum gdb_regno s, enum gdb_regno csr);

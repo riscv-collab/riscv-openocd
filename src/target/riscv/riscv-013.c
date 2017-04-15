@@ -1220,64 +1220,98 @@ static int read_memory(struct target *target, uint32_t address,
 	select_dmi(target);
 	riscv_set_current_hartid(target, 0);
 
-	for (uint32_t i = 0; i < count; ++i) {
-		uint32_t offset = i*size;
-		uint32_t t_addr = address + offset;
-		uint8_t *t_buffer = buffer + offset;
+	uint64_t s0 = riscv_get_register(target, GDB_REGNO_S0);
 
-		struct riscv_program program;
-		riscv_program_init(&program, target);
-		enum gdb_regno temp = riscv_program_gettemp(&program);
-		riscv_addr_t outaddr;
-
-		switch (size) {
+	struct riscv_program program;
+	riscv_program_init(&program, target);
+	riscv_addr_t r_addr = riscv_program_alloc_x(&program);
+	riscv_addr_t r_data = riscv_program_alloc_w(&program);
+	riscv_program_lx(&program, GDB_REGNO_S0, r_addr);
+	switch (size) {
 		case 1:
-			riscv_program_lb(&program, temp, t_addr);
-			outaddr = riscv_program_alloc_w(&program);
-			riscv_program_sw(&program, temp, outaddr);
+			riscv_program_lbr(&program, GDB_REGNO_S0, GDB_REGNO_S0, 0);
 			break;
 		case 2:
-			riscv_program_lh(&program, temp, t_addr);
-			outaddr = riscv_program_alloc_w(&program);
-			riscv_program_sw(&program, temp, outaddr);
+			riscv_program_lhr(&program, GDB_REGNO_S0, GDB_REGNO_S0, 0);
 			break;
 		case 4:
-			riscv_program_lw(&program, temp, t_addr);
-			outaddr = riscv_program_alloc_w(&program);
-			riscv_program_sw(&program, temp, outaddr);
+			riscv_program_lwr(&program, GDB_REGNO_S0, GDB_REGNO_S0, 0);
 			break;
 		default:
 			LOG_ERROR("Unsupported size: %d", size);
 			return ERROR_FAIL;
+	}
+	riscv_program_sw(&program, GDB_REGNO_S0, r_data);
+	program.writes_memory = false;
+
+	for (uint32_t i = 0; i < count; ++i) {
+		uint32_t offset = size*i;
+		uint32_t t_addr = address + offset;
+		uint8_t *t_buffer = buffer + offset;
+
+		uint64_t value;
+		if (i == 0) {
+			switch (riscv_xlen(target)) {
+			case 64:
+				riscv_program_write_ram(&program, r_addr + 4, t_addr >> 32);
+			case 32:
+				riscv_program_write_ram(&program, r_addr, t_addr);
+			}
+
+			if (riscv_program_exec(&program, target) != ERROR_OK) {
+				LOG_ERROR("failed to execute program");
+				return ERROR_FAIL;
+			}
+
+			value = riscv_program_read_ram(&program, r_data);
+		} else {
+			int d_addr = (r_addr - riscv_debug_buffer_addr(target)) / 4;
+			int d_data = (r_data - riscv_debug_buffer_addr(target)) / 4;
+
+			switch (riscv_xlen(target)) {
+			case 64:
+				riscv_write_debug_buffer(target, d_addr + 1, t_addr >> 32);
+			case 32:
+				riscv_write_debug_buffer(target, d_addr, t_addr);
+			}
+
+			if (riscv_execute_debug_buffer(target) != ERROR_OK) {
+				LOG_ERROR("failed to execute program");
+				return ERROR_FAIL;
+			}
+
+			value = riscv_read_debug_buffer(target, d_data);
 		}
 
-
-		if (riscv_program_exec(&program, target) != ERROR_OK) {
-			LOG_ERROR("failed to execute program");
-			return ERROR_FAIL;
-		}
-
-		uint64_t value = riscv_program_read_ram(&program, outaddr);
-		switch (size) {
-		case 1:
-			t_buffer[0] = value;
-			break;
-		case 2:
-			t_buffer[0] = value;
-			t_buffer[1] = value >> 8;
-			break;
-		case 4:
-			t_buffer[0] = value;
-			t_buffer[1] = value >> 8;
-			t_buffer[2] = value >> 16;
-			t_buffer[3] = value >> 24;
-			break;
-		default:
-			LOG_ERROR("unsupported access size: %d", size);
-			return ERROR_FAIL;
+                switch (size) {
+                case 1:
+                        t_buffer[0] = value;
+                        break;
+                case 2:
+                        t_buffer[0] = value;
+                        t_buffer[1] = value >> 8;
+                        break;
+                case 4:
+                        t_buffer[0] = value;
+                        t_buffer[1] = value >> 8;
+                        t_buffer[2] = value >> 16;
+                        t_buffer[3] = value >> 24;
+                        break;
+                default:
+                        LOG_ERROR("unsupported access size: %d", size);
+                        return ERROR_FAIL;
 		}
 
 		LOG_DEBUG("M[0x%08lx] reads 0x%08lx", t_addr, value);
+	}
+
+	riscv_set_register(target, GDB_REGNO_S0, s0);
+
+	{
+		struct riscv_program fprogram;
+		riscv_program_init(&fprogram, target);
+		riscv_program_fence(&fprogram);
+		riscv_program_exec(&fprogram, target);
 	}
 
 	return ERROR_OK;
@@ -1288,6 +1322,33 @@ static int write_memory(struct target *target, uint32_t address,
 {
 	select_dmi(target);
 	riscv_set_current_hartid(target, 0);
+
+	uint64_t s0 = riscv_get_register(target, GDB_REGNO_S0);
+	uint64_t s1 = riscv_get_register(target, GDB_REGNO_S1);
+
+	struct riscv_program program;
+	riscv_program_init(&program, target);
+	riscv_addr_t r_addr = riscv_program_alloc_x(&program);
+	riscv_addr_t r_data = riscv_program_alloc_w(&program);
+	riscv_program_lx(&program, GDB_REGNO_S0, r_addr);
+	riscv_program_lw(&program, GDB_REGNO_S1, r_data);
+
+	switch (size) {
+		case 1:
+			riscv_program_sbr(&program, GDB_REGNO_S1, GDB_REGNO_S0, 0);
+			break;
+		case 2:
+			riscv_program_shr(&program, GDB_REGNO_S1, GDB_REGNO_S0, 0);
+			break;
+		case 4:
+			riscv_program_swr(&program, GDB_REGNO_S1, GDB_REGNO_S0, 0);
+			break;
+		default:
+			LOG_ERROR("Unsupported size: %d", size);
+			return ERROR_FAIL;
+	}
+
+	program.writes_memory = false;
 
 	for (uint32_t i = 0; i < count; ++i) {
 		uint32_t offset = size*i;
@@ -1313,32 +1374,48 @@ static int write_memory(struct target *target, uint32_t address,
 				return ERROR_FAIL;
 		}
 
-		struct riscv_program program;
-		riscv_program_init(&program, target);
-		enum gdb_regno data = riscv_program_gettemp(&program);
-		riscv_program_li(&program, data, value);
-
-		switch (size) {
-			case 1:
-				riscv_program_sb(&program, data, t_addr);
-				break;
-			case 2:
-				riscv_program_sh(&program, data, t_addr);
-				break;
-			case 4:
-				riscv_program_sw(&program, data, t_addr);
-				break;
-			default:
-				LOG_ERROR("Unsupported size: %d", size);
-				return ERROR_FAIL;
-		}
-
-		if (riscv_program_exec(&program, target) != ERROR_OK) {
-			LOG_ERROR("failed to execute program");
-			return ERROR_FAIL;
-		}
-
 		LOG_DEBUG("M[0x%08lx] writes 0x%08lx", t_addr, value);
+
+		if (i == 0) {
+			switch (riscv_xlen(target)) {
+			case 64:
+				riscv_program_write_ram(&program, r_addr + 4, t_addr >> 32);
+			case 32:
+				riscv_program_write_ram(&program, r_addr, t_addr);
+			}
+			riscv_program_write_ram(&program, r_data, value);
+
+			if (riscv_program_exec(&program, target) != ERROR_OK) {
+				LOG_ERROR("failed to execute program");
+				return ERROR_FAIL;
+			}
+		} else {
+			int d_addr = (r_addr - riscv_debug_buffer_addr(target)) / 4;
+			int d_data = (r_data - riscv_debug_buffer_addr(target)) / 4;
+
+			switch (riscv_xlen(target)) {
+			case 64:
+				riscv_write_debug_buffer(target, d_addr + 1, t_addr >> 32);
+			case 32:
+				riscv_write_debug_buffer(target, d_addr, t_addr);
+			}
+			riscv_write_debug_buffer(target, d_data, value);
+
+			if (riscv_execute_debug_buffer(target) != ERROR_OK) {
+				LOG_ERROR("failed to execute program");
+				return ERROR_FAIL;
+			}
+		}
+	}
+
+	riscv_set_register(target, GDB_REGNO_S0, s0);
+	riscv_set_register(target, GDB_REGNO_S1, s1);
+
+	{
+		struct riscv_program fprogram;
+		riscv_program_init(&fprogram, target);
+		riscv_program_fence(&fprogram);
+		riscv_program_exec(&fprogram, target);
 	}
 
 	return ERROR_OK;
@@ -1614,6 +1691,7 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 	dmi_write(target, DMI_DMCONTROL, dmcontrol);
 
 	for (size_t i = 0; i < 256; ++i) {
+		usleep(10);
 		uint32_t dmstatus = dmi_read(target, DMI_DMSTATUS);
 		if (get_field(dmstatus, DMI_DMSTATUS_ALLRESUMEACK) == 0)
 			continue;
@@ -1633,10 +1711,11 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 	LOG_ERROR("  dmcontrol=0x%08x", dmcontrol);
 	LOG_ERROR("  dmstatus =0x%08x", dmstatus);
 
-#if 0
-	if (step)
-		halt_current_hart();
-#endif
+	if (step) {
+		LOG_ERROR("  was stepping, halting");
+		riscv013_halt_current_hart(target);
+		return;
+	}
 
 	abort();
 }

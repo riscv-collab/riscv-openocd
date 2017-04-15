@@ -161,6 +161,42 @@ void riscv_program_write_ram(struct riscv_program *p, riscv_addr_t addr, uint64_
 	p->debug_buffer[off] = d;
 }
 
+int riscv_program_swr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno b, int offset)
+{
+	p->writes_memory = 1;
+	return riscv_program_insert(p, sw(d, b, offset));
+}
+
+int riscv_program_shr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno b, int offset)
+{
+	p->writes_memory = 1;
+	return riscv_program_insert(p, sh(d, b, offset));
+}
+
+int riscv_program_sbr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno b, int offset)
+{
+	p->writes_memory = 1;
+	return riscv_program_insert(p, sb(d, b, offset));
+}
+
+int riscv_program_lwr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno b, int offset)
+{
+	p->writes_memory = 1;
+	return riscv_program_insert(p, lw(d, b, offset));
+}
+
+int riscv_program_lhr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno b, int offset)
+{
+	p->writes_memory = 1;
+	return riscv_program_insert(p, lh(d, b, offset));
+}
+
+int riscv_program_lbr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno b, int offset)
+{
+	p->writes_memory = 1;
+	return riscv_program_insert(p, lb(d, b, offset));
+}
+
 int riscv_program_lx(struct riscv_program *p, enum gdb_regno d, riscv_addr_t addr)
 {
 	switch (p->target_xlen) {
