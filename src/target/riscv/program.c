@@ -111,6 +111,9 @@ riscv_addr_t riscv_program_alloc_data(struct riscv_program *p, size_t bytes)
 	}
 
 	LOG_DEBUG("allocated %d bytes at 0x%08lx", bytes, addr);
+	p->data_count = 
+		+ riscv_debug_buffer_size(p->target)
+		- (addr - riscv_debug_buffer_addr(p->target)) / sizeof(p->debug_buffer[0]);
 	return addr;
 }
 

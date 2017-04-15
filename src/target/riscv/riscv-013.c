@@ -1234,8 +1234,8 @@ static int read_memory(struct target *target, uint32_t address,
 
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	riscv_addr_t r_addr = riscv_program_alloc_x(&program);
 	riscv_addr_t r_data = riscv_program_alloc_w(&program);
+	riscv_addr_t r_addr = riscv_program_alloc_x(&program);
 	riscv_program_lx(&program, GDB_REGNO_S0, r_addr);
 	switch (size) {
 		case 1:
@@ -1338,8 +1338,8 @@ static int write_memory(struct target *target, uint32_t address,
 
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	riscv_addr_t r_addr = riscv_program_alloc_x(&program);
 	riscv_addr_t r_data = riscv_program_alloc_w(&program);
+	riscv_addr_t r_addr = riscv_program_alloc_x(&program);
 	riscv_program_lx(&program, GDB_REGNO_S0, r_addr);
 	riscv_program_lw(&program, GDB_REGNO_S1, r_data);
 
@@ -1706,8 +1706,6 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 		if (get_field(dmstatus, DMI_DMSTATUS_ALLRESUMEACK) == 0)
 			continue;
 		if (step && get_field(dmstatus, DMI_DMSTATUS_ALLHALTED) == 0)
-			continue;
-		if (!step && get_field(dmstatus, DMI_DMSTATUS_ALLRUNNING) == 0)
 			continue;
 
 		dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_RESUMEREQ, 0);
