@@ -367,8 +367,9 @@ static uint64_t dmi_read(struct target *target, uint16_t address)
 			false);
 
 	if (status != DMI_STATUS_SUCCESS) {
-		LOG_ERROR("failed read from 0x%x; value=0x%" PRIx64 ", status=%d\n",
+		LOG_ERROR("Failed read from 0x%x; value=0x%" PRIx64 ", status=%d\n",
 				address, value, status);
+		abort();
 	}
 
 	return value;
@@ -389,6 +390,7 @@ static void dmi_write(struct target *target, uint16_t address, uint64_t value)
 	}
 	if (status != DMI_STATUS_SUCCESS) {
 		LOG_ERROR("failed to write 0x%" PRIx64 " to 0x%x; status=%d\n", value, address, status);
+		abort();
 	}
 }
 
