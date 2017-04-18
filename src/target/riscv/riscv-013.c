@@ -1171,7 +1171,7 @@ static int examine(struct target *target)
 		LOG_DEBUG("hart %d has XLEN=%d", i, r->xlen[i]);
 		LOG_DEBUG("found program buffer at 0x%08lx", (long)(r->debug_buffer_addr[i]));
 
-		if (riscv_program_gah(r->debug_buffer_addr[i])) {
+		if (riscv_program_gah(0, r->debug_buffer_addr[i])) {
                 	LOG_ERROR("This implementation will not work with hart %d with debug_buffer_addr of 0x%x\n", i, 
                             r->debug_buffer_addr[i]);
 			abort();
