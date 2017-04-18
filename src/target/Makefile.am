@@ -139,7 +139,8 @@ RISCV_SRC = \
 	riscv/riscv-011.c \
 	riscv/riscv-013.c \
 	riscv/riscv.c \
-	riscv/program.c
+	riscv/program.c \
+	riscv/batch.c
 
 noinst_HEADERS = \
 	algorithm.h \

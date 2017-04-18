@@ -88,6 +88,9 @@ typedef struct {
 	void (*write_debug_buffer)(struct target *target, int i, riscv_insn_t d);
 	riscv_insn_t (*read_debug_buffer)(struct target *target, int i);
 	void (*execute_debug_buffer)(struct target *target);
+	int (*dmi_write_u64_bits)(struct target *target);
+	void (*fill_dmi_write_u64)(struct target *target, char *buf, int a, uint64_t d);
+	void (*fill_dmi_nop_u64)(struct target *target, char *buf);
 } riscv_info_t;
 
 /* Everything needs the RISC-V specific info structure, so here's a nice macro
@@ -197,7 +200,13 @@ int riscv_debug_buffer_enter(struct target *target, struct riscv_program *progra
 int riscv_debug_buffer_leave(struct target *target, struct riscv_program *program);
 
 riscv_insn_t riscv_read_debug_buffer(struct target *target, int index);
+riscv_addr_t riscv_read_debug_buffer_x(struct target *target, int index);
 int riscv_write_debug_buffer(struct target *target, int index, riscv_insn_t insn);
+int riscv_write_debug_buffer_x(struct target *target, int index, riscv_addr_t data);
 int riscv_execute_debug_buffer(struct target *target);
+
+void riscv_fill_dmi_nop_u64(struct target *target, char *buf);
+void riscv_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d);
+int riscv_dmi_write_u64_bits(struct target *target);
 
 #endif

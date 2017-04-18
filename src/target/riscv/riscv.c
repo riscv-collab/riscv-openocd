@@ -618,12 +618,12 @@ static int riscv_poll_hart(struct target *target, int hartid)
 	RISCV_INFO(r);
 	riscv_set_current_hartid(target, hartid);
 
-	LOG_INFO("polling hart %d, target->state=%d (TARGET_HALTED=%d)", hartid, target->state, TARGET_HALTED);
+	LOG_DEBUG("polling hart %d, target->state=%d (TARGET_HALTED=%d)", hartid, target->state, TARGET_HALTED);
 
 	/* If OpenOCD this we're running but this hart is halted then it's time
 	 * to raise an event. */
 	if (target->state != TARGET_HALTED && riscv_is_halted(target)) {
-		LOG_INFO("  triggered a halt");
+		LOG_DEBUG("  triggered a halt");
 		r->on_halt(target);
 		return 1;
 	}
@@ -1025,9 +1025,43 @@ riscv_insn_t riscv_read_debug_buffer(struct target *target, int index)
 	return r->read_debug_buffer(target, index);
 }
 
+riscv_addr_t riscv_read_debug_buffer_x(struct target *target, int index)
+{
+	riscv_addr_t out = 0;
+	switch (riscv_xlen(target)) {
+	case 64:
+		out |= riscv_read_debug_buffer(target, index + 1) << 32;
+	case 32:
+		out |= riscv_read_debug_buffer(target, index + 0) <<  0;
+		break;
+	default:
+		LOG_ERROR("unsupported XLEN %d", riscv_xlen(target));
+		abort();
+	}
+	return out;
+}
+
 int riscv_execute_debug_buffer(struct target *target)
 {
 	RISCV_INFO(r);
 	r->execute_debug_buffer(target);
 	return ERROR_OK;
+}
+
+void riscv_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d)
+{
+	RISCV_INFO(r);
+	r->fill_dmi_write_u64(target, buf, a, d);
+}
+
+void riscv_fill_dmi_nop_u64(struct target *target, char *buf)
+{
+	RISCV_INFO(r);
+	r->fill_dmi_nop_u64(target, buf);
+}
+
+int riscv_dmi_write_u64_bits(struct target *target)
+{
+	RISCV_INFO(r);
+	return r->dmi_write_u64_bits(target);
 }
