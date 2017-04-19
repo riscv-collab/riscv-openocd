@@ -1597,9 +1597,7 @@ riscv_insn_t riscv013_read_debug_buffer(struct target *target, int index)
 
 void riscv013_execute_debug_buffer(struct target *target)
 {
-	uint32_t abstractcs = dmi_read(target, DMI_ABSTRACTCS);
-	abstractcs = set_field(abstractcs, DMI_ABSTRACTCS_CMDERR, 0);
-	dmi_write(target, DMI_ABSTRACTCS, abstractcs);
+	riscv013_clear_abstract_error(target);
 
 	uint32_t run_program = 0;
 	run_program = set_field(run_program, AC_ACCESS_REGISTER_SIZE, 2);
@@ -1775,6 +1773,5 @@ int riscv013_debug_buffer_register(struct target *target, riscv_addr_t addr)
 void riscv013_clear_abstract_error(struct target *target)
 {
 	uint32_t acs = dmi_read(target, DMI_ABSTRACTCS);
-	acs = set_field(acs, DMI_ABSTRACTCS_CMDERR, 0);
 	dmi_write(target, DMI_ABSTRACTCS, acs);
 }
