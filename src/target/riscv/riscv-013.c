@@ -1157,12 +1157,43 @@ static int examine(struct target *target)
 
 static int assert_reset(struct target *target)
 {
-	return ERROR_FAIL;
+  select_dmi(target);
+  uint32_t control = DMI_DMCONTROL_DMACTIVE | DMI_DMCONTROL_NDMRESET;
+  if (target->reset_halt) {
+    LOG_DEBUG("TARGET RESET HALT SET, Requesting halt during reset.\n");
+    control |= DMI_DMCONTROL_HALTREQ;
+  }
+    
+  dmi_write(target, DMI_DMCONTROL,
+	    control);
+
+  if (!target->reset_halt) {
+    LOG_DEBUG("TARGET RESET HALT NOT SET, Requesting resume during reset.\n");
+    control = DMI_DMCONTROL_DMACTIVE | DMI_DMCONTROL_RESUMEREQ;
+    dmi_write(target, DMI_DMCONTROL, control);
+  }
+    
+  return ERROR_OK;
 }
 
 static int deassert_reset(struct target *target)
 {
-	return ERROR_FAIL;
+  select_dmi(target);
+
+  // Note that we don't need to keep asserting
+  // haltreq since we already set it in assert_reset.
+  dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_DMACTIVE);
+  
+  if (target->reset_halt) {
+    LOG_DEBUG("TARGET RESET HALT SET, waiting for hart to be halted.\n");
+    while (get_field(dmi_read(target, DMI_DMSTATUS), DMI_DMSTATUS_ALLHALTED) == 0) {
+    }
+  } else {
+    LOG_DEBUG("TARGET RESET HALT NOT SET, waiting for hart to be running.\n");
+    while (get_field(dmi_read(target, DMI_DMSTATUS), DMI_DMSTATUS_ALLRUNNING) == 0) {
+    }
+  }
+  return ERROR_OK;
 }
 
 static int read_memory(struct target *target, uint32_t address,
