@@ -336,7 +336,7 @@ static dmi_status_t dmi_scan(struct target *target, uint16_t *address_in,
 	/* Assume dbus is already selected. */
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
-	int idle_count = info->dtmcontrol_idle + info->dmi_busy_delay;
+	int idle_count = info->dmi_busy_delay;
 	if (exec)
 		idle_count += info->ac_busy_delay;
 
@@ -697,9 +697,7 @@ static int init_target(struct command_context *cmd_ctx,
 	info->data_addr = -1;
 
 	info->dmi_busy_delay = 0;
-	/* FIXME: If I set this (which is used by write_memory) to less than 3
-	 * then all register read commands fail. */
-	info->ac_busy_delay = 3;
+	info->ac_busy_delay = 0;
 
 	target->reg_cache = calloc(1, sizeof(*target->reg_cache));
 	target->reg_cache->name = "RISC-V registers";
@@ -1374,13 +1372,15 @@ static int write_memory(struct target *target, uint32_t address,
 	 * termination conditions to this loop: a non-BUSY error message, or
 	 * the data was all copied. */
 	riscv_addr_t cur_addr = 0xbadbeef;
+        riscv_addr_t prev_addr = cur_addr - 1;
 	riscv_addr_t fin_addr = address + (count * size);
 	LOG_DEBUG("writing until final address 0x%016lx", fin_addr);
 	while ((cur_addr = riscv_read_debug_buffer_x(target, d_addr)) < fin_addr) {
+
 		LOG_DEBUG("transferring burst starting at address 0x%016lx", cur_addr);
 		riscv_addr_t start = (cur_addr - address) / size;
-		assert(cur_addr > address);
-		struct riscv_batch *batch = riscv_batch_alloc(target, count + 1, info->ac_busy_delay);
+                assert (cur_addr > address);
+                struct riscv_batch *batch = riscv_batch_alloc(target, count + 1, info->dmi_busy_delay + info->ac_busy_delay);
 
 		for (riscv_addr_t i = start; i < count; ++i) {
 			riscv_addr_t offset = size*i;
@@ -1419,10 +1419,15 @@ static int write_memory(struct target *target, uint32_t address,
 		riscv_batch_run(batch);
 		riscv_batch_free(batch);
 
+                // Note that if the scan resulted in a Busy DMI response, it
+                // is this read to abstractcs that will cause the dmi_busy_delay
+                // to be incremented if necessary. The loop condition above
+                // catches the case where no writes went through at all.
+
 		uint32_t abstractcs = dmi_read(target, DMI_ABSTRACTCS);
 		switch (get_field(abstractcs, DMI_ABSTRACTCS_CMDERR)) {
 		case CMDERR_NONE:
-			LOG_DEBUG("successful memory write");
+			LOG_DEBUG("successful (partial?) memory write");
 			break;
 		case CMDERR_BUSY:
 			LOG_DEBUG("memory write resulted in busy response");
