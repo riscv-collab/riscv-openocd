@@ -372,6 +372,10 @@ static uint64_t dmi_read(struct target *target, uint16_t address)
 	uint16_t address_in;
 
 	unsigned i = 0;
+
+        // This first loop ensures that the read request was actually sent
+        // to the target. Note that if for some reason this stays busy,
+        // it is actually due to the Previous dmi_read or dmi_write.
 	for (i = 0; i < 256; i++) {
 		status = dmi_scan(target, NULL, NULL, DMI_OP_READ, address, 0,
 				false);
@@ -385,11 +389,30 @@ static uint64_t dmi_read(struct target *target, uint16_t address)
 		}
 	}
 
-	status = dmi_scan(target, &address_in, &value, DMI_OP_NOP, address, 0,
-			false);
+        if (status != DMI_STATUS_SUCCESS) {
+                LOG_ERROR("Failed read from 0x%x; value=0x%" PRIx64 ", status=%d\n",
+                                address, value, status);
+                abort();
+        }
+
+         // This second loop ensures that we got the read
+         // data back. Note that NOP can result in a 'busy' result as well, but
+         // that would be noticed on the next DMI access we do.
+         for (i = 0; i < 256; i++) {
+           status = dmi_scan(target, &address_in, &value, DMI_OP_NOP, address, 0,
+                             false);
+           if (status == DMI_STATUS_BUSY) {
+             increase_dmi_busy_delay(target);
+           } else if (status == DMI_STATUS_SUCCESS) {
+             break;
+           } else {
+             LOG_ERROR("failed read (NOP) at 0x%x, status=%d\n", address, status);
+             break;
+           }
+        }
 
 	if (status != DMI_STATUS_SUCCESS) {
-		LOG_ERROR("Failed read from 0x%x; value=0x%" PRIx64 ", status=%d\n",
+		LOG_ERROR("Failed read (NOP) from 0x%x; value=0x%" PRIx64 ", status=%d\n",
 				address, value, status);
 		abort();
 	}
@@ -402,16 +425,43 @@ static void dmi_write(struct target *target, uint16_t address, uint64_t value)
 	select_dmi(target);
 	dmi_status_t status = DMI_STATUS_BUSY;
 	unsigned i = 0;
-	while (status == DMI_STATUS_BUSY && i++ < 256) {
-		dmi_scan(target, NULL, NULL, DMI_OP_WRITE, address, value,
-				address == DMI_COMMAND);
-		status = dmi_scan(target, NULL, NULL, DMI_OP_NOP, 0, 0, false);
-		if (status == DMI_STATUS_BUSY) {
-			increase_dmi_busy_delay(target);
-		}
+
+         // The first loop ensures that we successfully sent the write request.
+        for (i = 0; i < 256; i++) {
+           status = dmi_scan(target, NULL, NULL, DMI_OP_WRITE, address, value,
+                             address == DMI_COMMAND);
+           if (status == DMI_STATUS_BUSY) {
+             increase_dmi_busy_delay(target);
+           } else if (status == DMI_STATUS_SUCCESS) {
+             break;
+           } else {
+             LOG_ERROR("failed write to 0x%x, status=%d\n", address, status);
+             break;
+           }
+        }
+
+         if (status != DMI_STATUS_SUCCESS) {
+           LOG_ERROR("Failed write to 0x%x to 0x%x;" PRIx64 ", status=%d\n",
+                     address, status);
+           abort();
+        }
+
+         // The second loop isn't strictly necessary, but would ensure that
+         // the write is complete/ has no non-busy errors before returning from this function.
+         for (i = 0; i < 256; i++) {
+           status = dmi_scan(target, NULL, NULL, DMI_OP_NOP, address, 0,
+                             false);
+           if (status == DMI_STATUS_BUSY) {
+             increase_dmi_busy_delay(target);
+           } else if (status == DMI_STATUS_SUCCESS) {
+             break;
+           } else {
+             LOG_ERROR("failed write (NOP) at 0x%x, status=%d\n", address, status);
+             break;
+           }
 	}
 	if (status != DMI_STATUS_SUCCESS) {
-		LOG_ERROR("failed to write 0x%" PRIx64 " to 0x%x; status=%d\n", value, address, status);
+		LOG_ERROR("failed to write (NOP) 0x%" PRIx64 " to 0x%x; status=%d\n", value, address, status);
 		abort();
 	}
 }
