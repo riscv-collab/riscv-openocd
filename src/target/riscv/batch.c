@@ -4,6 +4,7 @@
 
 #include "batch.h"
 #include "debug_defines.h"
+#include "riscv.h"
 
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
@@ -39,7 +40,7 @@ bool riscv_batch_full(struct riscv_batch *batch)
 
 void riscv_batch_run(struct riscv_batch *batch)
 {
-	LOG_DEBUG("running a batch of %d scans", batch->used_scans);
+	LOG_DEBUG("running a batch of %ld scans", (long)batch->used_scans);
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
 		dump_field(batch->fields + i);
@@ -63,10 +64,10 @@ void riscv_batch_add_dmi_write(struct riscv_batch *batch, unsigned address, uint
 	assert(batch->used_scans < batch->allocated_scans);
 	struct scan_field *field = batch->fields + batch->used_scans;
 	field->num_bits = riscv_dmi_write_u64_bits(batch->target);
-	field->out_value = batch->data_out + batch->used_scans * sizeof(uint64_t);
-	field->in_value  = batch->data_in  + batch->used_scans * sizeof(uint64_t);
-	riscv_fill_dmi_write_u64(batch->target, field->out_value, address, data);
-	riscv_fill_dmi_nop_u64(batch->target, field->in_value);
+	field->out_value = (void *)(batch->data_out + batch->used_scans * sizeof(uint64_t));
+	field->in_value  = (void *)(batch->data_in  + batch->used_scans * sizeof(uint64_t));
+	riscv_fill_dmi_write_u64(batch->target, (char *)field->out_value, address, data);
+	riscv_fill_dmi_nop_u64(batch->target, (char *)field->in_value);
 	field->in_value = NULL;
 	batch->used_scans++;
 }

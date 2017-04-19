@@ -10,7 +10,6 @@
 #include "asm.h"
 #include "encoding.h"
 
-riscv_addr_t riscv_program_gah(struct riscv_program *p, riscv_addr_t addr);
 riscv_addr_t riscv_program_gal(struct riscv_program *p, riscv_addr_t addr);
 int riscv_program_lah(struct riscv_program *p, enum gdb_regno d, riscv_addr_t addr);
 int riscv_program_lal(struct riscv_program *p, enum gdb_regno d, riscv_addr_t addr);
@@ -18,7 +17,7 @@ int riscv_program_lal(struct riscv_program *p, enum gdb_regno d, riscv_addr_t ad
 /* Program interface. */
 int riscv_program_init(struct riscv_program *p, struct target *target)
 {
-	LOG_DEBUG("riscv_program_init: p=0x%016lx", p);
+	LOG_DEBUG("riscv_program_init: p=0x%p", p);
 
 	memset(p, 0, sizeof(*p));
 	p->target = target;
@@ -52,7 +51,7 @@ int riscv_program_exec(struct riscv_program *p, struct target *t)
 	riscv_reg_t saved_registers[GDB_REGNO_XPR31 + 1];
 	for (size_t i = GDB_REGNO_XPR0 + 1; i <= GDB_REGNO_XPR31; ++i) {
 		if (p->writes_xreg[i]) {
-			LOG_DEBUG("Saving register %d as used by program", i);
+			LOG_DEBUG("Saving register %d as used by program", (int)i);
 			saved_registers[i] = riscv_get_register(t, i);
 		}
 	}
@@ -60,7 +59,7 @@ int riscv_program_exec(struct riscv_program *p, struct target *t)
 	if (p->writes_memory && (riscv_program_fence(p) != ERROR_OK)) {
 		LOG_ERROR("Unable to write fence");
 		for(size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
-			LOG_ERROR("ram[%02x]: DASM(0x%08lx) [0x%08lx]", i, p->debug_buffer[i], p->debug_buffer[i]);
+			LOG_ERROR("ram[%02x]: DASM(0x%08lx) [0x%08lx]", (int)i, (long)p->debug_buffer[i], (long)p->debug_buffer[i]);
 		abort();
 		return ERROR_FAIL;
 	}
@@ -68,13 +67,13 @@ int riscv_program_exec(struct riscv_program *p, struct target *t)
 	if (riscv_program_ebreak(p) != ERROR_OK) {
 		LOG_ERROR("Unable to write ebreak");
 		for(size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
-			LOG_ERROR("ram[%02x]: DASM(0x%08lx) [0x%08lx]", i, p->debug_buffer[i], p->debug_buffer[i]);
+			LOG_ERROR("ram[%02x]: DASM(0x%08lx) [0x%08lx]", (int)i, (long)p->debug_buffer[i], (long)p->debug_buffer[i]);
 		abort();
 		return ERROR_FAIL;
 	}
 
 	for (size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i) {
-		LOG_DEBUG("Executing program 0x%016lx: debug_buffer[%02x] = DASM(0x%08lx)", p, i, p->debug_buffer[i]);
+		LOG_DEBUG("Executing program 0x%p: debug_buffer[%02x] = DASM(0x%08lx)", p, (int)i, (long)p->debug_buffer[i]);
 		riscv_write_debug_buffer(t, i, p->debug_buffer[i]);
 	}
 
@@ -92,7 +91,7 @@ int riscv_program_exec(struct riscv_program *p, struct target *t)
 
 riscv_addr_t riscv_program_alloc_data(struct riscv_program *p, size_t bytes)
 {
-	LOG_DEBUG("allocating %d bytes of data", bytes);
+	LOG_DEBUG("allocating %d bytes of data", (int)bytes);
 
 	riscv_addr_t addr = 
 		riscv_debug_buffer_addr(p->target) 
@@ -106,11 +105,11 @@ riscv_addr_t riscv_program_alloc_data(struct riscv_program *p, size_t bytes)
 		+ p->instruction_count * sizeof(p->debug_buffer[0]);
 
 	if (addr <= ptop) {
-		LOG_DEBUG("unable to allocate %d bytes", bytes);
+		LOG_DEBUG("unable to allocate %d bytes", (int)bytes);
 		return RISCV_PROGRAM_ALLOC_FAIL;
 	}
 
-	LOG_DEBUG("allocated %d bytes at 0x%08lx", bytes, addr);
+	LOG_DEBUG("allocated %d bytes at 0x%08lx", (int)bytes, (long)addr);
 	p->data_count = 
 		+ riscv_debug_buffer_size(p->target)
 		- (addr - riscv_debug_buffer_addr(p->target)) / sizeof(p->debug_buffer[0]);
@@ -146,7 +145,7 @@ riscv_insn_t riscv_program_read_ram(struct riscv_program *p, riscv_addr_t addr)
 {
 	if (addr < riscv_debug_buffer_addr(p->target))
 		return -1;
-	if (addr > riscv_debug_buffer_addr(p->target) + (riscv_debug_buffer_size(p->target) * sizeof(p->debug_buffer[0])))
+	if ((size_t)addr > riscv_debug_buffer_addr(p->target) + (riscv_debug_buffer_size(p->target) * sizeof(p->debug_buffer[0])))
 		return -1;
 
 	int off = (addr - riscv_debug_buffer_addr(p->target)) / sizeof(p->debug_buffer[0]);
@@ -157,7 +156,7 @@ void riscv_program_write_ram(struct riscv_program *p, riscv_addr_t addr, uint64_
 {
 	if (addr < riscv_debug_buffer_addr(p->target))
 		return;
-	if (addr > riscv_debug_buffer_addr(p->target) + (riscv_debug_buffer_size(p->target) * sizeof(p->debug_buffer[0])))
+	if ((size_t)addr > riscv_debug_buffer_addr(p->target) + (riscv_debug_buffer_size(p->target) * sizeof(p->debug_buffer[0])))
 		return;
 
 	int off = (addr - riscv_debug_buffer_addr(p->target)) / sizeof(p->debug_buffer[0]);
@@ -442,17 +441,17 @@ int riscv_program_lal(struct riscv_program *p, enum gdb_regno d, riscv_addr_t ad
 
 int riscv_program_insert(struct riscv_program *p, riscv_insn_t i)
 {
-	LOG_DEBUG("instruction_count: %d (p=0x%016lx)", p->instruction_count, p);
+	LOG_DEBUG("instruction_count: %d (p=0x%p)", (int)p->instruction_count, p);
 
 	if (p->instruction_count + p->data_count + 1 > riscv_debug_buffer_size(p->target)) {
 		LOG_DEBUG("Unable to insert instruction:");
-		LOG_DEBUG("  instruction_count=%d", p->instruction_count);
-		LOG_DEBUG("  data_count       =%d", p->data_count);
-		LOG_DEBUG("  buffer size      =%d", riscv_debug_buffer_size(p->target));
+		LOG_DEBUG("  instruction_count=%d", (int)p->instruction_count);
+		LOG_DEBUG("  data_count       =%d", (int)p->data_count);
+		LOG_DEBUG("  buffer size      =%d", (int)riscv_debug_buffer_size(p->target));
 		return ERROR_FAIL;
 	}
 
-	LOG_DEBUG("PROGBUF[%d] = DASM(0x%08x) [0x%08x]", p->instruction_count, i, i);
+	LOG_DEBUG("PROGBUF[%d] = DASM(0x%08x) [0x%08x]", (int)p->instruction_count, i, i);
 	p->debug_buffer[p->instruction_count] = i;
 	p->instruction_count++;
 	return ERROR_OK;

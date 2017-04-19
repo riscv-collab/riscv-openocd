@@ -132,4 +132,7 @@ void riscv_program_puttemp(struct riscv_program *p, enum gdb_regno r);
 int riscv_program_dont_restore_register(struct riscv_program *p, enum gdb_regno r);
 int riscv_program_do_restore_register(struct riscv_program *p, enum gdb_regno r);
 
+/* Addressing functions. */
+riscv_addr_t riscv_program_gah(struct riscv_program *p, riscv_addr_t addr);
+
 #endif

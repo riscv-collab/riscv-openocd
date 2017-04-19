@@ -737,8 +737,6 @@ int riscv_openocd_step(
 ) {
 	LOG_DEBUG("stepping rtos hart");
 
-	RISCV_INFO(r);
-
 	if (!current) {
 		LOG_ERROR("step-at-pc unimplemented");
 		return ERROR_FAIL;
@@ -1030,7 +1028,7 @@ riscv_addr_t riscv_read_debug_buffer_x(struct target *target, int index)
 	riscv_addr_t out = 0;
 	switch (riscv_xlen(target)) {
 	case 64:
-		out |= riscv_read_debug_buffer(target, index + 1) << 32;
+		out |= (uint64_t)riscv_read_debug_buffer(target, index + 1) << 32;
 	case 32:
 		out |= riscv_read_debug_buffer(target, index + 0) <<  0;
 		break;
