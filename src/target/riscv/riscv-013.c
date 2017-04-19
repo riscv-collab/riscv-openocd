@@ -441,7 +441,7 @@ static void dmi_write(struct target *target, uint16_t address, uint64_t value)
         }
 
          if (status != DMI_STATUS_SUCCESS) {
-           LOG_ERROR("Failed write to 0x%x to 0x%x;" PRIx64 ", status=%d\n",
+           LOG_ERROR("Failed write to 0x%x;, status=%d\n",
                      address, status);
            abort();
         }
@@ -1372,7 +1372,6 @@ static int write_memory(struct target *target, uint32_t address,
 	 * termination conditions to this loop: a non-BUSY error message, or
 	 * the data was all copied. */
 	riscv_addr_t cur_addr = 0xbadbeef;
-        riscv_addr_t prev_addr = cur_addr - 1;
 	riscv_addr_t fin_addr = address + (count * size);
 	LOG_DEBUG("writing until final address 0x%016lx", fin_addr);
 	while ((cur_addr = riscv_read_debug_buffer_x(target, d_addr)) < fin_addr) {
