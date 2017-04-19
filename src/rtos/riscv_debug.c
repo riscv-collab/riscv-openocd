@@ -160,7 +160,6 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 			return GDB_THREAD_PACKET_NOT_CONSUMED;
 		}
 
-		riscv_enable_rtos(target);
 		switch (tid) {
 		case 0:
 		case -1:
@@ -196,7 +195,6 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 			return ERROR_FAIL;
 		}
 
-		riscv_enable_rtos(target);
 		riscv_update_threads(target->rtos);
 		if (tid <= target->rtos->thread_count) {
 			gdb_put_packet(connection, "OK", 2);

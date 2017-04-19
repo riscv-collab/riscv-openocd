@@ -36,11 +36,6 @@ typedef struct {
 	/* The number of harts on this system. */
 	int hart_count;
 
-	/* When the RTOS is enabled this target is expected to handle all the
-	 * harts in the system.  When it's disabled this just uses the regular
-	 * multi-target mode.  */
-	bool rtos_enabled;
-
 	/* The hart that the RTOS thinks is currently being debugged. */
 	int rtos_hartid;
 
@@ -148,10 +143,6 @@ int riscv_step_rtos_hart(struct target *target);
 int riscv_xlen(const struct target *target);
 int riscv_xlen_of_hart(const struct target *target, int hartid);
 
-/* Enables RISC-V RTOS support for this target.  This causes the coreid field
- * of the generic target struct to be ignored, and instead for operations to
- * apply to all the harts in the system. */
-void riscv_enable_rtos(struct target *target);
 bool riscv_rtos_enabled(const struct target *target);
 
 /* Sets the current hart, which is the hart that will actually be used when

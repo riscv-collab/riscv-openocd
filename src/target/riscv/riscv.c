@@ -758,9 +758,6 @@ void riscv_info_init(riscv_info_t *r)
 	memset(r, 0, sizeof(*r));
 	r->dtm_version = 1;
 
-	/* FIXME: The RTOS gets enabled before the target gets initialized. */
-	r->rtos_enabled = true;
-
 	for (size_t h = 0; h < RISCV_MAX_HARTS; ++h) {
 		r->xlen[h] = -1;
 		r->debug_buffer_addr[h] = -1;
@@ -857,16 +854,9 @@ int riscv_xlen_of_hart(const struct target *target, int hartid)
 	return r->xlen[hartid];
 }
 
-void riscv_enable_rtos(struct target *target)
-{
-	RISCV_INFO(r);
-	r->rtos_enabled = true;
-}
-
 bool riscv_rtos_enabled(const struct target *target)
 {
-	RISCV_INFO(r);
-	return r->rtos_enabled;
+	return target->rtos != NULL;
 }
 
 void riscv_set_current_hartid(struct target *target, int hartid)
@@ -902,8 +892,10 @@ void riscv_set_current_hartid(struct target *target, int hartid)
 int riscv_current_hartid(const struct target *target)
 {
 	RISCV_INFO(r);
-	assert(riscv_rtos_enabled(target) || target->coreid == r->current_hartid);
-	return r->current_hartid;
+	if (riscv_rtos_enabled(target))
+		return r->current_hartid;
+	else
+		return target->coreid;
 }
 
 void riscv_set_all_rtos_harts(struct target *target)
