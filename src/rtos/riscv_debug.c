@@ -234,7 +234,7 @@ static int riscv_gdb_v_packet(struct connection *connection, const char *packet,
 
 	if (strcmp(packet_stttrr, "vCont?") == 0) {
 		static const char *message = "OK";
-		gdb_put_packet(connection, message, strlen(message));
+		gdb_put_packet(connection, (char *)message, strlen(message));
 		return JIM_OK;
 	}
 
@@ -294,7 +294,7 @@ static int riscv_get_thread_reg_list(struct rtos *rtos, int64_t thread_id, char 
 				strncat(*hex_reg_list, "xx", hex_reg_list_length);
 		}
 	}
-	LOG_DEBUG(*hex_reg_list);
+	LOG_DEBUG("%s", *hex_reg_list);
 	return JIM_OK;
 }
 
