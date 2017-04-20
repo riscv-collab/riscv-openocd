@@ -1168,7 +1168,6 @@ int target_get_gdb_fileio_info(struct target *target, struct gdb_fileio_info *fi
 {
 	if (target->state != TARGET_HALTED) {
 		LOG_WARNING("target %s is not halted (gdb fileio)", target->cmd_name);
-		abort();
 		return ERROR_TARGET_NOT_HALTED;
 	}
 	return target->type->get_gdb_fileio_info(target, fileio_info);
