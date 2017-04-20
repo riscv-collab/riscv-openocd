@@ -638,9 +638,9 @@ static int riscv_poll_hart(struct target *target, int hartid)
 int riscv_openocd_poll(struct target *target)
 {
 	LOG_DEBUG("polling all harts");
+	int triggered_hart = -1;
 	if (riscv_rtos_enabled(target)) {
 		/* Check every hart for an event. */
-		int triggered_hart = -1;
 		for (int i = 0; i < riscv_count_harts(target); ++i) {
 			int out = riscv_poll_hart(target, i);
 			switch (out) {
@@ -667,29 +667,35 @@ int riscv_openocd_poll(struct target *target)
 		 * harts. */
 		for (int i = 0; i < riscv_count_harts(target); ++i)
 			riscv_halt_one_hart(target, i);
+	} else {
+		if (riscv_poll_hart(target, riscv_current_hartid(target)) == 0)
+			return ERROR_OK;
 
-		target->state = TARGET_HALTED;
-		switch (riscv_halt_reason(target, triggered_hart)) {
-		case RISCV_HALT_BREAKPOINT:
-			target->debug_reason = DBG_REASON_BREAKPOINT;
-			break;
-		case RISCV_HALT_INTERRUPT:
-			target->debug_reason = DBG_REASON_DBGRQ;
-			break;
-		case RISCV_HALT_SINGLESTEP:
-			target->debug_reason = DBG_REASON_SINGLESTEP;
-			break;
-		}
-		
+		triggered_hart = riscv_current_hartid(target);
+		LOG_DEBUG("  hart %d halted", triggered_hart);
+	}
+
+	target->state = TARGET_HALTED;
+	switch (riscv_halt_reason(target, triggered_hart)) {
+	case RISCV_HALT_BREAKPOINT:
+		target->debug_reason = DBG_REASON_BREAKPOINT;
+		break;
+	case RISCV_HALT_INTERRUPT:
+		target->debug_reason = DBG_REASON_DBGRQ;
+		break;
+	case RISCV_HALT_SINGLESTEP:
+		target->debug_reason = DBG_REASON_SINGLESTEP;
+		break;
+	}
+	
+	if (riscv_rtos_enabled(target)) {
 		target->rtos->current_threadid = triggered_hart + 1;
 		target->rtos->current_thread = triggered_hart + 1;
-
-		target->state = TARGET_HALTED;
-		target_call_event_callbacks(target, TARGET_EVENT_HALTED);
-		return ERROR_OK;
-	} else {
-		return riscv_poll_hart(target, riscv_current_hartid(target));
 	}
+
+	target->state = TARGET_HALTED;
+	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
+	return ERROR_OK;
 }
 
 int riscv_openocd_halt(struct target *target)
@@ -703,6 +709,7 @@ int riscv_openocd_halt(struct target *target)
 	}
 
 	target->state = TARGET_HALTED;
+	target->debug_reason = DBG_REASON_DBGRQ;
 	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 	return out;
 }
@@ -751,6 +758,11 @@ int riscv_openocd_step(
 		return out;
 	}
 
+	target->state = TARGET_RUNNING;
+	target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
+	target->state = TARGET_HALTED;
+	target->debug_reason = DBG_REASON_SINGLESTEP;
+	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 	return out;
 }
 
