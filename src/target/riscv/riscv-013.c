@@ -1412,11 +1412,13 @@ static int write_memory(struct target *target, uint32_t address,
 	riscv_addr_t fin_addr = address + (count * size);
 	LOG_DEBUG("writing until final address 0x%016lx", fin_addr);
 	while ((cur_addr = riscv_read_debug_buffer_x(target, d_addr)) < fin_addr) {
-
 		LOG_DEBUG("transferring burst starting at address 0x%016lx", cur_addr);
 		riscv_addr_t start = (cur_addr - address) / size;
                 assert (cur_addr > address);
-                struct riscv_batch *batch = riscv_batch_alloc(target, count + 1, info->dmi_busy_delay + info->ac_busy_delay);
+                struct riscv_batch *batch = riscv_batch_alloc(
+			target,
+			32,
+			info->dmi_busy_delay + info->ac_busy_delay);
 
 		for (riscv_addr_t i = start; i < count; ++i) {
 			riscv_addr_t offset = size*i;
