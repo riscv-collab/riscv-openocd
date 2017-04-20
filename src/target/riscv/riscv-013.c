@@ -1048,12 +1048,16 @@ static int examine(struct target *target)
 
 	/* Before doing anything else we must first enumerate the harts. */
 	RISCV_INFO(r);
-	for (int i = 0; i < RISCV_MAX_HARTS; ++i) {
-		riscv_set_current_hartid(target, i);
-		uint32_t s = dmi_read(target, DMI_DMSTATUS);
-		if (get_field(s, DMI_DMSTATUS_ANYNONEXISTENT))
-			break;
-		r->hart_count = i + 1;
+	if (riscv_rtos_enabled(target)) {
+		for (int i = 0; i < RISCV_MAX_HARTS; ++i) {
+			riscv_set_current_hartid(target, i);
+			uint32_t s = dmi_read(target, DMI_DMSTATUS);
+			if (get_field(s, DMI_DMSTATUS_ANYNONEXISTENT))
+				break;
+			r->hart_count = i + 1;
+		}
+	} else {
+		r->hart_count = 1;
 	}
 
 	LOG_DEBUG("Enumerated %d harts", r->hart_count);
