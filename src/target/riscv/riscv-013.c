@@ -1382,6 +1382,8 @@ static int write_memory(struct target *target, uint32_t address,
 	}
 	riscv_program_write_ram(&program, r_data, value);
 
+	LOG_DEBUG("M[0x%08lx] writes 0x%08lx", (long)address, (long)value);
+
 	if (riscv_program_exec(&program, target) != ERROR_OK) {
 		LOG_ERROR("failed to execute program");
 		return ERROR_FAIL;
@@ -1421,8 +1423,6 @@ static int write_memory(struct target *target, uint32_t address,
 			riscv_addr_t t_addr = address + offset;
 			const uint8_t *t_buffer = buffer + offset;
 
-			LOG_DEBUG("M[0x%08lx] writes 0x%08lx", (long)t_addr, (long)value);
-
 			switch (size) {
 				case 1:
 					value = t_buffer[0];
@@ -1441,6 +1441,8 @@ static int write_memory(struct target *target, uint32_t address,
 					LOG_ERROR("unsupported access size: %d", size);
 					return ERROR_FAIL;
 			}
+
+			LOG_DEBUG("M[0x%08lx] writes 0x%08lx", (long)t_addr, (long)value);
 
 			riscv_batch_add_dmi_write(
 				batch,
