@@ -77,7 +77,10 @@ int riscv_program_exec(struct riscv_program *p, struct target *t)
 		riscv_write_debug_buffer(t, i, p->debug_buffer[i]);
 	}
 
-	riscv_execute_debug_buffer(t);
+	if (riscv_execute_debug_buffer(t) != ERROR_OK) {
+		LOG_DEBUG("Unable to execute program 0x%p", p);
+		return ERROR_FAIL;
+	}
 
 	for (size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
 		p->debug_buffer[i] = riscv_read_debug_buffer(t, i);

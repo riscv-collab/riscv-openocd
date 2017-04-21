@@ -1386,6 +1386,7 @@ static int write_memory(struct target *target, uint32_t address,
 
 	if (riscv_program_exec(&program, target) != ERROR_OK) {
 		LOG_ERROR("failed to execute program");
+		riscv013_clear_abstract_error(target);
 		return ERROR_FAIL;
 	}
 
@@ -1474,6 +1475,7 @@ static int write_memory(struct target *target, uint32_t address,
 			break;
 		default:
 			LOG_ERROR("error when writing memory, abstractcs=0x%08lx", (long)abstractcs);
+			riscv013_set_autoexec(target, d_data, 0);
 			riscv013_clear_abstract_error(target);
 			return ERROR_FAIL;
 		}
@@ -1688,7 +1690,7 @@ riscv_insn_t riscv013_read_debug_buffer(struct target *target, int index)
 	return dmi_read(target, DMI_PROGBUF0 + index);
 }
 
-void riscv013_execute_debug_buffer(struct target *target)
+int riscv013_execute_debug_buffer(struct target *target)
 {
 	riscv013_clear_abstract_error(target);
 
@@ -1708,7 +1710,10 @@ void riscv013_execute_debug_buffer(struct target *target)
 	if (get_field(cs, DMI_ABSTRACTCS_CMDERR) != 0) {
 		LOG_ERROR("unable to execute program: (abstractcs=0x%08x)", cs);
 		dmi_read(target, DMI_DMSTATUS);
+		return ERROR_FAIL;
 	}
+
+	return ERROR_OK;
 }
 
 void riscv013_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d)

@@ -82,7 +82,7 @@ typedef struct {
 	void (*debug_buffer_leave)(struct target *target, struct riscv_program *program);
 	void (*write_debug_buffer)(struct target *target, int i, riscv_insn_t d);
 	riscv_insn_t (*read_debug_buffer)(struct target *target, int i);
-	void (*execute_debug_buffer)(struct target *target);
+	int (*execute_debug_buffer)(struct target *target);
 	int (*dmi_write_u64_bits)(struct target *target);
 	void (*fill_dmi_write_u64)(struct target *target, char *buf, int a, uint64_t d);
 	void (*fill_dmi_nop_u64)(struct target *target, char *buf);
