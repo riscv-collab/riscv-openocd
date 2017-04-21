@@ -1061,6 +1061,12 @@ void riscv_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t 
 	r->fill_dmi_write_u64(target, buf, a, d);
 }
 
+void riscv_fill_dmi_read_u64(struct target *target, char *buf, int a)
+{
+	RISCV_INFO(r);
+	r->fill_dmi_read_u64(target, buf, a);
+}
+
 void riscv_fill_dmi_nop_u64(struct target *target, char *buf)
 {
 	RISCV_INFO(r);

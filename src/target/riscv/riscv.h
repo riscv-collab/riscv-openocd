@@ -85,6 +85,7 @@ typedef struct {
 	int (*execute_debug_buffer)(struct target *target);
 	int (*dmi_write_u64_bits)(struct target *target);
 	void (*fill_dmi_write_u64)(struct target *target, char *buf, int a, uint64_t d);
+	void (*fill_dmi_read_u64)(struct target *target, char *buf, int a);
 	void (*fill_dmi_nop_u64)(struct target *target, char *buf);
 } riscv_info_t;
 
@@ -198,6 +199,7 @@ int riscv_execute_debug_buffer(struct target *target);
 
 void riscv_fill_dmi_nop_u64(struct target *target, char *buf);
 void riscv_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d);
+void riscv_fill_dmi_read_u64(struct target *target, char *buf, int a);
 int riscv_dmi_write_u64_bits(struct target *target);
 
 #endif
