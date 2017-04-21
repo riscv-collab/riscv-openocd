@@ -1259,8 +1259,12 @@ static int read_memory(struct target *target, uint32_t address,
 	}
 
 	if (riscv_program_exec(&program, target) != ERROR_OK) {
-		LOG_ERROR("failed to execute program");
+		uint32_t acs = dmi_read(target, DMI_ABSTRACTCS);
+		LOG_ERROR("failed to execute program, abstractcs=0x%08x", acs);
 		riscv013_clear_abstract_error(target);
+		riscv_set_register(target, GDB_REGNO_S0, s0);
+		riscv_set_register(target, GDB_REGNO_S1, s1);
+		LOG_ERROR("  exiting with ERROR_FAIL");
 		return ERROR_FAIL;
 	}
 
@@ -1285,14 +1289,6 @@ static int read_memory(struct target *target, uint32_t address,
 	}
 
 	LOG_DEBUG("M[0x%08lx] reads 0x%08lx", (long)address, (long)value);
-
-	{
-		uint32_t acs = dmi_read(target, DMI_ABSTRACTCS);
-		if (get_field(acs, DMI_ABSTRACTCS_CMDERR) != CMDERR_NONE) {
-			LOG_ERROR("failed to execute program with error %d", acs);
-			return ERROR_FAIL;
-		}
-	}
 
 	/* The rest of this program is designed to be fast so it reads various
 	 * DMI registers directly. */
@@ -1386,6 +1382,8 @@ static int read_memory(struct target *target, uint32_t address,
 		default:
 			LOG_ERROR("error when writing memory, abstractcs=0x%08lx", (long)abstractcs);
 			riscv013_set_autoexec(target, d_data, 0);
+			riscv_set_register(target, GDB_REGNO_S0, s0);
+			riscv_set_register(target, GDB_REGNO_S1, s1);
 			riscv013_clear_abstract_error(target);
 			return ERROR_FAIL;
 		}
@@ -1479,17 +1477,13 @@ static int write_memory(struct target *target, uint32_t address,
 	LOG_DEBUG("M[0x%08lx] writes 0x%08lx", (long)address, (long)value);
 
 	if (riscv_program_exec(&program, target) != ERROR_OK) {
-		LOG_ERROR("failed to execute program");
-		riscv013_clear_abstract_error(target);
-		return ERROR_FAIL;
-	}
-
-	{
 		uint32_t acs = dmi_read(target, DMI_ABSTRACTCS);
-		if (get_field(acs, DMI_ABSTRACTCS_CMDERR) != CMDERR_NONE) {
-			LOG_ERROR("failed to execute program with error %d", acs);
-			return ERROR_FAIL;
-		}
+		LOG_ERROR("failed to execute program, abstractcs=0x%08x", acs);
+		riscv013_clear_abstract_error(target);
+		riscv_set_register(target, GDB_REGNO_S0, s0);
+		riscv_set_register(target, GDB_REGNO_S1, s1);
+		LOG_ERROR("  exiting with ERROR_FAIL");
+		return ERROR_FAIL;
 	}
 
 	/* The rest of this program is designed to be fast so it reads various
@@ -1571,6 +1565,8 @@ static int write_memory(struct target *target, uint32_t address,
 			LOG_ERROR("error when writing memory, abstractcs=0x%08lx", (long)abstractcs);
 			riscv013_set_autoexec(target, d_data, 0);
 			riscv013_clear_abstract_error(target);
+			riscv_set_register(target, GDB_REGNO_S0, s0);
+			riscv_set_register(target, GDB_REGNO_S1, s1);
 			return ERROR_FAIL;
 		}
 	}

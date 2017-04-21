@@ -1051,8 +1051,7 @@ riscv_addr_t riscv_read_debug_buffer_x(struct target *target, int index)
 int riscv_execute_debug_buffer(struct target *target)
 {
 	RISCV_INFO(r);
-	r->execute_debug_buffer(target);
-	return ERROR_OK;
+	return r->execute_debug_buffer(target);
 }
 
 void riscv_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d)
