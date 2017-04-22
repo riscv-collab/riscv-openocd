@@ -46,6 +46,7 @@ int riscv_program_init(struct riscv_program *p, struct target *t);
  * program to execute.  That's OK, just make sure this eventually terminates.
  * */
 int riscv_program_exec(struct riscv_program *p, struct target *t);
+int riscv_program_load(struct riscv_program *p, struct target *t);
 
 /* Clears a program, removing all the state associated with it. */
 int riscv_program_clear(struct riscv_program *p, struct target *t);
@@ -112,6 +113,9 @@ int riscv_program_ebreak(struct riscv_program *p);
 
 int riscv_program_lui(struct riscv_program *p, enum gdb_regno d, int32_t u);
 int riscv_program_addi(struct riscv_program *p, enum gdb_regno d, enum gdb_regno s, int16_t i);
+
+int riscv_program_fsd(struct riscv_program *p, enum gdb_regno s, riscv_addr_t addr);
+int riscv_program_fld(struct riscv_program *p, enum gdb_regno d, riscv_addr_t addr);
 
 /* Assembler macros. */
 int riscv_program_li(struct riscv_program *p, enum gdb_regno d, riscv_reg_t c);

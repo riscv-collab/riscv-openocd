@@ -13,17 +13,18 @@ static void dump_field(const struct scan_field *field);
 
 struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_t idle)
 {
+	scans += 4;
 	struct riscv_batch *out = malloc(sizeof(*out));
 	memset(out, 0, sizeof(*out));
 	out->target = target;
 	out->allocated_scans = scans;
 	out->used_scans = 0;
 	out->idle_count = idle;
-	out->data_out = malloc(sizeof(*out->data_out) * (scans + 1) * sizeof(uint64_t));
-	out->data_in  = malloc(sizeof(*out->data_in)  * (scans + 1) * sizeof(uint64_t));
-	out->fields = malloc(sizeof(*out->fields) * (scans + 1));
+	out->data_out = malloc(sizeof(*out->data_out) * (scans) * sizeof(uint64_t));
+	out->data_in  = malloc(sizeof(*out->data_in)  * (scans) * sizeof(uint64_t));
+	out->fields = malloc(sizeof(*out->fields) * (scans));
 	out->last_scan = RISCV_SCAN_TYPE_INVALID;
-	out->read_keys = malloc(sizeof(*out->read_keys) * (scans + 1));
+	out->read_keys = malloc(sizeof(*out->read_keys) * (scans));
 	out->read_keys_used = 0;
 	return out;
 }
@@ -38,12 +39,13 @@ void riscv_batch_free(struct riscv_batch *batch)
 
 bool riscv_batch_full(struct riscv_batch *batch)
 {
-	return batch->used_scans >= batch->allocated_scans;
+	return batch->used_scans > (batch->allocated_scans - 4);
 }
 
 void riscv_batch_run(struct riscv_batch *batch)
 {
 	LOG_DEBUG("running a batch of %ld scans", (long)batch->used_scans);
+	riscv_batch_add_nop(batch);
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
 		dump_field(batch->fields + i);
@@ -92,7 +94,7 @@ size_t riscv_batch_add_dmi_read(struct riscv_batch *batch, unsigned address)
 	riscv_batch_add_nop(batch);
 
 	batch->read_keys[batch->read_keys_used] = batch->used_scans - 1;
-	LOG_DEBUG("read key %ld for batch 0x%p is %ld (0x%p)", batch->read_keys_used, batch, batch->used_scans - 1, (uint64_t*)batch->data_in + (batch->used_scans - 1));
+	LOG_DEBUG("read key %ld for batch 0x%p is %ld (0x%p)", batch->read_keys_used, batch, batch->used_scans - 1, (uint64_t*)batch->data_in + (batch->used_scans + 1));
 	return batch->read_keys_used++;
 }
 
@@ -127,6 +129,7 @@ void dump_field(const struct scan_field *field)
         if (debug_level < LOG_LVL_DEBUG)
                 return;
 
+	assert(field->out_value != NULL);
         uint64_t out = buf_get_u64(field->out_value, 0, field->num_bits);
         unsigned int out_op = get_field(out, DTM_DMI_OP);
         unsigned int out_data = get_field(out, DTM_DMI_DATA);

@@ -526,24 +526,15 @@ static int register_write_direct(struct target *target, unsigned number,
 	struct riscv_program program;
 	riscv_program_init(&program, target);
 
-	riscv_addr_t input = riscv_program_alloc_x(&program);
-	switch (riscv_xlen(target)) {
-	case 64:
-		riscv_program_write_ram(&program, input + 4, value >> 32);
-	case 32:
-		riscv_program_write_ram(&program, input, value);
-		break;
-	default:
-		LOG_ERROR("Unknown XLEN: %d\n", riscv_xlen(target));
-		abort();
-	}
+	riscv_addr_t input = riscv_program_alloc_d(&program);
+	riscv_program_write_ram(&program, input + 4, value >> 32);
+	riscv_program_write_ram(&program, input, value);
 
 	assert(GDB_REGNO_XPR0 == 0);
 	if (number <= GDB_REGNO_XPR31) {
 		riscv_program_lx(&program, number, input);
 	} else if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
-		LOG_ERROR("FIXME: I don't support floating-point");
-		abort();
+		riscv_program_fld(&program, number, input);
 	} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
 		enum gdb_regno temp = riscv_program_gettemp(&program);
 		riscv_program_lx(&program, temp, input);
@@ -575,14 +566,15 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 {
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	riscv_addr_t output = riscv_program_alloc_x(&program);
+	riscv_addr_t output = riscv_program_alloc_d(&program);
+	riscv_program_write_ram(&program, output + 4, 0);
+	riscv_program_write_ram(&program, output, 0);
 
 	assert(GDB_REGNO_XPR0 == 0);
 	if (number <= GDB_REGNO_XPR31) {
 		riscv_program_sx(&program, number, output);
 	} else if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
-		LOG_ERROR("FIXME: I don't support floating-point");
-		abort();
+		riscv_program_fsd(&program, number, output);
 	} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
 		enum gdb_regno temp = riscv_program_gettemp(&program);
 		riscv_program_csrr(&program, temp, number);
@@ -599,13 +591,8 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 	}
 
 	*value = 0;
-	switch (riscv_xlen(target)) {
-	case 64:
-		*value |= ((uint64_t)(riscv_program_read_ram(&program, output + 4))) << 32;
-	case 32:
-		*value |= riscv_program_read_ram(&program, output);
-	}
-
+	*value |= ((uint64_t)(riscv_program_read_ram(&program, output + 4))) << 32;
+	*value |= riscv_program_read_ram(&program, output);
 	LOG_DEBUG("register 0x%x = 0x%" PRIx64, number, *value);
 	return ERROR_OK;
 }
@@ -1227,6 +1214,7 @@ static int read_memory(struct target *target, uint32_t address,
 	riscv_addr_t r_addr = riscv_program_alloc_x(&program);
 	riscv_program_fence(&program);
 	riscv_program_lx(&program, GDB_REGNO_S0, r_addr);
+	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 	switch (size) {
 		case 1:
 			riscv_program_lbr(&program, GDB_REGNO_S1, GDB_REGNO_S0, 0);
@@ -1242,16 +1230,16 @@ static int read_memory(struct target *target, uint32_t address,
 			return ERROR_FAIL;
 	}
 	riscv_program_sw(&program, GDB_REGNO_S1, r_data);
-	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 	riscv_program_sx(&program, GDB_REGNO_S0, r_addr);
 
+#if 1
 	/* The first round through the program's execution we use the regular
 	 * program execution mechanism. */
 	switch (riscv_xlen(target)) {
 	case 64:
-		riscv_program_write_ram(&program, r_addr + 4, ((riscv_addr_t)address) >> 32);
+		riscv_program_write_ram(&program, r_addr + 4, ((riscv_addr_t)(address - size)) >> 32);
 	case 32:
-		riscv_program_write_ram(&program, r_addr, (riscv_addr_t)address);
+		riscv_program_write_ram(&program, r_addr, (riscv_addr_t)(address - size));
 		break;
 	default:
 		LOG_ERROR("unknown XLEN %d", riscv_xlen(target));
@@ -1269,6 +1257,7 @@ static int read_memory(struct target *target, uint32_t address,
 	}
 
 	uint32_t value = riscv_program_read_ram(&program, r_data);
+	LOG_DEBUG("M[0x%08lx] reads 0x%08lx", (long)address, (long)value);
 	switch (size) {
 	case 1:
 		buffer[0] = value;
@@ -1287,8 +1276,31 @@ static int read_memory(struct target *target, uint32_t address,
 		LOG_ERROR("unsupported access size: %d", size);
 		return ERROR_FAIL;
 	}
+#else
+	/* The first round through the program's execution we use the regular
+	 * program execution mechanism. */
+	switch (riscv_xlen(target)) {
+	case 64:
+		riscv_program_write_ram(&program, r_addr + 4, ((riscv_addr_t)(address)) >> 32);
+	case 32:
+		riscv_program_write_ram(&program, r_addr, (riscv_addr_t)(address));
+		break;
+	default:
+		LOG_ERROR("unknown XLEN %d", riscv_xlen(target));
+		return ERROR_FAIL;
+	}
 
-	LOG_DEBUG("M[0x%08lx] reads 0x%08lx", (long)address, (long)value);
+	if (riscv_program_load(&program, target) != ERROR_OK) {
+		uint32_t acs = dmi_read(target, DMI_ABSTRACTCS);
+		LOG_ERROR("failed to execute program, abstractcs=0x%08x", acs);
+		riscv013_clear_abstract_error(target);
+		riscv_set_register(target, GDB_REGNO_S0, s0);
+		riscv_set_register(target, GDB_REGNO_S1, s1);
+		LOG_ERROR("  exiting with ERROR_FAIL");
+		return ERROR_FAIL;
+	}
+	uint32_t value;
+#endif
 
 	/* The rest of this program is designed to be fast so it reads various
 	 * DMI registers directly. */
@@ -1316,7 +1328,13 @@ static int read_memory(struct target *target, uint32_t address,
 			32,
 			info->dmi_busy_delay + info->ac_busy_delay);
 
+#if 0
+		size_t reads = 1;
+		riscv_batch_add_dmi_read(batch, riscv013_debug_buffer_register(target, r_data));
+#else
 		size_t reads = 0;
+#endif
+		size_t rereads = reads;
 		for (riscv_addr_t i = start; i < count; ++i) {
 			size_t index = 
 				riscv_batch_add_dmi_read(
@@ -1330,15 +1348,14 @@ static int read_memory(struct target *target, uint32_t address,
 
 		riscv_batch_run(batch);
 
-		reads = 0;
-		for (riscv_addr_t i = start; i < count; ++i) {
+		for (size_t i = start; i < start + reads; ++i) {
 			riscv_addr_t offset = size*i;
 			riscv_addr_t t_addr = address + offset;
 			uint8_t *t_buffer = buffer + offset;
 
-			uint64_t dmi_out = riscv_batch_get_dmi_read(batch, reads);
+			uint64_t dmi_out = riscv_batch_get_dmi_read(batch, rereads);
 			value = get_field(dmi_out, DTM_DMI_DATA);
-			reads++;
+			rereads++;
 
 			switch (size) {
 			case 1:
@@ -1632,8 +1649,8 @@ static riscv_reg_t riscv013_get_register(struct target *target, int hid, int rid
 	} else {
 		int result = register_read_direct(target, &out, rid);
 		if (result != ERROR_OK) {
-			LOG_ERROR("Whoops");
-			abort();
+			LOG_ERROR("Unable to read register %d", rid);
+			out = -1;
 		}
 
 		if (rid == GDB_REGNO_MSTATUS)

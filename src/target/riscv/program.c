@@ -92,6 +92,37 @@ int riscv_program_exec(struct riscv_program *p, struct target *t)
 	return ERROR_OK;
 }
 
+int riscv_program_load(struct riscv_program *p, struct target *t)
+{
+	if (riscv_debug_buffer_leave(t, p) != ERROR_OK) {
+		LOG_ERROR("unable to write program buffer exit code");
+		return ERROR_FAIL;
+	}
+
+	if (p->writes_memory && (riscv_program_fence(p) != ERROR_OK)) {
+		LOG_ERROR("Unable to write fence");
+		for(size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
+			LOG_ERROR("ram[%02x]: DASM(0x%08lx) [0x%08lx]", (int)i, (long)p->debug_buffer[i], (long)p->debug_buffer[i]);
+		abort();
+		return ERROR_FAIL;
+	}
+
+	if (riscv_program_ebreak(p) != ERROR_OK) {
+		LOG_ERROR("Unable to write ebreak");
+		for(size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i)
+			LOG_ERROR("ram[%02x]: DASM(0x%08lx) [0x%08lx]", (int)i, (long)p->debug_buffer[i], (long)p->debug_buffer[i]);
+		abort();
+		return ERROR_FAIL;
+	}
+
+	for (size_t i = 0; i < riscv_debug_buffer_size(p->target); ++i) {
+		LOG_DEBUG("Executing program 0x%p: debug_buffer[%02x] = DASM(0x%08lx)", p, (int)i, (long)p->debug_buffer[i]);
+		riscv_write_debug_buffer(t, i, p->debug_buffer[i]);
+	}
+
+	return ERROR_OK;
+}
+
 riscv_addr_t riscv_program_alloc_data(struct riscv_program *p, size_t bytes)
 {
 	LOG_DEBUG("allocating %d bytes of data", (int)bytes);
@@ -363,6 +394,30 @@ int riscv_program_lui(struct riscv_program *p, enum gdb_regno d, int32_t u)
 int riscv_program_addi(struct riscv_program *p, enum gdb_regno d, enum gdb_regno s, int16_t u)
 {
 	return riscv_program_insert(p, addi(d, s, u));
+}
+
+int riscv_program_fsd(struct riscv_program *p, enum gdb_regno d, riscv_addr_t addr)
+{
+	enum gdb_regno t = riscv_program_gah(p, addr) == 0
+		? GDB_REGNO_X0
+		: riscv_program_gettemp(p);
+	if (riscv_program_lah(p, t, addr) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_program_insert(p, fsd(d - GDB_REGNO_FPR0, t, riscv_program_gal(p, addr))) != ERROR_OK)
+		return ERROR_FAIL;
+	riscv_program_puttemp(p, t);
+	p->writes_memory = true;
+	return ERROR_OK;
+}
+
+int riscv_program_fld(struct riscv_program *p, enum gdb_regno d, riscv_addr_t addr)
+{
+	enum gdb_regno t = riscv_program_gah(p, addr) == 0 ? GDB_REGNO_X0 : d;
+	if (riscv_program_lah(p, t, addr) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_program_insert(p, fld(d, t - GDB_REGNO_FPR0, riscv_program_gal(p, addr))) != ERROR_OK)
+		return ERROR_FAIL;
+	return ERROR_OK;
 }
 
 int riscv_program_li(struct riscv_program *p, enum gdb_regno d, riscv_reg_t c)
