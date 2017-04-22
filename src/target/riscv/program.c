@@ -398,6 +398,8 @@ int riscv_program_addi(struct riscv_program *p, enum gdb_regno d, enum gdb_regno
 
 int riscv_program_fsd(struct riscv_program *p, enum gdb_regno d, riscv_addr_t addr)
 {
+	assert(d >= GDB_REGNO_FPR0);
+	assert(d <= GDB_REGNO_FPR31);
 	enum gdb_regno t = riscv_program_gah(p, addr) == 0
 		? GDB_REGNO_X0
 		: riscv_program_gettemp(p);
@@ -412,10 +414,12 @@ int riscv_program_fsd(struct riscv_program *p, enum gdb_regno d, riscv_addr_t ad
 
 int riscv_program_fld(struct riscv_program *p, enum gdb_regno d, riscv_addr_t addr)
 {
+	assert(d >= GDB_REGNO_FPR0);
+	assert(d <= GDB_REGNO_FPR31);
 	enum gdb_regno t = riscv_program_gah(p, addr) == 0 ? GDB_REGNO_X0 : d;
 	if (riscv_program_lah(p, t, addr) != ERROR_OK)
 		return ERROR_FAIL;
-	if (riscv_program_insert(p, fld(d, t - GDB_REGNO_FPR0, riscv_program_gal(p, addr))) != ERROR_OK)
+	if (riscv_program_insert(p, fld(d - GDB_REGNO_FPR0, t, riscv_program_gal(p, addr))) != ERROR_OK)
 		return ERROR_FAIL;
 	return ERROR_OK;
 }
