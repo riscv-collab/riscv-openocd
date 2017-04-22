@@ -65,6 +65,9 @@ typedef struct {
 	/* The number of entries in the debug buffer. */
 	int debug_buffer_size[RISCV_MAX_HARTS];
 
+	/* This avoids invalidating the register cache too often. */
+	bool registers_initialized;
+
 	/* Helper functions that target the various RISC-V debug spec
 	 * implementations. */
 	riscv_reg_t (*get_register)(struct target *, int, int);

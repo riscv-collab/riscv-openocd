@@ -708,6 +708,7 @@ int riscv_openocd_halt(struct target *target)
 		return out;
 	}
 
+	register_cache_invalidate(target->reg_cache);
 	target->state = TARGET_HALTED;
 	target->debug_reason = DBG_REASON_DBGRQ;
 	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
@@ -734,6 +735,7 @@ int riscv_openocd_resume(
 		return out;
 	}
 
+	register_cache_invalidate(target->reg_cache);
 	target->state = TARGET_RUNNING;
 	target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
 	return out;
@@ -758,6 +760,7 @@ int riscv_openocd_step(
 		return out;
 	}
 
+	register_cache_invalidate(target->reg_cache);
 	target->state = TARGET_RUNNING;
 	target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
 	target->state = TARGET_HALTED;
@@ -772,6 +775,7 @@ void riscv_info_init(riscv_info_t *r)
 {
 	memset(r, 0, sizeof(*r));
 	r->dtm_version = 1;
+	r->registers_initialized = false;
 
 	for (size_t h = 0; h < RISCV_MAX_HARTS; ++h) {
 		r->xlen[h] = -1;
@@ -879,6 +883,7 @@ void riscv_set_current_hartid(struct target *target, int hartid)
 	RISCV_INFO(r);
 	r->current_hartid = hartid;
 	assert(riscv_rtos_enabled(target) || target->coreid == hartid);
+	int previous_hartid = riscv_current_hartid(target);
 	if (riscv_rtos_enabled(target))
 		r->select_current_hart(target);
 
@@ -886,6 +891,13 @@ void riscv_set_current_hartid(struct target *target, int hartid)
 	 * setting up the register cache. */
 	if (!target_was_examined(target))
 		return;
+
+	/* Avoid invalidating the register cache all the time. */
+	if (r->registers_initialized && (!riscv_rtos_enabled(target) || (previous_hartid == hartid)) && target->reg_cache->reg_list[GDB_REGNO_XPR0].size == (long)riscv_xlen(target)) {
+		LOG_DEBUG("registers already initialized, skipping");
+		return;
+	} else
+		LOG_DEBUG("Initializing registers: xlen=%d", riscv_xlen(target));
 
 	/* Update the register list's widths. */
 	register_cache_invalidate(target->reg_cache);
@@ -904,6 +916,8 @@ void riscv_set_current_hartid(struct target *target, int hartid)
 			break;
 		}
 	}
+
+	r->registers_initialized = true;
 }
 
 int riscv_current_hartid(const struct target *target)
