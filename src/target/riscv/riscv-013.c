@@ -1150,41 +1150,67 @@ static int examine(struct target *target)
 
 static int assert_reset(struct target *target)
 {
+  /*FIXME -- this only works for single-hart.*/
+  assert(!riscv_rtos_enabled(target));
+  RISCV_INFO(r);
+  assert(r->current_hartid == 0);
+
   select_dmi(target);
-  uint32_t control = DMI_DMCONTROL_DMACTIVE | DMI_DMCONTROL_NDMRESET;
+  LOG_DEBUG("ASSERTING NDRESET");
+  uint32_t control = dmi_read(target, DMI_DMCONTROL);
+  control = set_field(control, DMI_DMCONTROL_NDMRESET, 1);
   if (target->reset_halt) {
-    LOG_DEBUG("TARGET RESET HALT SET, Requesting halt during reset.\n");
-    control |= DMI_DMCONTROL_HALTREQ;
+    LOG_DEBUG("TARGET RESET HALT SET, ensuring halt is set during reset.\n");
+    control = set_field(control, DMI_DMCONTROL_HALTREQ, 1);
+  } else {
+    LOG_DEBUG("TARGET RESET HALT NOT SET\n");
+    control = set_field(control, DMI_DMCONTROL_HALTREQ, 0);
   }
-    
+
   dmi_write(target, DMI_DMCONTROL,
 	    control);
 
-  if (!target->reset_halt) {
-    LOG_DEBUG("TARGET RESET HALT NOT SET, Requesting resume during reset.\n");
-    control = DMI_DMCONTROL_DMACTIVE | DMI_DMCONTROL_RESUMEREQ;
-    dmi_write(target, DMI_DMCONTROL, control);
-  }
-    
   return ERROR_OK;
 }
 
 static int deassert_reset(struct target *target)
 {
+
   select_dmi(target);
 
-  // Note that we don't need to keep asserting
-  // haltreq since we already set it in assert_reset.
-  dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_DMACTIVE);
+  /*FIXME -- this only works for Single Hart*/
+  assert(!riscv_rtos_enabled(target));
+  RISCV_INFO(r);
+  assert(r->current_hartid == 0);
+
+  /*FIXME -- is there bookkeeping we need to do here*/
   
+  uint32_t control = dmi_read(target, DMI_DMCONTROL);
+
+  // Clear the reset, but make sure haltreq is still set
   if (target->reset_halt) {
-    LOG_DEBUG("TARGET RESET HALT SET, waiting for hart to be halted.\n");
-    while (get_field(dmi_read(target, DMI_DMSTATUS), DMI_DMSTATUS_ALLHALTED) == 0) {
-    }
+    control = set_field(control, DMI_DMCONTROL_HALTREQ, 1);
+  }
+
+  control = set_field(control, DMI_DMCONTROL_NDMRESET, 0);
+  dmi_write(target, DMI_DMCONTROL, control);
+
+  uint32_t status;
+  if (target->reset_halt) {
+    LOG_DEBUG("DEASSERTING RESET, waiting for hart to be halted.\n");
+    do {
+      status = dmi_read(target, DMI_DMSTATUS);
+    } while (get_field(status, DMI_DMSTATUS_ALLHALTED) == 0);
   } else {
-    LOG_DEBUG("TARGET RESET HALT NOT SET, waiting for hart to be running.\n");
-    while (get_field(dmi_read(target, DMI_DMSTATUS), DMI_DMSTATUS_ALLRUNNING) == 0) {
-    }
+    LOG_DEBUG("DEASSERTING RESET, waiting for hart to be running.\n");
+    do {
+      status = dmi_read(target, DMI_DMSTATUS);
+      if (get_field(status, DMI_DMSTATUS_ANYHALTED) ||
+	  get_field(status, DMI_DMSTATUS_ANYUNAVAIL)) {
+	LOG_ERROR("Unexpected hart status during reset.\n");
+	abort();
+      }
+    } while (get_field(status, DMI_DMSTATUS_ALLRUNNING) == 0);
   }
   return ERROR_OK;
 }
