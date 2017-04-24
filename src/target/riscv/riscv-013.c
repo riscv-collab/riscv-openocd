@@ -1150,7 +1150,10 @@ static int examine(struct target *target)
 
 static int assert_reset(struct target *target)
 {
-  /*FIXME -- this only works for Hart 0*/
+  /*FIXME -- this only works for single-hart.*/
+  assert(!riscv_rtos_enabled(target));
+  RISCV_INFO(r);
+  assert(r->current_hartid == 0);
 
   select_dmi(target);
   LOG_DEBUG("ASSERTING NDRESET");
@@ -1175,7 +1178,11 @@ static int deassert_reset(struct target *target)
 
   select_dmi(target);
 
-  /*FIXME -- this only works for Hart 0*/
+  /*FIXME -- this only works for Single Hart*/
+  assert(!riscv_rtos_enabled(target));
+  RISCV_INFO(r);
+  assert(r->current_hartid == 0);
+
   /*FIXME -- is there bookkeeping we need to do here*/
   
   uint32_t control = dmi_read(target, DMI_DMCONTROL);
