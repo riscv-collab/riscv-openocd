@@ -341,6 +341,7 @@ static dmi_status_t dmi_scan(struct target *target, uint16_t *address_in,
 	int idle_count = info->dmi_busy_delay;
 	if (exec)
 		idle_count += info->ac_busy_delay;
+	idle_count += 10;
 
 	if (idle_count) {
 		jtag_add_runtest(idle_count, TAP_IDLE);
