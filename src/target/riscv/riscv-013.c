@@ -1329,7 +1329,7 @@ static int read_memory(struct target *target, uint32_t address,
                 struct riscv_batch *batch = riscv_batch_alloc(
 			target,
 			1024,
-			info->dmi_busy_delay + info->ac_busy_delay);
+			info->dmi_busy_delay + info->ac_busy_delay + 10);
 
 		size_t reads = 0;
 		size_t rereads = reads;
@@ -1522,7 +1522,7 @@ static int write_memory(struct target *target, uint32_t address,
                 struct riscv_batch *batch = riscv_batch_alloc(
 			target,
 			1024,
-			info->dmi_busy_delay + info->ac_busy_delay);
+			info->dmi_busy_delay + info->ac_busy_delay + 10);
 
 		for (riscv_addr_t i = start; i < count; ++i) {
 			riscv_addr_t offset = size*i;
