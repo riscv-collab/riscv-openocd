@@ -821,7 +821,13 @@ static int cmsis_dap_swd_switch_seq(enum swd_special_seq seq)
 		return ERROR_FAIL;
 	}
 
-	return cmsis_dap_cmd_DAP_SWJ_Sequence(s_len, s);
+	retval = cmsis_dap_cmd_DAP_SWJ_Sequence(s_len, s);
+	if (retval != ERROR_OK)
+		return retval;
+
+	/* Atmel EDBG needs renew clock setting after SWJ_Sequence
+	 * otherwise default frequency is used */
+	return cmsis_dap_cmd_DAP_SWJ_Clock(jtag_get_speed_khz());
 }
 
 static int cmsis_dap_swd_open(void)
@@ -1493,13 +1499,11 @@ static int cmsis_dap_execute_queue(void)
 
 static int cmsis_dap_speed(int speed)
 {
-	if (speed > DAP_MAX_CLOCK) {
-		LOG_INFO("reduce speed request: %dkHz to %dkHz maximum", speed, DAP_MAX_CLOCK);
-		speed = DAP_MAX_CLOCK;
-	}
+	if (speed > DAP_MAX_CLOCK)
+		LOG_INFO("High speed (adapter_khz %d) may be limited by adapter firmware.", speed);
 
 	if (speed == 0) {
-		LOG_INFO("RTCK not supported");
+		LOG_ERROR("RTCK not supported. Set nonzero adapter_khz.");
 		return ERROR_JTAG_NOT_IMPLEMENTED;
 	}
 
