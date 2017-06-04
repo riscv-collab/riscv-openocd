@@ -1167,8 +1167,20 @@ static int gdb_get_registers_packet(struct connection *connection,
 	reg_packet_p = reg_packet;
 
 	for (i = 0; i < reg_list_size; i++) {
+#if 1 // GNU_MCU_ECLIPSE_RISCV
+		if (!reg_list[i]->valid) {
+			retval = reg_list[i]->type->get(reg_list[i]);
+			if (retval != ERROR_OK) {
+				LOG_DEBUG("Couldn't get register %s.", reg_list[i]->name);
+				free(reg_packet);
+				free(reg_list);
+				return gdb_error(connection, retval);
+			}
+		}
+#else
 		if (!reg_list[i]->valid)
 			reg_list[i]->type->get(reg_list[i]);
+#endif
 		gdb_str_to_target(target, reg_packet_p, reg_list[i]);
 		reg_packet_p += DIV_ROUND_UP(reg_list[i]->size, 8) * 2;
 	}
@@ -1229,7 +1241,17 @@ static int gdb_set_registers_packet(struct connection *connection,
 		bin_buf = malloc(DIV_ROUND_UP(reg_list[i]->size, 8));
 		gdb_target_to_reg(target, packet_p, chars, bin_buf);
 
+#if 1 // GNU_MCU_ECLIPSE_RISCV
+		retval = reg_list[i]->type->set(reg_list[i], bin_buf);
+		if (retval != ERROR_OK) {
+			LOG_DEBUG("Couldn't set register %s.", reg_list[i]->name);
+			free(reg_list);
+			free(bin_buf);
+			return gdb_error(connection, retval);
+		}
+#else
 		reg_list[i]->type->set(reg_list[i], bin_buf);
+#endif
 
 		/* advance packet pointer */
 		packet_p += chars;
@@ -1269,8 +1291,19 @@ static int gdb_get_register_packet(struct connection *connection,
 		return ERROR_SERVER_REMOTE_CLOSED;
 	}
 
+#if 1 // GNU_MCU_ECLIPSE_RISCV
+	if (!reg_list[reg_num]->valid) {
+	        retval = reg_list[reg_num]->type->get(reg_list[reg_num]);
+		if (retval != ERROR_OK) {
+			LOG_DEBUG("Couldn't get register %s.", reg_list[reg_num]->name);
+			free (reg_list);
+			return gdb_error(connection, retval);
+		}
+	}
+#else
 	if (!reg_list[reg_num]->valid)
 		reg_list[reg_num]->type->get(reg_list[reg_num]);
+#endif
 
 	reg_packet = malloc(DIV_ROUND_UP(reg_list[reg_num]->size, 8) * 2 + 1); /* plus one for string termination null */
 
@@ -1324,7 +1357,17 @@ static int gdb_set_register_packet(struct connection *connection,
 
 	gdb_target_to_reg(target, separator + 1, chars, bin_buf);
 
+#if 1 // GNU_MCU_ECLIPSE_RISCV
+	retval = reg_list[reg_num]->type->set(reg_list[reg_num], bin_buf);
+	if (retval != ERROR_OK){
+		LOG_DEBUG("Couldn't set register %s.", reg_list[reg_num]->name);
+		free(bin_buf);
+		free(reg_list);
+		return gdb_error(connection, retval);
+	}
+#else
 	reg_list[reg_num]->type->set(reg_list[reg_num], bin_buf);
+#endif
 
 	gdb_put_packet(connection, "OK", 2);
 
@@ -2561,6 +2604,15 @@ static int gdb_v_packet(struct connection *connection,
 	struct gdb_service *gdb_service = connection->service->priv;
 	int result;
 
+#if 1 // GNU_MCU_ECLIPSE_RISCV
+	struct target *target = get_target_from_connection(connection);
+	if (target->rtos != NULL && target->rtos->gdb_v_packet != NULL) {
+		int out = target->rtos->gdb_v_packet(connection, packet, packet_size);
+		if (out != GDB_THREAD_PACKET_NOT_CONSUMED)
+			return out;
+	}
+#endif
+
 	/* if flash programming disabled - send a empty reply */
 
 	if (gdb_flash_program == 0) {
@@ -2759,7 +2811,11 @@ static void gdb_log_callback(void *priv, const char *file, unsigned line,
 	gdb_output_con(connection, string);
 }
 
+#if 1 // GNU_MCU_ECLIPSE_RISCV
+void gdb_sig_halted(struct connection *connection)
+#else
 static void gdb_sig_halted(struct connection *connection)
+#endif
 {
 	char sig_reply[4];
 	snprintf(sig_reply, 4, "T%2.2x", 2);
@@ -3316,3 +3372,11 @@ int gdb_register_commands(struct command_context *cmd_ctx)
 	gdb_port_next = strdup("3333");
 	return register_commands(cmd_ctx, NULL, gdb_command_handlers);
 }
+
+#if 1 // GNU_MCU_ECLIPSE_RISCV
+void gdb_set_frontend_state_running(struct connection *connection)
+{
+	struct gdb_connection *gdb_con = connection->priv;
+	gdb_con->frontend_state = TARGET_RUNNING;
+}
+#endif

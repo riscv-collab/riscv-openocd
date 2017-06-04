@@ -20,6 +20,7 @@ noinst_LTLIBRARIES += %D%/libtarget.la
 	$(MIPS32_SRC) \
 	$(NDS32_SRC) \
 	$(INTEL_IA32_SRC) \
+	$(RISCV_SRC) \
 	%D%/avrt.c \
 	%D%/dsp563xx.c \
 	%D%/dsp563xx_once.c \
@@ -129,6 +130,13 @@ INTEL_IA32_SRC = \
 	%D%/quark_d20xx.c \
 	%D%/lakemont.c \
 	%D%/x86_32_common.c
+
+RISCV_SRC = \
+	%D%/riscv/riscv-011.c \
+	%D%/riscv/riscv-013.c \
+	%D%/riscv/riscv.c \
+	%D%/riscv/program.c \
+	%D%/riscv/batch.c
 
 %C%_libtarget_la_SOURCES += \
 	%D%/algorithm.h \

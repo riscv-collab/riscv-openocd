@@ -23,6 +23,7 @@ NOR_DRIVERS = \
 	%D%/efm32.c \
 	%D%/em357.c \
 	%D%/faux.c \
+	%D%/fespi.c \
 	%D%/fm3.c \
 	%D%/fm4.c \
 	%D%/jtagspi.c \

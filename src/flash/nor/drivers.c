@@ -38,6 +38,9 @@ extern struct flash_driver em357_flash;
 extern struct flash_driver faux_flash;
 extern struct flash_driver fm3_flash;
 extern struct flash_driver fm4_flash;
+#if 1 // GNU_MCU_ECLIPSE_RISCV
+extern struct flash_driver fespi_flash;
+#endif
 extern struct flash_driver jtagspi_flash;
 extern struct flash_driver kinetis_flash;
 extern struct flash_driver kinetis_ke_flash;
@@ -91,6 +94,9 @@ static struct flash_driver *flash_drivers[] = {
 	&faux_flash,
 	&fm3_flash,
 	&fm4_flash,
+#if 1 // GNU_MCU_ECLIPSE_RISCV
+	&fespi_flash,
+#endif
 	&jtagspi_flash,
 	&kinetis_flash,
 	&kinetis_ke_flash,
