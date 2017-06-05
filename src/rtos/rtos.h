@@ -54,7 +54,7 @@ struct rtos {
 	struct thread_detail *thread_details;
 	int thread_count;
 	int (*gdb_thread_packet)(struct connection *connection, char const *packet, int packet_size);
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 	int (*gdb_v_packet)(struct connection *connection, char const *packet, int packet_size);
 #endif
 	void *rtos_specific_params;

@@ -105,7 +105,7 @@ extern struct target_type nds32_v3m_target;
 extern struct target_type or1k_target;
 extern struct target_type quark_x10xx_target;
 extern struct target_type quark_d20xx_target;
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 extern struct target_type riscv_target;
 #endif
 
@@ -142,7 +142,7 @@ static struct target_type *target_types[] = {
 #if BUILD_TARGET64
     &aarch64_target,
 #endif
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
     &riscv_target,
 #endif
     NULL,
@@ -1104,7 +1104,7 @@ int target_add_breakpoint(struct target *target,
                           struct breakpoint *breakpoint)
 {
     if ((target->state != TARGET_HALTED) && (breakpoint->type != BKPT_HARD)) {
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         LOG_WARNING("target %s is not halted (add breakpoint)", target_name(target));
 #else
         LOG_WARNING("target %s is not halted", target_name(target));
@@ -1118,7 +1118,7 @@ int target_add_context_breakpoint(struct target *target,
                                   struct breakpoint *breakpoint)
 {
     if (target->state != TARGET_HALTED) {
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         LOG_WARNING("target %s is not halted (add context breakpoint)", target_name(target));
 #else
         LOG_WARNING("target %s is not halted", target_name(target));
@@ -1132,7 +1132,7 @@ int target_add_hybrid_breakpoint(struct target *target,
                                  struct breakpoint *breakpoint)
 {
     if (target->state != TARGET_HALTED) {
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         LOG_WARNING("target %s is not halted (add hybrid breakpoint)", target_name(target));
 #else
         LOG_WARNING("target %s is not halted", target_name(target));
@@ -1152,7 +1152,7 @@ int target_add_watchpoint(struct target *target,
                           struct watchpoint *watchpoint)
 {
     if (target->state != TARGET_HALTED) {
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         LOG_WARNING("target %s is not halted (add watchpoint)", target_name(target));
 #else
         LOG_WARNING("target %s is not halted", target_name(target));
@@ -1170,7 +1170,7 @@ int target_hit_watchpoint(struct target *target,
                           struct watchpoint **hit_watchpoint)
 {
     if (target->state != TARGET_HALTED) {
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         LOG_WARNING("target %s is not halted (hit watchpoint)", target->cmd_name);
 #else
         LOG_WARNING("target %s is not halted", target->cmd_name);
@@ -1204,7 +1204,7 @@ int target_step(struct target *target,
 int target_get_gdb_fileio_info(struct target *target, struct gdb_fileio_info *fileio_info)
 {
     if (target->state != TARGET_HALTED) {
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         LOG_WARNING("target %s is not halted (gdb fileio)", target->cmd_name);
 #else
         LOG_WARNING("target %s is not halted", target->cmd_name);
@@ -1217,7 +1217,7 @@ int target_get_gdb_fileio_info(struct target *target, struct gdb_fileio_info *fi
 int target_gdb_fileio_end(struct target *target, int retcode, int fileio_errno, bool ctrl_c)
 {
     if (target->state != TARGET_HALTED) {
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         LOG_WARNING("target %s is not halted (gdb fileio end)", target->cmd_name);
 #else
         LOG_WARNING("target %s is not halted", target->cmd_name);
@@ -1231,7 +1231,7 @@ int target_profiling(struct target *target, uint32_t *samples,
                      uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
 {
     if (target->state != TARGET_HALTED) {
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         LOG_WARNING("target %s is not halted (profiling)", target->cmd_name);
 #else
         LOG_WARNING("target %s is not halted", target->cmd_name);
@@ -2004,7 +2004,7 @@ int target_arch_state(struct target *target)
 {
     int retval;
     if (target == NULL) {
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         LOG_USER("No target has been configured");
 #else
         LOG_WARNING("No target has been configured");
@@ -2013,7 +2013,7 @@ int target_arch_state(struct target *target)
         return ERROR_OK;
     }
     
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
     LOG_USER("%s: target state: %s", target_name(target),
              target_state_name(target));
 #endif
@@ -2769,7 +2769,7 @@ COMMAND_HANDLER(handle_reg_command)
     struct reg *reg = NULL;
     unsigned count = 0;
     char *value;
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
     int retval;
 #endif
     
@@ -2857,7 +2857,7 @@ COMMAND_HANDLER(handle_reg_command)
         if ((CMD_ARGC == 2) && (strcmp(CMD_ARGV[1], "force") == 0))
             reg->valid = 0;
         
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         if (reg->valid == 0) {
             retval = reg->type->get(reg);
             if (retval != ERROR_OK) {
@@ -2882,7 +2882,7 @@ COMMAND_HANDLER(handle_reg_command)
             return ERROR_FAIL;
         str_to_buf(CMD_ARGV[1], strlen(CMD_ARGV[1]), buf, reg->size, 0);
         
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
         retval = reg->type->set(reg, buf);
         if (retval != ERROR_OK) {
             LOG_DEBUG("Couldn't set register %s.", reg->name);
@@ -4858,7 +4858,7 @@ static int jim_target_configure(Jim_Interp *interp, int argc, Jim_Obj * const *a
     
     Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
     goi.isconfigure = !strcmp(Jim_GetString(argv[0], NULL), "configure");
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
     int need_args = 1 + goi.isconfigure;
     if (goi.argc < need_args) {
         Jim_WrongNumArgs(goi.interp, goi.argc, goi.argv,

@@ -45,7 +45,7 @@ static inline struct target *get_target_from_connection(struct connection *conne
 	return gdb_service->target;
 }
 
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 void gdb_set_frontend_state_running(struct connection *connection);
 void gdb_sig_halted(struct connection *connection);
 #endif

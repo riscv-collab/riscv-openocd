@@ -430,7 +430,7 @@ static void ftdi_execute_pathmove(struct jtag_command *cmd)
 	tap_set_end_state(tap_get_state());
 }
 
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 #ifdef _DEBUG_JTAG_IO_
 static void debug_jtag_io_value(const char *prefix, const uint8_t *value,
 		unsigned int num_bits)
@@ -462,7 +462,7 @@ static void ftdi_execute_scan(struct jtag_command *cmd)
 {
 	DEBUG_JTAG_IO("%s type:%d", cmd->cmd.scan->ir_scan ? "IRSCAN" : "DRSCAN",
 		jtag_scan_type(cmd->cmd.scan));
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 #ifdef _DEBUG_JTAG_IO_
 	debug_jtag_io_value("  out=", cmd->cmd.scan->fields->out_value,
 			cmd->cmd.scan->fields->num_bits);
@@ -550,7 +550,7 @@ static void ftdi_execute_scan(struct jtag_command *cmd)
 		(cmd->cmd.scan->ir_scan) ? "IR" : "DR", scan_size,
 		tap_state_name(tap_get_end_state()));
 
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 #ifdef _DEBUG_JTAG_IO_
 	debug_jtag_io_value("   in=", cmd->cmd.scan->fields->in_value,
 			cmd->cmd.scan->fields->num_bits);

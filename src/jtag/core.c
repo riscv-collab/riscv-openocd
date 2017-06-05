@@ -836,7 +836,7 @@ int default_interface_jtag_execute_queue(void)
 		return ERROR_FAIL;
 	}
 
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 	int result = jtag->execute_queue();
 
 #if 0
@@ -1224,7 +1224,7 @@ static int jtag_examine_chain(void)
 
 		if ((idcode & 1) == 0) {
 			/* Zero for LSB indicates a device in bypass */
-#if 1 // GNU_MCU_ECLIPSE_RISCV
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 			LOG_INFO("TAP %s does not have valid IDCODE (idcode=0x%x)",
 					tap->dotted_name, idcode);
 #else
