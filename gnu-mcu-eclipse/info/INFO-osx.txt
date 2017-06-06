@@ -1,0 +1,19 @@
+
+This is the GNU MCU Eclipse (formerly GNU ARM Eclipse) version of OpenOCD for Apple OS X.
+
+If generally follows the official releases.
+
+The changes are minimal, and mainly consist in the packing
+procedure to generate the setup/install packages (`CHANGES.txt`).
+
+The main addition is support for RISC-V devices.
+
+For more info and support, please read the GNU MCU Eclipe project pages from:
+
+  http://gnuarmeclipse.github.io
+
+
+Thank you for using GNU MCU Eclipse,
+
+Liviu Ionescu
+
