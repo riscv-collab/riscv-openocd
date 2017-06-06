@@ -1,6 +1,16 @@
 
 The changes applied to the OpenOCD master branch, and the releases, are:
 
+[2017-06-06]
+
+- rename gnu-mcu-eclipse & content
+- add sifive-* configuration files to the board folder
+
+[2017-06-04]
+
+- merge original branch 'master' from 2017-06-02 into gnuarmeclipse-dev.
+- merge RISC-V commit '51ab5a0' from 2017-05-26 into gnuarmeclipse-dev
+
 [2017-01-24]
 
 - v0.10.0-20170124* released (stable)
