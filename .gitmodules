@@ -1,0 +1,6 @@
+[submodule "src/riscv-gnu-toolchain"]
+	path = src/riscv-gnu-toolchain
+	url = git://github.com/riscv/riscv-gnu-toolchain
+[submodule "src/libexpat"]
+	path = src/libexpat
+	url = git://github.com/libexpat/libexpat
