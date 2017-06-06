@@ -63,7 +63,7 @@ $(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp: \
 	$(eval $@_BUILD := $(patsubst %/stamps/riscv-gnu-toolchain/install.stamp,%/build/riscv-gnu-toolchain,$@))
 	$(eval $@_INSTALL := $(patsubst %/stamps/riscv-gnu-toolchain/install.stamp,%/install/riscv64-unknown-elf-gcc-$(VERSION)-$($@_TARGET),$@))
 	mkdir -p $($@_BUILD)
-	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) --with-host=$($@_TARGET) $($($@_TARGET)-rgt-configure)
+	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) --with-host=$($@_TARGET) $($($@_TARGET)-rgt-configure) --enable-multilib
 	$(MAKE) PATH="$(abspath $(OBJ_NATIVE)/install/riscv64-unknown-elf-gcc-$(VERSION)-$(NATIVE)/bin:$(PATH))" -C $($@_BUILD)
 	mkdir -p $(dir $@)
 	date > $@
