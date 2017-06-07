@@ -25,6 +25,7 @@ VERSION ?= $(shell cd $(SRC_RGT); git describe --tags | sed s/^v//g)
 
 # The actual output of this repository is a set of tarballs.
 .PHONY: windows
+windows: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WINDOWS).zip
 windows: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WINDOWS).tar.gz
 windows: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WINDOWS).src.tar.gz
 .PHONY: ubuntu
@@ -44,6 +45,12 @@ i686-w64-mingw32-rgt-configure   := --without-system-zlib
 .SECONDARY:
 
 # Builds riscv-gnu-toolchain for various targets.
+$(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.zip: \
+		$(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp
+	$(eval $@_TARGET := $(patsubst $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.zip,%,$@))
+	mkdir -p $(dir $@)
+	cd $(OBJDIR)/$($@_TARGET)/install; zip -r $(abspath $@) riscv64-unknown-elf-gcc-$(VERSION)-$($@_TARGET)
+
 $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.tar.gz: \
 		$(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp
 	$(eval $@_TARGET := $(patsubst $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.tar.gz,%,$@))
