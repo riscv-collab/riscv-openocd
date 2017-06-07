@@ -45,7 +45,7 @@
 #include <strings.h>
 #endif
 
-// [GNU ARM Eclipse]
+// [GNU MCU Eclipse]
 #if 0
 
 #ifdef PKGBLDDATE
@@ -58,7 +58,7 @@
 
 #else
 
-#define OPENOCD_BRANDING "GNU ARM Eclipse "
+#define OPENOCD_BRANDING "GNU MCU Eclipse "
 #if INTPTR_MAX == INT32_MAX
 #define OPENOCD_WORDSIZE "32-bits "
 #elif INTPTR_MAX == INT64_MAX

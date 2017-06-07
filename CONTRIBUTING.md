@@ -10,9 +10,9 @@ Just [register](http://www.element14.com/community/create-account.jspa) to eleme
 
 ## Submit bug reports & enhancement requests
 
-If you are convinced you identified a bug (if you have doubts, use the forum), or you have a pertinent suggestion how to enhance the GNU ARM Eclipse **OpenOCD**, please use the [GitHub Issues](https://github.com/gnuarmeclipse/openocd/issues) tracker.
+If you are convinced you identified a bug (if you have doubts, use the forum), or you have a pertinent suggestion how to enhance the **GNU MCU Eclipse OpenOCD**, please use the [GitHub Issues](https://github.com/gnu-mcu-eclipse/openocd/issues) tracker.
 
-Be sure you report only issues related to the GNU ARM Eclipse **OpenOCD**. **DO NOT** use it for issues related to the plug-ins or the other tools (QEMU, OpenOCD, etc), which should be addressed to their corresponding trackers. Web content issues should be addressed to the [Web Issues](https://github.com/gnuarmeclipse/gnuarmeclipse.github.io/issues/1) tracker. J-Link specific questions should be addresses to SEGGER support.
+Be sure you report only issues related to the **GNU MCU Eclipse OpenOCD**. **DO NOT** use it for issues related to the plug-ins or the other tools (QEMU, OpenOCD, etc), which should be addressed to their corresponding trackers. Web content issues should be addressed to the [Web Issues](https://github.com/gnuarmeclipse/gnuarmeclipse.github.io/issues/1) tracker. J-Link specific questions should be addresses to SEGGER support.
 
 Before reporting issues, please check the list of [Known Issues](http://gnuarmeclipse.github.io/support/known-issues/) and the [FAQ](http://gnuarmeclipse.github.io/support/faq/).
 

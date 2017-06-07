@@ -1,7 +1,7 @@
 
 ### Prerequisites
 
-In case you encounter problems while using the GNU ARM Eclipse **OpenOCD**, please consider the following:
+In case you encounter problems while using the **GNU MCU Eclipse OpenOCD**, please consider the following:
 
 * [ ] read the documentation pages carefully
 * [ ] check the [Known issues](http://gnuarmeclipse.github.io/support/known-issues/)
@@ -16,8 +16,8 @@ use the [GNU ARM Eclipse forum](http://gnuarmeclipse.github.io/support/forum/).
 Just [register](http://www.element14.com/community/create-account.jspa) to element14 community and use the [Start a discussion](http://www.element14.com/community/discussion/create.jspa?containerID=2436&containerType=700) link, with the OpenOCD category.
 
 If you are convinced that you identified a bug (if you have doubts, use the forum), or you have a 
-pertinent suggestion how to enhance GNU ARM Eclipse OpenOCD, continue and register
-an issue, but please keep in mind that GNU ARM Eclipse OpenOCD only repacks the binaries, without significant changes, and functional changes should normally be addressed to the original project developers.
+pertinent suggestion how to enhance GNU MCU Eclipse OpenOCD, continue and register
+an issue, but please keep in mind that GNU MCU Eclipse OpenOCD only repacks the binaries, without significant changes, and functional changes should normally be addressed to the original project developers.
 
 ### Description
 
