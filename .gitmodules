@@ -4,3 +4,9 @@
 [submodule "src/libexpat"]
 	path = src/libexpat
 	url = git://github.com/libexpat/libexpat
+[submodule "src/riscv-openocd"]
+	path = src/riscv-openocd
+	url = git://github.com/riscv/riscv-openocd.git
+[submodule "src/libusb"]
+	path = src/libusb
+	url = git://github.com/libusb/libusb.git
