@@ -7,14 +7,14 @@ OBJDIR := obj
 SRCDIR := src
 
 UBUNTU ?= x86_64-linux-gnu
-WINDOWS ?= i686-w64-mingw32
+WIN64  ?= i686-w64-mingw32
 
 # FIXME: Detect the native platform
 NATIVE ?= $(UBUNTU)
 
 OBJ_NATIVE := $(OBJDIR)/$(NATIVE)
 OBJ_UBUNTU := $(OBJDIR)/$(UBUNTU)
-OBJ_WIN64  := $(OBJDIR)/$(WINDOWS)
+OBJ_WIN64  := $(OBJDIR)/$(WIN64)
 
 SRC_RGT := $(SRCDIR)/riscv-gnu-toolchain
 SRC_EXPAT := $(SRCDIR)/libexpat/expat
@@ -24,17 +24,17 @@ SRC_ZLIB := $(SRCDIR)/zlib
 VERSION ?= $(shell cd $(SRC_RGT); git describe --tags | sed s/^v//g)
 
 # The actual output of this repository is a set of tarballs.
-.PHONY: windows
-windows: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WINDOWS).zip
-windows: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WINDOWS).tar.gz
-windows: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WINDOWS).src.tar.gz
+.PHONY: win64
+win64: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WIN64).zip
+win64: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WIN64).tar.gz
+win64: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WI64).src.tar.gz
 .PHONY: ubuntu
 ubuntu: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(UBUNTU).tar.gz
 ubuntu: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(UBUNTU).src.tar.gz
 
 # FIXME: Check to see if the Windows tools should be built based on the
 # presence of the Windows cross compiler.
-all: windows
+all: win64
 all: ubuntu
 
 # Some special riscv-gnu-toolchain configure flags for specific targets.
