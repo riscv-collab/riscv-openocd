@@ -93,7 +93,7 @@ $(OBJDIR)/%/stamps/expat/install.stamp: \
 		$(OBJDIR)/%/build/expat/configure
 	$(eval $@_TARGET := $(patsubst $(OBJDIR)/%/stamps/expat/install.stamp,%,$@))
 	$(eval $@_BUILD := $(patsubst %/stamps/expat/install.stamp,%/build/expat,$@))
-	$(eval $@_INSTALL := $(patsubst %/stamps/expat/install.stamp,%/install,$@))
+	$(eval $@_INSTALL := $(patsubst %/stamps/expat/install.stamp,%/install/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$($@_TARGET),$@))
 	mkdir -p $($@_BUILD)
 	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) --host=$($@_TARGET)
 	$(MAKE) -C $($@_BUILD) buildlib
