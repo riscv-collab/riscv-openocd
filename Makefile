@@ -21,16 +21,16 @@ SRC_EXPAT := $(SRCDIR)/libexpat/expat
 SRC_ZLIB := $(SRCDIR)/zlib
 
 # The version that will be appended to the various tool builds.
-VERSION ?= $(shell cd $(SRC_RGT); git describe --tags | sed s/^v//g)
+RGT_VERSION ?= $(shell cd $(SRC_RGT); git describe --tags | sed s/^v//g)
 
 # The actual output of this repository is a set of tarballs.
 .PHONY: win64
-win64: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WIN64).zip
-win64: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WIN64).tar.gz
-win64: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(WI64).src.tar.gz
+win64: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WIN64).zip
+win64: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WIN64).tar.gz
+win64: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WI64).src.tar.gz
 .PHONY: ubuntu
-ubuntu: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(UBUNTU).tar.gz
-ubuntu: $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-$(UBUNTU).src.tar.gz
+ubuntu: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU).tar.gz
+ubuntu: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU).src.tar.gz
 
 # FIXME: Check to see if the Windows tools should be built based on the
 # presence of the Windows cross compiler.
@@ -38,28 +38,28 @@ all: win64
 all: ubuntu
 
 # Some special riscv-gnu-toolchain configure flags for specific targets.
-x86_64-linux-gnu-rgt-configue    :=
 i686-w64-mingw32-rgt-configure   := --without-system-zlib
+i686-w64-mingw32-rocd-vars       := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN64)/install/riscv-openocd-$(RGT_VERSION)-$(WIN64))/lib"
 
 # There's enough % rules that make starts blowing intermediate files away.
 .SECONDARY:
 
 # Builds riscv-gnu-toolchain for various targets.
-$(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.zip: \
+$(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-%.zip: \
 		$(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp
-	$(eval $@_TARGET := $(patsubst $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.zip,%,$@))
+	$(eval $@_TARGET := $(patsubst $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-%.zip,%,$@))
 	mkdir -p $(dir $@)
-	cd $(OBJDIR)/$($@_TARGET)/install; zip -r $(abspath $@) riscv64-unknown-elf-gcc-$(VERSION)-$($@_TARGET)
+	cd $(OBJDIR)/$($@_TARGET)/install; zip -r $(abspath $@) riscv64-unknown-elf-gcc-$(RGT_VERSION)-$($@_TARGET)
 
-$(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.tar.gz: \
+$(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-%.tar.gz: \
 		$(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp
-	$(eval $@_TARGET := $(patsubst $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.tar.gz,%,$@))
+	$(eval $@_TARGET := $(patsubst $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-%.tar.gz,%,$@))
 	mkdir -p $(dir $@)
-	tar -C $(OBJDIR)/$($@_TARGET)/install -c riscv64-unknown-elf-gcc-$(VERSION)-$($@_TARGET) | gzip > $(abspath $@)
+	tar -C $(OBJDIR)/$($@_TARGET)/install -c riscv64-unknown-elf-gcc-$(RGT_VERSION)-$($@_TARGET) | gzip > $(abspath $@)
 
-$(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.src.tar.gz: \
+$(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-%.src.tar.gz: \
 		$(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp
-	$(eval $@_TARGET := $(patsubst $(BINDIR)/riscv64-unknown-elf-gcc-$(VERSION)-%.src.tar.gz,%,$@))
+	$(eval $@_TARGET := $(patsubst $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-%.src.tar.gz,%,$@))
 	mkdir -p $(dir $@)
 	tar -C $(OBJDIR)/$($@_TARGET)/build -c . | gzip > $(abspath $@)
 
@@ -68,10 +68,10 @@ $(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp: \
 		$(OBJDIR)/%/build/riscv-gnu-toolchain/stamp
 	$(eval $@_TARGET := $(patsubst $(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp,%,$@))
 	$(eval $@_BUILD := $(patsubst %/stamps/riscv-gnu-toolchain/install.stamp,%/build/riscv-gnu-toolchain,$@))
-	$(eval $@_INSTALL := $(patsubst %/stamps/riscv-gnu-toolchain/install.stamp,%/install/riscv64-unknown-elf-gcc-$(VERSION)-$($@_TARGET),$@))
+	$(eval $@_INSTALL := $(patsubst %/stamps/riscv-gnu-toolchain/install.stamp,%/install/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$($@_TARGET),$@))
 	mkdir -p $($@_BUILD)
 	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) --with-host=$($@_TARGET) $($($@_TARGET)-rgt-configure) --enable-multilib
-	$(MAKE) PATH="$(abspath $(OBJ_NATIVE)/install/riscv64-unknown-elf-gcc-$(VERSION)-$(NATIVE)/bin:$(PATH))" -C $($@_BUILD)
+	$(MAKE) PATH="$(abspath $(OBJ_NATIVE)/install/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(NATIVE)/bin:$(PATH))" -C $($@_BUILD)
 	mkdir -p $(dir $@)
 	date > $@
 
