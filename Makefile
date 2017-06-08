@@ -17,8 +17,9 @@ NATIVE ?= $(REDHAT)
 AUTORECONF ?= autoreconf268
 all: redhat
 else ifeq ($(DISTRIB_ID),Ubuntu)
-NATIVE ?= $(REDHAT)
+NATIVE ?= $(UBUNTU)
 all: ubuntu
+all: win64
 else
 $(error Unknown host)
 endif
