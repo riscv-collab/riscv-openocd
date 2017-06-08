@@ -28,7 +28,7 @@ RGT_VERSION ?= $(shell cd $(SRC_RGT); git describe --tags | sed s/^v//g)
 ROCD_VERSION ?= $(shell cd $(SRC_ROCD); git describe --tags | sed s/^v//g)
 
 # The actual output of this repository is a set of tarballs.
-.PHONY: windows windows-openocd windows-gcc
+.PHONY: win64 win64-openocd win64-gcc
 win64: win64-openocd win64-gcc
 win64-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WIN64).zip
 win64-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WIN64).tar.gz
