@@ -7,11 +7,19 @@ OBJDIR := obj
 SRCDIR := src
 
 UBUNTU ?= x86_64-linux-ubuntu14
+REDHAT ?= x86_64-linux-centos6
 WIN32  ?= i686-w64-mingw32
 WIN64  ?= x86_64-w64-mingw32
 
-# FIXME: Detect the native platform
-NATIVE ?= $(UBUNTU)
+ifneq ($(wildcard /etc/redhat-release),)
+NATIVE ?= $(REDHAT)
+AUTORECONF ?= autoreconf268
+all: redhat
+else
+$(error Unknown host)
+endif
+
+AUTORECONF ?= autoreconf
 
 OBJ_NATIVE := $(OBJDIR)/$(NATIVE)
 OBJ_UBUNTU := $(OBJDIR)/$(UBUNTU)
@@ -50,11 +58,12 @@ ubuntu-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU).tar.gz
 ubuntu-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU).src.tar.gz
 ubuntu-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(UBUNTU).tar.gz
 ubuntu-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(UBUNTU).src.tar.gz
-
-# FIXME: Check to see if the Windows tools should be built based on the
-# presence of the Windows cross compiler.
-all: win64
-all: ubuntu
+.PHONY: redhat redhat-gcc redhat-openocd
+redhat: redhat-gcc redhat-openocd
+redhat-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(REDHAT).tar.gz
+redhat-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(REDHAT).src.tar.gz
+redhat-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(REDHAT).tar.gz
+redhat-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(REDHAT).src.tar.gz
 
 # Some special riscv-gnu-toolchain configure flags for specific targets.
 $(WIN32)-rgt-configure    := --without-system-zlib --with-host=$(WIN32)
