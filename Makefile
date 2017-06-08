@@ -99,7 +99,7 @@ $(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp: \
 $(OBJDIR)/%/build/riscv-gnu-toolchain/stamp:
 	rm -rf $(dir $@)
 	mkdir -p $(dir $@)
-	cp -r $(SRC_RGT)/* $(dir $@)
+	cp -a $(SRC_RGT)/* $(dir $@)
 	cd $(dir $@)/riscv-gcc; ./contrib/download_prerequisites
 	date > $@
 
@@ -125,7 +125,7 @@ $(OBJDIR)/%/stamps/expat/install.stamp: \
 $(OBJDIR)/%/build/expat/configure:
 	rm -rf $(dir $@)
 	mkdir -p $(dir $@)
-	cp -r $(SRC_EXPAT)/* $(dir $@)
+	cp -a $(SRC_EXPAT)/* $(dir $@)
 	cd $(dir $@); ./buildconf.sh
 	touch -c $@
 
@@ -165,7 +165,7 @@ $(OBJDIR)/%/stamps/riscv-openocd/install.stamp: \
 $(OBJDIR)/%/build/riscv-openocd/configure:
 	rm -rf $(dir $@)
 	mkdir -p $(dir $@)
-	cp -r $(SRC_ROCD)/* $(dir $@)
+	cp -a $(SRC_ROCD)/* $(dir $@)
 	cd $(dir $@); autoreconf -i
 	touch -c $@
 
@@ -195,7 +195,7 @@ $(OBJDIR)/%/stamps/libusb/install.stamp: \
 $(OBJDIR)/%/build/libusb/configure:
 	rm -rf $(dir $@)
 	mkdir -p $(dir $@)
-	cp -r $(SRC_LIBUSB)/* $(dir $@)
+	cp -a $(SRC_LIBUSB)/* $(dir $@)
 	cd $(dir $@); ./autogen.sh --disable-udev
 	touch -c $@
 
