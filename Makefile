@@ -131,7 +131,8 @@ $(OBJDIR)/%/build/expat/configure:
 
 # The OpenOCD builds go here
 $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-%.zip: \
-		$(OBJDIR)/%/stamps/riscv-openocd/install.stamp
+		$(OBJDIR)/%/stamps/riscv-openocd/install.stamp \
+		$(OBJDIR)/%/stamps/riscv-openocd/libs.stamp
 	$(eval $@_TARGET := $(patsubst $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-%.zip,%,$@))
 	mkdir -p $(dir $@)
 	cd $(OBJDIR)/$($@_TARGET)/install; zip -r $(abspath $@) riscv-openocd-$(ROCD_VERSION)-$($@_TARGET)
@@ -167,6 +168,12 @@ $(OBJDIR)/%/build/riscv-openocd/configure:
 	cp -r $(SRC_ROCD)/* $(dir $@)
 	cd $(dir $@); autoreconf -i
 	touch -c $@
+
+# We might need some extra target libraries for OpenOCD
+$(OBJDIR)/%/stamps/riscv-openocd/libs.stamp: \
+		$(OBJDIR)/%/stamps/riscv-openocd/install.stamp
+	$(WIN64)-gcc -print-search-dirs | grep ^libraries | cut -d= -f2- | xargs -I {} -d: find {} -iname "libgcc_*.dll" | xargs cp -t $(OBJDIR)/$(WIN64)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN64)/bin
+	date > $@
 
 # Use the host libusb unless we expect there to be none
 $(OBJ_WIN64)/stamps/riscv-openocd/install.stamp: \
