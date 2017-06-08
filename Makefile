@@ -180,7 +180,8 @@ $(OBJDIR)/%/build/riscv-openocd/configure:
 	rm -rf $(dir $@)
 	mkdir -p $(dir $@)
 	cp -a $(SRC_ROCD)/* $(dir $@)
-	cd $(dir $@); autoreconf -i
+	find $(dir $@) -iname configure.ac | sed s/configure.ac/m4/ | xargs mkdir -p
+	cd $(dir $@); $(AUTORECONF) -i
 	touch -c $@
 
 # We might need some extra target libraries for OpenOCD
