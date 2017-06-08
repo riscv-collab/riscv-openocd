@@ -57,10 +57,16 @@ all: win64
 all: ubuntu
 
 # Some special riscv-gnu-toolchain configure flags for specific targets.
-$(WIN32)-rgt-configure   := --without-system-zlib
-$(WIN32)-rocd-vars       := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN32)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN32))/lib" CFLAGS="-O2"
-$(WIN64)-rgt-configure   := --without-system-zlib
-$(WIN64)-rocd-vars       := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN64)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN64))/lib" CFLAGS="-O2"
+$(WIN32)-rgt-configure    := --without-system-zlib --with-host=$(WIN32)
+$(WIN32)-rocd-vars        := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN32)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN32))/lib" CFLAGS="-O2"
+$(WIN32)-rocd-configure   := --host=$(WIN32)
+$(WIN32)-expat-configure  := --host=$(WIN32)
+$(WIN32)-libusb-configure := --host=$(WIN32)
+$(WIN64)-rgt-configure    := --without-system-zlib --with-host=$(WIN64)
+$(WIN64)-rocd-vars        := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN64)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN64))/lib" CFLAGS="-O2"
+$(WIN64)-rocd-configure   := --host=$(WIN64)
+$(WIN64)-expat-configure  := --host=$(WIN64)
+$(WIN64)-libusb-configure := --host=$(WIN64)
 
 # There's enough % rules that make starts blowing intermediate files away.
 .SECONDARY:
@@ -91,7 +97,7 @@ $(OBJDIR)/%/stamps/riscv-gnu-toolchain/install.stamp: \
 	$(eval $@_BUILD := $(patsubst %/stamps/riscv-gnu-toolchain/install.stamp,%/build/riscv-gnu-toolchain,$@))
 	$(eval $@_INSTALL := $(patsubst %/stamps/riscv-gnu-toolchain/install.stamp,%/install/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$($@_TARGET),$@))
 	mkdir -p $($@_BUILD)
-	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) --with-host=$($@_TARGET) $($($@_TARGET)-rgt-configure) --enable-multilib
+	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) $($($@_TARGET)-rgt-configure) --enable-multilib
 	$(MAKE) PATH="$(abspath $(OBJ_NATIVE)/install/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(NATIVE)/bin:$(PATH))" -C $($@_BUILD)
 	mkdir -p $(dir $@)
 	date > $@
@@ -116,7 +122,7 @@ $(OBJDIR)/%/stamps/expat/install.stamp: \
 	$(eval $@_BUILD := $(patsubst %/stamps/expat/install.stamp,%/build/expat,$@))
 	$(eval $@_INSTALL := $(patsubst %/stamps/expat/install.stamp,%/install/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$($@_TARGET),$@))
 	mkdir -p $($@_BUILD)
-	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) --host=$($@_TARGET)
+	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) $($($@_TARGET)-expat-configure)
 	$(MAKE) -C $($@_BUILD) buildlib
 	$(MAKE) -C $($@_BUILD) installlib
 	mkdir -p $(dir $@)
@@ -150,13 +156,12 @@ $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-%.src.tar.gz: \
 	tar -C $(OBJDIR)/$($@_TARGET)/build -c . | gzip > $(abspath $@)
 
 $(OBJDIR)/%/stamps/riscv-openocd/install.stamp: \
-		$(OBJDIR)/%/stamps/libusb/install.stamp \
 		$(OBJDIR)/%/build/riscv-openocd/configure
 	$(eval $@_TARGET := $(patsubst $(OBJDIR)/%/stamps/riscv-openocd/install.stamp,%,$@))
 	$(eval $@_BUILD := $(patsubst %/stamps/riscv-openocd/install.stamp,%/build/riscv-openocd,$@))
 	$(eval $@_INSTALL := $(patsubst %/stamps/riscv-openocd/install.stamp,%/install/riscv-openocd-$(ROCD_VERSION)-$($@_TARGET),$@))
 	mkdir -p $($@_BUILD)
-	cd $($@_BUILD); $($($@_TARGET)-rocd-vars) ./configure --prefix=$(abspath $($@_INSTALL)) --host=$($@_TARGET) --enable-remote-bitbang --disable-werror --enable-ftdi
+	cd $($@_BUILD); $($($@_TARGET)-rocd-vars) ./configure --prefix=$(abspath $($@_INSTALL)) --enable-remote-bitbang --disable-werror --enable-ftdi $($($@_TARGET)-rocd-configure)
 	$(MAKE) -C $($@_BUILD)
 	$(MAKE) -C $($@_BUILD) install
 	mkdir -p $(dir $@)
@@ -186,7 +191,7 @@ $(OBJDIR)/%/stamps/libusb/install.stamp: \
 	$(eval $@_BUILD := $(patsubst %/stamps/libusb/install.stamp,%/build/libusb,$@))
 	$(eval $@_INSTALL := $(patsubst %/stamps/libusb/install.stamp,%/install/riscv-openocd-$(ROCD_VERSION)-$($@_TARGET),$@))
 	mkdir -p $($@_BUILD)
-	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) --host=$($@_TARGET) --disable-udev
+	cd $($@_BUILD); ./configure --prefix=$(abspath $($@_INSTALL)) --disable-udev $($($@_TARGET)-libusb-configure)
 	$(MAKE) -C $($@_BUILD)
 	$(MAKE) -C $($@_BUILD) install
 	mkdir -p $(dir $@)
