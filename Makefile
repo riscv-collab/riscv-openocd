@@ -7,6 +7,7 @@ OBJDIR := obj
 SRCDIR := src
 
 UBUNTU ?= x86_64-linux-gnu
+WIN32  ?= i686-w64-mingw32
 WIN64  ?= x86_64-w64-mingw32
 
 # FIXME: Detect the native platform
@@ -35,6 +36,14 @@ win64-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WIN64).src.tar.gz
 win64-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN64).zip
 win64-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN64).tar.gz
 win64-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN64).src.tar.gz
+.PHONY: win32 win32-openocd win32-gcc
+win32: win32-openocd win32-gcc
+win32-gcc: $(BINDIR)/riscv32-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).zip
+win32-gcc: $(BINDIR)/riscv32-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).tar.gz
+win32-gcc: $(BINDIR)/riscv32-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).src.tar.gz
+win32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN32).zip
+win32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN32).tar.gz
+win32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN32).src.tar.gz
 .PHONY: ubuntu ubuntu-gcc ubuntu-openocd
 ubuntu: ubuntu-gcc ubuntu-openocd
 ubuntu-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU).tar.gz
@@ -48,6 +57,8 @@ all: win64
 all: ubuntu
 
 # Some special riscv-gnu-toolchain configure flags for specific targets.
+$(WIN32)-rgt-configure   := --without-system-zlib
+$(WIN32)-rocd-vars       := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN32)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN32))/lib" CFLAGS="-O2"
 $(WIN64)-rgt-configure   := --without-system-zlib
 $(WIN64)-rocd-vars       := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN64)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN64))/lib" CFLAGS="-O2"
 
