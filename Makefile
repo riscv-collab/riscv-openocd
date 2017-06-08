@@ -7,7 +7,7 @@ OBJDIR := obj
 SRCDIR := src
 
 UBUNTU ?= x86_64-linux-gnu
-WIN64  ?= i686-w64-mingw32
+WIN64  ?= x86_64-w64-mingw32
 
 # FIXME: Detect the native platform
 NATIVE ?= $(UBUNTU)
@@ -48,8 +48,8 @@ all: win64
 all: ubuntu
 
 # Some special riscv-gnu-toolchain configure flags for specific targets.
-i686-w64-mingw32-rgt-configure   := --without-system-zlib
-i686-w64-mingw32-rocd-vars       := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN64)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN64))/lib"
+$(WIN64)-rgt-configure   := --without-system-zlib
+$(WIN64)-rocd-vars       := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN64)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN64))/lib" CFLAGS="-O2"
 
 # There's enough % rules that make starts blowing intermediate files away.
 .SECONDARY:
