@@ -6,7 +6,7 @@ BINDIR := bin
 OBJDIR := obj
 SRCDIR := src
 
-UBUNTU ?= x86_64-linux-gnu
+UBUNTU ?= x86_64-linux-ubuntu14
 WIN32  ?= i686-w64-mingw32
 WIN64  ?= x86_64-w64-mingw32
 
