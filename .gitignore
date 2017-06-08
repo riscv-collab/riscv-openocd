@@ -52,8 +52,8 @@ doc/openocd.pg
 doc/openocd.toc
 doc/openocd.tp
 doc/openocd.vr
-doc/texinfo.tex
 doc/version.texi
+texinfo.tex
 src/openocd
 src/openocd.exe
 
@@ -80,13 +80,6 @@ INSTALL
 NOTES
 
 # coexist with quilt
-patches
-*.patch
-
-# Eclipse stuff
-.project
-.cproject
-.settings
 
 # Emacs temp files
 *~
@@ -99,3 +92,4 @@ TAGS
 
 # ctags tag files
 tags
+.vscode

@@ -1,0 +1,55 @@
+
+### Prerequisites
+
+In case you encounter problems while using the **GNU MCU Eclipse OpenOCD**, please consider the following:
+
+* [ ] read the documentation pages carefully
+* [ ] check the [Known issues](http://gnuarmeclipse.github.io/support/known-issues/)
+* [ ] check the [FAQ](http://gnuarmeclipse.github.io/support/faq/)
+* [ ] check the [GNU ARM Eclipse forum](http://gnuarmeclipse.github.io/support/forum/) for similar problems
+* [ ] check the GitHub Issues [tracker](https://github.com/gnuarmeclipse/openocd/issues/)
+
+If you still could not find a solution, if you have interesting use cases, if you have custom 
+configurations, and generally if you have any experience that you want to share with others, 
+use the [GNU ARM Eclipse forum](http://gnuarmeclipse.github.io/support/forum/).
+
+Just [register](http://www.element14.com/community/create-account.jspa) to element14 community and use the [Start a discussion](http://www.element14.com/community/discussion/create.jspa?containerID=2436&containerType=700) link, with the OpenOCD category.
+
+If you are convinced that you identified a bug (if you have doubts, use the forum), or you have a 
+pertinent suggestion how to enhance GNU MCU Eclipse OpenOCD, continue and register
+an issue, but please keep in mind that GNU MCU Eclipse OpenOCD only repacks the binaries, without significant changes, and functional changes should normally be addressed to the original project developers.
+
+### Description
+
+[Description of the bug or feature]
+
+### Steps to Reproduce
+
+1. [First Step]
+2. [Second Step]
+3. [and so on...]
+
+**Expected behaviour:** [What you expected to happen]
+
+**Actual behaviour:** [What actually happened]
+
+### Versions
+
+* OpenOCD package version
+* plug-in version
+* Eclipse version
+* Java version
+* operating system
+* toolchain version
+* the **detailed and complete list of steps to reproduce the bug** (mandatory)
+
+Please understand that without being able to reproduce the bug we cannot identify your problem.
+
+To be allowed to enter issues, you need first to login to GitHub.
+
+Note: the text should respect the markdown syntax; preview the message before posting and correct if it does not look as expected, especially inline code or other quoted text.
+
+---
+
+Note: Remove unnecessary text after reading, before entering your ticket.
+

@@ -1,0 +1,11 @@
+prefix=XXX
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: hidapi
+Description: HIDAPI is a multi-platform library which allows an application to interface with USB and Bluetooth HID-Class devices
+Version: 0.7.0
+Libs: -L${libdir} -lhid -framework IOKit -framework CoreFoundation
+Cflags: -I${includedir}/hidapi
+

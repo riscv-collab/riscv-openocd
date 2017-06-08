@@ -318,7 +318,11 @@ static int jtag_vpi_runtest(int cycles, tap_state_t state)
 	if (retval != ERROR_OK)
 		return retval;
 
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 	retval = jtag_vpi_queue_tdi(NULL, cycles, NO_TAP_SHIFT);
+#else
+	retval = jtag_vpi_queue_tdi(NULL, cycles, TAP_SHIFT);
+#endif
 	if (retval != ERROR_OK)
 		return retval;
 
