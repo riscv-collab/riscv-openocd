@@ -1,10 +1,16 @@
 
 The changes applied to the OpenOCD master branch, and the releases, are:
 
+[2017-06-07]
+
+- v0.10.0-1-20170607-2132-dev released
+- add sifive-* configuration files to the board folder
+- 60-openocd.rules: simplify access rights
+- merge RISC-V commit '11008ba' into gnu-mcu-eclipse-dev
+
 [2017-06-06]
 
 - rename gnu-mcu-eclipse & content
-- add sifive-* configuration files to the board folder
 
 [2017-06-04]
 
