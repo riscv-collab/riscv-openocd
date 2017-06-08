@@ -11,10 +11,14 @@ REDHAT ?= x86_64-linux-centos6
 WIN32  ?= i686-w64-mingw32
 WIN64  ?= x86_64-w64-mingw32
 
+-include /etc/lsb-release
 ifneq ($(wildcard /etc/redhat-release),)
 NATIVE ?= $(REDHAT)
 AUTORECONF ?= autoreconf268
 all: redhat
+else ifeq ($(DISTRIB_ID),Ubuntu)
+NATIVE ?= $(REDHAT)
+all: ubuntu
 else
 $(error Unknown host)
 endif
