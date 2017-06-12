@@ -543,8 +543,8 @@ static int register_write_direct(struct target *target, unsigned number,
 
 	int exec_out = riscv_program_exec(&program, target);
 	if (exec_out != ERROR_OK) {
-		LOG_ERROR("Unable to execute program");
-		return exec_out;
+		riscv013_clear_abstract_error(target);
+		return ERROR_FAIL;
 	}
 
 	return ERROR_OK;
@@ -576,8 +576,8 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 
 	int exec_out = riscv_program_exec(&program, target);
 	if (exec_out != ERROR_OK) {
-		LOG_ERROR("Unable to execute program");
-		return exec_out;
+		riscv013_clear_abstract_error(target);
+		return ERROR_FAIL;
 	}
 
 	*value = 0;
@@ -680,7 +680,7 @@ static int init_target(struct command_context *cmd_ctx,
 	info->ac_busy_delay = 0;
 
 	target->reg_cache = calloc(1, sizeof(*target->reg_cache));
-	target->reg_cache->name = "RISC-V registers";
+	target->reg_cache->name = "RISC-V Registers";
 	target->reg_cache->num_regs = GDB_REGNO_COUNT;
 
 	target->reg_cache->reg_list = calloc(GDB_REGNO_COUNT, sizeof(struct reg));
