@@ -1,0 +1,9 @@
+#! /bin/sh
+# pkg-config wrapper for debug
+
+pkg-config $@
+RET=$?
+OUT=$(pkg-config $@)
+echo "$PKG_CONFIG_PATH | pkg-config $@ -> $RET [$OUT]" >&2
+exit ${RET}
+

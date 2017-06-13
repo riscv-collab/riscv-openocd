@@ -1,0 +1,33 @@
+
+This package was build on an OS X machine, using the script provided in
+the GNU MCU Eclipse build-scripts git.
+
+To build the latest version of the package please use the script from:
+
+```bash
+$ git clone https://github.com/gnu-mcu-eclipse/build-scripts.git \
+~/Downloads/build-scripts.git
+```
+
+To run it, first be sure that the packages required in the Prerequisites 
+section are installed, then download the script and execute it with bash:
+
+```bash
+$ bash ~/Downloads/build-scripts.git/scripts/build-openocd.sh --osx
+```
+
+The output of the build script is a `.pkg` install and a `*.tgz` 
+in the `${WORK_FOLDER}/output` folder.
+
+The script was developed on OS X 10.12 with Homebrew. Running it on other 
+versions is possible, but might require some adjustments.
+
+Up-to-date build information is available in the GNU MCU Eclipse project web:
+
+  http://gnuarmeclipse.github.io/openocd/
+
+Many thanks to my friend Dan Maiorescu for his major contributions 
+to this project.
+
+
+Liviu Ionescu

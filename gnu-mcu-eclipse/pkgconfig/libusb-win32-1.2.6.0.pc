@@ -1,0 +1,11 @@
+prefix=XXX
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include/libusb
+
+Name: libusb
+Description: Libusb-win32 is a library that allows userspace application to access USB devices on Windows operation systems (Win2k, WinXP, Vista, Win7). 
+Version: 1.2.6
+Libs: -L${libdir} -lusb
+Cflags: -I${includedir}
+

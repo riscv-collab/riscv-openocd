@@ -11,13 +11,14 @@
 #include "config.h"
 #endif
 
-#include "target.h"
+#include "helper/types.h"
+#include "target/target.h"
 #include "target/algorithm.h"
-#include "target_type.h"
+#include "target/target_type.h"
 #include "log.h"
 #include "jtag/jtag.h"
-#include "register.h"
-#include "breakpoints.h"
+#include "target/register.h"
+#include "target/breakpoints.h"
 #include "helper/time_support.h"
 #include "riscv.h"
 #include "debug_defines.h"
@@ -361,7 +362,7 @@ static uint64_t dmi_read(struct target *target, uint16_t address)
 {
 	select_dmi(target);
 
-	uint64_t value;
+	uint64_t value = -1;
 	dmi_status_t status;
 	uint16_t address_in;
 
@@ -862,7 +863,7 @@ static int add_breakpoint(struct target *target,
 	if (breakpoint->type == BKPT_SOFT) {
 		if (target_read_memory(target, breakpoint->address, breakpoint->length, 1,
 					breakpoint->orig_instr) != ERROR_OK) {
-			LOG_ERROR("Failed to read original instruction at 0x%x",
+			LOG_ERROR("Failed to read original instruction at " TARGET_ADDR_FMT,
 					breakpoint->address);
 			return ERROR_FAIL;
 		}
@@ -874,7 +875,7 @@ static int add_breakpoint(struct target *target,
 			retval = target_write_u16(target, breakpoint->address, ebreak_c());
 		}
 		if (retval != ERROR_OK) {
-			LOG_ERROR("Failed to write %d-byte breakpoint instruction at 0x%x",
+			LOG_ERROR("Failed to write %d-byte breakpoint instruction at " TARGET_ADDR_FMT,
 					breakpoint->length, breakpoint->address);
 			return ERROR_FAIL;
 		}
@@ -903,7 +904,7 @@ static int remove_breakpoint(struct target *target,
 		if (target_write_memory(target, breakpoint->address, breakpoint->length, 1,
 					breakpoint->orig_instr) != ERROR_OK) {
 			LOG_ERROR("Failed to restore instruction for %d-byte breakpoint at "
-					"0x%x", breakpoint->length, breakpoint->address);
+					TARGET_ADDR_FMT, breakpoint->length, breakpoint->address);
 			return ERROR_FAIL;
 		}
 
@@ -1203,7 +1204,8 @@ static int deassert_reset(struct target *target)
   return ERROR_OK;
 }
 
-static int read_memory(struct target *target, uint32_t address,
+static int
+read_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	RISCV013_INFO(info);
@@ -1304,9 +1306,10 @@ static int read_memory(struct target *target, uint32_t address,
 	riscv_addr_t cur_addr = 0xbadbeef;
 	riscv_addr_t fin_addr = address + (count * size);
 	riscv_addr_t prev_addr = ((riscv_addr_t) address) - size;
-	LOG_DEBUG("writing until final address 0x%016lx", fin_addr);
+	LOG_DEBUG("writing until final address 0x%" PRIx64, fin_addr);
 	while (count > 1 && (cur_addr = riscv_read_debug_buffer_x(target, d_addr)) < fin_addr) {
-		LOG_DEBUG("transferring burst starting at address 0x%016lx (previous burst was 0x%016lx)", cur_addr, prev_addr);
+		LOG_DEBUG("transferring burst starting at address 0x%" PRIx64 
+			" (previous burst was 0x%" PRIx64 ")", cur_addr, prev_addr);
 		assert(prev_addr < cur_addr);
 		prev_addr = cur_addr;
 		riscv_addr_t start = (cur_addr - address) / size;
@@ -1397,7 +1400,7 @@ static int read_memory(struct target *target, uint32_t address,
 	return ERROR_OK;
 }
 
-static int write_memory(struct target *target, uint32_t address,
+static int write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	RISCV013_INFO(info);
@@ -1501,9 +1504,9 @@ static int write_memory(struct target *target, uint32_t address,
 	 * the data was all copied. */
 	riscv_addr_t cur_addr = 0xbadbeef;
 	riscv_addr_t fin_addr = address + (count * size);
-	LOG_DEBUG("writing until final address 0x%016lx", fin_addr);
+	LOG_DEBUG("writing until final address 0x%" PRIx64, fin_addr);
 	while ((cur_addr = riscv_read_debug_buffer_x(target, d_addr)) < fin_addr) {
-		LOG_DEBUG("transferring burst starting at address 0x%016lx", cur_addr);
+		LOG_DEBUG("transferring burst starting at address 0x%" PRIx64, cur_addr);
 		riscv_addr_t start = (cur_addr - address) / size;
                 assert (cur_addr > address);
                 struct riscv_batch *batch = riscv_batch_alloc(
@@ -1628,7 +1631,7 @@ static riscv_reg_t riscv013_get_register(struct target *target, int hid, int rid
 		register_read_direct(target, &out, rid);
 	} else if (rid == GDB_REGNO_PC) {
 		register_read_direct(target, &out, GDB_REGNO_DPC);
-		LOG_DEBUG("read PC from DPC: 0x%016lx", out);
+		LOG_DEBUG("read PC from DPC: 0x%" PRIx64, out);
 	} else if (rid == GDB_REGNO_PRIV) {
 		uint64_t dcsr;
 		register_read_direct(target, &dcsr, CSR_DCSR);
@@ -1656,11 +1659,11 @@ static void riscv013_set_register(struct target *target, int hid, int rid, uint6
 	if (rid <= GDB_REGNO_XPR31) {
 		register_write_direct(target, rid, value);
 	} else if (rid == GDB_REGNO_PC) {
-		LOG_DEBUG("writing PC to DPC: 0x%016lx", value);
+		LOG_DEBUG("writing PC to DPC: 0x%" PRIx64, value);
 		register_write_direct(target, GDB_REGNO_DPC, value);
 		uint64_t actual_value;
 		register_read_direct(target, &actual_value, GDB_REGNO_DPC);
-		LOG_DEBUG("  actual DPC written: 0x%016lx", actual_value);
+		LOG_DEBUG("  actual DPC written: 0x%" PRIx64, actual_value);
 		assert(value == actual_value);
 	} else if (rid == GDB_REGNO_PRIV) {
 		uint64_t dcsr;

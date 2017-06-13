@@ -28,6 +28,7 @@ extern struct flash_driver at91sam4_flash;
 extern struct flash_driver at91sam4l_flash;
 extern struct flash_driver at91sam7_flash;
 extern struct flash_driver at91samd_flash;
+extern struct flash_driver ath79_flash;
 extern struct flash_driver atsamv_flash;
 extern struct flash_driver avr_flash;
 extern struct flash_driver cfi_flash;
@@ -37,7 +38,9 @@ extern struct flash_driver em357_flash;
 extern struct flash_driver faux_flash;
 extern struct flash_driver fm3_flash;
 extern struct flash_driver fm4_flash;
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 extern struct flash_driver fespi_flash;
+#endif
 extern struct flash_driver jtagspi_flash;
 extern struct flash_driver kinetis_flash;
 extern struct flash_driver kinetis_ke_flash;
@@ -81,6 +84,7 @@ static struct flash_driver *flash_drivers[] = {
 	&at91sam4l_flash,
 	&at91sam7_flash,
 	&at91samd_flash,
+	&ath79_flash,
 	&atsamv_flash,
 	&avr_flash,
 	&cfi_flash,
@@ -90,7 +94,9 @@ static struct flash_driver *flash_drivers[] = {
 	&faux_flash,
 	&fm3_flash,
 	&fm4_flash,
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 	&fespi_flash,
+#endif
 	&jtagspi_flash,
 	&kinetis_flash,
 	&kinetis_ke_flash,

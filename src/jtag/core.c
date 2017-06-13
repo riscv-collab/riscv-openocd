@@ -836,6 +836,7 @@ int default_interface_jtag_execute_queue(void)
 		return ERROR_FAIL;
 	}
 
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 	int result = jtag->execute_queue();
 
 #if 0
@@ -950,6 +951,9 @@ int default_interface_jtag_execute_queue(void)
 #endif
 
 	return result;
+#else
+	return jtag->execute_queue();
+#endif
 }
 
 void jtag_execute_queue_noclear(void)
@@ -1220,8 +1224,12 @@ static int jtag_examine_chain(void)
 
 		if ((idcode & 1) == 0) {
 			/* Zero for LSB indicates a device in bypass */
+#if defined(GNU_MCU_ECLIPSE_RISCV)
 			LOG_INFO("TAP %s does not have valid IDCODE (idcode=0x%x)",
 					tap->dotted_name, idcode);
+#else
+			LOG_INFO("TAP %s does not have IDCODE", tap->dotted_name);
+#endif
 			tap->hasidcode = false;
 			tap->idcode = 0;
 
@@ -1831,11 +1839,11 @@ void jtag_set_reset_config(enum reset_types type)
 
 int jtag_get_trst(void)
 {
-	return jtag_trst;
+	return jtag_trst == 1;
 }
 int jtag_get_srst(void)
 {
-	return jtag_srst;
+	return jtag_srst == 1;
 }
 
 void jtag_set_nsrst_delay(unsigned delay)

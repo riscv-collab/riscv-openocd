@@ -115,7 +115,7 @@ int riscv_openocd_halt(struct target *target);
 int riscv_openocd_resume(
 	struct target *target,
 	int current,
-	uint32_t address,
+	target_addr_t address,
 	int handle_breakpoints, 
 	int debug_execution
 );
@@ -123,7 +123,7 @@ int riscv_openocd_resume(
 int riscv_openocd_step(
 	struct target *target,
 	int current,
-	uint32_t address,
+	target_addr_t address,
 	int handle_breakpoints
 );
 

@@ -1,0 +1,114 @@
+
+The changes applied to the OpenOCD master branch, and the releases, are:
+
+[2017-06-07]
+
+- v0.10.0-1-20170607-2132-dev released
+- add sifive-* configuration files to the board folder
+- 60-openocd.rules: simplify access rights
+- merge RISC-V commit '11008ba' into gnu-mcu-eclipse-dev
+
+[2017-06-06]
+
+- rename gnu-mcu-eclipse & content
+
+[2017-06-04]
+
+- merge original branch 'master' from 2017-06-02 into gnuarmeclipse-dev.
+- merge RISC-V commit '51ab5a0' from 2017-05-26 into gnuarmeclipse-dev
+
+[2017-01-24]
+
+- v0.10.0-20170124* released (stable)
+- merge original 0.10.0, override local relative path processing
+
+[2016-10-28]
+
+- v0.10.0-20161028*-dev released
+
+[2016-10-20]
+
+- nsi file: add InstallDir; silent install should honour /D
+
+[2016-01-10]
+
+- v0.10.0-20160110*-dev released
+
+[2015-10-28]
+
+- v0.10.0-20151028*-dev released
+
+[2015-05-19]
+
+- v0.9.0-20150519*-dev released
+- remove @raggedright from openocd.texi
+
+[2015-05-11]
+
+- the three separate build scripts were deprecated, and a single script,
+using Docker, was added to the main gnuarmeclipse-se.git/scripts.
+
+- the greeting shows 32-bits or 64-bits (plural for bits).
+
+[2015-03-24]
+
+- v0.9.0-20150324*-dev released
+- v0.8.0-20150324* released
+
+[2015-03-22]
+
+- the NSIS script was fixed to prevent removing the keys when 
+uninstalling an older version.
+
+[2015-03-20]
+
+- v0.9.0-20150320*-dev released
+- v0.8.0-20150320* released
+
+[2015-03-18]
+
+- the build scripts were extended to generate both the stable and the 
+development version.
+
+- multiple versions of the package can be installed in separate folders, 
+named using the version.
+
+- for Windows, more accurate keys were stored, so remember separate locations 
+for 32/64-bit versions.
+
+[2015-01-31]
+
+- v0.8.0-20150131* released
+
+[2015-01-30]
+
+- gnuarmeclipse
+
+All GNU ARM Eclipse OpenOCD build related files were grouped under this folder.
+
+- README.md
+
+Markdown files were added in all new folders, to improve the look when browsed
+in the SourceForge Git web browser.
+
+[2015-01-19]
+
+- v0.8.0-20150119* released
+
+[2015-01-12]
+
+- src/openocd.c
+
+Add branding 'GNU ARM Eclipse' to the greeting message, to 
+more easily identify this custom version.
+
+- helper/options.c
+
+Update the logic used to locate the 'scripts' folder, by 
+using the argv[0], as on Windows. The logic is a bit more
+complicated, to accomodate 3 cases (no path, relative path
+and absolute path).
+
+
+Liviu Ionescu
+
