@@ -28,6 +28,7 @@ AUTORECONF ?= autoreconf
 
 OBJ_NATIVE := $(OBJDIR)/$(NATIVE)
 OBJ_UBUNTU := $(OBJDIR)/$(UBUNTU)
+OBJ_WIN32  := $(OBJDIR)/$(WIN32)
 OBJ_WIN64  := $(OBJDIR)/$(WIN64)
 
 SRC_RGT := $(SRCDIR)/riscv-gnu-toolchain
@@ -51,9 +52,9 @@ win64-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN64).tar.gz
 win64-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN64).src.tar.gz
 .PHONY: win32 win32-openocd win32-gcc
 win32: win32-openocd win32-gcc
-win32-gcc: $(BINDIR)/riscv32-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).zip
-win32-gcc: $(BINDIR)/riscv32-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).tar.gz
-win32-gcc: $(BINDIR)/riscv32-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).src.tar.gz
+win32-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).zip
+win32-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).tar.gz
+win32-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).src.tar.gz
 win32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN32).zip
 win32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN32).tar.gz
 win32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN32).src.tar.gz
@@ -128,6 +129,9 @@ $(OBJDIR)/%/build/riscv-gnu-toolchain/stamp:
 $(OBJ_WIN64)/stamps/riscv-gnu-toolchain/install.stamp: \
 	$(OBJ_NATIVE)/stamps/riscv-gnu-toolchain/install.stamp
 
+$(OBJ_WIN32)/stamps/riscv-gnu-toolchain/install.stamp: \
+	$(OBJ_NATIVE)/stamps/riscv-gnu-toolchain/install.stamp
+
 # OpenOCD requires a GDB that's been build with expat support so it can read
 # the target XML files.
 $(OBJDIR)/%/stamps/expat/install.stamp: \
@@ -192,12 +196,24 @@ $(OBJDIR)/%/build/riscv-openocd/configure:
 # We might need some extra target libraries for OpenOCD
 $(OBJDIR)/%/stamps/riscv-openocd/libs.stamp: \
 		$(OBJDIR)/%/stamps/riscv-openocd/install.stamp
+	date > $@
+
+$(OBJ_WIN64)/stamps/riscv-openocd/libs.stamp: \
+		$(OBJ_WIN64)/stamps/riscv-openocd/install.stamp
 	$(WIN64)-gcc -print-search-dirs | grep ^libraries | cut -d= -f2- | xargs -I {} -d: find {} -iname "libgcc_*.dll" | xargs cp -t $(OBJDIR)/$(WIN64)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN64)/bin
+	date > $@
+
+$(OBJ_WIN32)/stamps/riscv-openocd/libs.stamp: \
+		$(OBJ_WIN32)/stamps/riscv-openocd/install.stamp
+	$(WIN32)-gcc -print-search-dirs | grep ^libraries | cut -d= -f2- | xargs -I {} -d: find {} -iname "libgcc_*.dll" | xargs cp -t $(OBJDIR)/$(WIN32)/install/riscv-openocd-$(ROCD_VERSION)-$(WIN32)/bin
 	date > $@
 
 # Use the host libusb unless we expect there to be none
 $(OBJ_WIN64)/stamps/riscv-openocd/install.stamp: \
 		$(OBJ_WIN64)/stamps/libusb/install.stamp
+
+$(OBJ_WIN32)/stamps/riscv-openocd/install.stamp: \
+		$(OBJ_WIN32)/stamps/libusb/install.stamp
 
 # OpenOCD needs libusb
 $(OBJDIR)/%/stamps/libusb/install.stamp: \
