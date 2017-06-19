@@ -6,7 +6,8 @@ BINDIR := bin
 OBJDIR := obj
 SRCDIR := src
 
-UBUNTU ?= x86_64-linux-ubuntu14
+UBUNTU32 ?= i686-linux-ubuntu14
+UBUNTU64 ?= x86_64-linux-ubuntu14
 REDHAT ?= x86_64-linux-centos6
 WIN32  ?= i686-w64-mingw32
 WIN64  ?= x86_64-w64-mingw32
@@ -17,8 +18,13 @@ NATIVE ?= $(REDHAT)
 AUTORECONF ?= autoreconf268
 all: redhat
 else ifeq ($(DISTRIB_ID),Ubuntu)
-NATIVE ?= $(UBUNTU)
-all: ubuntu
+ifeq ($(shell uname -m),x86_64)
+NATIVE ?= $(UBUNTU64)
+all: ubuntu64
+else
+NATIVE ?= $(UBUNTU32)
+all: ubuntu32
+endif
 all: win64
 else
 $(error Unknown host)
@@ -26,10 +32,11 @@ endif
 
 AUTORECONF ?= autoreconf
 
-OBJ_NATIVE := $(OBJDIR)/$(NATIVE)
-OBJ_UBUNTU := $(OBJDIR)/$(UBUNTU)
-OBJ_WIN32  := $(OBJDIR)/$(WIN32)
-OBJ_WIN64  := $(OBJDIR)/$(WIN64)
+OBJ_NATIVE   := $(OBJDIR)/$(NATIVE)
+OBJ_UBUNTU32 := $(OBJDIR)/$(UBUNTU32)
+OBJ_UBUNTU64 := $(OBJDIR)/$(UBUNTU64)
+OBJ_WIN32    := $(OBJDIR)/$(WIN32)
+OBJ_WIN64    := $(OBJDIR)/$(WIN64)
 
 SRC_RGT := $(SRCDIR)/riscv-gnu-toolchain
 SRC_ROCD := $(SRCDIR)/riscv-openocd
@@ -58,12 +65,18 @@ win32-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(WIN32).src.tar.gz
 win32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN32).zip
 win32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN32).tar.gz
 win32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(WIN32).src.tar.gz
-.PHONY: ubuntu ubuntu-gcc ubuntu-openocd
-ubuntu: ubuntu-gcc ubuntu-openocd
-ubuntu-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU).tar.gz
-ubuntu-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU).src.tar.gz
-ubuntu-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(UBUNTU).tar.gz
-ubuntu-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(UBUNTU).src.tar.gz
+.PHONY: ubuntu64 ubuntu64-gcc ubuntu64-openocd
+ubuntu64: ubuntu64-gcc ubuntu64-openocd
+ubuntu64-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU64).tar.gz
+ubuntu64-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU64).src.tar.gz
+ubuntu64-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(UBUNTU64).tar.gz
+ubuntu64-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(UBUNTU64).src.tar.gz
+.PHONY: ubuntu32 ubuntu32-gcc ubuntu32-openocd
+ubuntu32: ubuntu32-gcc ubuntu32-openocd
+ubuntu32-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU32).tar.gz
+ubuntu32-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(UBUNTU32).src.tar.gz
+ubuntu32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(UBUNTU32).tar.gz
+ubuntu32-openocd: $(BINDIR)/riscv-openocd-$(ROCD_VERSION)-$(UBUNTU32).src.tar.gz
 .PHONY: redhat redhat-gcc redhat-openocd
 redhat: redhat-gcc redhat-openocd
 redhat-gcc: $(BINDIR)/riscv64-unknown-elf-gcc-$(RGT_VERSION)-$(REDHAT).tar.gz
@@ -82,6 +95,14 @@ $(WIN64)-rocd-vars        := LIBUSB1_LIBS="-L$(abspath $(OBJ_WIN64)/install/risc
 $(WIN64)-rocd-configure   := --host=$(WIN64)
 $(WIN64)-expat-configure  := --host=$(WIN64)
 $(WIN64)-libusb-configure := --host=$(WIN64)
+$(UBUNTU32)-rgt-configure    := --without-system-zlib --with-host=i686-linux-gnu
+$(UBUNTU32)-rocd-configure   := --host=i686-linux-gnu
+$(UBUNTU32)-expat-configure  := --host=i686-linux-gnu
+$(UBUNTU32)-libusb-configure := --host=i686-linux-gnu
+$(UBUNTU64)-rgt-configure    := --without-system-zlib --with-host=x86_64-linux-gnu
+$(UBUNTU64)-rocd-configure   := --host=x86_64-linux-gnu
+$(UBUNTU64)-expat-configure  := --host=x86_64-linux-gnu
+$(UBUNTU64)-libusb-configure := --host=x86_64-linux-gnu
 
 # There's enough % rules that make starts blowing intermediate files away.
 .SECONDARY:
