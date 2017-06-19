@@ -38,10 +38,10 @@ OBJ_UBUNTU64 := $(OBJDIR)/$(UBUNTU64)
 OBJ_WIN32    := $(OBJDIR)/$(WIN32)
 OBJ_WIN64    := $(OBJDIR)/$(WIN64)
 
-SRC_RGT := $(SRCDIR)/riscv-gnu-toolchain
-SRC_ROCD := $(SRCDIR)/riscv-openocd
-SRC_EXPAT := $(SRCDIR)/libexpat/expat
-SRC_ZLIB := $(SRCDIR)/zlib
+SRC_RGT    := $(SRCDIR)/riscv-gnu-toolchain
+SRC_ROCD   := $(SRCDIR)/riscv-openocd
+SRC_EXPAT  := $(SRCDIR)/libexpat/expat
+SRC_ZLIB   := $(SRCDIR)/zlib
 SRC_LIBUSB := $(SRCDIR)/libusb
 
 # The version that will be appended to the various tool builds.
