@@ -206,12 +206,13 @@ $(OBJDIR)/%/stamps/riscv-openocd/install.stamp: \
 	mkdir -p $(dir $@)
 	date > $@
 
-$(OBJDIR)/%/build/riscv-openocd/configure:
+$(OBJDIR)/%/build/riscv-openocd/configure: patches/openocd-autoconf.patch
 	rm -rf $(dir $@)
 	mkdir -p $(dir $@)
 	cp -a $(SRC_ROCD)/* $(dir $@)
 	find $(dir $@) -iname configure.ac | sed s/configure.ac/m4/ | xargs mkdir -p
-	cd $(dir $@); $(AUTORECONF) -i
+	patch -d $(dir $@) -p1 < $<
+	find $(dir $@) -iname configure | xargs chmod +x
 	touch -c $@
 
 # We might need some extra target libraries for OpenOCD
