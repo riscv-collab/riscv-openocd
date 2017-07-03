@@ -1,0 +1,12 @@
+language: c
+
+#addons:
+#    apt:
+#        sources:
+#            - ubuntu-toolchain-r-test
+#        packages:
+#            - automake-1.14
+
+script:
+    - automake --version
+#    - ./bootstrap && ./configure && make
