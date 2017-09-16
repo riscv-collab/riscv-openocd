@@ -391,22 +391,25 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 
 	riscv_reg_t tselect[RISCV_MAX_HARTS];
 
+	int active_hartid = 0;
+
 	for (int hartid = 0; hartid < riscv_count_harts(target); ++hartid) {
 		if (!riscv_hart_enabled(target, hartid))
 			continue;
+		active_hartid = hartid;
 		tselect[hartid] = riscv_get_register_on_hart(target, hartid,
 				GDB_REGNO_TSELECT);
 	}
 
 	unsigned int i;
-	for (i = 0; i < r->trigger_count[0]; i++) {
+	for (i = 0; i < r->trigger_count[active_hartid]; i++) {
 		if (r->trigger_unique_id[i] != -1) {
 			continue;
 		}
 
-		riscv_set_register_on_hart(target, 0, GDB_REGNO_TSELECT, i);
+		riscv_set_register_on_hart(target, active_hartid, GDB_REGNO_TSELECT, i);
 
-		uint64_t tdata1 = riscv_get_register_on_hart(target, 0, GDB_REGNO_TDATA1);
+		uint64_t tdata1 = riscv_get_register_on_hart(target, active_hartid, GDB_REGNO_TDATA1);
 		int type = get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
 
 		int result = ERROR_OK;
@@ -450,7 +453,7 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 				tselect[hartid]);
 	}
 
-	if (i >= r->trigger_count[0]) {
+	if (i >= r->trigger_count[active_hartid]) {
 		LOG_ERROR("Couldn't find an available hardware trigger.");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
@@ -460,6 +463,8 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 
 int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
+	assert(riscv_is_halted(target));
+
 	if (breakpoint->type == BKPT_SOFT) {
 		if (target_read_memory(target, breakpoint->address, breakpoint->length, 1,
 					breakpoint->orig_instr) != ERROR_OK) {
@@ -503,12 +508,12 @@ static int remove_trigger(struct target *target, struct trigger *trigger)
 	RISCV_INFO(r);
 
 	unsigned int i;
-	for (i = 0; i < r->trigger_count[0]; i++) {
+	for (i = 0; i < r->trigger_count[target->coreid]; i++) {
 		if (r->trigger_unique_id[i] == trigger->unique_id) {
 			break;
 		}
 	}
-	if (i >= r->trigger_count[0]) {
+	if (i >= r->trigger_count[target->coreid]) {
 		LOG_ERROR("Couldn't find the hardware resources used by hardware "
 				"trigger.");
 		return ERROR_FAIL;

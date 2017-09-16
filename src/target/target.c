@@ -608,6 +608,8 @@ int target_resume(struct target *target, int current, target_addr_t address,
 {
 	int retval;
 
+	target->halt_issued = false;
+
 	/* We can't poll until after examine */
 	if (!target_was_examined(target)) {
 		LOG_ERROR("Target not examined yet");
