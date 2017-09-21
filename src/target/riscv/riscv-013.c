@@ -1810,6 +1810,8 @@ static void riscv013_on_halt(struct target *target)
 
 static bool riscv013_is_halted(struct target *target)
 {
+
+	riscv_set_current_hartid(target, riscv_current_hartid(target));
 	uint32_t dmstatus = dmi_read(target, DMI_DMSTATUS);
 	if (get_field(dmstatus, DMI_DMSTATUS_ANYUNAVAIL))
 		LOG_ERROR("hart %d is unavailiable", riscv_current_hartid(target));
