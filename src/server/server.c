@@ -273,8 +273,12 @@ int add_service(char *name,
 		c->sin.sin_port = htons(c->portnumber);
 
 		if (bind(c->fd, (struct sockaddr *)&c->sin, sizeof(c->sin)) == -1) {
+#if BUILD_RISCV == 1
 			LOG_ERROR("couldn't bind %s to socket on port %d: %s", name,
 					c->portnumber, strerror(errno));
+#else
+			LOG_ERROR("couldn't bind %s to socket: %s", name, strerror(errno));
+#endif
 			close_socket(c->fd);
 			free_service(c);
 			return ERROR_FAIL;
@@ -300,11 +304,13 @@ int add_service(char *name,
 			return ERROR_FAIL;
 		}
 
+#if BUILD_RISCV == 1
 		struct sockaddr_in addr_in;
 		socklen_t addr_in_size = sizeof(addr_in);
 		getsockname(c->fd, (struct sockaddr *)&addr_in, &addr_in_size);
 		LOG_INFO("Listening on port %d for %s connections",
 				ntohs(addr_in.sin_port), name);
+#endif
 	} else if (c->type == CONNECTION_STDINOUT) {
 		c->fd = fileno(stdin);
 

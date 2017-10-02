@@ -7,6 +7,9 @@
 #include "target/riscv/riscv.h"
 #include "server/gdb_server.h"
 
+#if BUILD_RISCV == 1
+
+int riscv_update_threads(struct rtos *rtos);
 static int riscv_gdb_thread_packet(struct connection *connection, const char *packet, int packet_size);
 static int riscv_gdb_v_packet(struct connection *connection, const char *packet, int packet_size);
 
@@ -264,7 +267,7 @@ static int riscv_gdb_v_packet(struct connection *connection, const char *packet,
 
 static int riscv_get_thread_reg_list(struct rtos *rtos, int64_t thread_id, char **hex_reg_list)
 {
-	LOG_DEBUG("Updating RISC-V regiser list for hart %d", (int)(thread_id - 1));
+	LOG_DEBUG("Updating RISC-V register list for hart %d", (int)(thread_id - 1));
 
 #if 0
 	LOG_ERROR("  Not actually updating");
@@ -314,3 +317,5 @@ const struct rtos_type riscv_rtos =
 	.get_thread_reg_list = riscv_get_thread_reg_list,
 	.get_symbol_list_to_lookup = riscv_get_symbol_list_to_lookup,
 };
+
+#endif

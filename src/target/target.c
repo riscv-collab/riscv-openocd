@@ -105,7 +105,9 @@ extern struct target_type nds32_v3m_target;
 extern struct target_type or1k_target;
 extern struct target_type quark_x10xx_target;
 extern struct target_type quark_d20xx_target;
+#if BUILD_RISCV == 1
 extern struct target_type riscv_target;
+#endif
 
 static struct target_type *target_types[] = {
 	&arm7tdmi_target,
@@ -137,7 +139,9 @@ static struct target_type *target_types[] = {
 	&or1k_target,
 	&quark_x10xx_target,
 	&quark_d20xx_target,
+#if BUILD_RISCV == 1
 	&riscv_target,
+#endif
 #if BUILD_TARGET64
 	&aarch64_target,
 #endif
@@ -1100,7 +1104,11 @@ int target_add_breakpoint(struct target *target,
 		struct breakpoint *breakpoint)
 {
 	if ((target->state != TARGET_HALTED) && (breakpoint->type != BKPT_HARD)) {
+#if BUILD_RISCV == 1
 		LOG_WARNING("target %s is not halted (add breakpoint)", target_name(target));
+#else
+		LOG_WARNING("target %s is not halted", target_name(target));
+#endif
 		return ERROR_TARGET_NOT_HALTED;
 	}
 	return target->type->add_breakpoint(target, breakpoint);
@@ -1110,7 +1118,11 @@ int target_add_context_breakpoint(struct target *target,
 		struct breakpoint *breakpoint)
 {
 	if (target->state != TARGET_HALTED) {
+#if BUILD_RISCV == 1
 		LOG_WARNING("target %s is not halted (add context breakpoint)", target_name(target));
+#else
+		LOG_WARNING("target %s is not halted", target_name(target));
+#endif
 		return ERROR_TARGET_NOT_HALTED;
 	}
 	return target->type->add_context_breakpoint(target, breakpoint);
@@ -1120,7 +1132,11 @@ int target_add_hybrid_breakpoint(struct target *target,
 		struct breakpoint *breakpoint)
 {
 	if (target->state != TARGET_HALTED) {
+#if BUILD_RISCV == 1
 		LOG_WARNING("target %s is not halted (add hybrid breakpoint)", target_name(target));
+#else
+		LOG_WARNING("target %s is not halted", target_name(target));
+#endif
 		return ERROR_TARGET_NOT_HALTED;
 	}
 	return target->type->add_hybrid_breakpoint(target, breakpoint);
@@ -1136,7 +1152,11 @@ int target_add_watchpoint(struct target *target,
 		struct watchpoint *watchpoint)
 {
 	if (target->state != TARGET_HALTED) {
+#if BUILD_RISCV == 1
 		LOG_WARNING("target %s is not halted (add watchpoint)", target_name(target));
+#else
+		LOG_WARNING("target %s is not halted", target_name(target));
+#endif
 		return ERROR_TARGET_NOT_HALTED;
 	}
 	return target->type->add_watchpoint(target, watchpoint);
@@ -1150,7 +1170,11 @@ int target_hit_watchpoint(struct target *target,
 		struct watchpoint **hit_watchpoint)
 {
 	if (target->state != TARGET_HALTED) {
+#if BUILD_RISCV == 1
 		LOG_WARNING("target %s is not halted (hit watchpoint)", target->cmd_name);
+#else
+		LOG_WARNING("target %s is not halted", target->cmd_name);
+#endif
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
@@ -1179,7 +1203,11 @@ int target_step(struct target *target,
 int target_get_gdb_fileio_info(struct target *target, struct gdb_fileio_info *fileio_info)
 {
 	if (target->state != TARGET_HALTED) {
+#if BUILD_RISCV == 1
 		LOG_WARNING("target %s is not halted (gdb fileio)", target->cmd_name);
+#else
+		LOG_WARNING("target %s is not halted", target->cmd_name);
+#endif
 		return ERROR_TARGET_NOT_HALTED;
 	}
 	return target->type->get_gdb_fileio_info(target, fileio_info);
@@ -1188,7 +1216,11 @@ int target_get_gdb_fileio_info(struct target *target, struct gdb_fileio_info *fi
 int target_gdb_fileio_end(struct target *target, int retcode, int fileio_errno, bool ctrl_c)
 {
 	if (target->state != TARGET_HALTED) {
+#if BUILD_RISCV == 1
 		LOG_WARNING("target %s is not halted (gdb fileio end)", target->cmd_name);
+#else
+		LOG_WARNING("target %s is not halted", target->cmd_name);
+#endif
 		return ERROR_TARGET_NOT_HALTED;
 	}
 	return target->type->gdb_fileio_end(target, retcode, fileio_errno, ctrl_c);
@@ -1198,7 +1230,11 @@ int target_profiling(struct target *target, uint32_t *samples,
 			uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
 {
 	if (target->state != TARGET_HALTED) {
+#if BUILD_RISCV == 1
 		LOG_WARNING("target %s is not halted (profiling)", target->cmd_name);
+#else
+		LOG_WARNING("target %s is not halted", target->cmd_name);
+#endif
 		return ERROR_TARGET_NOT_HALTED;
 	}
 	return target->type->profiling(target, samples, max_num_samples,
@@ -2722,8 +2758,10 @@ COMMAND_HANDLER(handle_reg_command)
 	struct reg *reg = NULL;
 	unsigned count = 0;
 	char *value;
+#if BUILD_RISCV == 1
 	int retval;
-
+#endif
+	
 	LOG_DEBUG("-");
 
 	target = get_current_target(CMD_CTX);
@@ -2808,6 +2846,7 @@ COMMAND_HANDLER(handle_reg_command)
 		if ((CMD_ARGC == 2) && (strcmp(CMD_ARGV[1], "force") == 0))
 			reg->valid = 0;
 
+#if BUILD_RISCV == 1
 		if (reg->valid == 0) {
 			retval = reg->type->get(reg);
 			if (retval != ERROR_OK) {
@@ -2815,6 +2854,10 @@ COMMAND_HANDLER(handle_reg_command)
 			    return retval;
 			}
 		}
+#else
+		if (reg->valid == 0)
+			reg->type->get(reg);
+#endif
 		value = buf_to_str(reg->value, reg->size, 16);
 		command_print(CMD_CTX, "%s (/%i): 0x%s", reg->name, (int)(reg->size), value);
 		free(value);
@@ -2828,12 +2871,16 @@ COMMAND_HANDLER(handle_reg_command)
 			return ERROR_FAIL;
 		str_to_buf(CMD_ARGV[1], strlen(CMD_ARGV[1]), buf, reg->size, 0);
 
+#if BUILD_RISCV == 1
 		retval = reg->type->set(reg, buf);
 		if (retval != ERROR_OK) {
 		        LOG_DEBUG("Couldn't set register %s.", reg->name);
 			free (buf);
 			return retval;
 		}
+#else
+		reg->type->set(reg, buf);
+#endif
 
 		value = buf_to_str(reg->value, reg->size, 16);
 		command_print(CMD_CTX, "%s (/%i): 0x%s", reg->name, (int)(reg->size), value);
