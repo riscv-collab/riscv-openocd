@@ -9,7 +9,6 @@
 
 #if BUILD_RISCV == 1
 
-int riscv_update_threads(struct rtos *rtos);
 static int riscv_gdb_thread_packet(struct connection *connection, const char *packet, int packet_size);
 static int riscv_gdb_v_packet(struct connection *connection, const char *packet, int packet_size);
 
