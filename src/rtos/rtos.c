@@ -35,7 +35,9 @@ extern struct rtos_type ChibiOS_rtos;
 extern struct rtos_type embKernel_rtos;
 extern struct rtos_type mqx_rtos;
 extern struct rtos_type uCOS_III_rtos;
+#if BUILD_RISCV == 1
 extern struct rtos_type riscv_rtos;
+#endif
 
 static struct rtos_type *rtos_types[] = {
 	&ThreadX_rtos,
@@ -46,8 +48,10 @@ static struct rtos_type *rtos_types[] = {
 	&embKernel_rtos,
 	&mqx_rtos,
 	&uCOS_III_rtos,
+#if BUILD_RISCV == 1
 	&riscv_rtos,
-	NULL
+#endif
+    NULL
 };
 
 int rtos_thread_packet(struct connection *connection, const char *packet, int packet_size);
@@ -74,7 +78,9 @@ static int os_alloc(struct target *target, struct rtos_type *ostype)
 
 	/* RTOS drivers can override the packet handler in _create(). */
 	os->gdb_thread_packet = rtos_thread_packet;
+#if BUILD_RISCV == 1
 	os->gdb_v_packet = NULL;
+#endif
 
 	return JIM_OK;
 }
@@ -434,10 +440,17 @@ int rtos_get_gdb_reg_list(struct connection *connection)
 			(target->smp))) {	/* in smp several current thread are possible */
 		char *hex_reg_list;
 
+#if BUILD_RISCV == 1
 		LOG_INFO("RTOS: getting register list for thread 0x%" PRIx64
 				  ", target->rtos->current_thread=0x%" PRIx64 "\r\n",
 										current_threadid,
 										target->rtos->current_thread);
+#else
+        LOG_DEBUG("RTOS: getting register list for thread 0x%" PRIx64
+                    ", target->rtos->current_thread=0x%" PRIx64 "\r\n",
+                    current_threadid,
+                    target->rtos->current_thread);
+#endif
 
 		int retval = target->rtos->type->get_thread_reg_list(target->rtos,
 				current_threadid,

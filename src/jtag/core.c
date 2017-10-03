@@ -836,6 +836,7 @@ int default_interface_jtag_execute_queue(void)
 		return ERROR_FAIL;
 	}
 
+#if BUILD_RISCV == 1
 	int result = jtag->execute_queue();
 
 #if 0
@@ -950,6 +951,9 @@ int default_interface_jtag_execute_queue(void)
 #endif
 
 	return result;
+#else
+	return jtag->execute_queue();
+#endif
 }
 
 void jtag_execute_queue_noclear(void)
@@ -1220,8 +1224,12 @@ static int jtag_examine_chain(void)
 
 		if ((idcode & 1) == 0) {
 			/* Zero for LSB indicates a device in bypass */
+#if BUILD_RISCV == 1
 			LOG_INFO("TAP %s does not have valid IDCODE (idcode=0x%x)",
 					tap->dotted_name, idcode);
+#else
+			LOG_INFO("TAP %s does not have IDCODE", tap->dotted_name);
+#endif
 			tap->hasidcode = false;
 			tap->idcode = 0;
 
