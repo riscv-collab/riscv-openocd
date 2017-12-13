@@ -27,6 +27,14 @@ matrix:
                   packages:
                       - gcc-multilib
 
+        - os: linux
+          env: BUILD=i686-w64-mingw CC=i686-w64-mingw32-gcc CXX=i686-w64-mingw32-g++
+          addons:
+              apt:
+                  packages:
+                      - binutils-mingw-w64-i686 gcc-mingw-w64-i686 g++-mingw-w64-i686
+
+
 script:
     - ./bootstrap && ./configure --enable-remote-bitbang --enable-jtag_vpi && make
     - file src/openocd
