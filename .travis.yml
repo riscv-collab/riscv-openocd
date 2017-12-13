@@ -28,7 +28,8 @@ matrix:
                       - gcc-multilib
 
         - os: linux
-          env: BUILD=i686-w64-mingw CC=i686-w64-mingw32-gcc CXX=i686-w64-mingw32-g++
+          env: BUILD=i686-w64-mingw CXX=i686-w64-mingw32-g++
+          compiler: i686-w64-mingw32-gcc
           addons:
               apt:
                   packages:
