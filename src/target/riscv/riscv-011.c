@@ -455,6 +455,9 @@ static uint64_t dbus_read(struct target *target, uint16_t address)
 	dbus_status_t status;
 	uint16_t address_in;
 
+	// First, discard stale data
+	dbus_scan(target, &address_in, &value, DBUS_OP_READ, address, 0);
+
 	unsigned i = 0;
 	do {
 		status = dbus_scan(target, &address_in, &value, DBUS_OP_READ, address, 0);
