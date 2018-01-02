@@ -455,7 +455,11 @@ static uint64_t dbus_read(struct target *target, uint16_t address)
 	dbus_status_t status;
 	uint16_t address_in;
 
-	// First, discard stale data
+	// First scan sends the desired address/operation. This is 
+	// slightly inefficient as, if the previous read was to the same
+	// address, one could have simply used the data directly. However,
+	// that data may may have been captured significantly earlier,
+	// and could be considered stale at the start of this operation.
 	dbus_scan(target, &address_in, &value, DBUS_OP_READ, address, 0);
 
 	unsigned i = 0;
@@ -463,7 +467,7 @@ static uint64_t dbus_read(struct target *target, uint16_t address)
 		status = dbus_scan(target, &address_in, &value, DBUS_OP_READ, address, 0);
 		if (status == DBUS_STATUS_BUSY)
 			increase_dbus_busy_delay(target);
-	} while (((status == DBUS_STATUS_BUSY) || (address_in != address)) &&
+	} while (((status == DBUS_STATUS_BUSY)) &&
 			i++ < 256);
 
 	if (status != DBUS_STATUS_SUCCESS)
