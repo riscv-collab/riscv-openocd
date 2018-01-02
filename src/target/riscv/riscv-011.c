@@ -455,23 +455,21 @@ static uint64_t dbus_read(struct target *target, uint16_t address)
 	dbus_status_t status;
 	uint16_t address_in;
 
-	// First scan sends the desired address/operation. This is 
-	// slightly inefficient as, if the previous read was to the same
-	// address, one could have simply used the data directly. However,
-	// that data may may have been captured significantly earlier,
-	// and could be considered stale at the start of this operation.
-	dbus_scan(target, &address_in, &value, DBUS_OP_READ, address, 0);
-
-	unsigned i = 0;
-	do {
-		status = dbus_scan(target, &address_in, &value, DBUS_OP_READ, address, 0);
+	for (unsigned i = 0; i < 256; i++) {
+		dbus_scan(target, NULL, NULL, DBUS_OP_READ, address, 0);
+		status = dbus_scan(target, &address_in, &value, DBUS_OP_NOP, address, 0);
 		if (status == DBUS_STATUS_BUSY)
 			increase_dbus_busy_delay(target);
-	} while (((status == DBUS_STATUS_BUSY)) &&
-			i++ < 256);
+		else if (address_in != address)
+			LOG_ERROR("Tried to read from 0x%x, but actually read from 0x%x",
+					address, address_in);
+		else
+			break;
+	}
 
 	if (status != DBUS_STATUS_SUCCESS)
-		LOG_ERROR("failed read from 0x%x; value=0x%" PRIx64 ", status=%d\n", address, value, status);
+		LOG_ERROR("failed read from 0x%x; value=0x%" PRIx64 ", status=%d",
+				address, value, status);
 
 	return value;
 }
@@ -486,7 +484,7 @@ static void dbus_write(struct target *target, uint16_t address, uint64_t value)
 			increase_dbus_busy_delay(target);
 	}
 	if (status != DBUS_STATUS_SUCCESS)
-		LOG_ERROR("failed to write 0x%" PRIx64 " to 0x%x; status=%d\n", value, address, status);
+		LOG_ERROR("failed to write 0x%" PRIx64 " to 0x%x; status=%d", value, address, status);
 }
 
 /*** scans "class" ***/
