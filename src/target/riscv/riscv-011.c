@@ -459,7 +459,11 @@ static uint64_t dbus_read(struct target *target, uint16_t address)
 	 * If there happens to be a busy state pending, we will clear it after we
 	 * discover it as part of the NOP scan. */
 	for (unsigned i = 0; i < 256; i++) {
-		dbus_scan(target, NULL, NULL, DBUS_OP_READ, address, 0);
+		status = dbus_scan(target, NULL, NULL, DBUS_OP_READ, address, 0);
+		if (status == DBUS_STATUS_BUSY) {
+			increase_dbus_busy_delay(target);
+			continue;
+		}
 		status = dbus_scan(target, &address_in, &value, DBUS_OP_NOP, address, 0);
 		if (status == DBUS_STATUS_BUSY)
 			increase_dbus_busy_delay(target);
