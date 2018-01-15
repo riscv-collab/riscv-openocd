@@ -1436,6 +1436,9 @@ static int read_memory(struct target *target, target_addr_t address,
 			size, address);
 
 	select_dmi(target);
+        
+        //check if program buffer is available
+        if(info->progbufsize>0){
 
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
@@ -1654,6 +1657,72 @@ static int read_memory(struct target *target, target_addr_t address,
 
 	riscv_set_register(target, GDB_REGNO_S0, s0);
 	riscv_set_register(target, GDB_REGNO_S1, s1);
+ }
+         else{ //System Bus Access
+            LOG_DEBUG("*** read_memory System Buss Access: size: %d\tcount:%d\tstart address: 0x%08" PRIx64,size,count,address);
+            uint8_t *t_buffer=buffer;
+            riscv_addr_t cur_addr = address;
+            riscv_addr_t fin_addr = address + (count * size);
+            uint64_t access=0;
+            
+            //ww favorise one off reading if there is an issu
+            if(count==1){  
+                
+                    for(uint32_t i=0; i<count ; i++){
+                        access= dmi_read(target,DMI_SBCS);
+                        dmi_write(target, DMI_SBADDRESS0, cur_addr);
+                        
+                        //size/2 matching the bit access of the spec 0.13
+                        access=set_field(access,DMI_SBCS_SBACCESS,size/2); 
+                        access=set_field(access,DMI_SBCS_SBSINGLEREAD,1);
+                        LOG_DEBUG("\r\nread_memory: sab: access:  0x%08" PRIx64,access);
+                        dmi_write(target,DMI_SBCS,access);
+
+                        //3) read 
+                        uint32_t value=dmi_read(target, DMI_SBDATA0);
+                        LOG_DEBUG("\r\nread_memory: sab: value:  0x%08x", value);
+                        write_to_buf(t_buffer, value, size);
+                        t_buffer+=size;
+                        cur_addr+=size;
+                    }
+                    return ERROR_OK;
+                        
+            }
+            
+            //has to be the same size if we want to read a block
+            LOG_DEBUG("reading block until final address 0x%" PRIx64, fin_addr);
+             access=dmi_read(target,DMI_SBCS);
+            //set current address
+            dmi_write(target, DMI_SBADDRESS0, cur_addr);
+            //2) write sbaccess=2, sbsingleread,sbautoread,sbautoincrement
+            //size/2 matching the bit access of the spec 0.13
+            access=set_field(access,DMI_SBCS_SBACCESS,size/2); 
+            access=set_field(access,DMI_SBCS_SBAUTOREAD,1);
+            access=set_field(access,DMI_SBCS_SBSINGLEREAD,1);
+            access=set_field(access,DMI_SBCS_SBAUTOINCREMENT,1);
+            LOG_DEBUG("\r\naccess:  0x%08" PRIx64,access);
+            dmi_write(target,DMI_SBCS,access);
+
+             while (cur_addr < fin_addr) {
+                   
+                    LOG_DEBUG("\r\nread_memory:sab:autoincrement: \r\n size: %d\tcount:%d\taddress: 0x%08" PRIx64,size,count,cur_addr);
+            
+                    // read
+                    uint32_t value=dmi_read(target, DMI_SBDATA0);
+                    write_to_buf(t_buffer, value, size);
+                    cur_addr+=size;
+                    t_buffer+=size;
+                    
+                    //if we are reaching last address, we must clear autoread
+                    if(cur_addr==fin_addr && count!=1)
+                    {
+                       
+                        dmi_write(target,DMI_SBCS,0);
+                        value=dmi_read(target, DMI_SBDATA0);
+                        write_to_buf(t_buffer, value, size);
+                    }
+            }
+        }
 	return ERROR_OK;
 
 error:
@@ -1672,6 +1741,8 @@ static int write_memory(struct target *target, target_addr_t address,
 	LOG_DEBUG("writing %d words of %d bytes to 0x%08lx", count, size, (long)address);
 
 	select_dmi(target);
+        
+        if(info->progbufsize){
 
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
@@ -1838,6 +1909,95 @@ error:
 	if (execute_fence(target) != ERROR_OK)
 		return ERROR_FAIL;
 
+  }
+        else{ //System Bus Access
+            //1) write sbaddress: for singlewrite and autoincrement, we need to write the address once
+             LOG_DEBUG("************** write_memory System Buss Access: size: %d\tcount:%d\tstart address: 0x%08" PRIx64,size,count,address);
+             dmi_write(target, DMI_SBADDRESS0, address);
+            
+            int64_t value=0;
+            int64_t access=0;
+            riscv_addr_t offset=0 ;
+            riscv_addr_t t_addr=0 ;
+            const uint8_t *t_buffer = buffer + offset;
+            
+            //B.8 Writing Memory, single write 
+            //check if we write in one go 
+            if(count==1){ //count is in bytes here
+                //check the size
+                switch (size) {
+                        case 1:
+                                value = t_buffer[0];
+                                break;
+                        case 2:
+                                value = t_buffer[0]
+                                        | ((uint32_t) t_buffer[1] << 8);
+                                break;
+                        case 4:
+                                value = t_buffer[0]
+                                        | ((uint32_t) t_buffer[1] << 8)
+                                        | ((uint32_t) t_buffer[2] << 16)
+                                        | ((uint32_t) t_buffer[3] << 24);
+                                break;
+                        default:
+                                LOG_ERROR("unsupported access size: %d", size);
+                                return ERROR_FAIL;
+                }
+                
+               
+             
+                access=0;
+                access=set_field(access,DMI_SBCS_SBACCESS,size/2); 
+                dmi_write(target,DMI_SBCS,access);
+                LOG_DEBUG("\r\naccess:  0x%08" PRIx64,access);
+                LOG_DEBUG("\r\nwrite_memory:SAB: ONE OFF: value 0x%08" PRIx64,value);
+                dmi_write(target,DMI_SBDATA0,value);
+                return ERROR_OK;
+            }
+            
+           //B.8 Writing Memory, using autoincrement
+     
+            
+            access=0;
+            access=set_field(access,DMI_SBCS_SBACCESS,size/2); 
+            access=set_field(access,DMI_SBCS_SBAUTOINCREMENT,1);
+            LOG_DEBUG("\r\naccess:  0x%08" PRIx64,access);
+            dmi_write(target,DMI_SBCS,access);
+           
+            //2)set the value according to the size required and write
+            for (riscv_addr_t i = 0; i < count; ++i) {
+                
+                offset = size*i;
+                //for monitoring only
+                t_addr = address + offset;
+                t_buffer = buffer + offset;
+
+                switch (size) {
+                        case 1:
+                                value = t_buffer[0];
+                                break;
+                        case 2:
+                                value = t_buffer[0]
+                                        | ((uint32_t) t_buffer[1] << 8);
+                                break;
+                        case 4:
+                                value = t_buffer[0]
+                                        | ((uint32_t) t_buffer[1] << 8)
+                                        | ((uint32_t) t_buffer[2] << 16)
+                                        | ((uint32_t) t_buffer[3] << 24);
+                                break;
+                        default:
+                                LOG_ERROR("unsupported access size: %d", size);
+                                return ERROR_FAIL;
+                }
+                 LOG_DEBUG("write_memory:SAB:autoincrement: expected address: 0x%08x value: 0x%08x" PRIx64,(uint32_t)t_addr,(uint32_t)value);
+                 dmi_write(target, DMI_SBDATA0,value);
+                
+            }
+            //reset the autoincrement when finished (something weird is happening if this is not done at the end
+            access=set_field(access,DMI_SBCS_SBAUTOINCREMENT,0);
+            dmi_write(target,DMI_SBCS,access);
+        }
 	return result;
 }
 
