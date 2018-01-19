@@ -40,8 +40,7 @@
 static char *remote_bitbang_host;
 static char *remote_bitbang_port;
 
-static FILE *remote_bitbang_in;
-static FILE *remote_bitbang_out;
+static FILE *remote_bitbang_file;
 static int remote_bitbang_fd;
 
 /* Circular buffer. When start == end, the buffer is empty. */
@@ -93,25 +92,25 @@ static void remote_bitbang_fill_buf(void)
 
 static void remote_bitbang_putc(int c)
 {
-	if (EOF == fputc(c, remote_bitbang_out))
+	if (EOF == fputc(c, remote_bitbang_file))
 		REMOTE_BITBANG_RAISE_ERROR("remote_bitbang_putc: %s", strerror(errno));
 }
 
 static int remote_bitbang_quit(void)
 {
-	if (EOF == fputc('Q', remote_bitbang_out)) {
+	if (EOF == fputc('Q', remote_bitbang_file)) {
 		LOG_ERROR("fputs: %s", strerror(errno));
 		return ERROR_FAIL;
 	}
 
-	if (EOF == fflush(remote_bitbang_out)) {
+	if (EOF == fflush(remote_bitbang_file)) {
 		LOG_ERROR("fflush: %s", strerror(errno));
 		return ERROR_FAIL;
 	}
 
 	/* We only need to close one of the FILE*s, because they both use the same */
 	/* underlying file descriptor. */
-	if (EOF == fclose(remote_bitbang_out)) {
+	if (EOF == fclose(remote_bitbang_file)) {
 		LOG_ERROR("fclose: %s", strerror(errno));
 		return ERROR_FAIL;
 	}
@@ -140,7 +139,7 @@ static int char_to_int(int c)
 /* Get the next read response. */
 static int remote_bitbang_rread(void)
 {
-	if (EOF == fflush(remote_bitbang_out)) {
+	if (EOF == fflush(remote_bitbang_file)) {
 		remote_bitbang_quit();
 		REMOTE_BITBANG_RAISE_ERROR("fflush: %s", strerror(errno));
 	}
@@ -289,17 +288,10 @@ static int remote_bitbang_init(void)
 	if (remote_bitbang_fd < 0)
 		return remote_bitbang_fd;
 
-	remote_bitbang_in = fdopen(remote_bitbang_fd, "r");
-	if (remote_bitbang_in == NULL) {
-		LOG_ERROR("fdopen: failed to open read stream");
-		close(remote_bitbang_fd);
-		return ERROR_FAIL;
-	}
-
-	remote_bitbang_out = fdopen(remote_bitbang_fd, "w");
-	if (remote_bitbang_out == NULL) {
+	remote_bitbang_file = fdopen(remote_bitbang_fd, "w");
+	if (remote_bitbang_file == NULL) {
 		LOG_ERROR("fdopen: failed to open write stream");
-		fclose(remote_bitbang_in);
+		close(remote_bitbang_fd);
 		return ERROR_FAIL;
 	}
 
