@@ -1958,8 +1958,8 @@ static int write_memory(struct target *target, target_addr_t address,
 
 	
 	}
-	else{ //System Bus Access
-		//1) write sbaddress: for singlewrite and autoincrement, we need to write the address once
+	else{/*System Bus Access*/
+		/*1) write sbaddress: for singlewrite and autoincrement, we need to write the address once*/
 			LOG_DEBUG("************** write_memory System Buss Access: size: %d\tcount:%d\tstart address: 0x%08" PRIx64,size,count,address);
 			dmi_write(target, DMI_SBADDRESS0, address);
 			int64_t value=0;
@@ -1968,8 +1968,8 @@ static int write_memory(struct target *target, target_addr_t address,
 			riscv_addr_t t_addr=0 ;
 			const uint8_t *t_buffer = buffer + offset;
 
-			//B.8 Writing Memory, single write 
-			//check if we write in one go 
+			/*B.8 Writing Memory, single write 
+			*check if we write in one go */
 			if(count==1){ //count is in bytes here
 				//check the size
 				switch (size) {
@@ -2000,7 +2000,7 @@ static int write_memory(struct target *target, target_addr_t address,
 				return ERROR_OK;
 			}
 
-			//B.8 Writing Memory, using autoincrement
+			/*B.8 Writing Memory, using autoincrement*/
 
 
 			access=0;
@@ -2009,7 +2009,7 @@ static int write_memory(struct target *target, target_addr_t address,
 			LOG_DEBUG("\r\naccess:  0x%08" PRIx64,access);
 			dmi_write(target,DMI_SBCS,access);
 
-			//2)set the value according to the size required and write
+			/*2)set the value according to the size required and write*/
 			for (riscv_addr_t i = 0; i < count; ++i) {
 				offset = size*i;
 				//for monitoring only
@@ -2037,7 +2037,7 @@ static int write_memory(struct target *target, target_addr_t address,
 			LOG_DEBUG("write_memory:SAB:autoincrement: expected address: 0x%08x value: 0x%08x" PRIx64,(uint32_t)t_addr,(uint32_t)value);
 			dmi_write(target, DMI_SBDATA0,value);
 			}
-			//reset the autoincrement when finished (something weird is happening if this is not done at the end
+			/*reset the autoincrement when finished (something weird is happening if this is not done at the end*/
 			access=set_field(access,DMI_SBCS_SBAUTOINCREMENT,0);
 			dmi_write(target,DMI_SBCS,access);
 			}
@@ -2277,15 +2277,15 @@ int riscv013_dmi_write_u64_bits(struct target *target)
 static void riscv013_on_step_or_resume(struct target *target, bool step)
 {
 	struct riscv_program program;
-        RISCV013_INFO(info);
-        
-        //if we don't use prog buffer
-        if(info->progbufsize>0){
-            riscv_program_init(&program, target);
-            riscv_program_fence_i(&program);
-            if (riscv_program_exec(&program, target) != ERROR_OK)
-                    LOG_ERROR("Unable to execute fence.i");
-        }
+	RISCV013_INFO(info);
+
+	//if we don't use prog buffer
+	if(info->progbufsize>0){
+		riscv_program_init(&program, target);
+		riscv_program_fence_i(&program);
+		if (riscv_program_exec(&program, target) != ERROR_OK)
+			LOG_ERROR("Unable to execute fence.i");
+	}
 	/* We want to twiddle some bits in the debug CSR so debugging works. */
 	uint64_t dcsr = riscv_get_register(target, GDB_REGNO_DCSR);
 	dcsr = set_field(dcsr, CSR_DCSR_STEP, step);
@@ -2298,19 +2298,18 @@ static void riscv013_on_step_or_resume(struct target *target, bool step)
 static void riscv013_step_or_resume_current_hart(struct target *target, bool step)
 {
 	RISCV_INFO(r);
-        RISCV013_INFO(info);
+	RISCV013_INFO(info);
 	LOG_DEBUG("resuming hart %d (for step?=%d)", r->current_hartid, step);
 	assert(riscv_is_halted(target));
 
-       
-        struct riscv_program program;
-         //if we don't use prog buffer
-        if(info->progbufsize>0){
-            riscv_program_init(&program, target);
-            riscv_program_fence_i(&program);
-            if (riscv_program_exec(&program, target) != ERROR_OK)
-                    abort();
-        }
+	struct riscv_program program;
+	/*if we don't use prog buffer*/
+	\if(info->progbufsize>0){
+			riscv_program_init(&program, target);
+			riscv_program_fence_i(&program);
+			if (riscv_program_exec(&program, target) != ERROR_OK)
+				abort();
+	}
 
 	/* Issue the resume command, and then wait for the current hart to resume. */
 	uint32_t dmcontrol = dmi_read(target, DMI_DMCONTROL);
