@@ -24,6 +24,12 @@
 
 #include <jtag/swd.h>
 
+typedef enum {
+	BB_LOW,
+	BB_HIGH,
+	BB_ERROR
+} bb_value_t;
+
 /** Low level callbacks (for bitbang).
  *
  * Either read(), or sample() and read_sample() must be implemented.
@@ -32,21 +38,21 @@
  * sample requests together. Not waiting for a value to come back can greatly
  * increase throughput. */
 struct bitbang_interface {
-	/** Sample TDO and return 0 or 1. */
-	int (*read)(void);
+	/** Sample TDO. */
+	bb_value_t (*read)(void);
 
 	/** The number of TDO samples that can be buffered up before the caller has
 	 * to call read_sample. */
 	size_t buf_size;
 	/** Sample TDO and put the result in a buffer. */
-	void (*sample)(void);
+	int (*sample)(void);
 	/** Return the next unread value from the buffer. */
-	int (*read_sample)(void);
+	bb_value_t (*read_sample)(void);
 
 	/** Set TCK, TMS, and TDI to the given values. */
-	void (*write)(int tck, int tms, int tdi);
-	void (*reset)(int trst, int srst);
-	void (*blink)(int on);
+	int (*write)(int tck, int tms, int tdi);
+	int (*reset)(int trst, int srst);
+	int (*blink)(int on);
 	int (*swdio_read)(void);
 	void (*swdio_drive)(bool on);
 };
