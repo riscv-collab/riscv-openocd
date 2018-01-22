@@ -288,7 +288,7 @@ static int remote_bitbang_init(void)
 	if (remote_bitbang_fd < 0)
 		return remote_bitbang_fd;
 
-	remote_bitbang_file = fdopen(remote_bitbang_fd, "w");
+	remote_bitbang_file = fdopen(remote_bitbang_fd, "w+");
 	if (remote_bitbang_file == NULL) {
 		LOG_ERROR("fdopen: failed to open write stream");
 		close(remote_bitbang_fd);
