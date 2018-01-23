@@ -2280,7 +2280,7 @@ static void riscv013_on_step_or_resume(struct target *target, bool step)
 	RISCV013_INFO(info);
 
 	/*if we don't use prog buffer*/
-	if(info->progbufsize > 0){
+	if (info->progbufsize > 0) {
 		riscv_program_init(&program, target);
 		riscv_program_fence_i(&program);
 		if (riscv_program_exec(&program, target) != ERROR_OK)
@@ -2304,7 +2304,7 @@ static void riscv013_step_or_resume_current_hart(struct target *target, bool ste
 
 	struct riscv_program program;
 	/*if we don't use prog buffer*/
-	if(info->progbufsize>0) {
+	if (info->progbufsize > 0) {
 			riscv_program_init(&program, target);
 			riscv_program_fence_i(&program);
 			if (riscv_program_exec(&program, target) != ERROR_OK)
