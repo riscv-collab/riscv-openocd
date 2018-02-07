@@ -1436,6 +1436,17 @@ static int execute_fence(struct target *target)
 	return result;
 }
 
+static int execute_fence_i(struct target *target)
+{
+	struct riscv_program program;
+	riscv_program_init(&program, target);
+	riscv_program_fence_i(&program);
+	int result = riscv_program_exec(&program, target);
+	if (result != ERROR_OK)
+		LOG_ERROR("Unable to execute fence");
+	return result;
+}
+
 static void log_memory_access(target_addr_t address, uint64_t value,
 		unsigned size_bytes, bool read)
 {
@@ -1861,6 +1872,9 @@ error:
 		return ERROR_FAIL;
 
 	if (execute_fence(target) != ERROR_OK)
+		return ERROR_FAIL;
+
+	if (execute_fence_i(target) != ERROR_OK)
 		return ERROR_FAIL;
 
 	return result;
