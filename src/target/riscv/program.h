@@ -66,8 +66,7 @@ int riscv_program_sbr(struct riscv_program *p, enum gdb_regno s, enum gdb_regno 
 int riscv_program_csrr(struct riscv_program *p, enum gdb_regno d, enum gdb_regno csr);
 int riscv_program_csrw(struct riscv_program *p, enum gdb_regno s, enum gdb_regno csr);
 
-int riscv_program_fence_i(struct riscv_program *p);
-int riscv_program_fence(struct riscv_program *p);
+int riscv_program_fences(struct riscv_program *p);
 int riscv_program_ebreak(struct riscv_program *p);
 
 int riscv_program_addi(struct riscv_program *p, enum gdb_regno d, enum gdb_regno s, int16_t i);
