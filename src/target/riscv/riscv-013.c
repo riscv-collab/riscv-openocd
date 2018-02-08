@@ -1425,15 +1425,39 @@ static void write_to_buf(uint8_t *buffer, uint64_t value, unsigned size)
 	}
 }
 
-static int execute_fences(struct target *target)
+static int execute_fence(struct target *target)
 {
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	riscv_program_fences(&program);
+	riscv_program_fence(&program);
 	int result = riscv_program_exec(&program, target);
 	if (result != ERROR_OK)
-		LOG_ERROR("Unable to execute fence and fence.i");
+		LOG_ERROR("Unable to execute fence");
 	return result;
+}
+
+static int execute_fence_i(struct target *target)
+{
+	struct riscv_program program;
+	riscv_program_init(&program, target);
+	riscv_program_fence_i(&program);
+	int result = riscv_program_exec(&program, target);
+	if (result != ERROR_OK)
+		LOG_ERROR("Unable to execute fence");
+	return result;
+}
+
+static int execute_fences(struct target *target)
+{
+    if (execute_fence(target) != ERROR_OK)
+    {
+        return ERROR_FAIL;
+    }
+    if (execute_fence_i(target) != ERROR_OK)
+    {
+        return ERROR_FAIL;
+    }
+    return ERROR_OK;
 }
 
 static void log_memory_access(target_addr_t address, uint64_t value,
@@ -1474,7 +1498,7 @@ static int read_memory(struct target *target, target_addr_t address,
 	if (register_read_direct(target, &s1, GDB_REGNO_S1) != ERROR_OK)
 		return ERROR_FAIL;
 
-	if (execute_fences(target) != ERROR_OK)
+	if (execute_fence(target) != ERROR_OK)
 		return ERROR_FAIL;
 
 	/* Write the program (load, increment) */
@@ -2107,7 +2131,7 @@ static int riscv013_on_step_or_resume(struct target *target, bool step)
 {
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	riscv_program_fences(&program);
+	riscv_program_fence_i(&program);
 	if (riscv_program_exec(&program, target) != ERROR_OK)
 		LOG_ERROR("Unable to execute fence.i");
 
@@ -2134,7 +2158,7 @@ static int riscv013_step_or_resume_current_hart(struct target *target, bool step
 
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	riscv_program_fences(&program);
+	riscv_program_fence_i(&program);
 	if (riscv_program_exec(&program, target) != ERROR_OK)
 		return ERROR_FAIL;
 
