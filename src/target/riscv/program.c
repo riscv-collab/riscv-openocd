@@ -121,14 +121,11 @@ int riscv_program_csrw(struct riscv_program *p, enum gdb_regno s, enum gdb_regno
 	return riscv_program_insert(p, csrrw(GDB_REGNO_ZERO, s, csr - GDB_REGNO_CSR0));
 }
 
-int riscv_program_fence_i(struct riscv_program *p)
+int riscv_program_fences(struct riscv_program *p)
 {
-	return riscv_program_insert(p, fence_i());
-}
-
-int riscv_program_fence(struct riscv_program *p)
-{
-	return riscv_program_insert(p, fence());
+	if (riscv_program_insert(p, fence()) != ERROR_OK) return ERROR_FAIL;
+	if (riscv_program_insert(p, fence_i()) != ERROR_OK) return ERROR_FAIL;
+	return ERROR_OK;
 }
 
 int riscv_program_ebreak(struct riscv_program *p)
