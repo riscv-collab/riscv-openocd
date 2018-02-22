@@ -2227,7 +2227,14 @@ int riscv013_test_compliance(struct target *target) {
   LOG_INFO("Trying to write zeroes into Debug ROM");
   uint8_t b[256] = {};
   write_memory(target, 0x800, 4, 24, b);
-  write_memory(target, 0x280, 4, 40, b);
+
+  for (int i = 0; i < 16; i++) {
+    dmi_write(target, 0x20 + i, 0);
+  }
+
+  for (int i = 0; i < 16; i++) {
+    dmi_write(target, 0x20 + i, 0xffffffff);
+  }
 
   dmcontrol = set_field(dmcontrol_orig, hartsel_mask(target), RISCV_MAX_HARTS-1);
   dmi_write(target, DMI_DMCONTROL, dmcontrol);
