@@ -2224,6 +2224,10 @@ int riscv013_test_compliance(struct target *target) {
   uint32_t testvar;
   riscv_reg_t value;
 
+  LOG_INFO("Trying to write zeroes into Debug ROM");
+  uint8_t b[100] = {};
+  write_memory(target, 0x800, 4, 24, b);
+
   dmcontrol = set_field(dmcontrol_orig, hartsel_mask(target), RISCV_MAX_HARTS-1);
   dmi_write(target, DMI_DMCONTROL, dmcontrol);
   dmcontrol = dmi_read(target, DMI_DMCONTROL);
