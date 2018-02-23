@@ -2224,18 +2224,6 @@ int riscv013_test_compliance(struct target *target) {
   uint32_t testvar;
   riscv_reg_t value;
 
-  LOG_INFO("Trying to write zeroes into Debug ROM");
-  uint8_t b[256] = {};
-  write_memory(target, 0x800, 4, 24, b);
-
-  for (int i = 0; i < 16; i++) {
-    dmi_write(target, 0x20 + i, 0);
-  }
-
-  for (int i = 0; i < 16; i++) {
-    dmi_write(target, 0x20 + i, 0xffffffff);
-  }
-
   dmcontrol = set_field(dmcontrol_orig, hartsel_mask(target), RISCV_MAX_HARTS-1);
   dmi_write(target, DMI_DMCONTROL, dmcontrol);
   dmcontrol = dmi_read(target, DMI_DMCONTROL);
@@ -2275,10 +2263,13 @@ int riscv013_test_compliance(struct target *target) {
   dmcontrol |= DMI_DMCONTROL_HALTREQ;
   dmi_write(target, DMI_DMCONTROL, dmcontrol);
   COMPLIANCE_TEST(dmi_read(target, DMI_DMCONTROL) & DMI_DMCONTROL_HALTREQ, "DMCONTROL.haltreq should be R/W");
-  uint32_t dmstatus;
+  uint32_t dmstatus, dmstatus_m;
   do {
     dmstatus = dmi_read(target, DMI_DMSTATUS);
   } while ((dmstatus & DMI_DMSTATUS_ALLHALTED) == 0);
+
+  dmi_write(target, DMI_DMSTATUS, 0xffffffff);
+  COMPLIANCE_TEST(dmi_read(target, DMI_DMSTATUS) == dmstatus, "DMSTATUS is R/O");
 
   // resumereq. This will resume the hart but this test is destructive anyway.
   dmcontrol &= ~DMI_DMCONTROL_HALTREQ;
@@ -2351,6 +2342,12 @@ int riscv013_test_compliance(struct target *target) {
     expected_haltsum |= (1 << (i / 32));
   }
   COMPLIANCE_TEST(dmi_read(target, DMI_HALTSUM) == expected_haltsum, "HALTSUM should report all halted harts");
+
+  dmi_write(target, DMI_HALTSUM, 0xffffffff);
+  COMPLIANCE_TEST(dmi_read(target, DMI_HALTSUM) == expected_haltsum, "HALTSUM is R/O");
+
+  dmi_write(target, DMI_HALTSUM, 0x0);
+  COMPLIANCE_TEST(dmi_read(target, DMI_HALTSUM) == expected_haltsum, "HALTSUM is R/O");
 
   for (int i = 0; i < riscv_count_harts(target); i +=32){
     uint32_t haltstat =  dmi_read(target, 0x40 + (i / 32));
