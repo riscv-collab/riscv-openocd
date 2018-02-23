@@ -383,7 +383,7 @@ static dmi_status_t dmi_scan(struct target *target, uint16_t *address_in,
 
 	int retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
-		LOG_ERROR("dmi_scan failed jtag scan");
+		LOG_INFO("dmi_scan failed jtag scan");
 		return DMI_STATUS_FAILED;
 	}
 
@@ -418,13 +418,13 @@ static uint32_t dmi_read(struct target *target, uint16_t address)
 		} else if (status == DMI_STATUS_SUCCESS) {
 			break;
 		} else {
-			LOG_ERROR("failed read from 0x%x, status=%d", address, status);
+			LOG_INFO("failed read from 0x%x, status=%d", address, status);
 			break;
 		}
 	}
 
 	if (status != DMI_STATUS_SUCCESS) {
-		LOG_ERROR("Failed read from 0x%x; status=%d", address, status);
+		LOG_INFO("Failed read from 0x%x; status=%d", address, status);
 		return ~0;
 	}
 
