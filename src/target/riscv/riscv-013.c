@@ -2263,7 +2263,7 @@ int riscv013_test_compliance(struct target *target) {
   dmcontrol |= DMI_DMCONTROL_HALTREQ;
   dmi_write(target, DMI_DMCONTROL, dmcontrol);
   COMPLIANCE_TEST(dmi_read(target, DMI_DMCONTROL) & DMI_DMCONTROL_HALTREQ, "DMCONTROL.haltreq should be R/W");
-  uint32_t dmstatus, dmstatus_m;
+  uint32_t dmstatus;
   do {
     dmstatus = dmi_read(target, DMI_DMSTATUS);
   } while ((dmstatus & DMI_DMSTATUS_ALLHALTED) == 0);
