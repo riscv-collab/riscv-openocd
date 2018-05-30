@@ -692,11 +692,7 @@ static int riscv_examine(struct target *target)
 	if (result != ERROR_OK)
 		return result;
 
-	int result = tt->examine(target);
-	if (result != ERROR_OK)
-		return result;
-
-	target->state = riscv_is_halted(target) ? TARGET_HALTED : TARGET_RUNNING;
+	return tt->examine(target);
 }
 
 static int oldriscv_poll(struct target *target)
