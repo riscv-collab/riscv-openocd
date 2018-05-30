@@ -1036,7 +1036,9 @@ int riscv_openocd_poll(struct target *target)
 #ifdef RISCV_DEBUG_POLL
 		LOG_DEBUG("  hart %d halted", halted_hart);
 #else
+		debug_level = old_debug_level;
 		LOG_DEBUG("hart %d halted", halted_hart);
+		debug_level = LOG_LVL_INFO;
 #endif
 
 		/* If we're here then at least one hart triggered.  That means
@@ -1063,7 +1065,9 @@ int riscv_openocd_poll(struct target *target)
 #ifdef RISCV_DEBUG_POLL
 		LOG_DEBUG("  hart %d halted", halted_hart);
 #else
+		debug_level = old_debug_level;
 		LOG_DEBUG("hart %d halted", halted_hart);
+		debug_level = LOG_LVL_INFO;
 #endif
 	}
 
