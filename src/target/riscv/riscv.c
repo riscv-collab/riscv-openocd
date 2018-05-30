@@ -18,6 +18,8 @@
 #include "gdb_regs.h"
 #include "rtos/rtos.h"
 
+#define RISCV_DEBUG_POLL
+
 /**
  * Since almost everything can be accomplish by scanning the dbus register, all
  * functions here assume dbus is already selected. The exception are functions
@@ -1118,6 +1120,7 @@ int riscv_openocd_halt(struct target *target)
 
 	register_cache_invalidate(target->reg_cache);
 	if (riscv_rtos_enabled(target)) {
+		LOG_DEBUG("    current RTOS hartid is %d", r->rtos_hartid);
 		target->rtos->current_threadid = r->rtos_hartid + 1;
 		target->rtos->current_thread = r->rtos_hartid + 1;
 	}
