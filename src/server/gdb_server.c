@@ -480,11 +480,6 @@ int gdb_put_packet(struct connection *connection, char *buffer, int len)
 	int retval = gdb_put_packet_inner(connection, buffer, len);
 	gdb_con->busy = false;
 
-	char *msg = malloc(len + 1);
-	memset(msg, '\0', len+1);
-	strncpy(msg, buffer, len);
-	LOG_DEBUG("msg: %s", msg);
-
 	/* we sent some data, reset timer for keep alive messages */
 	kept_alive();
 
