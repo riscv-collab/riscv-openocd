@@ -174,7 +174,7 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 
 		switch (tid) {
 		case 0:
-			riscv_set_rtos_hartid(target, 0);
+			riscv_set_rtos_hartid(target, 1);
 			break;
 		case -1:
 			riscv_set_all_rtos_harts(target);
