@@ -130,7 +130,7 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 		}
 
 		if (strcmp(packet, "qTStatus", 8) == 0) {
-			gdb_put_packet("T0");
+			gdb_put_packet(connection, "T0", strlen("T0"));
 			return ERROR_OK;
 		}
 
