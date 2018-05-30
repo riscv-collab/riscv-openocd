@@ -1001,8 +1001,15 @@ static enum riscv_poll_hart riscv_poll_hart(struct target *target, int hartid)
 /*** OpenOCD Interface ***/
 int riscv_openocd_poll(struct target *target)
 {
+#ifdef RISCV_DEBUG_POLL
 	LOG_DEBUG("polling all harts");
+#endif
 	int halted_hart = -1;
+        int old_debug_level = debug_level;
+#ifdef RISCV_DEBUG_POLL
+#else
+        debug_level = LOG_LVL_INFO;
+#endif
 	if (riscv_rtos_enabled(target)) {
 		/* Check every hart for an event. */
 		for (int i = 0; i < riscv_count_harts(target); ++i) {
@@ -1015,14 +1022,20 @@ int riscv_openocd_poll(struct target *target)
 				halted_hart = i;
 				break;
 			case RPH_ERROR:
+				debug_level = old_debug_level;
 				return ERROR_FAIL;
 			}
 		}
 		if (halted_hart == -1) {
+#ifdef RISCV_DEBUG_POLL
 			LOG_DEBUG("  no harts just halted, target->state=%d", target->state);
+#endif
+			debug_level = old_debug_level;
 			return ERROR_OK;
 		}
+#ifdef RISCV_DEBUG_POLL
 		LOG_DEBUG("  hart %d halted", halted_hart);
+#endif
 
 		/* If we're here then at least one hart triggered.  That means
 		 * we want to go and halt _every_ hart in the system, as that's
@@ -1035,13 +1048,19 @@ int riscv_openocd_poll(struct target *target)
 	} else {
 		enum riscv_poll_hart out = riscv_poll_hart(target,
 				riscv_current_hartid(target));
-		if (out == RPH_NO_CHANGE || out == RPH_DISCOVERED_RUNNING)
+		if (out == RPH_NO_CHANGE || out == RPH_DISCOVERED_RUNNING) {
+			debug_level = old_debug_level;
 			return ERROR_OK;
-		else if (out == RPH_ERROR)
+		}
+		else if (out == RPH_ERROR) {
+			debug_level = old_debug_level;
 			return ERROR_FAIL;
+		}
 
 		halted_hart = riscv_current_hartid(target);
+#ifdef RISCV_DEBUG_POLL
 		LOG_DEBUG("  hart %d halted", halted_hart);
+#endif
 	}
 
 	target->state = TARGET_HALTED;
@@ -1062,6 +1081,7 @@ int riscv_openocd_poll(struct target *target)
 		target->debug_reason = DBG_REASON_UNDEFINED;
 		break;
 	case RISCV_HALT_ERROR:
+		debug_level = old_debug_level;
 		return ERROR_FAIL;
 	}
 
@@ -1072,6 +1092,7 @@ int riscv_openocd_poll(struct target *target)
 
 	target->state = TARGET_HALTED;
 	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
+	debug_level = old_debug_level;
 	return ERROR_OK;
 }
 
