@@ -1121,9 +1121,12 @@ int riscv_openocd_halt(struct target *target)
 
 	register_cache_invalidate(target->reg_cache);
 	if (riscv_rtos_enabled(target)) {
-		LOG_DEBUG("    current RTOS hartid is %d", r->rtos_hartid);
-		target->rtos->current_threadid = r->rtos_hartid + 1;
-		target->rtos->current_thread = r->rtos_hartid + 1;
+		if (r->rtos_hartid == -1) {
+			LOG_DEBUG("halt requested on RTOS hartid %d", r->rtos_hartid);
+			target->rtos->current_threadid = r->rtos_hartid + 1;
+			target->rtos->current_thread = r->rtos_hartid + 1;
+		} else
+			LOG_DEBUG("halt requested, but no known RTOS hartid");
 	}
 
 	target->state = TARGET_HALTED;
