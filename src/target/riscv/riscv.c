@@ -1114,9 +1114,7 @@ int riscv_openocd_halt(struct target *target)
 		target->rtos->current_thread = r->rtos_hartid + 1;
 	}
 
-	target->state = TARGET_HALTED;
 	target->debug_reason = DBG_REASON_DBGRQ;
-	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 	return out;
 }
 
@@ -1177,8 +1175,6 @@ int riscv_openocd_resume(
 	}
 
 	register_cache_invalidate(target->reg_cache);
-	target->state = TARGET_RUNNING;
-	target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
 	return out;
 }
 
