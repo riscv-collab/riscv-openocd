@@ -1096,6 +1096,7 @@ int riscv_openocd_poll(struct target *target)
 	}
 
 	if (riscv_rtos_enabled(target)) {
+		LOG_DEBUG("    setting RTOS threaded to %d+1", halted_hart);
 		target->rtos->current_threadid = halted_hart + 1;
 		target->rtos->current_thread = halted_hart + 1;
 	}
