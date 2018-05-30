@@ -129,6 +129,11 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 			return ERROR_OK;
 		}
 
+		if (strcmp(packet, "qTStatus", 8) == 0) {
+			gdb_put_packet("T0");
+			return ERROR_OK;
+		}
+
 		return GDB_THREAD_PACKET_NOT_CONSUMED;
 
 	case 'Q':
