@@ -1091,7 +1091,11 @@ int riscv_openocd_poll(struct target *target)
 	}
 
 	target->state = TARGET_HALTED;
-	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
+	/* Only produce a TARGET_EVENT_HALTED callback if we've already
+	 * examined this target, as polls during examination shouldn't be
+	 * raising events. */
+	if (target_was_examined(target))
+		target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 	debug_level = old_debug_level;
 	return ERROR_OK;
 }
