@@ -136,7 +136,7 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 
 		if (strncmp(packet, "qC", 2) == 0) {
 			char rep_str[32];
-			strnprintf("QC%d", rtos->current_threadid);
+			snprintf(rep_str, 32, "QC%d", rtos->current_threadid);
 			gdb_put_packet(connection, rep_str, strlen(rep_str));
 			return ERROR_OK;
 		}
