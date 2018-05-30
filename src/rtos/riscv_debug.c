@@ -134,6 +134,13 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 			return ERROR_OK;
 		}
 
+		if (strncmp(packet, "qC", 2) == 0) {
+			char rep_str[32];
+			strnprintf("QC%d", rtos->current_threadid);
+			gdb_put_packet(connection, rep_str, strlen(rep_str));
+			return ERROR_OK;
+		}
+
 		return GDB_THREAD_PACKET_NOT_CONSUMED;
 
 	case 'Q':
