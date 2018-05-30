@@ -692,7 +692,7 @@ static int riscv_examine(struct target *target)
 	if (result != ERROR_OK)
 		return result;
 
-	result = tt->examine(target);
+	int result = tt->examine(target);
 	if (result != ERROR_OK)
 		return result;
 
