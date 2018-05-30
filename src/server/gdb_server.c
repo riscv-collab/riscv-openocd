@@ -484,7 +484,6 @@ int gdb_put_packet(struct connection *connection, char *buffer, int len)
 	memset(msg, '\0', len+1);
 	strncpy(msg, buffer, len);
 	LOG_DEBUG("msg: %s", msg);
-	free(msg);
 
 	/* we sent some data, reset timer for keep alive messages */
 	kept_alive();
