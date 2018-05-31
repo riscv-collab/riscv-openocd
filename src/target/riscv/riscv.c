@@ -265,6 +265,8 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 	select_dbus.num_bits = target->tap->ir_length;
 	select_idcode.num_bits = target->tap->ir_length;
 
+	target->debug_reason = DBG_REASON_DBGRQ;
+
 	return ERROR_OK;
 }
 
