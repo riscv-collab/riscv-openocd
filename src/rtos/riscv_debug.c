@@ -100,7 +100,7 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 		}
 
 		if (strncmp(packet, "qAttached", 9) == 0) {
-			gdb_put_packet(connection, "1", 1);
+			gdb_put_packet(connection, "0", 1);
 			return ERROR_OK;
 		}
 
