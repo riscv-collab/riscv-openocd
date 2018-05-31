@@ -759,9 +759,12 @@ static int old_or_new_riscv_resume(
 static int riscv_select_current_hart(struct target *target)
 {
 	RISCV_INFO(r);
-	if (r->rtos_hartid != -1 && riscv_rtos_enabled(target))
+	if (riscv_rtos_enabled(target)) {
+		if (r->rtos_hartid == -1)
+			r->rtos_hartid = target->rtos->current_threadid - 1;
+
 		return riscv_set_current_hartid(target, r->rtos_hartid);
-	else
+	} else
 		return riscv_set_current_hartid(target, target->coreid);
 }
 
