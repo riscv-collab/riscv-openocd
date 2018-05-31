@@ -1718,13 +1718,26 @@ static void write_to_buf(uint8_t *buffer, uint64_t value, unsigned size)
 
 static int execute_fence(struct target *target)
 {
-	struct riscv_program program;
-	riscv_program_init(&program, target);
-	riscv_program_fence(&program);
-	int result = riscv_program_exec(&program, target);
-	if (result != ERROR_OK)
-		LOG_ERROR("Unable to execute fence");
-	return result;
+	int old_hartid = riscv_current_hartid(target);
+
+	for (int i = 0; i < riscv_count_harts(target); ++i) {
+		if (!riscv_hart_enabled(target, i))
+			continue;
+
+		riscv_set_current_hartid(target, i);
+
+		struct riscv_program program;
+		riscv_program_init(&program, target);
+		riscv_program_fence_i(&program);
+		riscv_program_fence(&program);
+		int result = riscv_program_exec(&program, target);
+		if (result != ERROR_OK)
+			LOG_ERROR("Unable to execute fence");
+	}
+
+	riscv_set_current_hartid(target, old_hartid);
+
+	return ERROR_OK;
 }
 
 static void log_memory_access(target_addr_t address, uint64_t value,
@@ -2899,19 +2912,7 @@ int riscv013_dmi_write_u64_bits(struct target *target)
 
 static int maybe_execute_fence_i(struct target *target)
 {
-	RISCV013_INFO(info);
-	RISCV_INFO(r);
-	if (info->progbufsize + r->impebreak >= 2) {
-		struct riscv_program program;
-		riscv_program_init(&program, target);
-		if (riscv_program_fence_i(&program) != ERROR_OK)
-			return ERROR_FAIL;
-		if (riscv_program_exec(&program, target) != ERROR_OK) {
-			LOG_ERROR("Failed to execute fence.i");
-			return ERROR_FAIL;
-		}
-	}
-	return ERROR_OK;
+	return execute_fence(target);
 }
 
 /* Helper Functions. */
