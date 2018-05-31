@@ -1627,6 +1627,8 @@ int riscv_halt_all_harts(struct target *target)
 		riscv_halt_one_hart(target, i);
 	}
 
+	riscv_invalidate_register_cache(target);
+
 	return ERROR_OK;
 }
 
@@ -1752,6 +1754,7 @@ int riscv_set_current_hartid(struct target *target, int hartid)
 	if (!target_was_examined(target))
 		return ERROR_OK;
 
+#if 0
 	/* Avoid invalidating the register cache all the time. */
 	if (r->registers_initialized
 			&& (!riscv_rtos_enabled(target) || (previous_hartid == hartid))
@@ -1759,6 +1762,7 @@ int riscv_set_current_hartid(struct target *target, int hartid)
 		return ERROR_OK;
 	} else
 		LOG_DEBUG("Initializing registers: xlen=%d", riscv_xlen(target));
+#endif
 
 	riscv_invalidate_register_cache(target);
 	return ERROR_OK;
