@@ -1720,6 +1720,18 @@ static int execute_fence(struct target *target)
 {
 	int old_hartid = riscv_current_hartid(target);
 
+	/* FIXME: For non-coherent systems we need to flush the caches right
+	 * here, but there's no ISA-defined way of doing that. */
+	{
+		struct riscv_program program;
+		riscv_program_init(&program, target);
+		riscv_program_fence_i(&program);
+		riscv_program_fence(&program);
+		int result = riscv_program_exec(&program, target);
+		if (result != ERROR_OK)
+			LOG_ERROR("Unable to execute fence");
+	}
+
 	for (int i = 0; i < riscv_count_harts(target); ++i) {
 		if (!riscv_hart_enabled(target, i))
 			continue;
