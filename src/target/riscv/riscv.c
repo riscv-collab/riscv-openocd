@@ -1840,7 +1840,15 @@ int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 		int hartid, enum gdb_regno regid)
 {
 	RISCV_INFO(r);
+
+        if (hartid != riscv_current_hartid(target))
+		riscv_invalidate_register_cache(target);
+
 	int result = r->get_register(target, value, hartid, regid);
+
+        if (hartid != riscv_current_hartid(target))
+		riscv_invalidate_register_cache(target);
+
 	LOG_DEBUG("[%d] %s: %" PRIx64, hartid, gdb_regno_name(regid), *value);
 	return result;
 }
