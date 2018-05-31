@@ -1729,7 +1729,7 @@ static int execute_fence(struct target *target)
 		riscv_program_fence(&program);
 		int result = riscv_program_exec(&program, target);
 		if (result != ERROR_OK)
-			LOG_ERROR("Unable to execute pre-fence");
+			LOG_DEBUG("Unable to execute pre-fence");
 	}
 
 	for (int i = 0; i < riscv_count_harts(target); ++i) {
@@ -1744,7 +1744,7 @@ static int execute_fence(struct target *target)
 		riscv_program_fence(&program);
 		int result = riscv_program_exec(&program, target);
 		if (result != ERROR_OK)
-			LOG_ERROR("Unable to execute fence on hart %d", i);
+			LOG_DEBUG("Unable to execute fence on hart %d", i);
 	}
 
 	riscv_set_current_hartid(target, old_hartid);
