@@ -2067,8 +2067,13 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 				AC_ACCESS_REGISTER_TRANSFER |
 				AC_ACCESS_REGISTER_POSTEXEC);
 	result = execute_abstract_command(target, command);
-	if (result != ERROR_OK)
-		goto error;
+	if (result != ERROR_OK) {
+		/* Reading the first word failed, which is fine -- we just
+		 * assume this is some sort of before-memory read from Eclipse.
+		 * */
+		if (register_write_direct(target, GDB_REGNO_S0, address+size) != ERROR_OK)
+			goto error;
+	}
 
 	/* First read has just triggered. Result is in s1. */
 
@@ -2196,7 +2201,8 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 				 * address. */
 				dmi_write(target, DMI_ABSTRACTAUTO, 0);
 				next_read_addr = next_read_addr + size;
-				register_write_direct(target, &next_read_addr, GDB_REGNO_S0);
+				if (register_write_direct(target, &next_read_addr, GDB_REGNO_S0) != ERROR_OK)
+					goto error;
 				dmi_write(target, DMI_COMMAND, command);
 				dmi_write(target, DMI_ABSTRACTAUTO,
 						1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET);
