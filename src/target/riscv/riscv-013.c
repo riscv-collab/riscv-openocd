@@ -2200,8 +2200,8 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 				 * failing reads by just moving on to the next
 				 * address. */
 				dmi_write(target, DMI_ABSTRACTAUTO, 0);
-				next_read_addr = next_read_addr + size;
-				if (register_write_direct(target, &next_read_addr, GDB_REGNO_S0) != ERROR_OK)
+				next_read_addr = read_addr + size;
+				if (register_write_direct(target, GDB_REGNO_S0, next_read_addr) != ERROR_OK)
 					goto error;
 				dmi_write(target, DMI_COMMAND, command);
 				dmi_write(target, DMI_ABSTRACTAUTO,
