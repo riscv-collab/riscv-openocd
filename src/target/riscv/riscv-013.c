@@ -2075,12 +2075,15 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 				AC_ACCESS_REGISTER_POSTEXEC);
 
 	do {
+		LOG_DEBUG("Performing first read at 0x%" PRIx64, read_addr);
 		result = register_write_direct(target, GDB_REGNO_S0, read_addr);
 		if (result != ERROR_OK)
 			goto error;
 		result = execute_abstract_command(target, command);
 		riscv013_clear_abstract_error(target);
 		read_addr += size;
+		if (result != ERROR_OK)
+			receive_addr += size;
 	} while (result != ERROR_OK && read_addr < fin_addr);
 
 	/* First valid read has just triggered. Result is in s1. */
