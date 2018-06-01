@@ -2059,34 +2059,35 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 		return ERROR_FAIL;
 	riscv_program_write(&program);
 
-	/* Write address to S0, and execute buffer. */
+	/* read_addr is the next address that the hart will read from, which is the
+	 * value in s0. */
+	riscv_addr_t read_addr = address;
+	/* The next address that we need to receive data for. */
+	riscv_addr_t receive_addr = address;
+	riscv_addr_t fin_addr = address + (count * size);
+
+	/* Write address to S0, and execute buffer until we end up successfully
+	 * reading an actual word from memory.  This is necessary because
+	 * Eclipse might ask us to read memory before the start of a block. */
 	result = register_write_direct(target, GDB_REGNO_S0, address);
-	if (result != ERROR_OK)
-		goto error;
 	uint32_t command = access_register_command(GDB_REGNO_S1, riscv_xlen(target),
 				AC_ACCESS_REGISTER_TRANSFER |
 				AC_ACCESS_REGISTER_POSTEXEC);
-	result = execute_abstract_command(target, command);
-	if (result != ERROR_OK) {
-		riscv013_clear_abstract_error(target);
-		/* Reading the first word failed, which is fine -- we just
-		 * assume this is some sort of before-memory read from Eclipse.
-		 * */
-		if (register_write_direct(target, GDB_REGNO_S0, address+size) != ERROR_OK)
-			goto error;
-	}
 
-	/* First read has just triggered. Result is in s1. */
+	do {
+		result = register_write_direct(target, GDB_REGNO_S0, read_addr);
+		if (result != ERROR_OK)
+			goto error;
+		result = execute_abstract_command(target, command);
+		riscv013_clear_abstract_error(target);
+		read_addr += size;
+	} while (result != ERROR_OK);
+
+	/* First valid read has just triggered. Result is in s1. */
 
 	dmi_write(target, DMI_ABSTRACTAUTO,
 			1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET);
 
-	/* read_addr is the next address that the hart will read from, which is the
-	 * value in s0. */
-	riscv_addr_t read_addr = address + size;
-	/* The next address that we need to receive data for. */
-	riscv_addr_t receive_addr = address;
-	riscv_addr_t fin_addr = address + (count * size);
 	unsigned skip = 1;
 	while (read_addr < fin_addr) {
 		LOG_DEBUG("read_addr=0x%" PRIx64 ", receive_addr=0x%" PRIx64
