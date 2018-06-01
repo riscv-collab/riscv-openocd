@@ -1688,7 +1688,7 @@ int riscv_step_rtos_hart(struct target *target)
 	if (riscv_rtos_enabled(target)) {
 		hartid = r->rtos_hartid;
 		if (hartid == -1) {
-			LOG_USER("GDB has asked me to step \"any\" thread, so I'm stepping hart 0.");
+			LOG_DEBUG("GDB has asked me to step \"any\" thread, so I'm stepping hart 0.");
 			hartid = 0;
 		}
 	}
