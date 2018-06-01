@@ -2196,7 +2196,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 				 * address. */
 				dmi_write(target, DMI_ABSTRACTAUTO, 0);
 				next_read_addr = next_read_addr + size;
-				register_write_direct(target, &next_write_addr, GDB_REGNO_S0);
+				register_write_direct(target, &next_read_addr, GDB_REGNO_S0);
 				dmi_write(target, DMI_COMMAND, command);
 				dmi_write(target, DMI_ABSTRACTAUTO,
 						1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET);
