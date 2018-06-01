@@ -2186,11 +2186,21 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 						1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET);
 				break;
 			default:
-				LOG_ERROR("error when reading memory, abstractcs=0x%08lx", (long)abstractcs);
+				LOG_DEBUG("error when reading memory, abstractcs=0x%08lx", (long)abstractcs);
 				riscv013_clear_abstract_error(target);
 				riscv_batch_free(batch);
 				result = ERROR_FAIL;
-				goto error;
+				/* Eclipse attempts to pre-buffer some data
+				 * before an address, so here we retry on
+				 * failing reads by just moving on to the next
+				 * address. */
+				dmi_write(target, DMI_ABSTRACTAUTO, 0);
+				next_read_addr = next_read_addr + size;
+				register_write_direct(target, &next_write_addr, GDB_REGNO_S0);
+				dmi_write(target, DMI_COMMAND, command);
+				dmi_write(target, DMI_ABSTRACTAUTO,
+						1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET);
+				break;
 		}
 
 		/* Now read whatever we got out of the batch. */
