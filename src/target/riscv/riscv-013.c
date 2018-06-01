@@ -2024,6 +2024,8 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 	select_dmi(target);
 
+	memset(buffer, 0, count*size);
+
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
 	 */
