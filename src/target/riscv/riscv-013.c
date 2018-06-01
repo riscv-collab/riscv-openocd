@@ -2068,6 +2068,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 				AC_ACCESS_REGISTER_POSTEXEC);
 	result = execute_abstract_command(target, command);
 	if (result != ERROR_OK) {
+		riscv013_clear_abstract_error(target);
 		/* Reading the first word failed, which is fine -- we just
 		 * assume this is some sort of before-memory read from Eclipse.
 		 * */
