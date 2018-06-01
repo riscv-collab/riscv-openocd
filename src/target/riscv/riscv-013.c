@@ -2081,7 +2081,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 		result = execute_abstract_command(target, command);
 		riscv013_clear_abstract_error(target);
 		read_addr += size;
-	} while (result != ERROR_OK);
+	} while (result != ERROR_OK && read_addr < fin_addr);
 
 	/* First valid read has just triggered. Result is in s1. */
 
