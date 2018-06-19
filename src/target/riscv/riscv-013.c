@@ -200,6 +200,12 @@ typedef struct {
 	bool abstract_read_fpr_supported;
 	bool abstract_write_fpr_supported;
 
+	/* Track whether the hart is currently halted. This is more precise than
+	 * target->state, because it'll reflect halted status even if we're
+	 * pretending to the client that the hart is running (ie. during
+	 * examine()). */
+	bool halted[RISCV_MAX_HARTS];
+
 	/* When a function returns some error due to a failure indicated by the
 	 * target in cmderr, the caller can look here to see what that error was.
 	 * (Compare with errno.) */
@@ -506,10 +512,14 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 static int dmi_op_timeout(struct target *target, uint32_t *data_in, int dmi_op,
 		uint32_t address, uint32_t data_out, int timeout_sec)
 {
+	riscv013_info_t *info = get_info(target);
 	select_dmi(target);
 
 	dmi_status_t status;
 	uint32_t address_in;
+	uint32_t data;
+	if (data_in == NULL)
+		data_in = &data;
 
 	const char *op_name;
 	switch (dmi_op) {
@@ -531,9 +541,14 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in, int dmi_op,
 	/* This first loop performs the request.  Note that if for some reason this
 	 * stays busy, it is actually due to the previous access. */
 	while (1) {
-		status = dmi_scan(target, NULL, NULL, dmi_op, address, data_out,
-				false);
-		if (status == DMI_STATUS_BUSY) {
+		status = dmi_scan(target, &address_in, data_in, dmi_op, address,
+				data_out, false);
+		LOG_DEBUG("address_in=0x%x; data_in=0x%x", address_in, *data_in);
+		if (address_in == (1U << info->abits) - 1 && *data_in == 0xffffffff) {
+			LOG_ERROR("TDO seems to be stuck high; target might be held in "
+					"reset, or there might be a connection failure");
+			return ERROR_FAIL;
+		} else if (status == DMI_STATUS_BUSY) {
 			increase_dmi_busy_delay(target);
 		} else if (status == DMI_STATUS_SUCCESS) {
 			break;
@@ -2828,16 +2843,16 @@ static int riscv013_set_register(struct target *target, int hid, int rid, uint64
 static int riscv013_select_current_hart(struct target *target)
 {
 	RISCV_INFO(r);
+	RISCV013_INFO(info);
 
 	dm013_info_t *dm = get_dm(target);
 	if (r->current_hartid == dm->current_hartid)
 		return ERROR_OK;
 
-	uint32_t dmcontrol;
-	/* TODO: can't we just "dmcontrol = DMI_DMACTIVE"? */
-	if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
-		return ERROR_FAIL;
+	uint32_t dmcontrol = DMI_DMCONTROL_DMACTIVE;
 	dmcontrol = set_hartsel(dmcontrol, r->current_hartid);
+	if (info->halted[r->current_hartid])
+		dmcontrol |= DMI_DMCONTROL_HALTREQ;
 	int result = dmi_write(target, DMI_DMCONTROL, dmcontrol);
 	dm->current_hartid = r->current_hartid;
 	return result;
@@ -2846,15 +2861,16 @@ static int riscv013_select_current_hart(struct target *target)
 static int riscv013_halt_current_hart(struct target *target)
 {
 	RISCV_INFO(r);
+	RISCV013_INFO(info);
+
 	LOG_DEBUG("halting hart %d", r->current_hartid);
 	if (riscv_is_halted(target))
 		LOG_ERROR("Hart %d is already halted!", r->current_hartid);
 
 	/* Issue the halt command, and then wait for the current hart to halt. */
-	uint32_t dmcontrol;
-	if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
-		return ERROR_FAIL;
-	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_HALTREQ, 1);
+	uint32_t dmcontrol = DMI_DMCONTROL_DMACTIVE;
+	dmcontrol |= DMI_DMCONTROL_HALTREQ;
+	dmcontrol = set_hartsel(dmcontrol, r->current_hartid);
 	dmi_write(target, DMI_DMCONTROL, dmcontrol);
 	for (size_t i = 0; i < 256; ++i)
 		if (riscv_is_halted(target))
@@ -2873,8 +2889,7 @@ static int riscv013_halt_current_hart(struct target *target)
 		return ERROR_FAIL;
 	}
 
-	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_HALTREQ, 0);
-	dmi_write(target, DMI_DMCONTROL, dmcontrol);
+	info->halted[r->current_hartid] = true;
 
 	return ERROR_OK;
 }
@@ -2906,6 +2921,8 @@ static int riscv013_on_halt(struct target *target)
 
 static bool riscv013_is_halted(struct target *target)
 {
+	RISCV013_INFO(info);
+
 	uint32_t dmstatus;
 	if (dmstatus_read(target, &dmstatus, true) != ERROR_OK)
 		return false;
@@ -2913,8 +2930,8 @@ static bool riscv013_is_halted(struct target *target)
 		LOG_ERROR("Hart %d is unavailable.", riscv_current_hartid(target));
 	if (get_field(dmstatus, DMI_DMSTATUS_ANYNONEXISTENT))
 		LOG_ERROR("Hart %d doesn't exist.", riscv_current_hartid(target));
+	int hartid = riscv_current_hartid(target);
 	if (get_field(dmstatus, DMI_DMSTATUS_ANYHAVERESET)) {
-		int hartid = riscv_current_hartid(target);
 		LOG_INFO("Hart %d unexpectedly reset!", hartid);
 		/* TODO: Can we make this more obvious to eg. a gdb user? */
 		uint32_t dmcontrol = DMI_DMCONTROL_DMACTIVE |
@@ -2929,6 +2946,7 @@ static bool riscv013_is_halted(struct target *target)
 			dmcontrol |= DMI_DMCONTROL_HALTREQ;
 		dmi_write(target, DMI_DMCONTROL, dmcontrol);
 	}
+	info->halted[hartid] = get_field(dmstatus, DMI_DMSTATUS_ALLHALTED);
 	return get_field(dmstatus, DMI_DMSTATUS_ALLHALTED);
 }
 
@@ -3394,6 +3412,8 @@ static int riscv013_on_step_or_resume(struct target *target, bool step)
 static int riscv013_step_or_resume_current_hart(struct target *target, bool step)
 {
 	RISCV_INFO(r);
+	RISCV013_INFO(info);
+
 	LOG_DEBUG("resuming hart %d (for step?=%d)", r->current_hartid, step);
 	if (!riscv_is_halted(target)) {
 		LOG_ERROR("Hart %d is not halted!", r->current_hartid);
@@ -3419,6 +3439,7 @@ static int riscv013_step_or_resume_current_hart(struct target *target, bool step
 			continue;
 
 		dmi_write(target, DMI_DMCONTROL, dmcontrol);
+		info->halted[r->current_hartid] = false;
 		return ERROR_OK;
 	}
 
