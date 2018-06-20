@@ -544,7 +544,8 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in, int dmi_op,
 		status = dmi_scan(target, &address_in, data_in, dmi_op, address,
 				data_out, false);
 		LOG_DEBUG("address_in=0x%x; data_in=0x%x", address_in, *data_in);
-		if (address_in == (1U << info->abits) - 1 && *data_in == 0xffffffff) {
+		if (status == 3 && address_in == (1U << info->abits) - 1 &&
+				*data_in == 0xffffffff) {
 			LOG_ERROR("TDO seems to be stuck high; target might be held in "
 					"reset, or there might be a connection failure");
 			return ERROR_FAIL;
@@ -571,7 +572,19 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in, int dmi_op,
 	while (1) {
 		status = dmi_scan(target, &address_in, data_in, DMI_OP_NOP, address, 0,
 				false);
-		if (status == DMI_STATUS_BUSY) {
+		if (status == 3 && address_in == (1U << info->abits) - 1 &&
+				*data_in == 0xffffffff) {
+			LOG_ERROR("TDO seems to be stuck high; target might be held in "
+					"reset, or there might be a connection failure");
+			return ERROR_FAIL;
+		} else if (dmi_op == DMI_OP_READ && address != 0 && status == 0 &&
+				address_in == 0 && *data_in == 0) {
+			/* On read ops we should at least get back the address as non-zero.
+			 * */
+			LOG_ERROR("TDO seems to be stuck low; target might be held in "
+					"reset, or there might be a connection failure");
+			return ERROR_FAIL;
+		} else if (status == DMI_STATUS_BUSY) {
 			increase_dmi_busy_delay(target);
 		} else if (status == DMI_STATUS_SUCCESS) {
 			break;
