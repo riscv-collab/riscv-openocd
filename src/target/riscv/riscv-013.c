@@ -204,7 +204,7 @@ typedef struct {
 	 * target->state, because it'll reflect halted status even if we're
 	 * pretending to the client that the hart is running (ie. during
 	 * examine()). */
-	bool halted[RISCV_MAX_HARTS];
+	bool really_halted[RISCV_MAX_HARTS];
 
 	/* When a function returns some error due to a failure indicated by the
 	 * target in cmderr, the caller can look here to see what that error was.
@@ -2864,7 +2864,7 @@ static int riscv013_select_current_hart(struct target *target)
 
 	uint32_t dmcontrol = DMI_DMCONTROL_DMACTIVE;
 	dmcontrol = set_hartsel(dmcontrol, r->current_hartid);
-	if (info->halted[r->current_hartid])
+	if (info->really_halted[r->current_hartid])
 		dmcontrol |= DMI_DMCONTROL_HALTREQ;
 	int result = dmi_write(target, DMI_DMCONTROL, dmcontrol);
 	dm->current_hartid = r->current_hartid;
@@ -2902,7 +2902,7 @@ static int riscv013_halt_current_hart(struct target *target)
 		return ERROR_FAIL;
 	}
 
-	info->halted[r->current_hartid] = true;
+	info->really_halted[r->current_hartid] = true;
 
 	return ERROR_OK;
 }
@@ -2959,7 +2959,7 @@ static bool riscv013_is_halted(struct target *target)
 			dmcontrol |= DMI_DMCONTROL_HALTREQ;
 		dmi_write(target, DMI_DMCONTROL, dmcontrol);
 	}
-	info->halted[hartid] = get_field(dmstatus, DMI_DMSTATUS_ALLHALTED);
+	info->really_halted[hartid] = get_field(dmstatus, DMI_DMSTATUS_ALLHALTED);
 	return get_field(dmstatus, DMI_DMSTATUS_ALLHALTED);
 }
 
@@ -3452,7 +3452,7 @@ static int riscv013_step_or_resume_current_hart(struct target *target, bool step
 			continue;
 
 		dmi_write(target, DMI_DMCONTROL, dmcontrol);
-		info->halted[r->current_hartid] = false;
+		info->really_halted[r->current_hartid] = false;
 		return ERROR_OK;
 	}
 
