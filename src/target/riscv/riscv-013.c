@@ -414,7 +414,7 @@ static void select_dmi(struct target *target)
 	jtag_add_ir_scan(target->tap, &field, TAP_IDLE);
 }
 
-static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
+static int dtmcontrol_scan(struct target *target, uint32_t *in, uint32_t out)
 {
 	struct scan_field field;
 	uint8_t in_value[4];
@@ -438,13 +438,22 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 		return retval;
 	}
 
-	uint32_t in = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("DTMCS: 0x%x -> 0x%x", out, in);
+	uint32_t dtmcontrol = buf_get_u32(field.in_value, 0, 32);
+	LOG_DEBUG("DTMCS: 0x%x -> 0x%x", out, dtmcontrol);
 
-	return in;
+	if (dtmcontrol == 0) {
+		LOG_ERROR("TDO seems to be stuck low; target might be held in "
+				"reset, or there might be a connection failure");
+		return ERROR_FAIL;
+	}
+
+	if (in)
+		*in = dtmcontrol;
+
+	return ERROR_OK;
 }
 
-static void increase_dmi_busy_delay(struct target *target)
+static int increase_dmi_busy_delay(struct target *target)
 {
 	riscv013_info_t *info = get_info(target);
 	info->dmi_busy_delay += info->dmi_busy_delay / 10 + 1;
@@ -452,7 +461,7 @@ static void increase_dmi_busy_delay(struct target *target)
 			info->dtmcontrol_idle, info->dmi_busy_delay,
 			info->ac_busy_delay);
 
-	dtmcontrol_scan(target, DTM_DTMCS_DMIRESET);
+	return dtmcontrol_scan(target, NULL, DTM_DTMCS_DMIRESET | DTM_DTMCS_DMIHARDRESET);
 }
 
 /**
@@ -575,13 +584,6 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in, int dmi_op,
 		if (status == 3 && address_in == (1U << info->abits) - 1 &&
 				*data_in == 0xffffffff) {
 			LOG_ERROR("TDO seems to be stuck high; target might be held in "
-					"reset, or there might be a connection failure");
-			return ERROR_FAIL;
-		} else if (dmi_op == DMI_OP_READ && address != 0 && status == 0 &&
-				address_in == 0 && *data_in == 0) {
-			/* On read ops we should at least get back the address as non-zero.
-			 * */
-			LOG_ERROR("TDO seems to be stuck low; target might be held in "
 					"reset, or there might be a connection failure");
 			return ERROR_FAIL;
 		} else if (status == DMI_STATUS_BUSY) {
@@ -1372,7 +1374,9 @@ static int examine(struct target *target)
 {
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 
-	uint32_t dtmcontrol = dtmcontrol_scan(target, 0);
+	uint32_t dtmcontrol;
+	if (dtmcontrol_scan(target, &dtmcontrol, 0) != ERROR_OK)
+		return ERROR_FAIL;
 	LOG_DEBUG("dtmcontrol=0x%x", dtmcontrol);
 	LOG_DEBUG("  dmireset=%d", get_field(dtmcontrol, DTM_DTMCS_DMIRESET));
 	LOG_DEBUG("  idle=%d", get_field(dtmcontrol, DTM_DTMCS_IDLE));
@@ -3451,8 +3455,13 @@ static int riscv013_step_or_resume_current_hart(struct target *target, bool step
 		if (step && get_field(dmstatus, DMI_DMSTATUS_ALLHALTED) == 0)
 			continue;
 
+		if (get_field(dmstatus, DMI_DMSTATUS_ANYHALTED)) {
+			dmcontrol |= DMI_DMCONTROL_HALTREQ;
+			info->really_halted[r->current_hartid] = true;
+		} else {
+			info->really_halted[r->current_hartid] = false;
+		}
 		dmi_write(target, DMI_DMCONTROL, dmcontrol);
-		info->really_halted[r->current_hartid] = false;
 		return ERROR_OK;
 	}
 
