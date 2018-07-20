@@ -1848,9 +1848,13 @@ static int handle_halt(struct target *target, bool announce)
 			break;
 		case DCSR_CAUSE_HWBP:
 			target->debug_reason = DBG_REASON_WPTANDBKPT;
-			/* If we halted because of a data trigger, gdb doesn't know to do
-			 * the disable-breakpoints-step-enable-breakpoints dance. */
-			info->need_strict_step = true;
+			/* If we halted because of a watchpoint trigger, gdb doesn't know
+			 * which watchpoint to step over. Setting need_strict_step to true
+			 * flags OpenOCD to disable triggers -> step -> enable triggers on
+			 * the next step or resume*/
+			if (! riscv_breakpoint_hit(target, 0, info->dpc)) {
+				info->need_strict_step = true;
+			}
 			break;
 		case DCSR_CAUSE_DEBUGINT:
 			target->debug_reason = DBG_REASON_DBGRQ;
