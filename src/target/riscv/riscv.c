@@ -2032,12 +2032,12 @@ bool riscv_breakpoint_hit(struct target *target, int hartid, uint64_t dpc)
 
 		if (tdata2 == dpc) {
 			LOG_DEBUG("breakpoint %d matches dpc", t);
-			hit = true;
-			break;
+	        hit = true;
+	        break;
 		}
 	}
 
-	/* restore tselect */
+	// restore tselect
 	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, tselect);
 	LOG_DEBUG("no breakpoint matches dpc");
 
