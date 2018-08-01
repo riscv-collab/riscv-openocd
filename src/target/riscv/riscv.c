@@ -1986,64 +1986,6 @@ int riscv_enumerate_triggers(struct target *target)
 	return ERROR_OK;
 }
 
-/**
- * Check if dpc matches the address of a breakpoint set on hartid
- **/
-bool riscv_breakpoint_hit(struct target *target, int hartid, uint64_t dpc)
-{
-	if (!riscv_hart_enabled(target, hartid))
-		return false;
-
-	riscv_reg_t tselect;
-	int result = riscv_get_register_on_hart(target, &tselect, hartid,
-			GDB_REGNO_TSELECT);
-	if (result != ERROR_OK)
-		return false;
-
-	bool hit = false;
-
-	for (unsigned t = 0; t < RISCV_MAX_TRIGGERS; ++t) {
-		riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, t);
-		uint64_t tselect_rb;
-		result = riscv_get_register_on_hart(target, &tselect_rb, hartid,
-				GDB_REGNO_TSELECT);
-		if (result != ERROR_OK)
-			break;
-		/* Mask off the top bit, which is used as tdrmode in old
-		 * implementations. */
-		tselect_rb &= ~(1ULL << (riscv_xlen(target)-1));
-		if (tselect_rb != t)
-			break;
-		uint64_t tdata1;
-		result = riscv_get_register_on_hart(target, &tdata1, hartid,
-				GDB_REGNO_TDATA1);
-		if (result != ERROR_OK)
-			break;
-
-		int type = get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
-		if (!(type == 2 && (tdata1 & MCONTROL_EXECUTE)))
-			continue;
-
-		uint64_t tdata2;
-		result = riscv_get_register_on_hart(target, &tdata2, hartid,
-				GDB_REGNO_TDATA2);
-		if (result != ERROR_OK)
-			break;
-
-		if (tdata2 == dpc) {
-			LOG_DEBUG("breakpoint %d matches dpc", t);
-	        hit = true;
-	        break;
-		}
-	}
-
-	// restore tselect
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, tselect);
-	LOG_DEBUG("no breakpoint matches dpc");
-
-	return hit;
-}
-
 const char *gdb_regno_name(enum gdb_regno regno)
 {
 	static char buf[32];

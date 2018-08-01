@@ -253,7 +253,6 @@ int riscv_remove_breakpoint(struct target *target,
 int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint);
 int riscv_remove_watchpoint(struct target *target,
 		struct watchpoint *watchpoint);
-bool riscv_breakpoint_hit(struct target *target, int hartid, uint64_t dpc);
 
 int riscv_init_registers(struct target *target);
 
