@@ -643,6 +643,74 @@ int riscv_remove_watchpoint(struct target *target,
 	return ERROR_OK;
 }
 
+int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoint) {
+	struct watchpoint *wp = target->watchpoints;
+
+	LOG_DEBUG("Current hartid = %d", riscv_current_hartid(target));
+
+	riscv_reg_t dpc;
+	riscv_get_register(target, &dpc, GDB_REGNO_DPC);
+	const uint8_t length = 4;
+	LOG_DEBUG("dpc is %lx", dpc);
+
+       /* fetch the instruction at dpc */
+	uint8_t buffer[length];
+	if (target_read_buffer(target, dpc, length, buffer) != ERROR_OK) {
+		LOG_ERROR("Failed to read instruction at dpc 0x%" TARGET_PRIxADDR, dpc);
+		return ERROR_FAIL;
+	}
+
+	uint32_t instruction = 0;
+
+	for (int i=0; i<length; i++) {
+		LOG_DEBUG("Next byte is %x", buffer[i]);
+		instruction += (buffer[i] << 8 * i);
+	}
+	LOG_DEBUG("Full instruction is %x", instruction);
+
+	/* find out which memory address is accessed by the instruction at dpc */
+	/* opcode is first 7 bits of the instruction */
+	uint8_t opcode = instruction & 0x7F;
+	uint32_t rs1;
+	int16_t imm;
+	riscv_reg_t mem_addr;
+
+	if (opcode == MATCH_LB || opcode == MATCH_SB) {
+		rs1 = (instruction & 0xf8000) >> 15;
+		riscv_get_register(target, &mem_addr, rs1);
+
+		if (opcode == MATCH_SB) {
+			LOG_DEBUG("%x is store instruction", instruction);
+			imm = ((instruction & 0xf80) >> 7) | ((instruction & 0xfe000000) >> 20);
+		}
+		else {
+			LOG_DEBUG("%x is load instruction", instruction);
+			imm = (instruction & 0xfff00000) >> 20;
+		}
+		/* sign extend 12-bit imm to 16-bits */
+		if (imm & (1 << 11))
+			imm |= 0xf000;
+		mem_addr += imm;
+		LOG_DEBUG("memory address=%lx", mem_addr);
+	}
+	else {
+		LOG_DEBUG("%x is not a load or store", instruction);
+		return ERROR_FAIL;
+	}
+
+	while (wp) {
+		if (wp->address == mem_addr) {
+			*hit_watchpoint = wp;
+			LOG_DEBUG("Hit address=%lx", wp->address);
+			return ERROR_OK;
+		}
+		wp = wp->next;
+	}
+
+	return ERROR_FAIL;
+}
+
+
 static int oldriscv_step(struct target *target, int current, uint32_t address,
 		int handle_breakpoints)
 {
@@ -1586,6 +1654,7 @@ struct target_type riscv_target = {
 
 	.add_watchpoint = riscv_add_watchpoint,
 	.remove_watchpoint = riscv_remove_watchpoint,
+	.hit_watchpoint = riscv_hit_watchpoint,
 
 	.arch_state = riscv_arch_state,
 
