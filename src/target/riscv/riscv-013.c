@@ -774,7 +774,6 @@ static uint32_t access_register_command(struct target *target, uint32_t number,
 		assert(target->reg_cache->reg_list[number].arch_info);
 		riscv_reg_info_t *reg_info = target->reg_cache->reg_list[number].arch_info;
 		assert(reg_info);
-		LOG_DEBUG(">>> custom_number=%d", reg_info->custom_number);
 		command = set_field(command, AC_ACCESS_REGISTER_REGNO,
 				0xc000 + reg_info->custom_number);
 	}
@@ -1326,7 +1325,7 @@ static void deinit_target(struct target *target)
 	LOG_DEBUG("riscv_deinit_target()");
 	riscv_info_t *info = (riscv_info_t *) target->arch_info;
 	free(info->version_specific);
-	// TODO: free register arch_info
+	/* TODO: free register arch_info */
 	info->version_specific = NULL;
 }
 

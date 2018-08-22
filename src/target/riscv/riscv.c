@@ -2209,9 +2209,10 @@ int riscv_init_registers(struct target *target)
 
 	if (expose_custom) {
 		for (unsigned i = 0; expose_custom[i].low <= expose_custom[i].high; i++) {
-			for (unsigned number = expose_custom[i].low; number <= expose_custom[i].high; number++) {
+			for (unsigned number = expose_custom[i].low;
+					number <= expose_custom[i].high;
+					number++)
 				target->reg_cache->num_regs++;
-			}
 		}
 	}
 
