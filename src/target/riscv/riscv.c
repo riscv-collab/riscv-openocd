@@ -643,7 +643,8 @@ int riscv_remove_watchpoint(struct target *target,
 	return ERROR_OK;
 }
 
-int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoint) {
+int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoint)
+{
 	struct watchpoint *wp = target->watchpoints;
 
 	LOG_DEBUG("Current hartid = %d", riscv_current_hartid(target));
@@ -653,7 +654,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 	const uint8_t length = 4;
 	LOG_DEBUG("dpc is %lx", dpc);
 
-       /* fetch the instruction at dpc */
+	/* fetch the instruction at dpc */
 	uint8_t buffer[length];
 	if (target_read_buffer(target, dpc, length, buffer) != ERROR_OK) {
 		LOG_ERROR("Failed to read instruction at dpc 0x%" TARGET_PRIxADDR, dpc);
@@ -662,7 +663,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 
 	uint32_t instruction = 0;
 
-	for (int i=0; i<length; i++) {
+	for (int i = 0; i < length; i++) {
 		LOG_DEBUG("Next byte is %x", buffer[i]);
 		instruction += (buffer[i] << 8 * i);
 	}
@@ -682,8 +683,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 		if (opcode == MATCH_SB) {
 			LOG_DEBUG("%x is store instruction", instruction);
 			imm = ((instruction & 0xf80) >> 7) | ((instruction & 0xfe000000) >> 20);
-		}
-		else {
+		} else {
 			LOG_DEBUG("%x is load instruction", instruction);
 			imm = (instruction & 0xfff00000) >> 20;
 		}
@@ -692,8 +692,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 			imm |= 0xf000;
 		mem_addr += imm;
 		LOG_DEBUG("memory address=%lx", mem_addr);
-	}
-	else {
+	} else {
 		LOG_DEBUG("%x is not a load or store", instruction);
 		return ERROR_FAIL;
 	}
