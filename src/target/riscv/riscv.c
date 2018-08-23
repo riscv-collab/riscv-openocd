@@ -652,7 +652,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 	riscv_reg_t dpc;
 	riscv_get_register(target, &dpc, GDB_REGNO_DPC);
 	const uint8_t length = 4;
-	LOG_DEBUG("dpc is %lx", dpc);
+	LOG_DEBUG("dpc is 0x%" PRIx64, dpc);
 
 	/* fetch the instruction at dpc */
 	uint8_t buffer[length];
@@ -691,7 +691,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 		if (imm & (1 << 11))
 			imm |= 0xf000;
 		mem_addr += imm;
-		LOG_DEBUG("memory address=%lx", mem_addr);
+		LOG_DEBUG("memory address=0x%" PRIx64, mem_addr);
 	} else {
 		LOG_DEBUG("%x is not a load or store", instruction);
 		return ERROR_FAIL;
@@ -700,7 +700,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 	while (wp) {
 		if (wp->address == mem_addr) {
 			*hit_watchpoint = wp;
-			LOG_DEBUG("Hit address=%lx", wp->address);
+			LOG_DEBUG("Hit address=%" PRIx64, wp->address);
 			return ERROR_OK;
 		}
 		wp = wp->next;
