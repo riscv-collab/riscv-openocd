@@ -667,7 +667,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 	/* fetch the instruction at dpc */
 	uint8_t buffer[length];
 	if (target_read_buffer(target, dpc, length, buffer) != ERROR_OK) {
-		LOG_ERROR("Failed to read instruction at dpc 0x%" TARGET_PRIxADDR, dpc);
+		LOG_ERROR("Failed to read instruction at dpc 0x%" PRIx64, dpc);
 		return ERROR_FAIL;
 	}
 
@@ -711,7 +711,7 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 		/*TODO support length/mask */
 		if (wp->address == mem_addr) {
 			*hit_watchpoint = wp;
-			LOG_DEBUG("Hit address=%" PRIx64, wp->address);
+			LOG_DEBUG("Hit address=%" TARGET_PRIxADDR, wp->address);
 			return ERROR_OK;
 		}
 		wp = wp->next;
