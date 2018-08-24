@@ -643,12 +643,22 @@ int riscv_remove_watchpoint(struct target *target,
 	return ERROR_OK;
 }
 
+/* Sets *hit_watchpoint to the first watchpoint identified as causing the
+ * current halt.
+ *
+ * The GDB server uses this information to tell GDB what data address has
+ * been hit, which enables GDB to print the hit variable along with its old
+ * and new value. */
 int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoint)
 {
 	struct watchpoint *wp = target->watchpoints;
 
 	LOG_DEBUG("Current hartid = %d", riscv_current_hartid(target));
 
+	/*TODO instead of disassembling the instruction that we think caused the
+	 * trigger, check the hit bit of each watchpoint first. The hit bit is
+	 * simpler and more reliable to check but as it is optional and relatively
+	 * new, not all hardware will implement it  */
 	riscv_reg_t dpc;
 	riscv_get_register(target, &dpc, GDB_REGNO_DPC);
 	const uint8_t length = 4;
@@ -693,11 +703,12 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 		mem_addr += imm;
 		LOG_DEBUG("memory address=0x%" PRIx64, mem_addr);
 	} else {
-		LOG_DEBUG("%x is not a load or store", instruction);
+		LOG_DEBUG("%x is not a RV32I load or store", instruction);
 		return ERROR_FAIL;
 	}
 
 	while (wp) {
+		/*TODO support length/mask */
 		if (wp->address == mem_addr) {
 			*hit_watchpoint = wp;
 			LOG_DEBUG("Hit address=%" PRIx64, wp->address);
@@ -706,6 +717,11 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 		wp = wp->next;
 	}
 
+	/* No match found - either we hit a watchpoint caused by an instruction that
+	 * this function does not yet disassemble, or we hit a breakpoint.
+	 *
+	 * OpenOCD will behave as if this function had never been implemented i.e.
+	 * report the halt to GDB with no address information. */
 	return ERROR_FAIL;
 }
 
