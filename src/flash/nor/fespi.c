@@ -23,8 +23,8 @@
  * - SW mode: the SPI is controlled by SW. Any custom commands can be sent
  *   on the bus. Writes are only possible in this mode.
  * - HW mode: Memory content is directly
- *   accessible in CPU memory space. CPU can read, write and execute memory
- *   content. */
+ *   accessible in CPU memory space. CPU can read and execute memory content.
+ */
 
 /* ATTENTION:
  * To have flash memory mapped in CPU memory space, the controller
@@ -121,39 +121,9 @@
 #define FESPI_MAX_TIMEOUT  (3000)
 
 
-#define FESPI_READ_REG(a) (_FESPI_READ_REG(a))
-#define _FESPI_READ_REG(a)					\
-{								\
-	int __a;						\
-	uint32_t __v;						\
-								\
-	__a = target_read_u32(target, ctrl_base + (a), &__v);	\
-	if (__a != ERROR_OK) {					\
-		LOG_ERROR("FESPI_READ_REG error");		\
-		return __a;					\
-	}							\
-	__v;							\
-}
-
-#define FESPI_WRITE_REG(a, v)					\
-{								\
-	int __r;						\
-								\
-	__r = target_write_u32(target, ctrl_base + (a), (v));	\
-	if (__r != ERROR_OK) {					\
-		LOG_ERROR("FESPI_WRITE_REG error");		\
-		return __r;					\
-	}							\
-}
-
-#define FESPI_DISABLE_HW_MODE()	FESPI_WRITE_REG(FESPI_REG_FCTRL, \
-		FESPI_READ_REG(FESPI_REG_FCTRL) & ~FESPI_FCTRL_EN)
-#define FESPI_ENABLE_HW_MODE()	FESPI_WRITE_REG(FESPI_REG_FCTRL, \
-	FESPI_READ_REG(FESPI_REG_FCTRL) | FESPI_FCTRL_EN)
-
 struct fespi_flash_bank {
 	int probed;
-	uint32_t ctrl_base;
+	target_addr_t ctrl_base;
 	const struct flash_device *dev;
 };
 
@@ -192,36 +162,76 @@ FLASH_BANK_COMMAND_HANDLER(fespi_flash_bank_command)
 		int temp;
 		COMMAND_PARSE_NUMBER(int, CMD_ARGV[6], temp);
 		fespi_info->ctrl_base = (uint32_t) temp;
-		LOG_DEBUG("ASSUMING FESPI device at ctrl_base = 0x%x", fespi_info->ctrl_base);
+		LOG_DEBUG("ASSUMING FESPI device at ctrl_base = 0x%" TARGET_PRIxADDR,
+				fespi_info->ctrl_base);
 	}
 
 	return ERROR_OK;
 }
 
-static int fespi_set_dir(struct flash_bank *bank, bool dir)
+static int fespi_read_reg(struct flash_bank *bank, uint32_t *value, target_addr_t address)
 {
 	struct target *target = bank->target;
 	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
 
-	FESPI_WRITE_REG(FESPI_REG_FMT,
-			(FESPI_READ_REG(FESPI_REG_FMT) & ~(FESPI_FMT_DIR(0xFFFFFFFF))) |
-			FESPI_FMT_DIR(dir));
-
+	int result = target_read_u32(target, fespi_info->ctrl_base + address, value);
+	if (result != ERROR_OK) {
+		LOG_ERROR("fespi_read_reg() error at 0x%" TARGET_PRIxADDR,
+				fespi_info->ctrl_base + address);
+		return result;
+	}
 	return ERROR_OK;
+}
 
+static int fespi_write_reg(struct flash_bank *bank, target_addr_t address, uint32_t value)
+{								\
+	struct target *target = bank->target;
+	struct fespi_flash_bank *fespi_info = bank->driver_priv;
+
+	int result = target_write_u32(target, fespi_info->ctrl_base + address, value);
+	if (result != ERROR_OK) {
+		LOG_ERROR("fespi_write_reg() error writing 0x%x to 0x%" TARGET_PRIxADDR,
+				value, fespi_info->ctrl_base + address);
+		return result;
+	}
+	return ERROR_OK;
+}
+
+static int fespi_disable_hw_mode(struct flash_bank *bank)
+{
+	uint32_t fctrl;
+	if (fespi_read_reg(bank, &fctrl, FESPI_REG_FCTRL) != ERROR_OK)
+		return ERROR_FAIL;
+	return fespi_write_reg(bank, FESPI_REG_FCTRL, fctrl & ~FESPI_FCTRL_EN);
+}
+
+static int fespi_enable_hw_mode(struct flash_bank *bank)
+{
+	uint32_t fctrl;
+	if (fespi_read_reg(bank, &fctrl, FESPI_REG_FCTRL) != ERROR_OK)
+		return ERROR_FAIL;
+	return fespi_write_reg(bank, FESPI_REG_FCTRL, fctrl | FESPI_FCTRL_EN);
+}
+
+static int fespi_set_dir(struct flash_bank *bank, bool dir)
+{
+	uint32_t fmt;
+	if (fespi_read_reg(bank, &fmt, FESPI_REG_FMT) != ERROR_OK)
+		return ERROR_FAIL;
+
+	return fespi_write_reg(bank, FESPI_REG_FMT,
+			(fmt & ~(FESPI_FMT_DIR(0xFFFFFFFF))) | FESPI_FMT_DIR(dir));
 }
 
 static int fespi_txwm_wait(struct flash_bank *bank)
 {
-	struct target *target = bank->target;
-	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
-
 	int64_t start = timeval_ms();
 
 	while (1) {
-		if (FESPI_READ_REG(FESPI_REG_IP) & FESPI_IP_TXWM)
+		uint32_t ip;
+		if (fespi_read_reg(bank, &ip, FESPI_REG_IP) != ERROR_OK)
+			return ERROR_FAIL;
+		if (ip & FESPI_IP_TXWM)
 			break;
 		int64_t now = timeval_ms();
 		if (now - start > 1000) {
@@ -231,19 +241,17 @@ static int fespi_txwm_wait(struct flash_bank *bank)
 	}
 
 	return ERROR_OK;
-
 }
 
 static int fespi_tx(struct flash_bank *bank, uint8_t in)
 {
-	struct target *target = bank->target;
-	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
-
 	int64_t start = timeval_ms();
 
 	while (1) {
-		if ((int32_t) FESPI_READ_REG(FESPI_REG_TXFIFO) >= 0)
+		uint32_t txfifo;
+		if (fespi_read_reg(bank, &txfifo, FESPI_REG_TXFIFO) != ERROR_OK)
+			return ERROR_FAIL;
+		if (!(txfifo >> 31))
 			break;
 		int64_t now = timeval_ms();
 		if (now - start > 1000) {
@@ -252,23 +260,18 @@ static int fespi_tx(struct flash_bank *bank, uint8_t in)
 		}
 	}
 
-	FESPI_WRITE_REG(FESPI_REG_TXFIFO, in);
-
-	return ERROR_OK;
+	return fespi_write_reg(bank, FESPI_REG_TXFIFO, in);
 }
 
 static int fespi_rx(struct flash_bank *bank, uint8_t *out)
 {
-	struct target *target = bank->target;
-	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
-
 	int64_t start = timeval_ms();
-	int32_t value;
+	uint32_t value;
 
 	while (1) {
-		value = (int32_t) FESPI_READ_REG(FESPI_REG_RXFIFO);
-		if (value >= 0)
+		if (fespi_read_reg(bank, &value, FESPI_REG_RXFIFO) != ERROR_OK)
+			return ERROR_FAIL;
+		if (!(value >> 31))
 			break;
 		int64_t now = timeval_ms();
 		if (now - start > 1000) {
@@ -286,15 +289,12 @@ static int fespi_rx(struct flash_bank *bank, uint8_t *out)
 /* TODO!!! Why don't we need to call this after writing? */
 static int fespi_wip(struct flash_bank *bank, int timeout)
 {
-	struct target *target = bank->target;
-	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
-
 	int64_t endtime;
 
 	fespi_set_dir(bank, FESPI_DIR_RX);
 
-	FESPI_WRITE_REG(FESPI_REG_CSMODE, FESPI_CSMODE_HOLD);
+	if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_HOLD) != ERROR_OK)
+		return ERROR_FAIL;
 	endtime = timeval_ms() + timeout;
 
 	fespi_tx(bank, SPIFLASH_READ_STATUS);
@@ -309,7 +309,8 @@ static int fespi_wip(struct flash_bank *bank, int timeout)
 		if (fespi_rx(bank, &rx) != ERROR_OK)
 			return ERROR_FAIL;
 		if ((rx & SPIFLASH_BSY_BIT) == 0) {
-			FESPI_WRITE_REG(FESPI_REG_CSMODE, FESPI_CSMODE_AUTO);
+			if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_AUTO) != ERROR_OK)
+				return ERROR_FAIL;
 			fespi_set_dir(bank, FESPI_DIR_TX);
 			return ERROR_OK;
 		}
@@ -321,9 +322,7 @@ static int fespi_wip(struct flash_bank *bank, int timeout)
 
 static int fespi_erase_sector(struct flash_bank *bank, int sector)
 {
-	struct target *target = bank->target;
 	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
 	int retval;
 
 	retval = fespi_tx(bank, SPIFLASH_WRITE_ENABLE);
@@ -333,7 +332,8 @@ static int fespi_erase_sector(struct flash_bank *bank, int sector)
 	if (retval != ERROR_OK)
 		return retval;
 
-	FESPI_WRITE_REG(FESPI_REG_CSMODE, FESPI_CSMODE_HOLD);
+	if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_HOLD) != ERROR_OK)
+		return ERROR_FAIL;
 	retval = fespi_tx(bank, fespi_info->dev->erase_cmd);
 	if (retval != ERROR_OK)
 		return retval;
@@ -350,7 +350,8 @@ static int fespi_erase_sector(struct flash_bank *bank, int sector)
 	retval = fespi_txwm_wait(bank);
 	if (retval != ERROR_OK)
 		return retval;
-	FESPI_WRITE_REG(FESPI_REG_CSMODE, FESPI_CSMODE_AUTO);
+	if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_AUTO) != ERROR_OK)
+		return ERROR_FAIL;
 
 	retval = fespi_wip(bank, FESPI_MAX_TIMEOUT);
 	if (retval != ERROR_OK)
@@ -363,7 +364,6 @@ static int fespi_erase(struct flash_bank *bank, int first, int last)
 {
 	struct target *target = bank->target;
 	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
 	int retval = ERROR_OK;
 	int sector;
 
@@ -391,7 +391,8 @@ static int fespi_erase(struct flash_bank *bank, int first, int last)
 		}
 	}
 
-	FESPI_WRITE_REG(FESPI_REG_TXCTRL, FESPI_TXWM(1));
+	if (fespi_write_reg(bank, FESPI_REG_TXCTRL, FESPI_TXWM(1)) != ERROR_OK)
+		return ERROR_FAIL;
 	retval = fespi_txwm_wait(bank);
 	if (retval != ERROR_OK) {
 		LOG_ERROR("WM Didn't go high before attempting.");
@@ -399,7 +400,8 @@ static int fespi_erase(struct flash_bank *bank, int first, int last)
 	}
 
 	/* Disable Hardware accesses*/
-	FESPI_DISABLE_HW_MODE();
+	if (fespi_disable_hw_mode(bank) != ERROR_OK)
+		return ERROR_FAIL;
 
 	/* poll WIP */
 	retval = fespi_wip(bank, FESPI_PROBE_TIMEOUT);
@@ -414,7 +416,8 @@ static int fespi_erase(struct flash_bank *bank, int first, int last)
 	}
 
 	/* Switch to HW mode before return to prompt */
-	FESPI_ENABLE_HW_MODE();
+	if (fespi_enable_hw_mode(bank) != ERROR_OK)
+		return ERROR_FAIL;
 	return retval;
 }
 
@@ -431,9 +434,6 @@ static int fespi_protect(struct flash_bank *bank, int set,
 static int slow_fespi_write_buffer(struct flash_bank *bank,
 		const uint8_t *buffer, uint32_t offset, uint32_t len)
 {
-	struct target *target = bank->target;
-	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
 	uint32_t ii;
 
 	if (offset & 0xFF000000) {
@@ -447,7 +447,8 @@ static int slow_fespi_write_buffer(struct flash_bank *bank,
 	fespi_tx(bank, SPIFLASH_WRITE_ENABLE);
 	fespi_txwm_wait(bank);
 
-	FESPI_WRITE_REG(FESPI_REG_CSMODE, FESPI_CSMODE_HOLD);
+	if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_HOLD) != ERROR_OK)
+		return ERROR_FAIL;
 
 	fespi_tx(bank, SPIFLASH_PAGE_PROGRAM);
 
@@ -460,7 +461,8 @@ static int slow_fespi_write_buffer(struct flash_bank *bank,
 
 	fespi_txwm_wait(bank);
 
-	FESPI_WRITE_REG(FESPI_REG_CSMODE, FESPI_CSMODE_AUTO);
+	if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_AUTO) != ERROR_OK)
+		return ERROR_FAIL;
 
 	keep_alive();
 
@@ -852,7 +854,6 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 {
 	struct target *target = bank->target;
 	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
 	uint32_t cur_count, page_size, page_offset;
 	int sector;
 	int retval = ERROR_OK;
@@ -921,7 +922,8 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 	fespi_txwm_wait(bank);
 
 	/* Disable Hardware accesses*/
-	FESPI_DISABLE_HW_MODE();
+	if (fespi_disable_hw_mode(bank) != ERROR_OK)
+		return ERROR_FAIL;
 
 	/* poll WIP */
 	retval = fespi_wip(bank, FESPI_PROBE_TIMEOUT);
@@ -990,7 +992,8 @@ err:
 	as_delete(as);
 
 	/* Switch to HW mode before return to prompt */
-	FESPI_ENABLE_HW_MODE();
+	if (fespi_enable_hw_mode(bank) != ERROR_OK)
+		return ERROR_FAIL;
 	return retval;
 }
 
@@ -999,8 +1002,6 @@ err:
 static int fespi_read_flash_id(struct flash_bank *bank, uint32_t *id)
 {
 	struct target *target = bank->target;
-	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base = fespi_info->ctrl_base;
 	int retval;
 
 	if (target->state != TARGET_HALTED) {
@@ -1011,7 +1012,8 @@ static int fespi_read_flash_id(struct flash_bank *bank, uint32_t *id)
 	fespi_txwm_wait(bank);
 
 	/* Disable Hardware accesses*/
-	FESPI_DISABLE_HW_MODE();
+	if (fespi_disable_hw_mode(bank) != ERROR_OK)
+		return ERROR_FAIL;
 
 	/* poll WIP */
 	retval = fespi_wip(bank, FESPI_PROBE_TIMEOUT);
@@ -1021,7 +1023,8 @@ static int fespi_read_flash_id(struct flash_bank *bank, uint32_t *id)
 	fespi_set_dir(bank, FESPI_DIR_RX);
 
 	/* Send SPI command "read ID" */
-	FESPI_WRITE_REG(FESPI_REG_CSMODE, FESPI_CSMODE_HOLD);
+	if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_HOLD) != ERROR_OK)
+		return ERROR_FAIL;
 
 	fespi_tx(bank, SPIFLASH_READ_ID);
 	/* Send dummy bytes to actually read the ID.*/
@@ -1044,7 +1047,8 @@ static int fespi_read_flash_id(struct flash_bank *bank, uint32_t *id)
 		return ERROR_FAIL;
 	*id |= (rx << 16);
 
-	FESPI_WRITE_REG(FESPI_REG_CSMODE, FESPI_CSMODE_AUTO);
+	if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_AUTO) != ERROR_OK)
+		return ERROR_FAIL;
 
 	fespi_set_dir(bank, FESPI_DIR_TX);
 
@@ -1055,7 +1059,6 @@ static int fespi_probe(struct flash_bank *bank)
 {
 	struct target *target = bank->target;
 	struct fespi_flash_bank *fespi_info = bank->driver_priv;
-	uint32_t ctrl_base;
 	struct flash_sector *sectors;
 	uint32_t id = 0; /* silence uninitialized warning */
 	const struct fespi_target *target_device;
@@ -1082,19 +1085,19 @@ static int fespi_probe(struct flash_bank *bank)
 				target_device->name, bank->base);
 
 	} else {
-	  LOG_DEBUG("Assuming FESPI as specified at address 0x%x with ctrl at 0x%x",
-		    fespi_info->ctrl_base,
-		    bank->base);
+	  LOG_DEBUG("Assuming FESPI as specified at address 0x%" TARGET_PRIxADDR
+			  " with ctrl at 0x%x", fespi_info->ctrl_base, bank->base);
 	}
-	ctrl_base = fespi_info->ctrl_base;
 
 	/* read and decode flash ID; returns in SW mode */
-	FESPI_WRITE_REG(FESPI_REG_TXCTRL, FESPI_TXWM(1));
+	if (fespi_write_reg(bank, FESPI_REG_TXCTRL, FESPI_TXWM(1)) != ERROR_OK)
+		return ERROR_FAIL;
 	fespi_set_dir(bank, FESPI_DIR_TX);
 
 	retval = fespi_read_flash_id(bank, &id);
 
-	FESPI_ENABLE_HW_MODE();
+	if (fespi_enable_hw_mode(bank) != ERROR_OK)
+		return ERROR_FAIL;
 	if (retval != ERROR_OK)
 		return retval;
 
