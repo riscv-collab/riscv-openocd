@@ -4,6 +4,7 @@ AC_INIT([openocd], [0.10.0+dev],
 AC_CONFIG_SRCDIR([src/openocd.c])
 
 m4_include([config_subdir.m4])dnl
+AC_CONFIG_MACRO_DIR([m4])
 
 # check for makeinfo before calling AM_INIT_AUTOMAKE
 AC_CHECK_PROG([MAKEINFO], [makeinfo], [makeinfo])
