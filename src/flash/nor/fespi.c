@@ -932,30 +932,14 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 
 	struct algorithm_steps *as = as_new();
 
-	/* unaligned buffer head */
-	if (count > 0 && (offset & 3) != 0) {
-		cur_count = 4 - (offset & 3);
-		if (cur_count > count)
-			cur_count = count;
-		if (algorithm_wa)
-			retval = steps_add_buffer_write(as, buffer, offset, cur_count);
-		else
-			retval = slow_fespi_write_buffer(bank, buffer, offset, cur_count);
-		if (retval != ERROR_OK)
-			goto err;
-		offset += cur_count;
-		buffer += cur_count;
-		count -= cur_count;
-	}
-
 	page_offset = offset % page_size;
 	/* central part, aligned words */
-	while (count >= 4) {
+	while (count > 0) {
 		/* clip block at page boundary */
 		if (page_offset + count > page_size)
 			cur_count = page_size - page_offset;
 		else
-			cur_count = count & ~3;
+			cur_count = count;
 
 		if (algorithm_wa)
 			retval = steps_add_buffer_write(as, buffer, offset, cur_count);
@@ -968,16 +952,6 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 		buffer += cur_count;
 		offset += cur_count;
 		count -= cur_count;
-	}
-
-	/* buffer tail */
-	if (count > 0) {
-		if (algorithm_wa)
-			retval = steps_add_buffer_write(as, buffer, offset, count);
-		else
-			retval = slow_fespi_write_buffer(bank, buffer, offset, count);
-		if (retval != ERROR_OK)
-			goto err;
 	}
 
 	if (algorithm_wa)
