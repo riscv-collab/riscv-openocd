@@ -513,8 +513,6 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
 	if (breakpoint->type == BKPT_SOFT) {
-		LOG_DEBUG("Adding software breakpoint at 0x%016lx", breakpoint->address);
-
 		if (target_read_memory(target, breakpoint->address, breakpoint->length, 1,
 					breakpoint->orig_instr) != ERROR_OK) {
 			LOG_ERROR("Failed to read original instruction at 0x%" TARGET_PRIxADDR,
