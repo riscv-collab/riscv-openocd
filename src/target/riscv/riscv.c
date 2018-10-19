@@ -266,6 +266,8 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 
 	riscv_semihosting_init(target);
 
+	target->debug_reason = DBG_REASON_DBGRQ;
+
 	return ERROR_OK;
 }
 
@@ -511,6 +513,8 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
 	if (breakpoint->type == BKPT_SOFT) {
+		LOG_DEBUG("Adding software breakpoint at 0x%016lx", breakpoint->address);
+
 		if (target_read_memory(target, breakpoint->address, breakpoint->length, 1,
 					breakpoint->orig_instr) != ERROR_OK) {
 			LOG_ERROR("Failed to read original instruction at 0x%" TARGET_PRIxADDR,
@@ -860,9 +864,11 @@ static int old_or_new_riscv_resume(
 static int riscv_select_current_hart(struct target *target)
 {
 	RISCV_INFO(r);
-	if (r->rtos_hartid != -1 && riscv_rtos_enabled(target))
+	if (riscv_rtos_enabled(target)) {
+		if (r->rtos_hartid == -1)
+			r->rtos_hartid = target->rtos->current_threadid - 1;
 		return riscv_set_current_hartid(target, r->rtos_hartid);
-	else
+	} else
 		return riscv_set_current_hartid(target, target->coreid);
 }
 
@@ -1200,8 +1206,12 @@ int riscv_openocd_halt(struct target *target)
 
 	register_cache_invalidate(target->reg_cache);
 	if (riscv_rtos_enabled(target)) {
-		target->rtos->current_threadid = r->rtos_hartid + 1;
-		target->rtos->current_thread = r->rtos_hartid + 1;
+		if (r->rtos_hartid != -1) {
+			LOG_DEBUG("halt requested on RTOS hartid %d", r->rtos_hartid);
+			target->rtos->current_threadid = r->rtos_hartid + 1;
+			target->rtos->current_thread = r->rtos_hartid + 1;
+		} else
+			LOG_DEBUG("halt requested, but no known RTOS hartid");
 	}
 
 	target->state = TARGET_HALTED;
@@ -1821,6 +1831,8 @@ int riscv_halt_all_harts(struct target *target)
 		riscv_halt_one_hart(target, i);
 	}
 
+	riscv_invalidate_register_cache(target);
+
 	return ERROR_OK;
 }
 
@@ -1873,7 +1885,7 @@ int riscv_step_rtos_hart(struct target *target)
 	if (riscv_rtos_enabled(target)) {
 		hartid = r->rtos_hartid;
 		if (hartid == -1) {
-			LOG_USER("GDB has asked me to step \"any\" thread, so I'm stepping hart 0.");
+			LOG_DEBUG("GDB has asked me to step \"any\" thread, so I'm stepping hart 0.");
 			hartid = 0;
 		}
 	}
@@ -1946,14 +1958,15 @@ int riscv_set_current_hartid(struct target *target, int hartid)
 	if (!target_was_examined(target))
 		return ERROR_OK;
 
+#if 0
 	/* Avoid invalidating the register cache all the time. */
 	if (r->registers_initialized
 			&& (!riscv_rtos_enabled(target) || (previous_hartid == hartid))
-			&& target->reg_cache->reg_list[GDB_REGNO_ZERO].size == (unsigned)riscv_xlen(target)
-			&& (!riscv_rtos_enabled(target) || (r->rtos_hartid != -1))) {
+			&& target->reg_cache->reg_list[GDB_REGNO_ZERO].size == (unsigned)riscv_xlen(target) {
 		return ERROR_OK;
 	} else
 		LOG_DEBUG("Initializing registers: xlen=%d", riscv_xlen(target));
+#endif
 
 	riscv_invalidate_register_cache(target);
 	return ERROR_OK;
@@ -2035,7 +2048,15 @@ int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 		int hartid, enum gdb_regno regid)
 {
 	RISCV_INFO(r);
+
+	if (hartid != riscv_current_hartid(target))
+		riscv_invalidate_register_cache(target);
+
 	int result = r->get_register(target, value, hartid, regid);
+
+	if (hartid != riscv_current_hartid(target))
+		riscv_invalidate_register_cache(target);
+
 	LOG_DEBUG("[%d] %s: %" PRIx64, hartid, gdb_regno_name(regid), *value);
 	return result;
 }
