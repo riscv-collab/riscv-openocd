@@ -406,16 +406,17 @@ static int fespi_erase(struct flash_bank *bank, int first, int last)
 	/* poll WIP */
 	retval = fespi_wip(bank, FESPI_PROBE_TIMEOUT);
 	if (retval != ERROR_OK)
-		return retval;
+		goto done;
 
 	for (sector = first; sector <= last; sector++) {
 		retval = fespi_erase_sector(bank, sector);
 		if (retval != ERROR_OK)
-			break;
+			goto done;
 		keep_alive();
 	}
 
 	/* Switch to HW mode before return to prompt */
+done:
 	if (fespi_enable_hw_mode(bank) != ERROR_OK)
 		return ERROR_FAIL;
 	return retval;
@@ -796,12 +797,12 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 	if (fespi_disable_hw_mode(bank) != ERROR_OK)
 		return ERROR_FAIL;
 
+	struct algorithm_steps *as = as_new();
+
 	/* poll WIP */
 	retval = fespi_wip(bank, FESPI_PROBE_TIMEOUT);
 	if (retval != ERROR_OK)
-		return retval;
-
-	struct algorithm_steps *as = as_new();
+		goto err;
 
 	page_offset = offset % page_size;
 	/* central part, aligned words */
@@ -855,10 +856,6 @@ static int fespi_read_flash_id(struct flash_bank *bank, uint32_t *id)
 	}
 
 	fespi_txwm_wait(bank);
-
-	/* Disable Hardware accesses*/
-	if (fespi_disable_hw_mode(bank) != ERROR_OK)
-		return ERROR_FAIL;
 
 	/* poll WIP */
 	retval = fespi_wip(bank, FESPI_PROBE_TIMEOUT);
@@ -938,6 +935,10 @@ static int fespi_probe(struct flash_bank *bank)
 	if (fespi_write_reg(bank, FESPI_REG_TXCTRL, FESPI_TXWM(1)) != ERROR_OK)
 		return ERROR_FAIL;
 	fespi_set_dir(bank, FESPI_DIR_TX);
+
+	/* Disable Hardware accesses*/
+	if (fespi_disable_hw_mode(bank) != ERROR_OK)
+		return ERROR_FAIL;
 
 	retval = fespi_read_flash_id(bank, &id);
 
