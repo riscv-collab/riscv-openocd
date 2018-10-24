@@ -124,12 +124,12 @@ static int riscv_gdb_thread_packet(struct connection *connection, const char *pa
 			return ERROR_OK;
 		}
 
-		if (strncmp(packet, "qTStatus", 8) == 0) {
-			gdb_put_packet(connection, "T0", strlen("T0"));
+		if (strcmp(packet, "qTStatus") == 0) {
+			gdb_put_packet(connection, "T0", 2);
 			return ERROR_OK;
 		}
 
-		if (strncmp(packet, "qC", 2) == 0) {
+		if (strcmp(packet, "qC") == 0) {
 			char rep_str[32];
 			snprintf(rep_str, 32, "QC%" PRIx64, rtos->current_threadid);
 			gdb_put_packet(connection, rep_str, strlen(rep_str));

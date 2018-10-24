@@ -3330,7 +3330,9 @@ int riscv013_dmi_write_u64_bits(struct target *target)
 
 static int maybe_execute_fence_i(struct target *target)
 {
-	return execute_fence(target);
+	if (info->progbufsize + r->impebreak >= 2) {
+		return execute_fence(target);
+	}
 }
 
 /* Helper Functions. */
