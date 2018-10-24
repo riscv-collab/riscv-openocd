@@ -3333,6 +3333,7 @@ static int maybe_execute_fence_i(struct target *target)
 	if (info->progbufsize + r->impebreak >= 2) {
 		return execute_fence(target);
 	}
+	return ERROR_OK;
 }
 
 /* Helper Functions. */
