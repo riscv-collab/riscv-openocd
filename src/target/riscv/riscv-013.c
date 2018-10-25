@@ -3332,7 +3332,7 @@ static int maybe_execute_fence_i(struct target *target)
 {
 	RISCV013_INFO(info);
 	RISCV_INFO(r);
-	if (info->progbufsize + r->impebreak >= 2) {
+	if (info->progbufsize + r->impebreak >= 3) {
 		return execute_fence(target);
 	}
 	return ERROR_OK;
