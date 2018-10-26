@@ -628,6 +628,132 @@ static void oscan1_ftdi_execute_scan(struct jtag_command *cmd)
 		tap_state_name(tap_get_end_state()));
 }
 
+static void oscan1_set_tck_tms_tdi(struct signal *tck, char tckvalue, struct signal *tms, char tmsvalue, struct signal *tdi, char tdivalue)
+{
+	oscan1_ftdi_set_signal(tms, tmsvalue);
+	oscan1_ftdi_set_signal(tdi, tdivalue);  
+	oscan1_ftdi_set_signal(tck, tckvalue);         
+}
+
+static void oscan1_reset_online_activate(void)
+{
+	struct signal *tck = find_signal_by_name("TCK");
+	struct signal *tdi = find_signal_by_name("TDI");
+	struct signal *tms = find_signal_by_name("TMS");
+	struct signal *tdo = find_signal_by_name("TDO");
+	uint16_t tdovalue;
+
+	/* After TAP reset, the OSCAN1-to-JTAG adapter is in offline and
+	non-activated state.  Escape sequences are needed to bring
+	the TAP online and activated into OSCAN1 mode. */
+
+	if (!tck)
+		LOG_ERROR("Can't run cJTAG online/activate escape sequences: TCK signal is not defined");
+
+	if (!tdi)
+		LOG_ERROR("Can't run cJTAG online/activate escape sequences: TDI signal is not defined");
+
+	if (!tms)
+		LOG_ERROR("Can't run cJTAG online/activate escape sequences: TMS signal is not defined");
+
+	if (!tdo)
+		LOG_ERROR("Can't run cJTAG online/activate escape sequences: TDO signal is not defined");
+	
+
+	/* TCK=0, TMS=1, TDI=0 (drive TMSC to 0 baseline) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+
+	/* Drive cJTAG escape sequence for TAP reset - 8 TMSC edges */
+	/* TCK=1, TMS=1, TDI=0 (rising edge of TCK with TMSC still 0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK with TMSC still 0) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+
+	/* Drive cJTAG escape sequence for SELECT */
+	/* TCK=1, TMS=1, TDI=0 (rising edge of TCK with TMSC still 0, TAP reset that was just setup occurs here too) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK with TMSC still 0) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+
+	/* Drive cJTAG escape sequence for activation */
+	/* TCK=1, TMS=1, TDI=0 (rising edge TCK with TMSC still 0... online mode activated... also OAC bit0==0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=0 (rising edge TCK... OAC bit1==0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=1 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=1 (rising edge TCK... OAC bit2==1) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=0, TMS=1, TDI=1 (falling edge TCK, TMSC stays high) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=1 (rising edge TCK... OAC bit3==1) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=0 (rising edge TCK... EC bit0==0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=0 (rising edge TCK... EC bit1==0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=0 (rising edge TCK... EC bit2==0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=1 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'1');
+	/* TCK=1, TMS=1, TDI=1 (rising edge TCK... EC bit3==1) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'1');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit0==0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit1==0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit2==0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+	/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+	oscan1_set_tck_tms_tdi(tck,'0',tms,'1',tdi,'0');
+	/* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit3==0) */
+	oscan1_set_tck_tms_tdi(tck,'1',tms,'1',tdi,'0');
+
+	oscan1_ftdi_get_signal(tdo, &tdovalue);  /* Just to force a flush */
+}
+
 static void oscan1_ftdi_execute_reset(struct jtag_command *cmd)
 {
 	DEBUG_JTAG_IO("reset trst: %i srst %i",
@@ -710,12 +836,14 @@ static void oscan1_ftdi_execute_command(struct jtag_command *cmd)
 	switch (cmd->type) {
 		case JTAG_RESET:
 			oscan1_ftdi_execute_reset(cmd);
+			oscan1_reset_online_activate();			
 			break;
 		case JTAG_RUNTEST:
 			oscan1_ftdi_execute_runtest(cmd);
 			break;
 		case JTAG_TLR_RESET:
 			oscan1_ftdi_execute_statemove(cmd);
+			oscan1_reset_online_activate();
 			break;
 		case JTAG_PATHMOVE:
 			oscan1_ftdi_execute_pathmove(cmd);
