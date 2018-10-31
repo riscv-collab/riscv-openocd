@@ -162,9 +162,6 @@ struct jtag_interface *jtag_interfaces[] = {
 #if BUILD_FTDI == 1
 		&ftdi_interface,
 #endif
-#if BUILD_FTDI_OSCAN1 == 1
-		&oscan1_ftdi_interface,
-#endif
 #if BUILD_USB_BLASTER || BUILD_USB_BLASTER_2 == 1
 		&usb_blaster_interface,
 #endif
