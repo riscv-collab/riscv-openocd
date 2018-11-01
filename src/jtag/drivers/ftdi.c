@@ -109,6 +109,17 @@ static uint8_t ftdi_jtag_mode = JTAG_MODE;
 static bool swd_mode;
 
 #if BUILD_FTDI_OSCAN1 == 1
+/*
+  cJTAG OSCAN1, in lieu of 4-wire JTAG, is starting to be a configuration option
+  for some SiFive hardware. An FTDI-based adapter that can be configured to drive
+  the bidirectional pin TMSC is assumed for this topology. Specifically, the Olimex
+  ARM-USB-TINY-H with the ARM-JTAG-SWD adapter, connected to a SiFive cJTAG-enabled
+  target board such a topology, currently. But in theory, other FTDI based devices
+  that can drive a two-wire bidirectional signaling pattern could be made to work
+  in this scheme in the future.  The OSCAN1-related code here translates IR/DR
+  scan commanads and JTAG state traversal commands to the two-wire clocking and
+  signaling.
+*/
 static void oscan1_reset_online_activate(void);
 static void oscan1_mpsse_clock_data(struct mpsse_ctx *ctx, const uint8_t *out, unsigned out_offset, uint8_t *in,
 				    unsigned in_offset, unsigned length, uint8_t mode);
