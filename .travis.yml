@@ -7,6 +7,10 @@ matrix:
           env:
               - BUILD=x86_64-linux-gnu
               - EXECUTABLE=openocd
+          addons:
+              apt:
+                  packages:
+                      - patchutils
           compiler: gcc
 
         - os: linux
@@ -17,13 +21,17 @@ matrix:
           addons:
               apt:
                   packages:
-                      - gcc-multilib
+                      - gcc-multilib patchutils
           compiler: gcc
 
         - os: linux
           env:
               - BUILD=x86_64-linux-gnu
               - EXECUTABLE=openocd
+          addons:
+              apt:
+                  packages:
+                      - patchutils
           compiler: clang
 
         - os: linux
@@ -36,7 +44,7 @@ matrix:
           addons:
               apt:
                   packages:
-                      - gcc-multilib
+                      - gcc-multilib patchutils
 
         - os: linux
           env:
@@ -47,7 +55,7 @@ matrix:
           addons:
               apt:
                   packages:
-                      - binutils-mingw-w64-i686 gcc-mingw-w64-i686 g++-mingw-w64-i686
+                      - binutils-mingw-w64-i686 gcc-mingw-w64-i686 g++-mingw-w64-i686 patchutils
 
 script:
     # Ideally we'd diff back to where we either branched off OpenOCD or master,
