@@ -84,12 +84,12 @@ patch:
 --- a/src/openocd.c
 +++ b/src/openocd.c
 @@ -372,8 +372,6 @@ int openocd_main(int argc, char *argv[])
- 
+
         if (ERROR_FAIL == ret)
                 return EXIT_FAILURE;
 -       else if (ERROR_OK != ret)
 -               exit_on_signal(ret);
- 
+
         return ret;
  }
   @endcode
