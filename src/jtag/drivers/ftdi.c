@@ -133,6 +133,12 @@ static void oscan1_mpsse_clock_tms_cs_out(struct mpsse_ctx *ctx, const uint8_t *
 static bool oscan1_mode;
 #endif
 
+#if BUILD_FTDI_BSCAN == 1
+static bool bscan_mode;
+static uint8_t bscan_ir_user = 0x23;     /* default USER4 */
+static uint32_t bscan_ir_user_width = 6;  /* default width of USER4 */
+#endif
+
 #define MAX_USB_IDS 8
 /* vid = pid = 0 marks the end of the list */
 static uint16_t ftdi_vid[MAX_USB_IDS + 1] = { 0 };
@@ -497,6 +503,152 @@ static void ftdi_execute_pathmove(struct jtag_command *cmd)
 	tap_set_end_state(tap_get_state());
 }
 
+#if BUILD_FTDI_BSCAN == 1
+static void bscan_single_field_data_scan(struct mpsse_ctx *ctx, const uint8_t *out, unsigned out_offset, uint8_t *in,
+				    unsigned in_offset, unsigned length)
+{
+	DO_CLOCK_DATA(mpsse_ctx,
+		      out,
+		      0,
+		      in,
+		      0,
+		      length - 1,
+		      ftdi_jtag_mode);
+	uint8_t last_bit = 0;
+	if (out)
+		bit_copy(&last_bit, 0, out, length - 1, 1);
+	uint8_t tms_bits = 0x01;
+	DO_CLOCK_TMS_CS(mpsse_ctx,
+			&tms_bits,
+			0,
+			in,
+			length - 1,
+			1,
+			last_bit,
+			ftdi_jtag_mode);
+	tap_set_state(tap_state_transition(tap_get_state(), 1));
+	DO_CLOCK_TMS_CS_OUT(mpsse_ctx,
+			    &tms_bits,
+			    1,
+			    1,
+			    last_bit,
+			    ftdi_jtag_mode);
+	tap_set_state(tap_state_transition(tap_get_state(), 0));
+
+	if (tap_get_state() != tap_get_end_state())
+		move_to_state(tap_get_end_state());
+}
+
+
+static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
+{
+	DEBUG_JTAG_IO("%s type:%d", cmd->cmd.scan->ir_scan ? "IRSCAN" : "DRSCAN",
+		jtag_scan_type(cmd->cmd.scan));
+
+	/* Make sure there are no trailing fields with num_bits == 0, or the logic below will fail. */
+	while (cmd->cmd.scan->num_fields > 0
+			&& cmd->cmd.scan->fields[cmd->cmd.scan->num_fields - 1].num_bits == 0) {
+		cmd->cmd.scan->num_fields--;
+		DEBUG_JTAG_IO("discarding trailing empty field");
+	}
+
+	if (cmd->cmd.scan->num_fields == 0) {
+		DEBUG_JTAG_IO("empty scan, doing nothing");
+		return;
+	}
+
+	if (tap_get_state() != TAP_IRSHIFT)
+		move_to_state(TAP_IRSHIFT);
+
+	ftdi_end_state(cmd->cmd.scan->end_state);	
+		
+	// Do the 6-bit IR scan of 0x23 (USER4)
+
+	bscan_single_field_data_scan(mpsse_ctx, &bscan_ir_user, 0, NULL, 0, bscan_ir_user_width);
+		
+	if (tap_get_state() != tap_get_end_state())
+		move_to_state(tap_get_end_state());
+
+	if (tap_get_state() != TAP_DRSHIFT)
+		move_to_state(TAP_DRSHIFT);
+
+	unsigned scan_size = 0;
+	struct scan_field *field = cmd->cmd.scan->fields;
+	
+	for (int i = 0; i < cmd->cmd.scan->num_fields; i++, field++) {
+		scan_size += field->num_bits;
+	}
+
+	// shift in prologue
+	uint8_t prologue = (scan_size << 1) | (cmd->cmd.scan->ir_scan ? 0 : 1);
+	static const uint8_t epilogue = 0x1;
+	
+	DO_CLOCK_DATA(mpsse_ctx,
+		      &prologue,
+		      0,
+		      NULL,
+		      0,
+		      8,
+		      ftdi_jtag_mode);
+
+	struct scan_field *prevfield = NULL;
+	uint8_t bitbucket;
+
+	for (int i = 0; i < cmd->cmd.scan->num_fields; i++, field++) {
+		DEBUG_JTAG_IO("%s%s field %d/%d %d bits",
+			field->in_value ? "in" : "",
+			field->out_value ? "out" : "",
+			i,
+			cmd->cmd.scan->num_fields,
+			field->num_bits);
+
+		// TDO output is off by one clock from TDI, so can't do an in/out MPSSE call,
+		// have to:
+		// Clock field data out
+		// Clock one bit in, prev_field->in_value at offset prev_field->num_bits-1 or discard if no prev field
+		// Clock width-1 bits in, assign to field->in_value at offset 0
+
+		DO_CLOCK_DATA(mpsse_ctx,
+			      field->out_value,
+			      0,
+			      NULL,
+			      0,
+			      field->num_bits,
+			      ftdi_jtag_mode);
+
+		if (prevfield)
+			DO_CLOCK_DATA(mpsse_ctx,
+			      NULL,
+			      0,
+			      prevfield->in_value,
+			      prevfield->num_bits-1,
+			      1,
+			      ftdi_jtag_mode);
+		else
+			DO_CLOCK_DATA(mpsse_ctx,
+			      NULL,
+			      0,
+			      &bitbucket,
+			      0,
+			      1,
+			      ftdi_jtag_mode);
+
+		prevfield = field;
+	}
+
+	// shift in epilogue and exit shift state
+	bscan_single_field_data_scan(mpsse_ctx, &epilogue, 0, NULL, 0, 2);	
+
+	if (tap_get_state() != tap_get_end_state())
+		move_to_state(tap_get_end_state());
+
+	DEBUG_JTAG_IO("%s scan, %i bits, end in %s",
+		(cmd->cmd.scan->ir_scan) ? "IR" : "DR", scan_size,
+		tap_state_name(tap_get_end_state()));
+}
+
+#endif
+
 static void ftdi_execute_scan(struct jtag_command *cmd)
 {
 	DEBUG_JTAG_IO("%s type:%d", cmd->cmd.scan->ir_scan ? "IRSCAN" : "DRSCAN",
@@ -583,6 +735,7 @@ static void ftdi_execute_scan(struct jtag_command *cmd)
 		(cmd->cmd.scan->ir_scan) ? "IR" : "DR", scan_size,
 		tap_state_name(tap_get_end_state()));
 }
+
 
 static void ftdi_execute_reset(struct jtag_command *cmd)
 {
@@ -683,6 +836,12 @@ static void ftdi_execute_command(struct jtag_command *cmd)
 			ftdi_execute_pathmove(cmd);
 			break;
 		case JTAG_SCAN:
+#if BUILD_FTDI_BSCAN == 1
+			if (bscan_mode) {
+				ftdi_execute_scan_via_bscan(cmd);
+				break;
+			}
+#endif			
 			ftdi_execute_scan(cmd);
 			break;
 		case JTAG_SLEEP:
@@ -1283,6 +1442,22 @@ COMMAND_HANDLER(ftdi_handle_oscan1_mode_command)
 }
 #endif
 
+
+#if BUILD_FTDI_BSCAN == 1
+COMMAND_HANDLER(ftdi_handle_bscan_mode_command)
+{
+	if (CMD_ARGC > 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (CMD_ARGC == 1)
+		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], bscan_mode);
+
+	command_print(CMD_CTX, "bscan mode: %s.", bscan_mode ? "on" : "off");
+	return ERROR_OK;
+}
+#endif
+
+
 static const struct command_registration ftdi_command_handlers[] = {
 	{
 		.name = "ftdi_device_desc",
@@ -1366,6 +1541,15 @@ static const struct command_registration ftdi_command_handlers[] = {
 		.handler = &ftdi_handle_oscan1_mode_command,
 		.mode = COMMAND_ANY,
 		.help = "set to 'on' to use OSCAN1 mode for signaling, otherwise 'off' (default is 'off')",
+		.usage = "(on|off)",
+	},
+#endif
+#if BUILD_FTDI_BSCAN == 1
+	{
+		.name = "ftdi_bscan_mode",
+		.handler = &ftdi_handle_bscan_mode_command,
+		.mode = COMMAND_ANY,
+		.help = "set to 'on' to use BSCAN tunneling mode, otherwise 'off' (default is 'off')",
 		.usage = "(on|off)",
 	},
 #endif
