@@ -573,9 +573,10 @@ static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
 		move_to_state(TAP_DRSHIFT);
 
 	unsigned scan_size = 0;
-	struct scan_field *field = cmd->cmd.scan->fields;
+	struct scan_field *field;
+	int i;
 	
-	for (int i = 0; i < cmd->cmd.scan->num_fields; i++, field++) {
+	for (i = 0, field = cmd->cmd.scan->fields; i < cmd->cmd.scan->num_fields; i++, field++) {
 		scan_size += field->num_bits;
 	}
 
@@ -594,7 +595,7 @@ static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
 	struct scan_field *prevfield = NULL;
 	uint8_t bitbucket;
 
-	for (int i = 0; i < cmd->cmd.scan->num_fields; i++, field++) {
+	for (i = 0, field = cmd->cmd.scan->fields; i < cmd->cmd.scan->num_fields; i++, field++) {
 		DEBUG_JTAG_IO("%s%s field %d/%d %d bits",
 			field->in_value ? "in" : "",
 			field->out_value ? "out" : "",
