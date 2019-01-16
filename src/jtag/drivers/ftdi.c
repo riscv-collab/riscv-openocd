@@ -504,7 +504,7 @@ static void ftdi_execute_pathmove(struct jtag_command *cmd)
 }
 
 #if BUILD_FTDI_BSCAN == 1
-static void bscan_single_field_data_scan(struct mpsse_ctx *ctx, const uint8_t *out, unsigned out_offset, uint8_t *in,
+static void bscan_single_field_data_scan(const uint8_t *out, unsigned out_offset, uint8_t *in,
 				    unsigned in_offset, unsigned length)
 {
 	DO_CLOCK_DATA(mpsse_ctx,
@@ -542,6 +542,8 @@ static void bscan_single_field_data_scan(struct mpsse_ctx *ctx, const uint8_t *o
 
 static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
 {
+	static const uint8_t zero;
+	
 	DEBUG_JTAG_IO("%s type:%d", cmd->cmd.scan->ir_scan ? "IRSCAN" : "DRSCAN",
 		jtag_scan_type(cmd->cmd.scan));
 
@@ -564,7 +566,7 @@ static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
 		
 	// Do the 6-bit IR scan of 0x23 (USER4)
 
-	bscan_single_field_data_scan(mpsse_ctx, &bscan_ir_user, 0, NULL, 0, bscan_ir_user_width);
+	bscan_single_field_data_scan(&bscan_ir_user, 0, NULL, 0, bscan_ir_user_width);
 		
 	if (tap_get_state() != tap_get_end_state())
 		move_to_state(tap_get_end_state());
@@ -593,7 +595,6 @@ static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
 		      ftdi_jtag_mode);
 
 	struct scan_field *prevfield = NULL;
-	uint8_t bitbucket;
 
 	for (i = 0, field = cmd->cmd.scan->fields; i < cmd->cmd.scan->num_fields; i++, field++) {
 		DEBUG_JTAG_IO("%s%s field %d/%d %d bits",
@@ -603,42 +604,43 @@ static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
 			cmd->cmd.scan->num_fields,
 			field->num_bits);
 
-		// TDO output is off by one clock from TDI, so can't do an in/out MPSSE call,
-		// have to:
-		// Clock field data out
-		// Clock one bit in, prev_field->in_value at offset prev_field->num_bits-1 or discard if no prev field
-		// Clock width-1 bits in, assign to field->in_value at offset 0
+		// TDO output is off by one clock from TDI, so the sequence is slightly more
+		// involved than a single aligned OUT/IN
+		// Clock first bit out, place IN bit in highest bit of prev field if there is a prev field
+		// Clock rest of bits out, place IN bits in bit zero of in
 
 		DO_CLOCK_DATA(mpsse_ctx,
 			      field->out_value,
 			      0,
-			      NULL,
-			      0,
-			      field->num_bits,
+			      prevfield ? prevfield->in_value : NULL,
+			      prevfield ? prevfield->num_bits-1 : 0,
+			      1,
 			      ftdi_jtag_mode);
 
-		if (prevfield)
-			DO_CLOCK_DATA(mpsse_ctx,
-			      NULL,
+		DO_CLOCK_DATA(mpsse_ctx,
+			      field->out_value,
+			      1,
+			      field->in_value,
+			      0,
+			      field->num_bits-1,
+			      ftdi_jtag_mode);
+		
+
+		prevfield = field;
+	}
+
+	// There is still one bit left to retrieve in TDO, because of the one clock delay
+	DO_CLOCK_DATA(mpsse_ctx,
+			      &zero,
 			      0,
 			      prevfield->in_value,
 			      prevfield->num_bits-1,
 			      1,
 			      ftdi_jtag_mode);
-		else
-			DO_CLOCK_DATA(mpsse_ctx,
-			      NULL,
-			      0,
-			      &bitbucket,
-			      0,
-			      1,
-			      ftdi_jtag_mode);
-
-		prevfield = field;
-	}
+	
 
 	// shift in epilogue and exit shift state
-	bscan_single_field_data_scan(mpsse_ctx, &epilogue, 0, NULL, 0, 2);	
+	bscan_single_field_data_scan(&epilogue, 0, NULL, 0, 2);	
 
 	if (tap_get_state() != tap_get_end_state())
 		move_to_state(tap_get_end_state());
