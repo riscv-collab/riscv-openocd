@@ -3,6 +3,7 @@
 #endif
 
 #include "riscv_debug.h"
+#include "target/register.h"
 #include "target/target.h"
 #include "target/riscv/riscv.h"
 #include "server/gdb_server.h"
@@ -270,6 +271,25 @@ static int riscv_gdb_v_packet(struct connection *connection, const char *packet,
 	return GDB_THREAD_PACKET_NOT_CONSUMED;
 }
 
+static int riscv_get_thread_reg(struct rtos *rtos, int64_t thread_id,
+		uint32_t reg_num, struct rtos_reg *rtos_reg)
+{
+	struct target *target = rtos->target;
+	struct reg *reg = register_get_by_number(target->reg_cache, reg_num, true);
+	if (!reg)
+		return ERROR_FAIL;
+
+	if (reg->type->get(reg) != ERROR_OK)
+		return ERROR_FAIL;
+
+	rtos_reg->number = reg->number;
+	rtos_reg->size = reg->size;
+	unsigned bytes = (reg->size + 7) / 8;
+	assert(bytes <= sizeof(rtos_reg->value));
+	memcpy(rtos_reg->value, reg->value, bytes);
+	return ERROR_OK;
+}
+
 static int riscv_get_thread_reg_list(struct rtos *rtos, int64_t thread_id,
 		struct rtos_reg **reg_list, int *num_regs)
 {
@@ -315,6 +335,7 @@ const struct rtos_type riscv_rtos = {
 	.detect_rtos = riscv_detect_rtos,
 	.create = riscv_create_rtos,
 	.update_threads = riscv_update_threads,
+	.get_thread_reg = riscv_get_thread_reg,
 	.get_thread_reg_list = riscv_get_thread_reg_list,
 	.get_symbol_list_to_lookup = riscv_get_symbol_list_to_lookup,
 };

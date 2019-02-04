@@ -2140,6 +2140,7 @@ void riscv_invalidate_register_cache(struct target *target)
 {
 	RISCV_INFO(r);
 
+	LOG_DEBUG("[%d]", target->coreid);
 	register_cache_invalidate(target->reg_cache);
 	for (size_t i = 0; i < target->reg_cache->num_regs; ++i) {
 		struct reg *reg = &target->reg_cache->reg_list[i];
