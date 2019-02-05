@@ -472,8 +472,8 @@ int rtos_get_gdb_reg(struct connection *connection, int reg_num)
 		struct rtos_reg *reg_list;
 		int num_regs;
 
-		LOG_DEBUG("RTOS: getting register %d for thread 0x%" PRIx64
-				  ", target->rtos->current_thread=0x%" PRIx64 "\r\n",
+		LOG_DEBUG("getting register %d for thread 0x%" PRIx64
+				  ", target->rtos->current_thread=0x%" PRIx64,
 										reg_num,
 										current_threadid,
 										target->rtos->current_thread);

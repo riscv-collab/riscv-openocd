@@ -937,7 +937,7 @@ static int riscv_get_gdb_reg_list(struct target *target,
 
 	switch (reg_class) {
 		case REG_CLASS_GENERAL:
-			*reg_list_size = 33;
+			*reg_list_size = 32;
 			break;
 		case REG_CLASS_ALL:
 			*reg_list_size = target->reg_cache->num_regs;
@@ -2197,7 +2197,7 @@ int riscv_set_register_on_hart(struct target *target, int hartid,
 		enum gdb_regno regid, uint64_t value)
 {
 	RISCV_INFO(r);
-	LOG_DEBUG("[%d] %s <- %" PRIx64, hartid, gdb_regno_name(regid), value);
+	LOG_DEBUG("{%d} %s <- %" PRIx64, hartid, gdb_regno_name(regid), value);
 	assert(r->set_register);
 	return r->set_register(target, hartid, regid, value);
 }
@@ -2228,7 +2228,7 @@ int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 	if (hartid != riscv_current_hartid(target))
 		riscv_invalidate_register_cache(target);
 
-	LOG_DEBUG("[%d] %s: %" PRIx64, hartid, gdb_regno_name(regid), *value);
+	LOG_DEBUG("{%d} %s: %" PRIx64, hartid, gdb_regno_name(regid), *value);
 	return result;
 }
 
@@ -2442,7 +2442,7 @@ static int register_get(struct reg *reg)
 			(reg->number >= GDB_REGNO_FPR0 && reg->number <= GDB_REGNO_FPR31) ||
 			reg->number == GDB_REGNO_PC)
 		reg->valid = true;
-	LOG_DEBUG("[%d,%d] read 0x%" PRIx64 " from %s (valid=%d)",
+	LOG_DEBUG("[%d]{%d} read 0x%" PRIx64 " from %s (valid=%d)",
 			target->coreid, riscv_current_hartid(target), value, reg->name,
 			reg->valid);
 	return ERROR_OK;
@@ -2455,7 +2455,7 @@ static int register_set(struct reg *reg, uint8_t *buf)
 
 	uint64_t value = buf_get_u64(buf, 0, reg->size);
 
-	LOG_DEBUG("[%d,%d] write 0x%" PRIx64 " to %s (valid=%d)",
+	LOG_DEBUG("[%d]{%d} write 0x%" PRIx64 " to %s (valid=%d)",
 			target->coreid, riscv_current_hartid(target), value, reg->name,
 			reg->valid);
 	struct reg *r = &target->reg_cache->reg_list[reg->number];
