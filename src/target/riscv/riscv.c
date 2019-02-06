@@ -919,13 +919,13 @@ static int riscv_write_memory(struct target *target, target_addr_t address,
 	return tt->write_memory(target, address, size, count, buffer);
 }
 
-static int riscv_get_gdb_reg_list(struct target *target,
+static int riscv_get_gdb_reg_list_internal(struct target *target,
 		struct reg **reg_list[], int *reg_list_size,
-		enum target_register_class reg_class)
+		enum target_register_class reg_class, bool read)
 {
 	RISCV_INFO(r);
-	LOG_DEBUG("reg_class=%d", reg_class);
-	LOG_DEBUG("rtos_hartid=%d current_hartid=%d", r->rtos_hartid, r->current_hartid);
+	LOG_DEBUG("rtos_hartid=%d, current_hartid=%d, reg_class=%d, read=%d",
+			r->rtos_hartid, r->current_hartid, reg_class, read);
 
 	if (!target->reg_cache) {
 		LOG_ERROR("Target not initialized. Return ERROR_FAIL.");
@@ -937,7 +937,7 @@ static int riscv_get_gdb_reg_list(struct target *target,
 
 	switch (reg_class) {
 		case REG_CLASS_GENERAL:
-			*reg_list_size = 32;
+			*reg_list_size = 33;
 			break;
 		case REG_CLASS_ALL:
 			*reg_list_size = target->reg_cache->num_regs;
@@ -951,22 +951,34 @@ static int riscv_get_gdb_reg_list(struct target *target,
 	if (!*reg_list)
 		return ERROR_FAIL;
 
-	bool read = true;
 	for (int i = 0; i < *reg_list_size; i++) {
 		assert(!target->reg_cache->reg_list[i].valid ||
 				target->reg_cache->reg_list[i].size > 0);
 		(*reg_list)[i] = &target->reg_cache->reg_list[i];
 		if (read && !target->reg_cache->reg_list[i].valid) {
-			/* This function gets called from
-			 * gdb_target_description_supported(), and we end up failing in
-			 * that case. Allow failures for now. */
 			if (target->reg_cache->reg_list[i].type->get(
 						&target->reg_cache->reg_list[i]) != ERROR_OK)
-				read = false;
+				return ERROR_FAIL;
 		}
 	}
 
 	return ERROR_OK;
+}
+
+static int riscv_get_gdb_reg_list_noread(struct target *target,
+		struct reg **reg_list[], int *reg_list_size,
+		enum target_register_class reg_class)
+{
+	return riscv_get_gdb_reg_list_internal(target, reg_list, reg_list_size,
+			reg_class, false);
+}
+
+static int riscv_get_gdb_reg_list(struct target *target,
+		struct reg **reg_list[], int *reg_list_size,
+		enum target_register_class reg_class)
+{
+	return riscv_get_gdb_reg_list_internal(target, reg_list, reg_list_size,
+			reg_class, true);
 }
 
 static int riscv_arch_state(struct target *target)
@@ -1960,6 +1972,7 @@ struct target_type riscv_target = {
 	.checksum_memory = riscv_checksum_memory,
 
 	.get_gdb_reg_list = riscv_get_gdb_reg_list,
+	.get_gdb_reg_list_noread = riscv_get_gdb_reg_list_noread,
 
 	.add_breakpoint = riscv_add_breakpoint,
 	.remove_breakpoint = riscv_remove_breakpoint,
@@ -2214,19 +2227,14 @@ int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 {
 	RISCV_INFO(r);
 
-	if (hartid != riscv_current_hartid(target))
-		riscv_invalidate_register_cache(target);
-
 	struct reg *reg = &target->reg_cache->reg_list[regid];
-	if (reg && reg->valid) {
+
+	if (reg && reg->valid && hartid == riscv_current_hartid(target)) {
 		*value = buf_get_u64(reg->value, 0, reg->size);
 		return ERROR_OK;
 	}
 
 	int result = r->get_register(target, value, hartid, regid);
-
-	if (hartid != riscv_current_hartid(target))
-		riscv_invalidate_register_cache(target);
 
 	LOG_DEBUG("{%d} %s: %" PRIx64, hartid, gdb_regno_name(regid), *value);
 	return result;

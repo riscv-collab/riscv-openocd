@@ -301,7 +301,7 @@ static int riscv_get_thread_reg_list(struct rtos *rtos, int64_t thread_id,
 
 	/* We return just the GPRs here. */
 
-	*num_regs = 32;
+	*num_regs = 33;
 	int xlen = riscv_xlen_of_hart(rtos->target, thread_id - 1);
 
 	*reg_list = calloc(*num_regs, sizeof(struct rtos_reg));
