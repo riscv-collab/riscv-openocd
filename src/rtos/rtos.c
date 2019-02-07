@@ -468,7 +468,10 @@ int rtos_get_gdb_reg(struct connection *connection, int reg_num)
 {
 	struct target *target = get_target_from_connection(connection);
 	int64_t current_threadid = target->rtos->current_threadid;
-	if (target->rtos != NULL) {
+	if ((target->rtos != NULL) && (current_threadid != -1) &&
+			(current_threadid != 0) &&
+			((current_threadid != target->rtos->current_thread) ||
+			(target->smp))) {	/* in smp several current thread are possible */
 		struct rtos_reg *reg_list;
 		int num_regs;
 
