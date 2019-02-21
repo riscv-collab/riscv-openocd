@@ -222,13 +222,12 @@ COMMAND_HANDLER(handle_log_output_command)
 {
 	if (CMD_ARGC == 1) {
 		FILE *file = NULL;
-		if (!strcmp(CMD_ARGV[0], ">stdout")) {
+		if (!strcmp(CMD_ARGV[0], ">stdout"))
 			file = stdout;
-		} else if (!strcmp(CMD_ARGV[0], ">stderr")) {
+		else if (!strcmp(CMD_ARGV[0], ">stderr"))
 			file = stderr;
-		} else {
+		else
 			file = fopen(CMD_ARGV[0], "w");
-		}
 		if (file == NULL) {
 			LOG_ERROR("failed to open output log '%s'", CMD_ARGV[0]);
 			return ERROR_FAIL;
