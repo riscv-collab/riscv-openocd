@@ -221,12 +221,19 @@ COMMAND_HANDLER(handle_debug_level_command)
 COMMAND_HANDLER(handle_log_output_command)
 {
 	if (CMD_ARGC == 1) {
-		FILE *file = fopen(CMD_ARGV[0], "w");
+		FILE *file = NULL;
+		if (!strcmp(CMD_ARGV[0], ">stdout")) {
+			file = stdout;
+		} else if (!strcmp(CMD_ARGV[0], ">stderr")) {
+			file = stderr;
+		} else {
+			file = fopen(CMD_ARGV[0], "w");
+		}
 		if (file == NULL) {
 			LOG_ERROR("failed to open output log '%s'", CMD_ARGV[0]);
 			return ERROR_FAIL;
 		}
-		if (log_output != stderr && log_output != NULL) {
+		if (log_output != stdout && log_output != stderr && log_output != NULL) {
 			/* Close previous log file, if it was open and wasn't stderr. */
 			fclose(log_output);
 		}
@@ -283,12 +290,6 @@ void log_init(void)
 		log_output = stderr;
 
 	start = last_time = timeval_ms();
-}
-
-int set_log_output(struct command_context *cmd_ctx, FILE *output)
-{
-	log_output = output;
-	return ERROR_OK;
 }
 
 /* add/remove log callback handler */
