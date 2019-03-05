@@ -855,6 +855,35 @@ static int oldriscv_resume(struct target *target, int current, uint32_t address,
 			debug_execution);
 }
 
+/**
+ * Get everything ready to resume.
+ */
+static int resume_prep(struct target *target, int current,
+		target_addr_t address, int handle_breakpoints, int debug_execution)
+{
+	if (!current)
+		riscv_set_register(target, GDB_REGNO_PC, address);
+
+	return ERROR_OK;
+}
+
+/**
+ * Resume all the harts that have been prepped, as close to instantaneous as
+ * possible.
+ */
+static int resume_go(struct target *target, int current,
+		target_addr_t address, int handle_breakpoints, int debug_execution)
+{
+	riscv_info_t *r = riscv_info(target);
+	if (r->is_halted == NULL) {
+		return oldriscv_resume(target, current, address, handle_breakpoints,
+				debug_execution);
+	} else {
+		return riscv_openocd_resume(target, current, address,
+				handle_breakpoints, debug_execution);
+	}
+}
+
 static int old_or_new_riscv_resume(
 		struct target *target,
 		int current,
@@ -863,31 +892,32 @@ static int old_or_new_riscv_resume(
 		int debug_execution
 ){
 	LOG_DEBUG("handle_breakpoints=%d", handle_breakpoints);
+	int result = ERROR_OK;
 	if (target->smp) {
-		struct target_list *targets = target->head;
-		int result = ERROR_OK;
-		while (targets) {
-			struct target *t = targets->target;
-			riscv_info_t *r = riscv_info(t);
-			if (r->is_halted == NULL) {
-				if (oldriscv_resume(t, current, address, handle_breakpoints,
-							debug_execution) != ERROR_OK)
-					result = ERROR_FAIL;
-			} else {
-				if (riscv_openocd_resume(t, current, address,
-							handle_breakpoints, debug_execution) != ERROR_OK)
-					result = ERROR_FAIL;
-			}
-			targets = targets->next;
+		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
+			struct target *t = tlist->target;
+			if (resume_prep(t, current, address, handle_breakpoints,
+						debug_execution) != ERROR_OK)
+				result = ERROR_FAIL;
 		}
-		return result;
+
+		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
+			struct target *t = tlist->target;
+			if (resume_go(t, current, address, handle_breakpoints,
+						debug_execution) != ERROR_OK)
+				result = ERROR_FAIL;
+		}
+
+	} else {
+		if (resume_prep(target, current, address, handle_breakpoints,
+					debug_execution) != ERROR_OK)
+			result = ERROR_FAIL;
+		if (resume_go(target, current, address, handle_breakpoints,
+					debug_execution) != ERROR_OK)
+			result = ERROR_FAIL;
 	}
 
-	RISCV_INFO(r);
-	if (r->is_halted == NULL)
-		return oldriscv_resume(target, current, address, handle_breakpoints, debug_execution);
-	else
-		return riscv_openocd_resume(target, current, address, handle_breakpoints, debug_execution);
+	return result;
 }
 
 static int riscv_select_current_hart(struct target *target)
@@ -1356,9 +1386,6 @@ int riscv_openocd_resume(
 		int debug_execution)
 {
 	LOG_DEBUG("debug_reason=%d", target->debug_reason);
-
-	if (!current)
-		riscv_set_register(target, GDB_REGNO_PC, address);
 
 	if (target->debug_reason == DBG_REASON_WATCHPOINT) {
 		/* To be able to run off a trigger, disable all the triggers, step, and

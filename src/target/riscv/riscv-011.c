@@ -1927,12 +1927,6 @@ static int riscv011_resume(struct target *target, int current,
 {
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
-	if (!current) {
-		int result = register_write(target, GDB_REGNO_PC, address);
-		if (result != ERROR_OK)
-			return result;
-	}
-
 	if (handle_breakpoints) {
 		int result = strict_step(target, false);
 		if (result != ERROR_OK)
