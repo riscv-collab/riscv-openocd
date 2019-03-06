@@ -861,8 +861,48 @@ static int oldriscv_resume(struct target *target, int current, uint32_t address,
 static int resume_prep(struct target *target, int current,
 		target_addr_t address, int handle_breakpoints, int debug_execution)
 {
+	LOG_DEBUG("[%d]", target->coreid);
+
 	if (!current)
 		riscv_set_register(target, GDB_REGNO_PC, address);
+
+	if (target->debug_reason == DBG_REASON_WATCHPOINT) {
+		/* To be able to run off a trigger, disable all the triggers, step, and
+		 * then resume as usual. */
+		struct watchpoint *watchpoint = target->watchpoints;
+		bool trigger_temporarily_cleared[RISCV_MAX_HWBPS] = {0};
+
+		int i = 0;
+		int result = ERROR_OK;
+		while (watchpoint && result == ERROR_OK) {
+			LOG_DEBUG("watchpoint %d: set=%d", i, watchpoint->set);
+			trigger_temporarily_cleared[i] = watchpoint->set;
+			if (watchpoint->set)
+				result = riscv_remove_watchpoint(target, watchpoint);
+			watchpoint = watchpoint->next;
+			i++;
+		}
+
+		if (result == ERROR_OK)
+			result = old_or_new_riscv_step(target, true, 0, false);
+
+		watchpoint = target->watchpoints;
+		i = 0;
+		while (watchpoint) {
+			LOG_DEBUG("watchpoint %d: cleared=%d", i, trigger_temporarily_cleared[i]);
+			if (trigger_temporarily_cleared[i]) {
+				if (result == ERROR_OK)
+					result = riscv_add_watchpoint(target, watchpoint);
+				else
+					riscv_add_watchpoint(target, watchpoint);
+			}
+			watchpoint = watchpoint->next;
+			i++;
+		}
+
+		if (result != ERROR_OK)
+			return result;
+	}
 
 	return ERROR_OK;
 }
@@ -875,16 +915,23 @@ static int resume_go(struct target *target, int current,
 		target_addr_t address, int handle_breakpoints, int debug_execution)
 {
 	riscv_info_t *r = riscv_info(target);
+	int result;
 	if (r->is_halted == NULL) {
-		return oldriscv_resume(target, current, address, handle_breakpoints,
+		result = oldriscv_resume(target, current, address, handle_breakpoints,
 				debug_execution);
 	} else {
-		return riscv_openocd_resume(target, current, address,
+		result = riscv_openocd_resume(target, current, address,
 				handle_breakpoints, debug_execution);
 	}
+
+	target->state = TARGET_RUNNING;
+	register_cache_invalidate(target->reg_cache);
+	target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
+
+	return result;
 }
 
-static int old_or_new_riscv_resume(
+static int riscv_resume(
 		struct target *target,
 		int current,
 		target_addr_t address,
@@ -1387,53 +1434,12 @@ int riscv_openocd_resume(
 {
 	LOG_DEBUG("debug_reason=%d", target->debug_reason);
 
-	if (target->debug_reason == DBG_REASON_WATCHPOINT) {
-		/* To be able to run off a trigger, disable all the triggers, step, and
-		 * then resume as usual. */
-		struct watchpoint *watchpoint = target->watchpoints;
-		bool trigger_temporarily_cleared[RISCV_MAX_HWBPS] = {0};
-
-		int i = 0;
-		int result = ERROR_OK;
-		while (watchpoint && result == ERROR_OK) {
-			LOG_DEBUG("watchpoint %d: set=%d", i, watchpoint->set);
-			trigger_temporarily_cleared[i] = watchpoint->set;
-			if (watchpoint->set)
-				result = riscv_remove_watchpoint(target, watchpoint);
-			watchpoint = watchpoint->next;
-			i++;
-		}
-
-		if (result == ERROR_OK)
-			result = riscv_step_rtos_hart(target);
-
-		watchpoint = target->watchpoints;
-		i = 0;
-		while (watchpoint) {
-			LOG_DEBUG("watchpoint %d: cleared=%d", i, trigger_temporarily_cleared[i]);
-			if (trigger_temporarily_cleared[i]) {
-				if (result == ERROR_OK)
-					result = riscv_add_watchpoint(target, watchpoint);
-				else
-					riscv_add_watchpoint(target, watchpoint);
-			}
-			watchpoint = watchpoint->next;
-			i++;
-		}
-
-		if (result != ERROR_OK)
-			return result;
-	}
-
 	int out = riscv_resume_all_harts(target);
 	if (out != ERROR_OK) {
 		LOG_ERROR("unable to resume all harts");
 		return out;
 	}
 
-	register_cache_invalidate(target->reg_cache);
-	target->state = TARGET_RUNNING;
-	target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
 	return out;
 }
 
@@ -1990,7 +1996,7 @@ struct target_type riscv_target = {
 	.poll = old_or_new_riscv_poll,
 
 	.halt = old_or_new_riscv_halt,
-	.resume = old_or_new_riscv_resume,
+	.resume = riscv_resume,
 	.step = old_or_new_riscv_step,
 
 	.assert_reset = riscv_assert_reset,

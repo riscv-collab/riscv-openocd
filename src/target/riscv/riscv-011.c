@@ -1927,12 +1927,6 @@ static int riscv011_resume(struct target *target, int current,
 {
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
-	if (handle_breakpoints) {
-		int result = strict_step(target, false);
-		if (result != ERROR_OK)
-			return result;
-	}
-
 	return resume(target, debug_execution, false);
 }
 
