@@ -163,7 +163,7 @@ int riscv_openocd_poll(struct target *target);
 
 int riscv_openocd_halt(struct target *target);
 
-int riscv_openocd_resume(
+int riscv_resume(
 	struct target *target,
 	int current,
 	target_addr_t address,
@@ -192,7 +192,6 @@ void riscv_info_init(struct target *target, riscv_info_t *r);
 int riscv_halt_all_harts(struct target *target);
 int riscv_halt_one_hart(struct target *target, int hartid);
 int riscv_resume_all_harts(struct target *target);
-int riscv_resume_one_hart(struct target *target, int hartid);
 
 /* Steps the hart that's currently selected in the RTOS, or if there is no RTOS
  * then the only hart. */

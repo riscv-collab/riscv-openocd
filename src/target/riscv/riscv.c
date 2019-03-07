@@ -846,13 +846,24 @@ static int riscv_deassert_reset(struct target *target)
 	return tt->deassert_reset(target);
 }
 
-
-static int oldriscv_resume(struct target *target, int current, uint32_t address,
-		int handle_breakpoints, int debug_execution)
+int riscv_resume_prep_all_harts(struct target *target)
 {
-	struct target_type *tt = get_target_type(target);
-	return tt->resume(target, current, address, handle_breakpoints,
-			debug_execution);
+	RISCV_INFO(r);
+	for (int i = 0; i < riscv_count_harts(target); ++i) {
+		if (!riscv_hart_enabled(target, i))
+			continue;
+
+		LOG_DEBUG("prep hart %d", i);
+		if (riscv_set_current_hartid(target, i) != ERROR_OK)
+			return ERROR_FAIL;
+		if (riscv_is_halted(target)) {
+			if (r->on_resume(target) != ERROR_OK)
+				return ERROR_FAIL;
+		} else {
+			LOG_DEBUG("  hart %d requested resume, but was already resumed", i);
+		}
+	}
+	return ERROR_OK;
 }
 
 /**
@@ -861,6 +872,7 @@ static int oldriscv_resume(struct target *target, int current, uint32_t address,
 static int resume_prep(struct target *target, int current,
 		target_addr_t address, int handle_breakpoints, int debug_execution)
 {
+	RISCV_INFO(r);
 	LOG_DEBUG("[%d]", target->coreid);
 
 	if (!current)
@@ -904,6 +916,10 @@ static int resume_prep(struct target *target, int current,
 			return result;
 	}
 
+	if (r->is_halted) {
+		return riscv_resume_prep_all_harts(target);
+	}
+
 	return ERROR_OK;
 }
 
@@ -917,11 +933,11 @@ static int resume_go(struct target *target, int current,
 	riscv_info_t *r = riscv_info(target);
 	int result;
 	if (r->is_halted == NULL) {
-		result = oldriscv_resume(target, current, address, handle_breakpoints,
+		struct target_type *tt = get_target_type(target);
+		result = tt->resume(target, current, address, handle_breakpoints,
 				debug_execution);
 	} else {
-		result = riscv_openocd_resume(target, current, address,
-				handle_breakpoints, debug_execution);
+		result = riscv_resume_all_harts(target);
 	}
 
 	target->state = TARGET_RUNNING;
@@ -931,7 +947,7 @@ static int resume_go(struct target *target, int current,
 	return result;
 }
 
-static int riscv_resume(
+int riscv_resume(
 		struct target *target,
 		int current,
 		target_addr_t address,
@@ -1141,7 +1157,7 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 
 	/* Run algorithm */
 	LOG_DEBUG("resume at 0x%" TARGET_PRIxADDR, entry_point);
-	if (oldriscv_resume(target, 0, entry_point, 0, 0) != ERROR_OK)
+	if (riscv_resume(target, 0, entry_point, 0, 0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	int64_t start = timeval_ms();
@@ -1423,24 +1439,6 @@ int riscv_openocd_halt(struct target *target)
 	target->debug_reason = DBG_REASON_DBGRQ;
 	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 	return result;
-}
-
-int riscv_openocd_resume(
-		struct target *target,
-		int current,
-		target_addr_t address,
-		int handle_breakpoints,
-		int debug_execution)
-{
-	LOG_DEBUG("debug_reason=%d", target->debug_reason);
-
-	int out = riscv_resume_all_harts(target);
-	if (out != ERROR_OK) {
-		LOG_ERROR("unable to resume all harts");
-		return out;
-	}
-
-	return out;
 }
 
 int riscv_openocd_step(
@@ -2075,30 +2073,24 @@ int riscv_halt_one_hart(struct target *target, int hartid)
 
 int riscv_resume_all_harts(struct target *target)
 {
+	RISCV_INFO(r);
 	for (int i = 0; i < riscv_count_harts(target); ++i) {
 		if (!riscv_hart_enabled(target, i))
 			continue;
 
-		riscv_resume_one_hart(target, i);
+		LOG_DEBUG("resuming hart %d", i);
+		if (riscv_set_current_hartid(target, i) != ERROR_OK)
+			return ERROR_FAIL;
+		if (riscv_is_halted(target)) {
+			if (r->resume_current_hart(target) != ERROR_OK)
+				return ERROR_FAIL;
+		} else {
+			LOG_DEBUG("  hart %d requested resume, but was already resumed", i);
+		}
 	}
 
 	riscv_invalidate_register_cache(target);
 	return ERROR_OK;
-}
-
-int riscv_resume_one_hart(struct target *target, int hartid)
-{
-	RISCV_INFO(r);
-	LOG_DEBUG("resuming hart %d", hartid);
-	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
-		return ERROR_FAIL;
-	if (!riscv_is_halted(target)) {
-		LOG_DEBUG("  hart %d requested resume, but was already resumed", hartid);
-		return ERROR_OK;
-	}
-
-	r->on_resume(target);
-	return r->resume_current_hart(target);
 }
 
 int riscv_step_rtos_hart(struct target *target)

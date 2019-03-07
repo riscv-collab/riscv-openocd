@@ -2822,7 +2822,7 @@ struct target_type riscv013_target = {
 
 	.poll = &riscv_openocd_poll,
 	.halt = &riscv_openocd_halt,
-	.resume = &riscv_openocd_resume,
+	.resume = &riscv_resume,
 	.step = &riscv_openocd_step,
 
 	.assert_reset = assert_reset,
