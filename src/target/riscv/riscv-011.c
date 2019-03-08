@@ -1479,7 +1479,6 @@ static int examine(struct target *target)
 	}
 
 	RISCV_INFO(r);
-	r->hart_count = 1;
 
 	riscv011_info_t *info = get_info(target);
 	info->addrbits = get_field(dtmcontrol, DTMCONTROL_ADDRBITS);
@@ -1925,8 +1924,10 @@ static int riscv011_poll(struct target *target)
 static int riscv011_resume(struct target *target, int current,
 		target_addr_t address, int handle_breakpoints, int debug_execution)
 {
+	RISCV_INFO(r);
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
+	r->prepped = false;
 	return resume(target, debug_execution, false);
 }
 

@@ -857,7 +857,7 @@ int riscv_resume_prep_all_harts(struct target *target)
 		if (riscv_set_current_hartid(target, i) != ERROR_OK)
 			return ERROR_FAIL;
 		if (riscv_is_halted(target)) {
-			if (r->on_resume(target) != ERROR_OK)
+			if (r->resume_prep(target) != ERROR_OK)
 				return ERROR_FAIL;
 		} else {
 			LOG_DEBUG("  hart %d requested resume, but was already resumed", i);
@@ -919,6 +919,8 @@ static int resume_prep(struct target *target, int current,
 	if (r->is_halted) {
 		return riscv_resume_prep_all_harts(target);
 	}
+
+	r->prepped = true;
 
 	return ERROR_OK;
 }
@@ -2082,7 +2084,7 @@ int riscv_resume_all_harts(struct target *target)
 		if (riscv_set_current_hartid(target, i) != ERROR_OK)
 			return ERROR_FAIL;
 		if (riscv_is_halted(target)) {
-			if (r->resume_current_hart(target) != ERROR_OK)
+			if (r->resume_go(target) != ERROR_OK)
 				return ERROR_FAIL;
 		} else {
 			LOG_DEBUG("  hart %d requested resume, but was already resumed", i);
@@ -2215,9 +2217,9 @@ int riscv_count_harts(struct target *target)
 	if (target == NULL)
 		return 1;
 	RISCV_INFO(r);
-	if (r == NULL)
+	if (r == NULL || r->hart_count == NULL)
 		return 1;
-	return r->hart_count;
+	return r->hart_count(target);
 }
 
 bool riscv_has_register(struct target *target, int hartid, int regid)
