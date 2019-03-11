@@ -32,7 +32,8 @@
 #define DMI_PROGBUF1 (DMI_PROGBUF0 + 1)
 
 static int riscv013_on_step_or_resume(struct target *target, bool step);
-static int riscv013_step_or_resume_current_hart(struct target *target, bool step);
+static int riscv013_step_or_resume_current_hart(struct target *target,
+		bool step, bool use_hasel);
 static void riscv013_clear_abstract_error(struct target *target);
 
 /* Implementations of the functions in riscv_info_t. */
@@ -253,6 +254,7 @@ dm013_info_t *get_dm(struct target *target)
 	}
 
 	if (!dm) {
+		LOG_DEBUG("[%d] Allocating new DM", target->coreid);
 		dm = calloc(1, sizeof(dm013_info_t));
 		dm->abs_chain_position = abs_chain_position;
 		dm->current_hartid = -1;
@@ -1560,7 +1562,7 @@ static int examine(struct target *target)
 				r->misa[i]);
 
 		if (!halted)
-			riscv013_step_or_resume_current_hart(target, false);
+			riscv013_step_or_resume_current_hart(target, false, false);
 	}
 
 	target_set_examined(target);
@@ -2967,31 +2969,51 @@ static int riscv013_halt_current_hart(struct target *target)
 static int select_prepped_harts(struct target *target)
 {
 	dm013_info_t *dm = get_dm(target);
+	assert(dm->hart_count);
+	unsigned hawindow_count = (dm->hart_count + 31) / 32;
+	uint32_t hawindow[hawindow_count];
+
+	memset(hawindow, 0, sizeof(uint32_t) * hawindow_count);
 
 	target_list_t *entry;
 	list_for_each_entry(entry, &dm->target_list, list) {
 		struct target *t = entry->target;
 		riscv_info_t *r = riscv_info(t);
+		riscv013_info_t *info = get_info(t);
+		unsigned index = info->index;
+		LOG_DEBUG("index=%d, coreid=%d, prepped=%d", index, t->coreid, r->prepped);
 		if (r->prepped) {
+			hawindow[index / 32] |= 1 << (index % 32);
 			r->prepped = false;
-			return ERROR_FAIL;
 		}
+		index++;
 	}
+
+	for (unsigned i = 0; i < hawindow_count; i++) {
+		if (dmi_write(target, DMI_HAWINDOWSEL, 0) != ERROR_OK)
+			return ERROR_FAIL;
+		if (dmi_write(target, DMI_HAWINDOW, hawindow[i]) != ERROR_OK)
+			return ERROR_FAIL;
+	}
+
 	return ERROR_OK;
 }
 
 static int riscv013_resume_go(struct target *target)
 {
-	select_prepped_harts(target);
-	//if (select_prepped_harts(target) != ERROR_OK)
-		//return ERROR_FAIL;
+	bool use_hasel = false;
+	if (!riscv_rtos_enabled(target)) {
+		if (select_prepped_harts(target) != ERROR_OK)
+			return ERROR_FAIL;
+		use_hasel = true;
+	}
 
-	return riscv013_step_or_resume_current_hart(target, false);
+	return riscv013_step_or_resume_current_hart(target, false, use_hasel);
 }
 
 static int riscv013_step_current_hart(struct target *target)
 {
-	return riscv013_step_or_resume_current_hart(target, true);
+	return riscv013_step_or_resume_current_hart(target, true, false);
 }
 
 static int riscv013_resume_prep(struct target *target)
@@ -3497,7 +3519,8 @@ static int riscv013_on_step_or_resume(struct target *target, bool step)
 	return riscv_set_register(target, GDB_REGNO_DCSR, dcsr);
 }
 
-static int riscv013_step_or_resume_current_hart(struct target *target, bool step)
+static int riscv013_step_or_resume_current_hart(struct target *target,
+		bool step, bool use_hasel)
 {
 	RISCV_INFO(r);
 	LOG_DEBUG("resuming hart %d (for step?=%d)", r->current_hartid, step);
@@ -3507,9 +3530,14 @@ static int riscv013_step_or_resume_current_hart(struct target *target, bool step
 	}
 
 	/* Issue the resume command, and then wait for the current hart to resume. */
-	uint32_t dmcontrol = DMI_DMCONTROL_DMACTIVE;
+	uint32_t dmcontrol = DMI_DMCONTROL_DMACTIVE | DMI_DMCONTROL_RESUMEREQ;
+	if (use_hasel)
+		dmcontrol |= DMI_DMCONTROL_HASEL;
 	dmcontrol = set_hartsel(dmcontrol, r->current_hartid);
-	dmi_write(target, DMI_DMCONTROL, dmcontrol | DMI_DMCONTROL_RESUMEREQ);
+	dmi_write(target, DMI_DMCONTROL, dmcontrol);
+
+	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_HASEL, 0);
+	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_RESUMEREQ, 0);
 
 	uint32_t dmstatus;
 	for (size_t i = 0; i < 256; ++i) {
@@ -3525,10 +3553,9 @@ static int riscv013_step_or_resume_current_hart(struct target *target, bool step
 		return ERROR_OK;
 	}
 
+	dmi_write(target, DMI_DMCONTROL, dmcontrol);
+
 	LOG_ERROR("unable to resume hart %d", r->current_hartid);
-	if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
-		return ERROR_FAIL;
-	LOG_ERROR("  dmcontrol=0x%08x", dmcontrol);
 	if (dmstatus_read(target, &dmstatus, true) != ERROR_OK)
 		return ERROR_FAIL;
 	LOG_ERROR("  dmstatus =0x%08x", dmstatus);
@@ -3640,7 +3667,7 @@ int riscv013_test_compliance(struct target *target)
 
 	/* resumereq */
 	/* This bit is not actually readable according to the spec, so nothing to check.*/
-	COMPLIANCE_MUST_PASS(riscv_resume_all_harts(target));
+	COMPLIANCE_MUST_PASS(riscv_resume(target, true, 0, false, false));
 
 	/* Halt all harts again so the test can continue.*/
 	COMPLIANCE_MUST_PASS(riscv_halt_all_harts(target));

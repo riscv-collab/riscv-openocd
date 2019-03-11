@@ -110,7 +110,8 @@ typedef struct {
 	bool (*is_halted)(struct target *target);
 	int (*halt_current_hart)(struct target *);
 	/* Resume this target, as well as every other prepped target that can be
-	 * resumed near-simultaneously. */
+	 * resumed near-simultaneously. Clear the prepped flag on any target that
+	 * was resumed. */
 	int (*resume_go)(struct target *target);
 	int (*step_current_hart)(struct target *target);
 	int (*on_halt)(struct target *target);
@@ -198,7 +199,6 @@ void riscv_info_init(struct target *target, riscv_info_t *r);
  * the system. */
 int riscv_halt_all_harts(struct target *target);
 int riscv_halt_one_hart(struct target *target, int hartid);
-int riscv_resume_all_harts(struct target *target);
 
 /* Steps the hart that's currently selected in the RTOS, or if there is no RTOS
  * then the only hart. */

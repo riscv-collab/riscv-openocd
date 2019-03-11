@@ -199,6 +199,8 @@ range_t *expose_csr;
 /* Same, but for custom registers. */
 range_t *expose_custom;
 
+static int riscv_resume_go_all_harts(struct target *target);
+
 static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 {
 	struct scan_field field;
@@ -917,9 +919,11 @@ static int resume_prep(struct target *target, int current,
 	}
 
 	if (r->is_halted) {
-		return riscv_resume_prep_all_harts(target);
+		if (riscv_resume_prep_all_harts(target) != ERROR_OK)
+			return ERROR_FAIL;
 	}
 
+	LOG_DEBUG("[%d] mark as prepped", target->coreid);
 	r->prepped = true;
 
 	return ERROR_OK;
@@ -939,14 +943,18 @@ static int resume_go(struct target *target, int current,
 		result = tt->resume(target, current, address, handle_breakpoints,
 				debug_execution);
 	} else {
-		result = riscv_resume_all_harts(target);
+		result = riscv_resume_go_all_harts(target);
 	}
 
-	target->state = TARGET_RUNNING;
-	register_cache_invalidate(target->reg_cache);
-	target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
-
 	return result;
+}
+
+static int resume_finish(struct target *target)
+{
+	register_cache_invalidate(target->reg_cache);
+
+	target->state = TARGET_RUNNING;
+	return target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
 }
 
 int riscv_resume(
@@ -968,9 +976,18 @@ int riscv_resume(
 
 		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
 			struct target *t = tlist->target;
-			if (resume_go(t, current, address, handle_breakpoints,
-						debug_execution) != ERROR_OK)
-				result = ERROR_FAIL;
+			riscv_info_t *i = riscv_info(t);
+			if (i->prepped) {
+				if (resume_go(t, current, address, handle_breakpoints,
+							debug_execution) != ERROR_OK)
+					result = ERROR_FAIL;
+			}
+		}
+
+		for (struct target_list *tlist = target->head; tlist; tlist = tlist->next) {
+			struct target *t = tlist->target;
+			if (resume_finish(t) != ERROR_OK)
+				return ERROR_FAIL;
 		}
 
 	} else {
@@ -980,6 +997,8 @@ int riscv_resume(
 		if (resume_go(target, current, address, handle_breakpoints,
 					debug_execution) != ERROR_OK)
 			result = ERROR_FAIL;
+		if (resume_finish(target) != ERROR_OK)
+			return ERROR_FAIL;
 	}
 
 	return result;
@@ -2073,7 +2092,7 @@ int riscv_halt_one_hart(struct target *target, int hartid)
 	return result;
 }
 
-int riscv_resume_all_harts(struct target *target)
+static int riscv_resume_go_all_harts(struct target *target)
 {
 	RISCV_INFO(r);
 	for (int i = 0; i < riscv_count_harts(target); ++i) {
