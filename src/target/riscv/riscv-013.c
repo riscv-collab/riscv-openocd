@@ -157,6 +157,7 @@ typedef struct {
 	struct list_head target_list;
 	/* The currently selected hartid on this DM. */
 	int current_hartid;
+	bool hasel_supported;
 } dm013_info_t;
 
 typedef struct {
@@ -1419,7 +1420,8 @@ static int examine(struct target *target)
 	}
 
 	dmi_write(target, DMI_DMCONTROL, DMI_DMCONTROL_HARTSELLO |
-			DMI_DMCONTROL_HARTSELHI | DMI_DMCONTROL_DMACTIVE);
+			DMI_DMCONTROL_HARTSELHI | DMI_DMCONTROL_DMACTIVE |
+			DMI_DMCONTROL_HASEL);
 	uint32_t dmcontrol;
 	if (dmi_read(target, &dmcontrol, DMI_DMCONTROL) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1429,6 +1431,8 @@ static int examine(struct target *target)
 				dmcontrol);
 		return ERROR_FAIL;
 	}
+
+	dm->hasel_supported = get_field(dmcontrol, DMI_DMCONTROL_HASEL);
 
 	uint32_t dmstatus;
 	if (dmstatus_read(target, &dmstatus, false) != ERROR_OK)
@@ -2966,9 +2970,18 @@ static int riscv013_halt_current_hart(struct target *target)
 	return ERROR_OK;
 }
 
-static int select_prepped_harts(struct target *target)
+/* Select all harts that were prepped and that are selectable, clearing the
+ * prepped flag on the harts that actually were selected. */
+static int select_prepped_harts(struct target *target, bool *use_hasel)
 {
 	dm013_info_t *dm = get_dm(target);
+	if (!dm->hasel_supported) {
+		RISCV_INFO(r);
+		r->prepped = false;
+		*use_hasel = false;
+		return ERROR_OK;
+	}
+
 	assert(dm->hart_count);
 	unsigned hawindow_count = (dm->hart_count + 31) / 32;
 	uint32_t hawindow[hawindow_count];
@@ -2976,6 +2989,7 @@ static int select_prepped_harts(struct target *target)
 	memset(hawindow, 0, sizeof(uint32_t) * hawindow_count);
 
 	target_list_t *entry;
+	unsigned total_selected = 0;
 	list_for_each_entry(entry, &dm->target_list, list) {
 		struct target *t = entry->target;
 		riscv_info_t *r = riscv_info(t);
@@ -2985,8 +2999,15 @@ static int select_prepped_harts(struct target *target)
 		if (r->prepped) {
 			hawindow[index / 32] |= 1 << (index % 32);
 			r->prepped = false;
+			total_selected++;
 		}
 		index++;
+	}
+
+	/* Don't use hasel if we only need to talk to one hart. */
+	if (total_selected <= 1) {
+		*use_hasel = false;
+		return ERROR_OK;
 	}
 
 	for (unsigned i = 0; i < hawindow_count; i++) {
@@ -2996,6 +3017,7 @@ static int select_prepped_harts(struct target *target)
 			return ERROR_FAIL;
 	}
 
+	*use_hasel = true;
 	return ERROR_OK;
 }
 
@@ -3003,9 +3025,8 @@ static int riscv013_resume_go(struct target *target)
 {
 	bool use_hasel = false;
 	if (!riscv_rtos_enabled(target)) {
-		if (select_prepped_harts(target) != ERROR_OK)
+		if (select_prepped_harts(target, &use_hasel) != ERROR_OK)
 			return ERROR_FAIL;
-		use_hasel = true;
 	}
 
 	return riscv013_step_or_resume_current_hart(target, false, use_hasel);
