@@ -1321,6 +1321,15 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 			return ERROR_FAIL;
 	}
 
+	/*
+	 * ROCK erratum: The DPC CSR correctly retains only the low 40 bits of
+	 * the PC. Do the sign-extending from bit 39 of DPC.
+	 */
+	if (number == GDB_REGNO_PC || number == GDB_REGNO_DPC) {
+		if (*value & (1UL << 39))
+			*value |= 0xffffff0000000000UL;
+	}
+
 	if (result == ERROR_OK) {
 		LOG_DEBUG("{%d} reg[0x%x] = 0x%" PRIx64, riscv_current_hartid(target),
 				number, *value);

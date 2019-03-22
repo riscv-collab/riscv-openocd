@@ -1818,6 +1818,13 @@ static riscv_error_t handle_halt_routine(struct target *target)
 	info->dpc = reg_cache_get(target, CSR_DPC);
 	info->dcsr = reg_cache_get(target, CSR_DCSR);
 
+	/*
+	 * ROCK erratum: The DPC CSR correctly retains only the low 40 bits of
+	 * the PC. Do the sign-extending from bit 39 of DPC.
+	 */
+	if (info->dpc & (1UL << 39))
+		info->dpc |= 0xffffff0000000000UL;
+
 	cache_invalidate(target);
 
 	return RE_OK;
