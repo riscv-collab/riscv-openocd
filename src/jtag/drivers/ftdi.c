@@ -577,6 +577,12 @@ static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
 	unsigned scan_size = 0;
 	struct scan_field *field;
 	int i;
+
+	if (cmd->cmd.scan->ir_scan && cmd->cmd.scan->num_fields == 1) {
+		cmd->cmd.scan->fields[0].num_bits = 5;  /* need to override.  This is a tunneled IR scan, not a scan of the BSCAN TAP's IR,
+							   so the width is actually 5, by definition */
+	}
+
 	
 	for (i = 0, field = cmd->cmd.scan->fields; i < cmd->cmd.scan->num_fields; i++, field++) {
 		scan_size += field->num_bits;
