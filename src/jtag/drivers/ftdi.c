@@ -504,49 +504,39 @@ static void ftdi_execute_pathmove(struct jtag_command *cmd)
 }
 
 #if BUILD_FTDI_BSCAN == 1
-static void bscan_shift(bool traverse_to_end_state, const uint8_t *out, unsigned out_offset, uint8_t *in,
+static void bscan_shift_and_traverse_to_end_state(const uint8_t *out, unsigned out_offset, uint8_t *in,
 				    unsigned in_offset, unsigned length)
 {
-	if (traverse_to_end_state) {
-		DO_CLOCK_DATA(mpsse_ctx,
-			      out,
-			      out_offset,
-			      in,
-			      in_offset,
-			      length - 1,
-			      ftdi_jtag_mode);
-		uint8_t last_bit = 0;
-		if (out)
-			bit_copy(&last_bit, 0, out, length - 1, 1);
-		uint8_t tms_bits = 0x01;
-		DO_CLOCK_TMS_CS(mpsse_ctx,
-				&tms_bits,
-				0,
-				in,
-				in_offset + length - 1,
-				1,
-				last_bit,
-				ftdi_jtag_mode);
-		tap_set_state(tap_state_transition(tap_get_state(), 1));
-		DO_CLOCK_TMS_CS_OUT(mpsse_ctx,
-				    &tms_bits,
-				    1,
-				    1,
-				    0,
-				    ftdi_jtag_mode);
-		tap_set_state(tap_state_transition(tap_get_state(), 0));
+	DO_CLOCK_DATA(mpsse_ctx,
+		      out,
+		      out_offset,
+		      in,
+		      in_offset,
+		      length - 1,
+		      ftdi_jtag_mode);
+	uint8_t last_bit = 0;
+	if (out)
+		bit_copy(&last_bit, 0, out, length - 1, 1);
+	uint8_t tms_bits = 0x01;
+	DO_CLOCK_TMS_CS(mpsse_ctx,
+			&tms_bits,
+			0,
+			in,
+			in_offset + length - 1,
+			1,
+			last_bit,
+			ftdi_jtag_mode);
+	tap_set_state(tap_state_transition(tap_get_state(), 1));
+	DO_CLOCK_TMS_CS_OUT(mpsse_ctx,
+			    &tms_bits,
+			    1,
+			    1,
+			    0,
+			    ftdi_jtag_mode);
+	tap_set_state(tap_state_transition(tap_get_state(), 0));
 
-		if (tap_get_state() != tap_get_end_state())
-			move_to_state(tap_get_end_state());
-	} else {
-		DO_CLOCK_DATA(mpsse_ctx,
-			      out,
-			      out_offset,
-			      in,
-			      in_offset,
-			      length,
-			      ftdi_jtag_mode);
-	}		
+	if (tap_get_state() != tap_get_end_state())
+		move_to_state(tap_get_end_state());
 }
 
 
@@ -576,7 +566,7 @@ static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
 		
 	// Do the 6-bit IR scan of 0x23 (USER4)
 
-	bscan_shift(true, &bscan_ir_user, 0, NULL, 0, bscan_ir_user_width);
+	bscan_shift_and_traverse_to_end_state(&bscan_ir_user, 0, NULL, 0, bscan_ir_user_width);
 		
 	if (tap_get_state() != tap_get_end_state())
 		move_to_state(tap_get_end_state());
@@ -650,7 +640,7 @@ static void ftdi_execute_scan_via_bscan(struct jtag_command *cmd)
 	
 
 	// shift in epilogue (3 bits of value zero), exiting shift state and traversing to idle state
-	bscan_shift(true, &epilogue, 0, NULL, 0, 3);	
+	bscan_shift_and_traverse_to_end_state(&epilogue, 0, NULL, 0, 3);	
 
 	if (tap_get_state() != tap_get_end_state())
 		move_to_state(tap_get_end_state());
