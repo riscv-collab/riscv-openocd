@@ -3011,7 +3011,7 @@ static int select_prepped_harts(struct target *target, bool *use_hasel)
 	}
 
 	for (unsigned i = 0; i < hawindow_count; i++) {
-		if (dmi_write(target, DMI_HAWINDOWSEL, 0) != ERROR_OK)
+		if (dmi_write(target, DMI_HAWINDOWSEL, i) != ERROR_OK)
 			return ERROR_FAIL;
 		if (dmi_write(target, DMI_HAWINDOW, hawindow[i]) != ERROR_OK)
 			return ERROR_FAIL;
