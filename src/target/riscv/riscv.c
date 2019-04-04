@@ -170,6 +170,44 @@ struct scan_field select_idcode = {
 	.out_value = ir_idcode
 };
 
+#if BUILD_RISCV_ARTY_BSCAN == 1
+
+uint8_t ir_user4[4] = {0x23};
+struct scan_field select_user4 = {
+	.in_value = NULL,
+	.out_value = ir_user4
+};
+
+
+uint8_t zero[4] = {0};
+uint8_t one[4] = {1};
+uint8_t tunneled_ir_width[4] = {5};  /* overridden by assignment in riscv_init_target */
+struct scan_field _bscan_tunneled_select_dmi[] = {
+		{
+			.num_bits = 1,
+			.out_value = zero,
+			.in_value = NULL,
+		},
+		{
+			.num_bits = 7,
+			.out_value = tunneled_ir_width,
+			.in_value = NULL,
+		},
+		{
+			.num_bits = 0, /* initialized in riscv_init_target to ir width of DM */
+			.out_value = ir_dbus,
+			.in_value = NULL,
+		},
+		{
+			.num_bits = 3,
+			.out_value = zero,
+			.in_value = NULL,
+		}
+};
+struct scan_field *bscan_tunneled_select_dmi = _bscan_tunneled_select_dmi;
+uint32_t bscan_tunneled_select_dmi_num_fields = sizeof(bscan_tunneled_select_dmi)/sizeof(bscan_tunneled_select_dmi[0]);
+#endif
+
 struct trigger {
 	uint64_t address;
 	uint32_t length;
@@ -265,6 +303,15 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 	select_dtmcontrol.num_bits = target->tap->ir_length;
 	select_dbus.num_bits = target->tap->ir_length;
 	select_idcode.num_bits = target->tap->ir_length;
+
+#if BUILD_RISCV_ARTY_BSCAN == 1
+	if (target->bscan_tunnel_ir_width != 0) {
+		select_user4.num_bits = target->bscan_tunnel_ir_width;		
+		tunneled_ir_width[0] = target->bscan_tunnel_ir_width;
+		bscan_tunneled_select_dmi[2].num_bits = target->bscan_tunnel_ir_width;
+	}
+	
+#endif	
 
 	riscv_semihosting_init(target);
 
