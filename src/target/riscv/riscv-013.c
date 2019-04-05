@@ -405,10 +405,57 @@ static void dump_field(int idle, const struct scan_field *field)
 /*** Utility functions. ***/
 
 #if BUILD_RISCV_ARTY_BSCAN == 1
+
+uint8_t bscan_zero[4] = {0};
+uint8_t bscan_one[4] = {1};
+
+
 static void select_dmi_via_bscan(struct target *target)
 {
 	jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
 	jtag_add_dr_scan(target->tap, bscan_tunneled_select_dmi_num_fields, bscan_tunneled_select_dmi, TAP_IDLE);
+}
+
+static void dmi_scan_via_bscan(struct target *target, uint8_t *out, uint8_t *in, unsigned num_bytes, size_t num_bits)
+{
+	jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
+
+	uint8_t out_right_shifted_by_one[num_bytes];
+	uint8_t tunneled_dr_width[4] = {num_bits};
+
+	memcpy(out_right_shifted_by_one, out, num_bytes);
+	buffer_shr(out_right_shifted_by_one, num_bytes, 1);
+		
+	struct scan_field tunneled_dr[] = {
+		{
+			.num_bits = 1,
+			.out_value = bscan_one,
+			.in_value = NULL,
+		},
+		{
+			.num_bits = 7,
+			.out_value = tunneled_dr_width,
+			.in_value = NULL,
+		},
+		/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so splitting the DR payload into 2 fields */
+		{
+			.num_bits = 1,
+			.out_value = out,
+			.in_value = NULL,
+		},
+		{
+			.num_bits = num_bits,
+			.out_value = out_right_shifted_by_one,
+			.in_value = in,
+		},
+		{
+			.num_bits = 3,
+			.out_value = bscan_zero,
+			.in_value = NULL,
+		}
+	};
+		
+	jtag_add_dr_scan(target->tap, DIM(tunneled_dr), tunneled_dr, TAP_IDLE);		
 }
 
 static uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
@@ -416,9 +463,6 @@ static uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	/* jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);	*/
 
 	/* On BSCAN TAP: Select IR=USER4, issue tunneled IR scan via BSCAN TAP's DR */
-
-	uint8_t zero[4] = {0};
-	uint8_t one[4] = {1};
 	uint8_t tunneled_ir_width[4] = {target->bscan_tunnel_ir_width};
 	uint8_t tunneled_dr_width[4] = {32};
 	uint8_t out_0[4] = {out & 0x1};
@@ -430,7 +474,7 @@ static uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	struct scan_field tunneled_ir[] = {
 		{
 			.num_bits = 1,
-			.out_value = zero,
+			.out_value = bscan_zero,
 			.in_value = NULL,
 		},
 		{
@@ -445,7 +489,7 @@ static uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		},
 		{
 			.num_bits = 3,
-			.out_value = zero,
+			.out_value = bscan_zero,
 			.in_value = NULL,
 		}
 		
@@ -453,7 +497,7 @@ static uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	struct scan_field tunneled_dr[] = {
 		{
 			.num_bits = 1,
-			.out_value = one,
+			.out_value = bscan_one,
 			.in_value = NULL,
 		},
 		{
@@ -461,7 +505,7 @@ static uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 			.out_value = tunneled_dr_width,
 			.in_value = NULL,
 		},
-		/* for BSCAN tunnel. there is a one TCK skew between shift in and shift out, so splitting the DR payload into 2 fields */
+		/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so splitting the DR payload into 2 fields */
 		{
 			.num_bits = 1,
 			.out_value = out_0,
@@ -474,7 +518,7 @@ static uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		},
 		{
 			.num_bits = 3,
-			.out_value = zero,
+			.out_value = bscan_zero,
 			.in_value = NULL,
 		}
 	};
@@ -592,6 +636,54 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 	buf_set_u32(out, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, data_out);
 	buf_set_u32(out, DTM_DMI_ADDRESS_OFFSET, info->abits, address_out);
 
+#if BUILD_RISCV_ARTY_BSCAN == 1
+	/* I wanted to place this code in a different function, but the way JTAG command
+	   queueing works in the jtag handling functions, the scan fields either have to be
+	   heap allocated, global/static, or else they need to stay on the stack until 
+	   the jtag_execute_queue() call.  Heap or static fields in this case doesn't seem
+	   the best fit.  Declaring stack based field values in a subsidiary function call wouldn't
+	   work. */
+	if (target->bscan_tunnel_ir_width != 0) {
+		jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
+
+		uint8_t out_right_shifted_by_one[num_bytes];
+		uint8_t tunneled_dr_width[4] = {num_bits};
+
+		memcpy(out_right_shifted_by_one, out, num_bytes);
+		buffer_shr(out_right_shifted_by_one, num_bytes, 1);
+		
+		struct scan_field tunneled_dr[] = {
+			{
+				.num_bits = 1,
+				.out_value = bscan_one,
+				.in_value = NULL,
+			},
+			{
+				.num_bits = 7,
+				.out_value = tunneled_dr_width,
+				.in_value = NULL,
+			},
+			/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so splitting the DR payload into 2 fields */
+			{
+				.num_bits = 1,
+				.out_value = out,
+				.in_value = NULL,
+			},
+			{
+				.num_bits = num_bits,
+				.out_value = out_right_shifted_by_one,
+				.in_value = in,
+			},
+			{
+				.num_bits = 3,
+				.out_value = bscan_zero,
+				.in_value = NULL,
+			}
+		};
+		
+		jtag_add_dr_scan(target->tap, DIM(tunneled_dr), tunneled_dr, TAP_IDLE);		
+	} else
+#endif	
 	/* Assume dbus is already selected. */
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
