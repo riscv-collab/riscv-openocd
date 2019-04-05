@@ -169,6 +169,11 @@ extern struct scan_field select_idcode;
 extern struct scan_field select_user4;
 extern struct scan_field *bscan_tunneled_select_dmi;
 extern uint32_t bscan_tunneled_select_dmi_num_fields;
+extern uint8_t bscan_zero[4];
+extern uint8_t bscan_one[4];
+
+uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out);
+void select_dmi_via_bscan(struct target *target);
 #endif
 
 /*** OpenOCD Interface */
