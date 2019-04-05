@@ -179,18 +179,17 @@ struct scan_field select_user4 = {
 };
 
 
-uint8_t zero[4] = {0};
-uint8_t one[4] = {1};
-uint8_t tunneled_ir_width[4] = {5};  /* overridden by assignment in riscv_init_target */
+static uint8_t bscan_zero[4];
+uint8_t bscan_tunneled_ir_width[4] = {5};  /* overridden by assignment in riscv_init_target */
 struct scan_field _bscan_tunneled_select_dmi[] = {
 		{
 			.num_bits = 1,
-			.out_value = zero,
+			.out_value = bscan_zero,
 			.in_value = NULL,
 		},
 		{
 			.num_bits = 7,
-			.out_value = tunneled_ir_width,
+			.out_value = bscan_tunneled_ir_width,
 			.in_value = NULL,
 		},
 		{
@@ -200,7 +199,7 @@ struct scan_field _bscan_tunneled_select_dmi[] = {
 		},
 		{
 			.num_bits = 3,
-			.out_value = zero,
+			.out_value = bscan_zero,
 			.in_value = NULL,
 		}
 };
@@ -306,8 +305,8 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 
 #if BUILD_RISCV_ARTY_BSCAN == 1
 	if (target->bscan_tunnel_ir_width != 0) {
-		select_user4.num_bits = target->bscan_tunnel_ir_width;		
-		tunneled_ir_width[0] = target->bscan_tunnel_ir_width;
+		select_user4.num_bits = target->tap->ir_length;
+		bscan_tunneled_ir_width[0] = target->bscan_tunnel_ir_width;
 		bscan_tunneled_select_dmi[2].num_bits = target->bscan_tunnel_ir_width;
 	}
 	

@@ -416,47 +416,6 @@ static void select_dmi_via_bscan(struct target *target)
 	jtag_add_dr_scan(target->tap, bscan_tunneled_select_dmi_num_fields, bscan_tunneled_select_dmi, TAP_IDLE);
 }
 
-static void dmi_scan_via_bscan(struct target *target, uint8_t *out, uint8_t *in, unsigned num_bytes, size_t num_bits)
-{
-	jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
-
-	uint8_t out_right_shifted_by_one[num_bytes];
-	uint8_t tunneled_dr_width[4] = {num_bits};
-
-	memcpy(out_right_shifted_by_one, out, num_bytes);
-	buffer_shr(out_right_shifted_by_one, num_bytes, 1);
-		
-	struct scan_field tunneled_dr[] = {
-		{
-			.num_bits = 1,
-			.out_value = bscan_one,
-			.in_value = NULL,
-		},
-		{
-			.num_bits = 7,
-			.out_value = tunneled_dr_width,
-			.in_value = NULL,
-		},
-		/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so splitting the DR payload into 2 fields */
-		{
-			.num_bits = 1,
-			.out_value = out,
-			.in_value = NULL,
-		},
-		{
-			.num_bits = num_bits,
-			.out_value = out_right_shifted_by_one,
-			.in_value = in,
-		},
-		{
-			.num_bits = 3,
-			.out_value = bscan_zero,
-			.in_value = NULL,
-		}
-	};
-		
-	jtag_add_dr_scan(target->tap, DIM(tunneled_dr), tunneled_dr, TAP_IDLE);		
-}
 
 static uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 {
