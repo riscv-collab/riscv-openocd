@@ -255,11 +255,10 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	/* On BSCAN TAP: Select IR=USER4, issue tunneled IR scan via BSCAN TAP's DR */
 	uint8_t tunneled_ir_width[4] = {target->bscan_tunnel_ir_width};
 	uint8_t tunneled_dr_width[4] = {32};
-	uint8_t out_0[4] = {out & 0x1};
-	uint8_t out_31_1[4];
-	uint8_t in_value[4];
+	uint8_t out_value[5];
+	uint8_t in_value[5];
 
-	buf_set_u32(out_31_1, 0, 32, (out >> 1));
+	buf_set_u32(out_value, 0, 32, out);
 	
 	struct scan_field tunneled_ir[] = {
 		{
@@ -295,15 +294,11 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 			.out_value = tunneled_dr_width,
 			.in_value = NULL,
 		},
-		/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so splitting the DR payload into 2 fields */
+		/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out,
+		   so scanning 33 bits and then right shifting the in_value after the scan is completed */
 		{
-			.num_bits = 1,
-			.out_value = out_0,
-			.in_value = NULL,
-		},
-		{
-			.num_bits = 32,
-			.out_value = out_31_1,
+			.num_bits = 32+1,
+			.out_value = out_value,
 			.in_value = in_value,
 		},
 		{
@@ -324,7 +319,9 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		return retval;
 	}
 
-	uint32_t in = buf_get_u32(in_value, 0, 32);
+	/* Note the starting offset is bit 1, not bit 0.  In BSCAN tunnel, there is a one-bit TCK skew between
+	   output and input */
+	uint32_t in = buf_get_u32(in_value, 1, 32);
 	LOG_DEBUG("DTMCS: 0x%x -> 0x%x", out, in);
 
 	return in;

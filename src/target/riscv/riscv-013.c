@@ -508,12 +508,8 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 	if (target->bscan_tunnel_ir_width != 0) {
 		jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
 
-		uint8_t out_right_shifted_by_one[num_bytes];
 		uint8_t tunneled_dr_width[4] = {num_bits};
 
-		memcpy(out_right_shifted_by_one, out, num_bytes);
-		buffer_shr(out_right_shifted_by_one, num_bytes, 1);
-		
 		struct scan_field tunneled_dr[] = {
 			{
 				.num_bits = 1,
@@ -525,15 +521,11 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 				.out_value = tunneled_dr_width,
 				.in_value = NULL,
 			},
-			/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so splitting the DR payload into 2 fields */
+			/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so 
+			   scanning num_bits + 1, and then will right shift the input field after executing the queues */
 			{
-				.num_bits = 1,
+				.num_bits = num_bits+1,
 				.out_value = out,
-				.in_value = NULL,
-			},
-			{
-				.num_bits = num_bits,
-				.out_value = out_right_shifted_by_one,
 				.in_value = in,
 			},
 			{
@@ -561,6 +553,13 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 		LOG_ERROR("dmi_scan failed jtag scan");
 		return DMI_STATUS_FAILED;
 	}
+
+#if BUILD_RISCV_ARTY_BSCAN == 1
+	if (target->bscan_tunnel_ir_width != 0) {
+		/* need to right-shift "in" by one bit, because of clock skew between BSCAN TAP and DM TAP */
+		buffer_shr(in, num_bytes, 1);		
+	}
+#endif	
 
 	if (data_in)
 		*data_in = buf_get_u32(in, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH);
