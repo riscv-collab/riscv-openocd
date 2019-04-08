@@ -206,7 +206,7 @@ struct scan_field _bscan_tunneled_select_dmi[] = {
 		}
 };
 struct scan_field *bscan_tunneled_select_dmi = _bscan_tunneled_select_dmi;
-uint32_t bscan_tunneled_select_dmi_num_fields = sizeof(bscan_tunneled_select_dmi)/sizeof(bscan_tunneled_select_dmi[0]);
+uint32_t bscan_tunneled_select_dmi_num_fields = DIM(_bscan_tunneled_select_dmi);
 #endif
 
 struct trigger {
