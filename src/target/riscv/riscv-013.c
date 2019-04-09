@@ -411,7 +411,7 @@ static void select_dmi(struct target *target)
 		select_dmi_via_bscan(target);
 		return;
 	}
-#endif	
+#endif
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 }
 
@@ -422,10 +422,9 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 	uint8_t out_value[4];
 
 #if BUILD_RISCV_ARTY_BSCAN == 1
-	if (target->bscan_tunnel_ir_width != 0) {
+	if (target->bscan_tunnel_ir_width != 0)
 		return dtmcontrol_scan_via_bscan(target, out);
-	}
-#endif	
+#endif
 
 	buf_set_u32(out_value, 0, 32, out);
 
@@ -501,7 +500,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 #if BUILD_RISCV_ARTY_BSCAN == 1
 	/* I wanted to place this code in a different function, but the way JTAG command
 	   queueing works in the jtag handling functions, the scan fields either have to be
-	   heap allocated, global/static, or else they need to stay on the stack until 
+	   heap allocated, global/static, or else they need to stay on the stack until
 	   the jtag_execute_queue() call.  Heap or static fields in this case doesn't seem
 	   the best fit.  Declaring stack based field values in a subsidiary function call wouldn't
 	   work. */
@@ -521,7 +520,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 				.out_value = tunneled_dr_width,
 				.in_value = NULL,
 			},
-			/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so 
+			/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
 			   scanning num_bits + 1, and then will right shift the input field after executing the queues */
 			{
 				.num_bits = num_bits+1,
@@ -534,10 +533,10 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 				.in_value = NULL,
 			}
 		};
-		
-		jtag_add_dr_scan(target->tap, DIM(tunneled_dr), tunneled_dr, TAP_IDLE);		
+
+		jtag_add_dr_scan(target->tap, DIM(tunneled_dr), tunneled_dr, TAP_IDLE);
 	} else
-#endif	
+#endif
 	/* Assume dbus is already selected. */
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
@@ -557,9 +556,9 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 #if BUILD_RISCV_ARTY_BSCAN == 1
 	if (target->bscan_tunnel_ir_width != 0) {
 		/* need to right-shift "in" by one bit, because of clock skew between BSCAN TAP and DM TAP */
-		buffer_shr(in, num_bytes, 1);		
+		buffer_shr(in, num_bytes, 1);
 	}
-#endif	
+#endif
 
 	if (data_in)
 		*data_in = buf_get_u32(in, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH);

@@ -259,7 +259,7 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	uint8_t in_value[5];
 
 	buf_set_u32(out_value, 0, 32, out);
-	
+
 	struct scan_field tunneled_ir[] = {
 		{
 			.num_bits = 1,
@@ -281,7 +281,6 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 			.out_value = bscan_zero,
 			.in_value = NULL,
 		}
-		
 	};
 	struct scan_field tunneled_dr[] = {
 		{
@@ -337,11 +336,10 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 	uint8_t out_value[4];
 
 #if BUILD_RISCV_ARTY_BSCAN == 1
-	if (target->bscan_tunnel_ir_width != 0) {
+	if (target->bscan_tunnel_ir_width != 0)
 		return dtmcontrol_scan_via_bscan(target, out);
-	}
-#endif	
-	
+#endif
+
 
 	buf_set_u32(out_value, 0, 32, out);
 
@@ -408,8 +406,7 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 		bscan_tunneled_ir_width[0] = target->bscan_tunnel_ir_width;
 		bscan_tunneled_select_dmi[2].num_bits = target->bscan_tunnel_ir_width;
 	}
-	
-#endif	
+#endif
 
 	riscv_semihosting_init(target);
 

@@ -210,9 +210,9 @@ struct target {
 
 	/* The semihosting information, extracted from the target. */
 	struct semihosting *semihosting;
-#if BUILD_RISCV_ARTY_BSCAN == 1	
+#if BUILD_RISCV_ARTY_BSCAN == 1
 	int bscan_tunnel_ir_width;  /* if zero, then tunneling is not present/active */
-#endif	
+#endif
 };
 
 struct target_list {

@@ -4603,7 +4603,7 @@ enum target_cfg_param {
 	TCFG_RTOS,
 	TCFG_DEFER_EXAMINE,
 	TCFG_GDB_PORT,
-	TCFG_BSCAN_TUNNEL_IR_WIDTH,	
+	TCFG_BSCAN_TUNNEL_IR_WIDTH,
 };
 
 static Jim_Nvp nvp_config_opts[] = {
@@ -4621,8 +4621,8 @@ static Jim_Nvp nvp_config_opts[] = {
 	{ .name = "-defer-examine",    .value = TCFG_DEFER_EXAMINE },
 	{ .name = "-gdb-port",         .value = TCFG_GDB_PORT },
 #if BUILD_RISCV_ARTY_BSCAN == 1
-	{ .name = "-bscan-tunnel-ir-width",     .value = TCFG_BSCAN_TUNNEL_IR_WIDTH },	
-#endif	
+	{ .name = "-bscan-tunnel-ir-width",     .value = TCFG_BSCAN_TUNNEL_IR_WIDTH },
+#endif
 	{ .name = NULL, .value = -1 }
 };
 
@@ -4924,7 +4924,7 @@ no_params:
 			Jim_SetResultString(goi->interp, target->gdb_port_override ? : "undefined", -1);
 			/* loop for more */
 			break;
-			
+
 		case TCFG_BSCAN_TUNNEL_IR_WIDTH:
 			if (goi->isconfigure) {
 				e = Jim_GetOpt_Wide(goi, &w);

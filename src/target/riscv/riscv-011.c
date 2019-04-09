@@ -282,10 +282,9 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 	uint8_t out_value[4];
 
 #if BUILD_RISCV_ARTY_BSCAN == 1
-	if (target->bscan_tunnel_ir_width != 0) {
+	if (target->bscan_tunnel_ir_width != 0)
 		return dtmcontrol_scan_via_bscan(target, out);
-	}
-#endif	
+#endif
 
 	buf_set_u32(out_value, 0, 32, out);
 
