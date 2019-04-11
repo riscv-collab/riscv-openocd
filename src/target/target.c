@@ -4603,9 +4603,9 @@ enum target_cfg_param {
 	TCFG_RTOS,
 	TCFG_DEFER_EXAMINE,
 	TCFG_GDB_PORT,
-#if BUILD_RISCV_ARTY_BSCAN == 1	
+#if BUILD_RISCV_ARTY_BSCAN == 1
 	TCFG_BSCAN_TUNNEL_IR_WIDTH,
-#endif	
+#endif
 };
 
 static Jim_Nvp nvp_config_opts[] = {
@@ -4941,7 +4941,7 @@ no_params:
 			Jim_SetResult(goi->interp, Jim_NewIntObj(goi->interp, target->bscan_tunnel_ir_width));
 			/* loop for more */
 			break;
-#endif			
+#endif
 		}
 	} /* while (goi->argc) */
 
