@@ -253,8 +253,8 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	/* On BSCAN TAP: Select IR=USER4, issue tunneled IR scan via BSCAN TAP's DR */
 	uint8_t tunneled_ir_width[4] = {bscan_tunnel_ir_width};
 	uint8_t tunneled_dr_width[4] = {32};
-	uint8_t out_value[5];
-	uint8_t in_value[5];
+	uint8_t out_value[5] = {0};
+	uint8_t in_value[5] = {0};
 
 	buf_set_u32(out_value, 0, 32, out);
 
