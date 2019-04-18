@@ -406,12 +406,10 @@ static void dump_field(int idle, const struct scan_field *field)
 
 static void select_dmi(struct target *target)
 {
-#if BUILD_RISCV_ARTY_BSCAN == 1
-	if (target->bscan_tunnel_ir_width != 0) {
+	if (bscan_tunnel_ir_width != 0) {
 		select_dmi_via_bscan(target);
 		return;
 	}
-#endif
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 }
 
@@ -421,10 +419,8 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 	uint8_t in_value[4];
 	uint8_t out_value[4];
 
-#if BUILD_RISCV_ARTY_BSCAN == 1
-	if (target->bscan_tunnel_ir_width != 0)
+	if (bscan_tunnel_ir_width != 0)
 		return dtmcontrol_scan_via_bscan(target, out);
-#endif
 
 	buf_set_u32(out_value, 0, 32, out);
 
@@ -497,14 +493,13 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 	buf_set_u32(out, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH, data_out);
 	buf_set_u32(out, DTM_DMI_ADDRESS_OFFSET, info->abits, address_out);
 
-#if BUILD_RISCV_ARTY_BSCAN == 1
 	/* I wanted to place this code in a different function, but the way JTAG command
 	   queueing works in the jtag handling functions, the scan fields either have to be
 	   heap allocated, global/static, or else they need to stay on the stack until
 	   the jtag_execute_queue() call.  Heap or static fields in this case doesn't seem
 	   the best fit.  Declaring stack based field values in a subsidiary function call wouldn't
 	   work. */
-	if (target->bscan_tunnel_ir_width != 0) {
+	if (bscan_tunnel_ir_width != 0) {
 		jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
 
 		uint8_t tunneled_dr_width[4] = {num_bits};
@@ -535,10 +530,10 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 		};
 
 		jtag_add_dr_scan(target->tap, DIM(tunneled_dr), tunneled_dr, TAP_IDLE);
-	} else
-#endif
-	/* Assume dbus is already selected. */
-	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
+	} else {
+		/* Assume dbus is already selected. */
+		jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
+	}
 
 	int idle_count = info->dmi_busy_delay;
 	if (exec)
@@ -553,12 +548,10 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 		return DMI_STATUS_FAILED;
 	}
 
-#if BUILD_RISCV_ARTY_BSCAN == 1
-	if (target->bscan_tunnel_ir_width != 0) {
+	if (bscan_tunnel_ir_width != 0) {
 		/* need to right-shift "in" by one bit, because of clock skew between BSCAN TAP and DM TAP */
 		buffer_shr(in, num_bytes, 1);
 	}
-#endif
 
 	if (data_in)
 		*data_in = buf_get_u32(in, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH);

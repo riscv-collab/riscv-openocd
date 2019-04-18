@@ -165,16 +165,16 @@ extern uint8_t ir_dbus[4];
 extern struct scan_field select_dbus;
 extern uint8_t ir_idcode[4];
 extern struct scan_field select_idcode;
-#if BUILD_RISCV_ARTY_BSCAN == 1
+
 extern struct scan_field select_user4;
 extern struct scan_field *bscan_tunneled_select_dmi;
 extern uint32_t bscan_tunneled_select_dmi_num_fields;
 extern uint8_t bscan_zero[4];
 extern uint8_t bscan_one[4];
+extern int bscan_tunnel_ir_width;
 
 uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out);
 void select_dmi_via_bscan(struct target *target);
-#endif
 
 /*** OpenOCD Interface */
 int riscv_openocd_poll(struct target *target);
