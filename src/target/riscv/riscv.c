@@ -248,8 +248,6 @@ void select_dmi_via_bscan(struct target *target)
 
 uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 {
-	/* jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);	*/
-
 	/* On BSCAN TAP: Select IR=USER4, issue tunneled IR scan via BSCAN TAP's DR */
 	uint8_t tunneled_ir_width[4] = {bscan_tunnel_ir_width};
 	uint8_t tunneled_dr_width[4] = {32};
@@ -2089,8 +2087,10 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "use_bscan_tunnel",
 		.handler = riscv_use_bscan_tunnel,
 		.mode = COMMAND_ANY,
-		.usage = "riscv use_bscan_tunnel dm_ir_width",
-		.help = "Enable or disable use of a BSCAN tunnel to reach DM.  Supply value of 0 to disable."
+		.usage = "riscv use_bscan_tunnel value",
+		.help = "Enable or disable use of a BSCAN tunnel to reach DM.  Supply "
+			"the width of the DM transport TAP's instruction register to "
+			"enable.  Supply a value of 0 to disable."
 	},
 	COMMAND_REGISTRATION_DONE
 };

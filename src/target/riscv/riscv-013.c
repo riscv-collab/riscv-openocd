@@ -502,7 +502,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 	if (bscan_tunnel_ir_width != 0) {
 		jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
 
-		uint8_t tunneled_dr_width[4] = {num_bits};
+		uint8_t tunneled_dr_width = num_bits;
 
 		struct scan_field tunneled_dr[] = {
 			{
@@ -512,7 +512,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 			},
 			{
 				.num_bits = 7,
-				.out_value = tunneled_dr_width,
+				.out_value = &tunneled_dr_width,
 				.in_value = NULL,
 			},
 			/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
