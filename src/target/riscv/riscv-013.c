@@ -476,6 +476,8 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 		.out_value = out,
 		.in_value = in
 	};
+	uint8_t tunneled_dr_width;
+	struct scan_field tunneled_dr[4];
 
 	if (r->reset_delays_wait >= 0) {
 		r->reset_delays_wait--;
@@ -502,32 +504,29 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 	if (bscan_tunnel_ir_width != 0) {
 		jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
 
-		uint8_t tunneled_dr_width = num_bits;
+		/* I wanted to use struct initialization syntax, but that would involve either
+		   declaring the variable within this scope (which would go out of scope at runtime
+		   before the JTAG queue gets executed, which is an error waiting to happen), or
+		   initializing outside of the check for whether a BSCAN tunnel was active (which
+		   would be a waste of CPU time when BSCAN tunnel is not being used. So I declared the
+		   struct at the function's top-level, so it's lifetime exceeds the point at which
+		   the queue is executed, and initializing with assignments here. */
+		memset(tunneled_dr, 0, sizeof(tunneled_dr));
+		tunneled_dr[0].num_bits = 1;
+		tunneled_dr[0].out_value = bscan_one;
 
-		struct scan_field tunneled_dr[] = {
-			{
-				.num_bits = 1,
-				.out_value = bscan_one,
-				.in_value = NULL,
-			},
-			{
-				.num_bits = 7,
-				.out_value = &tunneled_dr_width,
-				.in_value = NULL,
-			},
-			/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
-			   scanning num_bits + 1, and then will right shift the input field after executing the queues */
-			{
-				.num_bits = num_bits+1,
-				.out_value = out,
-				.in_value = in,
-			},
-			{
-				.num_bits = 3,
-				.out_value = bscan_zero,
-				.in_value = NULL,
-			}
-		};
+		tunneled_dr[1].num_bits = 7;
+		tunneled_dr_width = num_bits;
+		tunneled_dr[1].out_value = &tunneled_dr_width;
+
+		/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
+		   scanning num_bits + 1, and then will right shift the input field after executing the queues */
+		tunneled_dr[2].num_bits = num_bits+1;
+		tunneled_dr[2].out_value = out;
+		tunneled_dr[2].in_value = in;
+
+		tunneled_dr[3].num_bits = 3;
+		tunneled_dr[3].out_value = bscan_zero;
 
 		jtag_add_dr_scan(target->tap, DIM(tunneled_dr), tunneled_dr, TAP_IDLE);
 	} else {
