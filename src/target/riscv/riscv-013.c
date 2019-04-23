@@ -509,7 +509,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 		   before the JTAG queue gets executed, which is an error waiting to happen), or
 		   initializing outside of the check for whether a BSCAN tunnel was active (which
 		   would be a waste of CPU time when BSCAN tunnel is not being used. So I declared the
-		   struct at the function's top-level, so it's lifetime exceeds the point at which
+		   struct at the function's top-level, so its lifetime exceeds the point at which
 		   the queue is executed, and initializing with assignments here. */
 		memset(tunneled_dr, 0, sizeof(tunneled_dr));
 		tunneled_dr[0].num_bits = 1;
