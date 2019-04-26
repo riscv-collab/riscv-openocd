@@ -1438,6 +1438,10 @@ int riscv_openocd_poll(struct target *target)
 		if (set_debug_reason(target, halted_hart) != ERROR_OK)
 			return ERROR_FAIL;
 
+		target->rtos->current_threadid = halted_hart + 1;
+		target->rtos->current_thread = halted_hart + 1;
+		riscv_set_rtos_hartid(target, halted_hart);
+
 		/* If we're here then at least one hart triggered.  That means we want
 		 * to go and halt _every_ hart (configured in an smp group or with
 		 * -rtos riscv) in the system, as that's the invariant we hold here.
@@ -1495,12 +1499,6 @@ int riscv_openocd_poll(struct target *target)
 
 		halted_hart = riscv_current_hartid(target);
 		LOG_DEBUG("  hart %d halted", halted_hart);
-	}
-
-	if (riscv_rtos_enabled(target)) {
-		target->rtos->current_threadid = halted_hart + 1;
-		target->rtos->current_thread = halted_hart + 1;
-		riscv_set_rtos_hartid(target, halted_hart);
 	}
 
 	target->state = TARGET_HALTED;
