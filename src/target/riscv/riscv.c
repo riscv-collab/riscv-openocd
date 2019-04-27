@@ -1499,9 +1499,11 @@ int riscv_openocd_poll(struct target *target)
 
 		halted_hart = riscv_current_hartid(target);
 		LOG_DEBUG("  hart %d halted", halted_hart);
-	}
 
-	target->state = TARGET_HALTED;
+		if (set_debug_reason(target, halted_hart) != ERROR_OK)
+			return ERROR_FAIL;
+		target->state = TARGET_HALTED;
+	}
 
 	if (target->debug_reason == DBG_REASON_BREAKPOINT) {
 		int retval;
