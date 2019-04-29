@@ -833,6 +833,7 @@ int halt_prep(struct target *target)
 		} else {
 			if (r->halt_prep(target) != ERROR_OK)
 				return ERROR_FAIL;
+			r->prepped = true;
 		}
 	}
 	return ERROR_OK;
@@ -1481,10 +1482,6 @@ int riscv_openocd_poll(struct target *target)
 
 		if (halt_discovered) {
 			LOG_DEBUG("Halt other targets in this SMP group.");
-
-			target->state = TARGET_HALTED;
-			if (set_debug_reason(target, halted_hart) != ERROR_OK)
-				return ERROR_FAIL;
 			riscv_halt(target);
 		}
 		return ERROR_OK;
