@@ -1481,6 +1481,14 @@ int riscv_openocd_poll(struct target *target)
 		}
 
 		if (halt_discovered) {
+			i = 0;
+			for (struct target_list *list = target->head; list != NULL;
+					list = list->next, i++) {
+				struct target *t = list->target;
+				if (newly_halted[i])
+					target_call_event_callbacks(t, TARGET_EVENT_HALTED);
+			}
+
 			LOG_DEBUG("Halt other targets in this SMP group.");
 			riscv_halt(target);
 		}
