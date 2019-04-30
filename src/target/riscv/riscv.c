@@ -871,15 +871,15 @@ int halt_go(struct target *target)
 	} else {
 		result = riscv_halt_go_all_harts(target);
 	}
+	target->state = TARGET_HALTED;
+	if (target->debug_reason == DBG_REASON_NOTHALTED)
+		target->debug_reason = DBG_REASON_DBGRQ;
 
 	return result;
 }
 
 static int halt_finish(struct target *target)
 {
-	target->state = TARGET_HALTED;
-	if (target->debug_reason == DBG_REASON_NOTHALTED)
-		target->debug_reason = DBG_REASON_DBGRQ;
 	return target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 }
 
