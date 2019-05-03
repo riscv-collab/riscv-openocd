@@ -681,6 +681,8 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 {
 	struct watchpoint *wp = target->watchpoints;
 
+	if (riscv_rtos_enabled(target))
+		riscv_set_current_hartid(target, target->rtos->current_thread - 1);
 	LOG_DEBUG("Current hartid = %d", riscv_current_hartid(target));
 
 	/*TODO instead of disassembling the instruction that we think caused the
@@ -1444,11 +1446,11 @@ int riscv_openocd_poll(struct target *target)
 		riscv_set_rtos_hartid(target, halted_hart);
 
 		/* If we're here then at least one hart triggered.  That means we want
-		 * to go and halt _every_ hart (configured in an smp group or with
-		 * -rtos riscv) in the system, as that's the invariant we hold here.
-		 * Some harts might have already halted (as we're either in single-step
-		 * mode or they also triggered a breakpoint), so don't attempt to halt
-		 * those harts. riscv_halt() will do all that for us. */
+		 * to go and halt _every_ hart (configured with -rtos riscv) in the
+		 * system, as that's the invariant we hold here.  Some harts might have
+		 * already halted (as we're either in single-step mode or they also
+		 * triggered a breakpoint), so don't attempt to halt those harts.
+		 * riscv_halt() will do all that for us. */
 		riscv_halt(target);
 
 	} else if (target->smp) {
