@@ -99,6 +99,8 @@ typedef struct {
 
 	/* This target has been prepped and is ready to step/resume. */
 	bool prepped;
+	/* This target was selected using hasel. */
+	bool selected;
 
 	/* Helper functions that target the various RISC-V debug spec
 	 * implementations. */

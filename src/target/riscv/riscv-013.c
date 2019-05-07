@@ -2963,6 +2963,7 @@ static int select_prepped_harts(struct target *target, bool *use_hasel)
 		riscv013_info_t *info = get_info(t);
 		unsigned index = info->index;
 		LOG_DEBUG("index=%d, coreid=%d, prepped=%d", index, t->coreid, r->prepped);
+		r->selected = r->prepped;
 		if (r->prepped) {
 			hawindow[index / 32] |= 1 << (index % 32);
 			r->prepped = false;
@@ -3029,6 +3030,18 @@ static int riscv013_halt_go(struct target *target)
 
 	dmcontrol = set_field(dmcontrol, DMI_DMCONTROL_HALTREQ, 0);
 	dmi_write(target, DMI_DMCONTROL, dmcontrol);
+
+	if (use_hasel) {
+		target_list_t *entry;
+		dm013_info_t *dm = get_dm(target);
+		list_for_each_entry(entry, &dm->target_list, list) {
+			struct target *t = entry->target;
+			t->state = TARGET_HALTED;
+			if (t->debug_reason == DBG_REASON_NOTHALTED)
+				t->debug_reason = DBG_REASON_DBGRQ;
+		}
+	}
+	/* The "else" case is handled in halt_go(). */
 
 	return ERROR_OK;
 }
