@@ -185,8 +185,13 @@ struct scan_field select_user4 = {
 uint8_t bscan_tunneled_ir_width[4] = {5};  /* overridden by assignment in riscv_init_target */
 struct scan_field _bscan_tunneled_select_dmi[] = {
 		{
-			.num_bits = 1,
+			.num_bits = 3,
 			.out_value = bscan_zero,
+			.in_value = NULL,
+		},
+		{
+			.num_bits = 5, /* initialized in riscv_init_target to ir width of DM */
+			.out_value = ir_dbus,
 			.in_value = NULL,
 		},
 		{
@@ -195,12 +200,7 @@ struct scan_field _bscan_tunneled_select_dmi[] = {
 			.in_value = NULL,
 		},
 		{
-			.num_bits = 0, /* initialized in riscv_init_target to ir width of DM */
-			.out_value = ir_dbus,
-			.in_value = NULL,
-		},
-		{
-			.num_bits = 3,
+			.num_bits = 1,
 			.out_value = bscan_zero,
 			.in_value = NULL,
 		}
@@ -258,13 +258,8 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 
 	struct scan_field tunneled_ir[] = {
 		{
-			.num_bits = 1,
+			.num_bits = 3,
 			.out_value = bscan_zero,
-			.in_value = NULL,
-		},
-		{
-			.num_bits = 7,
-			.out_value = tunneled_ir_width,
 			.in_value = NULL,
 		},
 		{
@@ -273,20 +268,20 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 			.in_value = NULL,
 		},
 		{
-			.num_bits = 3,
+			.num_bits = 7,
+			.out_value = tunneled_ir_width,
+			.in_value = NULL,
+		},
+		{
+			.num_bits = 1,
 			.out_value = bscan_zero,
 			.in_value = NULL,
 		}
 	};
 	struct scan_field tunneled_dr[] = {
 		{
-			.num_bits = 1,
-			.out_value = bscan_one,
-			.in_value = NULL,
-		},
-		{
-			.num_bits = 7,
-			.out_value = tunneled_dr_width,
+			.num_bits = 3,
+			.out_value = bscan_zero,
 			.in_value = NULL,
 		},
 		/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out,
@@ -297,8 +292,13 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 			.in_value = in_value,
 		},
 		{
-			.num_bits = 3,
-			.out_value = bscan_zero,
+			.num_bits = 7,
+			.out_value = tunneled_dr_width,
+			.in_value = NULL,
+		},
+		{
+			.num_bits = 1,
+			.out_value = bscan_one,
 			.in_value = NULL,
 		}
 	};
@@ -313,7 +313,6 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		LOG_ERROR("failed jtag scan: %d", retval);
 		return retval;
 	}
-
 	/* Note the starting offset is bit 1, not bit 0.  In BSCAN tunnel, there is a one-bit TCK skew between
 	   output and input */
 	uint32_t in = buf_get_u32(in_value, 1, 32);
@@ -396,7 +395,7 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 	if (bscan_tunnel_ir_width != 0) {
 		select_user4.num_bits = target->tap->ir_length;
 		bscan_tunneled_ir_width[0] = bscan_tunnel_ir_width;
-		bscan_tunneled_select_dmi[2].num_bits = bscan_tunnel_ir_width;
+		bscan_tunneled_select_dmi[1].num_bits = bscan_tunnel_ir_width;
 	}
 
 	riscv_semihosting_init(target);
