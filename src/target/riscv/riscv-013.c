@@ -1651,7 +1651,6 @@ static int init_target(struct command_context *cmd_ctx,
 	generic_info->set_register = &riscv013_set_register;
 	generic_info->select_current_hart = &riscv013_select_current_hart;
 	generic_info->is_halted = &riscv013_is_halted;
-	generic_info->halt_go = &riscv013_halt_go;
 	generic_info->resume_go = &riscv013_resume_go;
 	generic_info->step_current_hart = &riscv013_step_current_hart;
 	generic_info->on_halt = &riscv013_on_halt;
