@@ -335,6 +335,9 @@ static void decode_dmi(char *text, unsigned address, unsigned data)
 
 		{ DMI_COMMAND, DMI_COMMAND_CMDTYPE, "cmdtype" },
 
+		{ DMI_SBCS, DMI_SBCS_SBVERSION, "sbversion" },
+		{ DMI_SBCS, DMI_SBCS_SBBUSYERROR, "sbbusyerror" },
+		{ DMI_SBCS, DMI_SBCS_SBBUSY, "sbbusy" },
 		{ DMI_SBCS, DMI_SBCS_SBREADONADDR, "sbreadonaddr" },
 		{ DMI_SBCS, DMI_SBCS_SBACCESS, "sbaccess" },
 		{ DMI_SBCS, DMI_SBCS_SBAUTOINCREMENT, "sbautoincrement" },
@@ -2153,6 +2156,11 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 			read_memory_bus_word(target, address + i * size, size,
 					buffer + i * size);
 		}
+
+		/* "Writes to sbcs while sbbusy is high result in undefined behavior.
+		 * A debugger must not write to sbcs until it reads sbbusy as 0." */
+		if (read_sbcs_nonbusy(target, &sbcs) != ERROR_OK)
+			return ERROR_FAIL;
 
 		sbcs = set_field(sbcs, DMI_SBCS_SBREADONDATA, 0);
 		dmi_write(target, DMI_SBCS, sbcs);
