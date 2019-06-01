@@ -287,8 +287,8 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	uint8_t in_value[5] = {0};
 
 	buf_set_u32(out_value, 0, 32, out);
-	struct scan_field tunneled_ir[4] = {0};
-	struct scan_field tunneled_dr[4] = {0};
+	struct scan_field tunneled_ir[4] = {};
+	struct scan_field tunneled_dr[4] = {};
 
 	if (bscan_tunnel_type == 1) {
 		tunneled_ir[0].num_bits = 3;
