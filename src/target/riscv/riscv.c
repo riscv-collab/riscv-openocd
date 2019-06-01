@@ -172,7 +172,7 @@ struct scan_field select_idcode = {
 
 
 int bscan_tunnel_ir_width; /* if zero, then tunneling is not present/active */
-int bscan_tunnel_type; 		 /* if zero, then tunneling is not present/active */
+int bscan_tunnel_type; /* if zero, then nested tap tunneling 1 : data register tunnel */
 
 uint8_t bscan_zero[4] = {0};
 uint8_t bscan_one[4] = {1};
@@ -270,12 +270,13 @@ static int riscv_resume_go_all_harts(struct target *target);
 void select_dmi_via_bscan(struct target *target)
 {
 	jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
-	if(bscan_tunnel_type == 1)
-		jtag_add_dr_scan(target->tap, bscan_tunneled_type_1_select_dmi_num_fields, bscan_tunneled_type_1_select_dmi, TAP_IDLE);
-	else	
-		jtag_add_dr_scan(target->tap, bscan_tunneled_select_dmi_num_fields, bscan_tunneled_select_dmi, TAP_IDLE);
+	if (bscan_tunnel_type == 1)
+		jtag_add_dr_scan(target->tap, bscan_tunneled_type_1_select_dmi_num_fields,
+										bscan_tunneled_type_1_select_dmi, TAP_IDLE);
+	else
+		jtag_add_dr_scan(target->tap, bscan_tunneled_select_dmi_num_fields,
+										bscan_tunneled_select_dmi, TAP_IDLE);
 }
-
 
 uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 {
@@ -289,7 +290,7 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	struct scan_field tunneled_ir[4] = {0};
 	struct scan_field tunneled_dr[4] = {0};
 
-	if(bscan_tunnel_type == 1){
+	if (bscan_tunnel_type == 1) {
 		tunneled_ir[0].num_bits = 3;
 		tunneled_ir[0].out_value = bscan_zero;
 		tunneled_ir[0].in_value = NULL;
@@ -314,9 +315,8 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		tunneled_dr[2].in_value = NULL;
 		tunneled_dr[3].num_bits = 1;
 		tunneled_dr[3].out_value = bscan_one;
-		tunneled_dr[3].in_value = NULL;	
-	} 
-	else{
+		tunneled_dr[3].in_value = NULL;
+	} else{
 		tunneled_ir[3].num_bits = 3;
 		tunneled_ir[3].out_value = bscan_zero;
 		tunneled_ir[3].in_value = NULL;
@@ -435,9 +435,9 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 	if (bscan_tunnel_ir_width != 0) {
 		select_user4.num_bits = target->tap->ir_length;
 		bscan_tunneled_ir_width[0] = bscan_tunnel_ir_width;
-		if(bscan_tunnel_type == 1)
+		if (bscan_tunnel_type == 1)
 			bscan_tunneled_type_1_select_dmi[1].num_bits = bscan_tunnel_ir_width;
-		else 
+		else
 			bscan_tunneled_select_dmi[2].num_bits = bscan_tunnel_ir_width;
 	}
 
@@ -2070,13 +2070,13 @@ COMMAND_HANDLER(riscv_use_bscan_tunnel)
 	if (CMD_ARGC > 2) {
 		LOG_ERROR("Command takes at most two arguments");
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	} else if (CMD_ARGC == 1){
+	} else if (CMD_ARGC == 1) {
 		COMMAND_PARSE_NUMBER(int, CMD_ARGV[0], irwidth);
-	}	else if (CMD_ARGC == 2){
+	} else if (CMD_ARGC == 2) {
 		COMMAND_PARSE_NUMBER(int, CMD_ARGV[0], irwidth);
 		COMMAND_PARSE_NUMBER(int, CMD_ARGV[1], tunnel_type);
 	}
-	if(tunnel_type == 0)
+	if (tunnel_type == 0)
 		LOG_INFO("Nested Tap based Bscan Tunnel Selected");
 	else if (tunnel_type == 1)
 		LOG_INFO("Simple Register based Bscan Tunnel Selected");

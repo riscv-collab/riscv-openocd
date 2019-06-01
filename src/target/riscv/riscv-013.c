@@ -516,7 +516,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 		   struct at the function's top-level, so its lifetime exceeds the point at which
 		   the queue is executed, and initializing with assignments here. */
 		memset(tunneled_dr, 0, sizeof(tunneled_dr));
-		if(bscan_tunnel_type == 1){
+		if (bscan_tunnel_type == 1) {
 			tunneled_dr[3].num_bits = 1;
 			tunneled_dr[3].out_value = bscan_one;
 			tunneled_dr[2].num_bits = 7;
@@ -524,8 +524,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 			tunneled_dr[2].out_value = &tunneled_dr_width;
 			/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
 			   scanning num_bits + 1, and then will right shift the input field after executing the queues */
-			
-			// * Get rid of the num bits section :/
+
 			tunneled_dr[1].num_bits = num_bits+1;
 			tunneled_dr[1].out_value = out;
 			tunneled_dr[1].in_value = in;
@@ -533,8 +532,8 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 
 			tunneled_dr[0].num_bits = 3;
 			tunneled_dr[0].out_value = bscan_zero;
-		}
-		else { // tunnel type = 0 , nested DMI.
+		} else {
+			/* tunnel type = 0 , nested DMI. */
 			tunneled_dr[0].num_bits = 1;
 			tunneled_dr[0].out_value = bscan_one;
 			tunneled_dr[1].num_bits = 7;
