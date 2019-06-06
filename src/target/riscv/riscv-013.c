@@ -516,7 +516,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 		   struct at the function's top-level, so its lifetime exceeds the point at which
 		   the queue is executed, and initializing with assignments here. */
 		memset(tunneled_dr, 0, sizeof(tunneled_dr));
-		if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER ) {
+		if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER) {
 			tunneled_dr[3].num_bits = 1;
 			tunneled_dr[3].out_value = bscan_one;
 			tunneled_dr[2].num_bits = 7;

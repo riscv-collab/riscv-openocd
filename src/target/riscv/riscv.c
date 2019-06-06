@@ -437,7 +437,7 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 		bscan_tunneled_ir_width[0] = bscan_tunnel_ir_width;
 		if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER)
 			bscan_tunnel_data_register_select_dmi[1].num_bits = bscan_tunnel_ir_width;
-		else //
+		else /* BSCAN_TUNNEL_NESTED_TAP */
 			bscan_tunnel_nested_tap_select_dmi[2].num_bits = bscan_tunnel_ir_width;
 	}
 
