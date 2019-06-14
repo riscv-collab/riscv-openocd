@@ -2344,7 +2344,7 @@ void riscv_info_init(struct target *target, riscv_info_t *r)
 static int riscv_resume_go_all_harts(struct target *target)
 {
 	RISCV_INFO(r);
-	for (int i = 0; i < riscv_count_harts(target); ++i) {
+	for (int i = riscv_count_harts(target)-1; i >= 0; --i) {
 		if (!riscv_hart_enabled(target, i))
 			continue;
 
