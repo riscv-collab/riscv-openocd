@@ -1569,8 +1569,7 @@ static int riscv_checksum_memory(struct target *target,
 		return retval;
 
 	if (crc_algorithm->address + crc_algorithm->size > address &&
-			crc_algorithm->address < address + count)
-	{
+			crc_algorithm->address < address + count) {
 		/* Region to checksum overlaps with the work area we've been assigned.
 		 * Bail. (Would be better to manually checksum what we read there, and
 		 * use the algorithm for the rest.) */
@@ -1597,7 +1596,7 @@ static int riscv_checksum_memory(struct target *target,
 
 	retval = target_run_algorithm(target, 0, NULL, 2, reg_params,
 			crc_algorithm->address,
-			0,	// exit point
+			0,	/* Leave exit point unspecified because we don't know. */
 			timeout, NULL);
 
 	if (retval == ERROR_OK)
