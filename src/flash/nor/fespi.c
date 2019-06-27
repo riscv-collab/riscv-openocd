@@ -488,8 +488,7 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 	int sector;
 	int retval = ERROR_OK;
 
-	LOG_DEBUG("%s: offset=0x%08" PRIx32 " count=0x%08" PRIx32,
-			__func__, offset, count);
+	LOG_DEBUG("offset=0x%08" PRIx32 " count=0x%08" PRIx32, offset, count);
 
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
@@ -526,7 +525,6 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 		bin = riscv64_bin;
 		bin_size = sizeof(riscv64_bin);
 	}
-	bin_size *= 100; //<<<<
 
 	unsigned data_wa_size = 0;
 	if (target_alloc_working_area(target, bin_size, &algorithm_wa) == ERROR_OK) {
@@ -586,11 +584,23 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 				goto err;
 			}
 
+			LOG_DEBUG("write(ctrl_base=0x%" TARGET_PRIxADDR ", page_size=0x%x, "
+					"address=0x%" TARGET_PRIxADDR ", offset=0x%" PRIx32
+					", count=0x%" PRIx32 "), buffer=%02x %02x %02x %02x %02x %02x ..." PRIx32,
+					fespi_info->ctrl_base, page_size, data_wa->address, offset, cur_count,
+					buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5]);
 			retval = target_run_algorithm(target, 0, NULL, 5, reg_params,
 					algorithm_wa->address, 0, 10000, NULL);
 			if (retval != ERROR_OK) {
 				LOG_ERROR("Failed to execute algorithm at " TARGET_ADDR_FMT ": %d",
 						algorithm_wa->address, retval);
+				goto err;
+			}
+
+			int algorithm_result = buf_get_u64(reg_params[0].value, 0, xlen);
+			if (algorithm_result != 0) {
+				LOG_ERROR("Algorithm returned error %d", algorithm_result);
+				retval = ERROR_FAIL;
 				goto err;
 			}
 
@@ -633,6 +643,10 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 			offset += cur_count;
 			count -= cur_count;
 		}
+
+		/* Switch to HW mode before return to prompt */
+		if (fespi_enable_hw_mode(bank) != ERROR_OK)
+			return ERROR_FAIL;
 	}
 
 	return ERROR_OK;

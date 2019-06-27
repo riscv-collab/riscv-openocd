@@ -129,7 +129,7 @@ err:
 	/* Switch to HW mode before return to prompt */
 	fespi_enable_hw_mode(ctrl_base);
 
-	return ERROR_OK;
+	return retval;
 }
 
 static uint32_t fespi_read_reg(volatile uint32_t *ctrl_base, unsigned address)
@@ -251,5 +251,5 @@ static int slow_fespi_write_buffer(volatile uint32_t *ctrl_base,
 
 	fespi_write_reg(ctrl_base, FESPI_REG_CSMODE, FESPI_CSMODE_AUTO);
 
-	return ERROR_OK;
+	return fespi_wip(ctrl_base);
 }

@@ -17,5 +17,5 @@ _start:
 
 		.section .data
 stack:
-		.fill	40, REGBYTES, 0x8675309
+		.fill	64, REGBYTES, 0x8675309
 stack_end:
