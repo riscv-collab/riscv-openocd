@@ -1,4 +1,4 @@
-#if XLEN == 64
+#if __riscv_xlen == 64
 # define LREG ld
 # define SREG sd
 # define REGBYTES 8
@@ -17,5 +17,5 @@ _start:
 
 		.section .data
 stack:
-		.fill	64, REGBYTES, 0x8675309
+		.fill	16, REGBYTES, 0x8675309
 stack_end:
