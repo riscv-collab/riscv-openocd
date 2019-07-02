@@ -2969,7 +2969,10 @@ int riscv_init_registers(struct target *target)
 		/* r->size is set in riscv_invalidate_register_cache, maybe because the
 		 * target is in theory allowed to change XLEN on us. But I expect a lot
 		 * of other things to break in that case as well. */
-		if (number <= GDB_REGNO_XPR31) {
+		if (number <= GDB_REGNO_XPR15 ||
+				(!riscv_supports_extension(target,
+										   riscv_current_hartid(target), 'E')
+				 && number <= GDB_REGNO_XPR31)) {
 			r->caller_save = true;
 			switch (number) {
 				case GDB_REGNO_ZERO:
