@@ -1358,7 +1358,7 @@ static int riscv_get_gdb_reg_list_internal(struct target *target,
 		(*reg_list)[i] = &target->reg_cache->reg_list[i];
 		if (read &&
 				target->reg_cache->reg_list[i].exist &&
-				target->reg_cache->reg_list[i].valid) {
+				!target->reg_cache->reg_list[i].valid) {
 			if (target->reg_cache->reg_list[i].type->get(
 						&target->reg_cache->reg_list[i]) != ERROR_OK)
 				return ERROR_FAIL;
