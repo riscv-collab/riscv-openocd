@@ -2471,6 +2471,32 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 	memset(buffer, 0, count*size);
 
+	// Read DCSR
+	uint64_t dcsr;
+	if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+		return ERROR_FAIL;
+
+	// Read and save MSTATUS	
+	uint64_t mstatus;
+	if (register_read(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
+		return ERROR_FAIL;
+	uint64_t mstatus_old = mstatus;
+
+	// If we come from m-mode with mprv set, we want to keep mpp
+	if(!(get_field(mstatus, MSTATUS_MPRV) && get_field(dcsr, DCSR_PRV) && get_field(dcsr, DCSR_PRV<<1)))
+	{
+		// MPP = PRIV
+		mstatus = set_field(mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
+
+		// MPRV = 1
+		mstatus = set_field(mstatus, MSTATUS_MPRV, 1);
+	}
+
+	// Write MSTATUS
+	if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus) != ERROR_OK)
+		return ERROR_FAIL;
+
+
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
 	 */
@@ -2486,6 +2512,8 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (load, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
+	riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
+	
 	switch (size) {
 		case 1:
 			riscv_program_lbr(&program, GDB_REGNO_S1, GDB_REGNO_S0, 0);
@@ -2500,6 +2528,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 			LOG_ERROR("Unsupported size: %d", size);
 			return ERROR_FAIL;
 	}
+	riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 
 	if (riscv_program_ebreak(&program) != ERROR_OK)
@@ -2536,6 +2565,11 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 	riscv_set_register(target, GDB_REGNO_S0, s0);
 	riscv_set_register(target, GDB_REGNO_S1, s1);
+
+	// Restore MSTATUS
+	if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus_old))
+		return ERROR_FAIL;
+
 	return result;
 }
 
@@ -2739,6 +2773,32 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 
 	select_dmi(target);
 
+	// Read DCSR
+	uint64_t dcsr;
+	if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+		return ERROR_FAIL;
+
+	// Read and save MSTATUS	
+	uint64_t mstatus;
+	if (register_read(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
+		return ERROR_FAIL;
+	uint64_t mstatus_old = mstatus;
+
+	// If we come from m-mode with mprv set, we want to keep mpp
+	if(!(get_field(mstatus, MSTATUS_MPRV) && get_field(dcsr, DCSR_PRV) && get_field(dcsr, DCSR_PRV<<1)))
+	{
+		// MPP = PRIV
+		mstatus = set_field(mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
+
+		// MPRV = 1
+		mstatus = set_field(mstatus, MSTATUS_MPRV, 1);
+	}
+
+	// Write MSTATUS
+	if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus) != ERROR_OK)
+		return ERROR_FAIL;
+
+
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
 	 */
@@ -2753,6 +2813,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (store, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
+	riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	switch (size) {
 		case 1:
@@ -2770,6 +2831,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 			goto error;
 	}
 
+	riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 
 	result = riscv_program_ebreak(&program);
@@ -2904,6 +2966,10 @@ error:
 	if (register_write_direct(target, GDB_REGNO_S1, s1) != ERROR_OK)
 		return ERROR_FAIL;
 	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
+		return ERROR_FAIL;
+
+	// Restore MSTATUS
+	if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus_old))
 		return ERROR_FAIL;
 
 	if (execute_fence(target) != ERROR_OK)
