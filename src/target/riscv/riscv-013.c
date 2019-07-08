@@ -2460,7 +2460,7 @@ error:
  * Read the requested memory, silently handling memory access errors.
  */
 static int read_memory_progbuf(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+		uint32_t size, uint32_t count, uint8_t *buffer, unsigned progbufsize)
 {
 	int result = ERROR_OK;
 
@@ -2471,30 +2471,32 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 	memset(buffer, 0, count*size);
 
-	/* Read DCSR */
-	uint64_t dcsr;
-	if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-		return ERROR_FAIL;
+	uint64_t mstatus = 0;
+	uint64_t mstatus_old = 0;
+	if (progbufsize >= 4) {
+		/* Read DCSR */
+		uint64_t dcsr;
+		if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+			return ERROR_FAIL;
 
-	/* Read and save MSTATUS */
-	uint64_t mstatus;
-	if (register_read(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
-		return ERROR_FAIL;
-	uint64_t mstatus_old = mstatus;
+		/* Read and save MSTATUS */
+		if (register_read(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
+			return ERROR_FAIL;
+		mstatus_old = mstatus;
 
-	/* If we come from m-mode with mprv set, we want to keep mpp */
-	if (!(get_field(mstatus, MSTATUS_MPRV) && get_field(dcsr, DCSR_PRV) == 3)) {
-		/* MPP = PRIV */
-		mstatus = set_field(mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
+		/* If we come from m-mode with mprv set, we want to keep mpp */
+		if (get_field(dcsr, DCSR_PRV) < 3) {
+			/* MPP = PRIV */
+			mstatus = set_field(mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
 
-		/* MPRV = 1 */
-		mstatus = set_field(mstatus, MSTATUS_MPRV, 1);
+			/* MPRV = 1 */
+			mstatus = set_field(mstatus, MSTATUS_MPRV, 1);
+
+			/* Write MSTATUS */
+			if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus) != ERROR_OK)
+				return ERROR_FAIL;
+		}
 	}
-
-	/* Write MSTATUS */
-	if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus) != ERROR_OK)
-		return ERROR_FAIL;
-
 
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
@@ -2511,7 +2513,8 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (load, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
+	if (progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	switch (size) {
 		case 1:
@@ -2527,7 +2530,8 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 			LOG_ERROR("Unsupported size: %d", size);
 			return ERROR_FAIL;
 	}
-	riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
+	if (progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 
 	if (riscv_program_ebreak(&program) != ERROR_OK)
@@ -2566,8 +2570,9 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 	riscv_set_register(target, GDB_REGNO_S1, s1);
 
 	/* Restore MSTATUS */
-	if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus_old))
-		return ERROR_FAIL;
+	if (mstatus != mstatus_old)
+		if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus_old))
+			return ERROR_FAIL;
 
 	return result;
 }
@@ -2577,7 +2582,7 @@ static int read_memory(struct target *target, target_addr_t address,
 {
 	RISCV013_INFO(info);
 	if (info->progbufsize >= 2 && !riscv_prefer_sba)
-		return read_memory_progbuf(target, address, size, count, buffer);
+		return read_memory_progbuf(target, address, size, count, buffer, info->progbufsize);
 
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
 			(get_field(info->sbcs, DMI_SBCS_SBACCESS16) && size == 2) ||
@@ -2591,7 +2596,7 @@ static int read_memory(struct target *target, target_addr_t address,
 	}
 
 	if (info->progbufsize >= 2)
-		return read_memory_progbuf(target, address, size, count, buffer);
+		return read_memory_progbuf(target, address, size, count, buffer, info->progbufsize);
 
 	LOG_ERROR("Don't know how to read memory on this target.");
 	return ERROR_FAIL;
@@ -2764,7 +2769,7 @@ static int write_memory_bus_v1(struct target *target, target_addr_t address,
 }
 
 static int write_memory_progbuf(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, const uint8_t *buffer)
+		uint32_t size, uint32_t count, const uint8_t *buffer, unsigned progbufsize)
 {
 	RISCV013_INFO(info);
 
@@ -2772,30 +2777,32 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 
 	select_dmi(target);
 
-	/* Read DCSR */
-	uint64_t dcsr;
-	if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-		return ERROR_FAIL;
+	uint64_t mstatus = 0;
+	uint64_t mstatus_old = 0;
+	if (progbufsize >= 4) {
+		/* Read DCSR */
+		uint64_t dcsr;
+		if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+			return ERROR_FAIL;
 
-	/* Read and save MSTATUS */
-	uint64_t mstatus;
-	if (register_read(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
-		return ERROR_FAIL;
-	uint64_t mstatus_old = mstatus;
+		/* Read and save MSTATUS */
+		if (register_read(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
+			return ERROR_FAIL;
+		mstatus_old = mstatus;
 
-	/* If we come from m-mode with mprv set, we want to keep mpp */
-	if (!(get_field(mstatus, MSTATUS_MPRV) && get_field(dcsr, DCSR_PRV) == 3)) {
-		/* MPP = PRIV */
-		mstatus = set_field(mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
+		/* If we come from m-mode with mprv set, we want to keep mpp */
+		if (get_field(dcsr, DCSR_PRV) < 3) {
+			/* MPP = PRIV */
+			mstatus = set_field(mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
 
-		/* MPRV = 1 */
-		mstatus = set_field(mstatus, MSTATUS_MPRV, 1);
+			/* MPRV = 1 */
+			mstatus = set_field(mstatus, MSTATUS_MPRV, 1);
+
+			/* Write MSTATUS */
+			if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus) != ERROR_OK)
+				return ERROR_FAIL;
+		}
 	}
-
-	/* Write MSTATUS */
-	if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus) != ERROR_OK)
-		return ERROR_FAIL;
-
 
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
@@ -2811,7 +2818,8 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (store, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
+	if (progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	switch (size) {
 		case 1:
@@ -2829,7 +2837,8 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 			goto error;
 	}
 
-	riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
+	if (progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 
 	result = riscv_program_ebreak(&program);
@@ -2967,8 +2976,9 @@ error:
 		return ERROR_FAIL;
 
 	/* Restore MSTATUS */
-	if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus_old))
-		return ERROR_FAIL;
+	if (mstatus != mstatus_old)
+		if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus_old))
+			return ERROR_FAIL;
 
 	if (execute_fence(target) != ERROR_OK)
 		return ERROR_FAIL;
@@ -2981,7 +2991,7 @@ static int write_memory(struct target *target, target_addr_t address,
 {
 	RISCV013_INFO(info);
 	if (info->progbufsize >= 2 && !riscv_prefer_sba)
-		return write_memory_progbuf(target, address, size, count, buffer);
+		return write_memory_progbuf(target, address, size, count, buffer, info->progbufsize);
 
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
 			(get_field(info->sbcs, DMI_SBCS_SBACCESS16) && size == 2) ||
@@ -2995,7 +3005,7 @@ static int write_memory(struct target *target, target_addr_t address,
 	}
 
 	if (info->progbufsize >= 2)
-		return write_memory_progbuf(target, address, size, count, buffer);
+		return write_memory_progbuf(target, address, size, count, buffer, info->progbufsize);
 
 	LOG_ERROR("Don't know how to write memory on this target.");
 	return ERROR_FAIL;
