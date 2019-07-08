@@ -2597,6 +2597,12 @@ int riscv_set_register_on_hart(struct target *target, int hartid,
 	RISCV_INFO(r);
 	LOG_DEBUG("{%d} %s <- %" PRIx64, hartid, gdb_regno_name(regid), value);
 	assert(r->set_register);
+
+	/* TODO: Hack to deal with gdb that thinks these registers still exist. */
+	if (regid > GDB_REGNO_XPR15 && regid <= GDB_REGNO_XPR31 && value == 0 &&
+			riscv_supports_extension(target, hartid, 'E'))
+		return ERROR_OK;
+
 	return r->set_register(target, hartid, regid, value);
 }
 
@@ -2616,6 +2622,13 @@ int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 
 	if (reg && reg->valid && hartid == riscv_current_hartid(target)) {
 		*value = buf_get_u64(reg->value, 0, reg->size);
+		return ERROR_OK;
+	}
+
+	/* TODO: Hack to deal with gdb that thinks these registers still exist. */
+	if (regid > GDB_REGNO_XPR15 && regid <= GDB_REGNO_XPR31 &&
+			riscv_supports_extension(target, hartid, 'E')) {
+		*value = 0;
 		return ERROR_OK;
 	}
 
@@ -2976,6 +2989,9 @@ int riscv_init_registers(struct target *target)
 		if (number <= GDB_REGNO_XPR31) {
 			r->exist = number <= GDB_REGNO_XPR15 ||
 				!riscv_supports_extension(target, hartid, 'E');
+			/* TODO: For now we fake that all GPRs exist because otherwise gdb
+			 * doesn't work. */
+			r->exist = true;
 			r->caller_save = true;
 			switch (number) {
 				case GDB_REGNO_ZERO:
