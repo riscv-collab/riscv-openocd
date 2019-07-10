@@ -1580,6 +1580,12 @@ static int examine(struct target *target)
 				r->impebreak);
 	}
 
+	if (info->progbufsize < 4 && riscv_enable_virtual) {
+		LOG_WARNING("set_enable_virtual is not available on this target. It "
+					"requires a program buffer size of at least 4. (progbufsize=%d)"
+					, info->progbufsize);
+	}
+
 	/* Before doing anything else we must first enumerate the harts. */
 	if (dm->hart_count < 0) {
 		for (int i = 0; i < MIN(RISCV_MAX_HARTS, 1 << info->hartsellen); ++i) {
@@ -2475,7 +2481,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 	uint64_t mstatus = 0;
 	uint64_t mstatus_old = 0;
-	if (info->progbufsize >= 4) {
+	if (riscv_enable_virtual && info->progbufsize >= 4) {
 		/* Read DCSR */
 		uint64_t dcsr;
 		if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
@@ -2516,7 +2522,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (load, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	if (info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	switch (size) {
@@ -2533,7 +2539,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 			LOG_ERROR("Unsupported size: %d", size);
 			return ERROR_FAIL;
 	}
-	if (info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 
@@ -2782,7 +2788,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 
 	uint64_t mstatus = 0;
 	uint64_t mstatus_old = 0;
-	if (info->progbufsize >= 4) {
+	if (riscv_enable_virtual && info->progbufsize >= 4) {
 		/* Read DCSR */
 		uint64_t dcsr;
 		if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
@@ -2822,7 +2828,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (store, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	if (info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	switch (size) {
@@ -2841,7 +2847,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 			goto error;
 	}
 
-	if (info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 
