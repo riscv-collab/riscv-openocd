@@ -2146,15 +2146,14 @@ COMMAND_HANDLER(riscv_set_ir)
 	uint32_t value;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], value);
 
-	if (!strcmp(CMD_ARGV[0], "idcode")) {
+	if (!strcmp(CMD_ARGV[0], "idcode"))
 		buf_set_u32(ir_idcode, 0, 32, value);
-	} else if (!strcmp(CMD_ARGV[0], "dtmcs")) {
+	else if (!strcmp(CMD_ARGV[0], "dtmcs"))
 		buf_set_u32(ir_dtmcontrol, 0, 32, value);
-	} else if (!strcmp(CMD_ARGV[0], "dmi")) {
+	else if (!strcmp(CMD_ARGV[0], "dmi"))
 		buf_set_u32(ir_dbus, 0, 32, value);
-	} else {
+	else
 		return ERROR_FAIL;
-	}
 
 	return ERROR_OK;
 }
