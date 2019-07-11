@@ -2469,7 +2469,10 @@ static int riscv_resume_go_all_harts(struct target *target)
 {
 	RISCV_INFO(r);
 
-	int first, last, step;
+	/* Dummy variables to make mingw32-gcc happy. */
+	int first = 0;
+	int last = 1;
+	int step = 1;
 	switch (resume_order) {
 		case RO_NORMAL:
 			first = 0;
