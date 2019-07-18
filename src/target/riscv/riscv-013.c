@@ -2501,6 +2501,13 @@ error:
 static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 		uint32_t size, uint8_t *buffer)
 {
+	RISCV013_INFO(info);
+
+	uint64_t mstatus = 0;
+	uint64_t mstatus_old = 0;
+	if (modify_privilege(target, &mstatus, &mstatus_old) != ERROR_OK)
+		return ERROR_FAIL;
+
 	uint64_t s0;
 
 	if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
@@ -2509,6 +2516,8 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 	/* Write the program (load, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
+	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	switch (size) {
 		case 1:
 			riscv_program_lbr(&program, GDB_REGNO_S0, GDB_REGNO_S0, 0);
@@ -2523,6 +2532,8 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 			LOG_ERROR("Unsupported size: %d", size);
 			return ERROR_FAIL;
 	}
+	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	if (riscv_program_ebreak(&program) != ERROR_OK)
 		return ERROR_FAIL;
@@ -2545,6 +2556,11 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 
 	if (riscv_set_register(target, GDB_REGNO_S0, s0) != ERROR_OK)
 		return ERROR_FAIL;
+
+	/* Restore MSTATUS */
+	if (mstatus != mstatus_old)
+		if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus_old))
+			return ERROR_FAIL;
 
 	return ERROR_OK;
 }
