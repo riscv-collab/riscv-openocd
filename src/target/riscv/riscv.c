@@ -266,6 +266,11 @@ range_t *expose_csr;
 /* Same, but for custom registers. */
 range_t *expose_custom;
 
+static enum {
+	RO_NORMAL,
+	RO_REVERSED
+} resume_order;
+
 static int riscv_resume_go_all_harts(struct target *target);
 
 void select_dmi_via_bscan(struct target *target)
@@ -1358,7 +1363,9 @@ static int riscv_get_gdb_reg_list_internal(struct target *target,
 		assert(!target->reg_cache->reg_list[i].valid ||
 				target->reg_cache->reg_list[i].size > 0);
 		(*reg_list)[i] = &target->reg_cache->reg_list[i];
-		if (read && !target->reg_cache->reg_list[i].valid) {
+		if (read &&
+				target->reg_cache->reg_list[i].exist &&
+				!target->reg_cache->reg_list[i].valid) {
 			if (target->reg_cache->reg_list[i].type->get(
 						&target->reg_cache->reg_list[i]) != ERROR_OK)
 				return ERROR_FAIL;
@@ -1480,6 +1487,12 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 			LOG_ERROR("  start = 0x%08x", (uint32_t) start);
 			riscv_halt(target);
 			old_or_new_riscv_poll(target);
+			for (enum gdb_regno regno = 0; regno <= GDB_REGNO_PC; regno++) {
+				riscv_reg_t reg_value;
+				if (riscv_get_register(target, &reg_value, regno) != ERROR_OK)
+					break;
+				LOG_ERROR("%s = 0x%" PRIx64, gdb_regno_name(regno), reg_value);
+			}
 			return ERROR_TARGET_TIMEOUT;
 		}
 
@@ -2145,18 +2158,35 @@ COMMAND_HANDLER(riscv_set_ir)
 	uint32_t value;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], value);
 
-	if (!strcmp(CMD_ARGV[0], "idcode")) {
+	if (!strcmp(CMD_ARGV[0], "idcode"))
 		buf_set_u32(ir_idcode, 0, 32, value);
-		return ERROR_OK;
-	} else if (!strcmp(CMD_ARGV[0], "dtmcs")) {
+	else if (!strcmp(CMD_ARGV[0], "dtmcs"))
 		buf_set_u32(ir_dtmcontrol, 0, 32, value);
-		return ERROR_OK;
-	} else if (!strcmp(CMD_ARGV[0], "dmi")) {
+	else if (!strcmp(CMD_ARGV[0], "dmi"))
 		buf_set_u32(ir_dbus, 0, 32, value);
-		return ERROR_OK;
+	else
+		return ERROR_FAIL;
+
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(riscv_resume_order)
+{
+	if (CMD_ARGC > 1) {
+		LOG_ERROR("Command takes at most one argument");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	if (!strcmp(CMD_ARGV[0], "normal")) {
+		resume_order = RO_NORMAL;
+	} else if (!strcmp(CMD_ARGV[0], "reversed")) {
+		resume_order = RO_REVERSED;
 	} else {
+		LOG_ERROR("Unsupported resume order: %s", CMD_ARGV[0]);
 		return ERROR_FAIL;
 	}
+
+	return ERROR_OK;
 }
 
 COMMAND_HANDLER(riscv_use_bscan_tunnel)
@@ -2292,6 +2322,15 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 			"between scans to avoid encountering the target being busy. This "
 			"command resets those learned values after `wait` scans. It's only "
 			"useful for testing OpenOCD itself."
+	},
+	{
+		.name = "resume_order",
+		.handler = riscv_resume_order,
+		.mode = COMMAND_ANY,
+		.usage = "resume_order normal|reversed",
+		.help = "Choose the order that harts are resumed in when `hasel` is not "
+			"supported. Normal order is from lowest hart index to highest. "
+			"Reversed order is from highest hart index to lowest."
 	},
 	{
 		.name = "set_ir",
@@ -2450,7 +2489,27 @@ void riscv_info_init(struct target *target, riscv_info_t *r)
 static int riscv_resume_go_all_harts(struct target *target)
 {
 	RISCV_INFO(r);
-	for (int i = 0; i < riscv_count_harts(target); ++i) {
+
+	/* Dummy variables to make mingw32-gcc happy. */
+	int first = 0;
+	int last = 1;
+	int step = 1;
+	switch (resume_order) {
+		case RO_NORMAL:
+			first = 0;
+			last = riscv_count_harts(target) - 1;
+			step = 1;
+			break;
+		case RO_REVERSED:
+			first = riscv_count_harts(target) - 1;
+			last = 0;
+			step = -1;
+			break;
+		default:
+			assert(0);
+	}
+
+	for (int i = first; i != last + step; i += step) {
 		if (!riscv_hart_enabled(target, i))
 			continue;
 
@@ -2616,6 +2675,12 @@ int riscv_set_register_on_hart(struct target *target, int hartid,
 	RISCV_INFO(r);
 	LOG_DEBUG("{%d} %s <- %" PRIx64, hartid, gdb_regno_name(regid), value);
 	assert(r->set_register);
+
+	/* TODO: Hack to deal with gdb that thinks these registers still exist. */
+	if (regid > GDB_REGNO_XPR15 && regid <= GDB_REGNO_XPR31 && value == 0 &&
+			riscv_supports_extension(target, hartid, 'E'))
+		return ERROR_OK;
+
 	return r->set_register(target, hartid, regid, value);
 }
 
@@ -2635,6 +2700,13 @@ int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 
 	if (reg && reg->valid && hartid == riscv_current_hartid(target)) {
 		*value = buf_get_u64(reg->value, 0, reg->size);
+		return ERROR_OK;
+	}
+
+	/* TODO: Hack to deal with gdb that thinks these registers still exist. */
+	if (regid > GDB_REGNO_XPR15 && regid <= GDB_REGNO_XPR31 &&
+			riscv_supports_extension(target, hartid, 'E')) {
+		*value = 0;
 		return ERROR_OK;
 	}
 
@@ -2796,10 +2868,68 @@ const char *gdb_regno_name(enum gdb_regno regno)
 	switch (regno) {
 		case GDB_REGNO_ZERO:
 			return "zero";
+		case GDB_REGNO_RA:
+			return "ra";
+		case GDB_REGNO_SP:
+			return "sp";
+		case GDB_REGNO_GP:
+			return "gp";
+		case GDB_REGNO_TP:
+			return "tp";
+		case GDB_REGNO_T0:
+			return "t0";
+		case GDB_REGNO_T1:
+			return "t1";
+		case GDB_REGNO_T2:
+			return "t2";
 		case GDB_REGNO_S0:
 			return "s0";
 		case GDB_REGNO_S1:
 			return "s1";
+		case GDB_REGNO_A0:
+			return "a0";
+		case GDB_REGNO_A1:
+			return "a1";
+		case GDB_REGNO_A2:
+			return "a2";
+		case GDB_REGNO_A3:
+			return "a3";
+		case GDB_REGNO_A4:
+			return "a4";
+		case GDB_REGNO_A5:
+			return "a5";
+		case GDB_REGNO_A6:
+			return "a6";
+		case GDB_REGNO_A7:
+			return "a7";
+		case GDB_REGNO_S2:
+			return "s2";
+		case GDB_REGNO_S3:
+			return "s3";
+		case GDB_REGNO_S4:
+			return "s4";
+		case GDB_REGNO_S5:
+			return "s5";
+		case GDB_REGNO_S6:
+			return "s6";
+		case GDB_REGNO_S7:
+			return "s7";
+		case GDB_REGNO_S8:
+			return "s8";
+		case GDB_REGNO_S9:
+			return "s9";
+		case GDB_REGNO_S10:
+			return "s10";
+		case GDB_REGNO_S11:
+			return "s11";
+		case GDB_REGNO_T3:
+			return "t3";
+		case GDB_REGNO_T4:
+			return "t4";
+		case GDB_REGNO_T5:
+			return "t5";
+		case GDB_REGNO_T6:
+			return "t6";
 		case GDB_REGNO_PC:
 			return "pc";
 		case GDB_REGNO_FPR0:
@@ -2973,6 +3103,8 @@ int riscv_init_registers(struct target *target)
 	riscv_reg_info_t *shared_reg_info = calloc(1, sizeof(riscv_reg_info_t));
 	shared_reg_info->target = target;
 
+	int hartid = riscv_current_hartid(target);
+
 	/* When gdb requests register N, gdb_get_register_packet() assumes that this
 	 * is register at index N in reg_list. So if there are certain registers
 	 * that don't exist, we need to leave holes in the list (or renumber, but
@@ -2991,6 +3123,11 @@ int riscv_init_registers(struct target *target)
 		 * target is in theory allowed to change XLEN on us. But I expect a lot
 		 * of other things to break in that case as well. */
 		if (number <= GDB_REGNO_XPR31) {
+			r->exist = number <= GDB_REGNO_XPR15 ||
+				!riscv_supports_extension(target, hartid, 'E');
+			/* TODO: For now we fake that all GPRs exist because otherwise gdb
+			 * doesn't work. */
+			r->exist = true;
 			r->caller_save = true;
 			switch (number) {
 				case GDB_REGNO_ZERO:
@@ -3099,12 +3236,10 @@ int riscv_init_registers(struct target *target)
 			r->feature = &feature_cpu;
 		} else if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
 			r->caller_save = true;
-			if (riscv_supports_extension(target, riscv_current_hartid(target),
-						'D')) {
+			if (riscv_supports_extension(target, hartid, 'D')) {
 				r->reg_data_type = &type_ieee_double;
 				r->size = 64;
-			} else if (riscv_supports_extension(target,
-						riscv_current_hartid(target), 'F')) {
+			} else if (riscv_supports_extension(target, hartid, 'F')) {
 				r->reg_data_type = &type_ieee_single;
 				r->size = 32;
 			} else {
@@ -3235,8 +3370,7 @@ int riscv_init_registers(struct target *target)
 				case CSR_FFLAGS:
 				case CSR_FRM:
 				case CSR_FCSR:
-					r->exist = riscv_supports_extension(target,
-							riscv_current_hartid(target), 'F');
+					r->exist = riscv_supports_extension(target, hartid, 'F');
 					r->group = "float";
 					r->feature = &feature_fpu;
 					break;
@@ -3250,16 +3384,15 @@ int riscv_init_registers(struct target *target)
 				case CSR_SCAUSE:
 				case CSR_STVAL:
 				case CSR_SATP:
-					r->exist = riscv_supports_extension(target,
-							riscv_current_hartid(target), 'S');
+					r->exist = riscv_supports_extension(target, hartid, 'S');
 					break;
 				case CSR_MEDELEG:
 				case CSR_MIDELEG:
 					/* "In systems with only M-mode, or with both M-mode and
 					 * U-mode but without U-mode trap support, the medeleg and
 					 * mideleg registers should not exist." */
-					r->exist = riscv_supports_extension(target, riscv_current_hartid(target), 'S') ||
-						riscv_supports_extension(target, riscv_current_hartid(target), 'N');
+					r->exist = riscv_supports_extension(target, hartid, 'S') ||
+						riscv_supports_extension(target, hartid, 'N');
 					break;
 
 				case CSR_CYCLEH:
@@ -3345,7 +3478,7 @@ int riscv_init_registers(struct target *target)
 			r->feature = &feature_virtual;
 			r->size = 8;
 
-		} else {
+		} else if (number >= GDB_REGNO_COUNT) {
 			/* Custom registers. */
 			assert(expose_custom);
 
