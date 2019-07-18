@@ -1581,8 +1581,9 @@ static int examine(struct target *target)
 	}
 
 	if (info->progbufsize < 4 && riscv_enable_virtual) {
-		LOG_WARNING("set_enable_virtual is not available on this target. It "
-					"requires a program buffer size of at least 4. (progbufsize=%d)"
+		LOG_ERROR("set_enable_virtual is not available on this target. It "
+				"requires a program buffer size of at least 4. (progbufsize=%d) "
+				"Use `riscv set_enable_virtual off` to continue."
 					, info->progbufsize);
 	}
 
@@ -2089,6 +2090,39 @@ static int read_sbcs_nonbusy(struct target *target, uint32_t *sbcs)
 	}
 }
 
+static int modify_privilege(struct target *target, uint64_t *mstatus, uint64_t *mstatus_old)
+{
+	RISCV013_INFO(info);
+
+	if (riscv_enable_virtual && info->progbufsize >= 4) {
+		/* Read DCSR */
+		uint64_t dcsr;
+		if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+			return ERROR_FAIL;
+
+		/* Read and save MSTATUS */
+		if (register_read(target, mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
+			return ERROR_FAIL;
+		*mstatus_old = *mstatus;
+
+		/* If we come from m-mode with mprv set, we want to keep mpp */
+		if (get_field(dcsr, DCSR_PRV) < 3) {
+			/* MPP = PRIV */
+			*mstatus = set_field(*mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
+
+			/* MPRV = 1 */
+			*mstatus = set_field(*mstatus, MSTATUS_MPRV, 1);
+
+			/* Write MSTATUS */
+			if (*mstatus != *mstatus_old)
+				if (register_write_direct(target, GDB_REGNO_MSTATUS, *mstatus) != ERROR_OK)
+					return ERROR_FAIL;
+		}
+	}
+
+	return ERROR_OK;
+}
+
 static int read_memory_bus_v0(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
@@ -2481,31 +2515,8 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 	uint64_t mstatus = 0;
 	uint64_t mstatus_old = 0;
-	if (riscv_enable_virtual && info->progbufsize >= 4) {
-		/* Read DCSR */
-		uint64_t dcsr;
-		if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-			return ERROR_FAIL;
-
-		/* Read and save MSTATUS */
-		if (register_read(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
-			return ERROR_FAIL;
-		mstatus_old = mstatus;
-
-		/* If we come from m-mode with mprv set, we want to keep mpp */
-		if (get_field(dcsr, DCSR_PRV) < 3) {
-			/* MPP = PRIV */
-			mstatus = set_field(mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
-
-			/* MPRV = 1 */
-			mstatus = set_field(mstatus, MSTATUS_MPRV, 1);
-
-			/* Write MSTATUS */
-			if (mstatus != mstatus_old)
-				if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus) != ERROR_OK)
-					return ERROR_FAIL;
-		}
-	}
+	if (modify_privilege(target, &mstatus, &mstatus_old) != ERROR_OK)
+		return ERROR_FAIL;
 
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
@@ -2788,31 +2799,8 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 
 	uint64_t mstatus = 0;
 	uint64_t mstatus_old = 0;
-	if (riscv_enable_virtual && info->progbufsize >= 4) {
-		/* Read DCSR */
-		uint64_t dcsr;
-		if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-			return ERROR_FAIL;
-
-		/* Read and save MSTATUS */
-		if (register_read(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
-			return ERROR_FAIL;
-		mstatus_old = mstatus;
-
-		/* If we come from m-mode with mprv set, we want to keep mpp */
-		if (get_field(dcsr, DCSR_PRV) < 3) {
-			/* MPP = PRIV */
-			mstatus = set_field(mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
-
-			/* MPRV = 1 */
-			mstatus = set_field(mstatus, MSTATUS_MPRV, 1);
-
-			/* Write MSTATUS */
-			if (mstatus != mstatus_old)
-				if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus) != ERROR_OK)
-					return ERROR_FAIL;
-		}
-	}
+	if (modify_privilege(target, &mstatus, &mstatus_old) != ERROR_OK)
+		return ERROR_FAIL;
 
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
