@@ -990,22 +990,19 @@ static int register_write_abstract(struct target *target, uint32_t number,
  * Sets the AAMSIZE field of a memory access abstract command based on
  * the width (bits).
  */
-uint32_t abstract_memory_size(unsigned width)
+static uint32_t abstract_memory_size(unsigned width)
 {
 	switch (width) {
 		case 8:
 			return set_field(0, AC_ACCESS_MEMORY_AAMSIZE, 0);
 		case 16:
 			return set_field(0, AC_ACCESS_MEMORY_AAMSIZE, 1);
-			break;
 		case 32:
 			return set_field(0, AC_ACCESS_MEMORY_AAMSIZE, 2);
 		case 64:
 			return set_field(0, AC_ACCESS_MEMORY_AAMSIZE, 3);
-			break;
 		case 128:
 			return set_field(0, AC_ACCESS_MEMORY_AAMSIZE, 4);
-			break;
 		default:
 			LOG_ERROR("Unsupported memory width: %d", width);
 			return 0;
@@ -1015,8 +1012,8 @@ uint32_t abstract_memory_size(unsigned width)
 /*
  * Creates a memory access abstract command.
  */
-static uint32_t access_memory_command(struct target *target, unsigned virtual,
-		unsigned width, unsigned postincrement, unsigned write)
+static uint32_t access_memory_command(struct target *target, bool virtual,
+		unsigned width, bool postincrement, bool write)
 {
 	uint32_t command = set_field(0, AC_ACCESS_MEMORY_CMDTYPE, 2);
 	command = set_field(command, AC_ACCESS_MEMORY_AAMVIRTUAL, virtual);
@@ -2355,26 +2352,26 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 
 	memset(buffer, 0, count*size);
 
-	// Convert the size (bytes) to width (bits)
+	/* Convert the size (bytes) to width (bits) */
 	unsigned width = size << 3;
 	if (width > 64) {
-		// TODO: Add 128b support if it's ever used. Involves modifying
-		//       read/write_abstract_arg() to work on two 64b values.
+		/* TODO: Add 128b support if it's ever used. Involves modifying
+				 read/write_abstract_arg() to work on two 64b values. */
 		LOG_ERROR("Unsupported size: %d bits", size);
 		return ERROR_FAIL;
 	}
 
-	// Create the command (physical address, postincrement, read)
+	/* Create the command (physical address, postincrement, read) */
 	uint32_t command = access_memory_command(target, false, width, true, false);
 
-	// Execute the reads
+	/* Execute the reads */
 	uint8_t* p = buffer;
 	bool updateaddr = true;
 	unsigned width32 = (width + 31) / 32 * 32;
 	for (uint32_t c = 0; c < count; c++) {
-		// Only update the addres initially and let postincrement update it
+		/* Only update the addres initially and let postincrement update it */
 		if (updateaddr) {
-			// Set arg1 to the address: address + c * size
+			/* Set arg1 to the address: address + c * size */
 			result = write_abstract_arg(target, 1, address, riscv_xlen(target));
 			if (result != ERROR_OK) {
 				LOG_ERROR("Failed to write arg1 during read_memory_abstract().");
@@ -2382,14 +2379,14 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 			}
 		}
 
-		// Execute the command
+		/* Execute the command */
 		result = execute_abstract_command(target, command);
 		if (result != ERROR_OK) {
 			LOG_ERROR("Failed to execute command read_memory_abstract().");
 			return result;
 		}
 
-		// Copy arg0 to buffer (rounded width up to nearest 32)
+		/* Copy arg0 to buffer (rounded width up to nearest 32) */
 		riscv_reg_t value = read_abstract_arg(target, 0, width32);
 		memcpy(p, &value, size);
 
@@ -2413,23 +2410,23 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 	LOG_DEBUG("writing %d words of %d bytes from 0x%" TARGET_PRIxADDR, count,
 			  size, address);
 
-	// Convert the size (bytes) to width (bits)
+	/* Convert the size (bytes) to width (bits) */
 	unsigned width = size << 3;
 	if (width > 64) {
-		// TODO: Add 128b support if it's ever used. Involves modifying
-		//       read/write_abstract_arg() to work on two 64b values.
+		/* TODO: Add 128b support if it's ever used. Involves modifying
+				 read/write_abstract_arg() to work on two 64b values. */
 		LOG_ERROR("Unsupported size: %d bits", width);
 		return ERROR_FAIL;
 	}
 
-	// Create the command (physical address, postincrement, write)
+	/* Create the command (physical address, postincrement, write) */
 	uint32_t command = access_memory_command(target, false, width, true, true);
 
-	// Execute the writes
+	/* Execute the writes */
 	const uint8_t* p = buffer;
 	bool updateaddr = true;
 	for (uint32_t c = 0; c < count; c++) {
-		// Move data to arg0
+		/* Move data to arg0 */
 		riscv_reg_t value = *(riscv_reg_t*)p;
 		result = write_abstract_arg(target, 0, value, riscv_xlen(target));
 		if (result != ERROR_OK) {
@@ -2437,9 +2434,9 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 			return result;
 		  }
 
-		// Only update the addres initially and let postincrement update it
+		/* Only update the addres initially and let postincrement update it */
 		if (updateaddr) {
-			// Set arg1 to the address: address + c * size
+			/* Set arg1 to the address: address + c * size */
 			result = write_abstract_arg(target, 1, address, riscv_xlen(target));
 			if (result != ERROR_OK) {
 				LOG_ERROR("Failed to write arg1 during write_memory_abstract().");
@@ -2447,7 +2444,7 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 			}
 		}
 
-		// Execute the command
+		/* Execute the command */
 		result = execute_abstract_command(target, command);
 		if (result != ERROR_OK) {
 			LOG_ERROR("Failed to execute command write_memory_abstract().");
@@ -2862,9 +2859,6 @@ static int read_memory(struct target *target, target_addr_t address,
 		return read_memory_progbuf(target, address, size, count, buffer);
 
 	return read_memory_abstract(target, address, size, count, buffer);
-
-	LOG_ERROR("Don't know how to read memory on this target.");
-	return ERROR_FAIL;
 }
 
 static int write_memory_bus_v0(struct target *target, target_addr_t address,
@@ -3252,9 +3246,6 @@ static int write_memory(struct target *target, target_addr_t address,
 
 	return write_memory_abstract(target, address, size, count, buffer);
 
-	LOG_ERROR("Don't know how to write memory on this target.");
-	return ERROR_FAIL;
-}
 
 static int arch_state(struct target *target)
 {
