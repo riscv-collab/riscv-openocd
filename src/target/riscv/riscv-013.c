@@ -2365,7 +2365,7 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 	uint32_t command = access_memory_command(target, false, width, true, false);
 
 	/* Execute the reads */
-	uint8_t* p = buffer;
+	uint8_t *p = buffer;
 	bool updateaddr = true;
 	unsigned width32 = (width + 31) / 32 * 32;
 	for (uint32_t c = 0; c < count; c++) {
@@ -2423,11 +2423,11 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 	uint32_t command = access_memory_command(target, false, width, true, true);
 
 	/* Execute the writes */
-	const uint8_t* p = buffer;
+	const uint8_t *p = buffer;
 	bool updateaddr = true;
 	for (uint32_t c = 0; c < count; c++) {
 		/* Move data to arg0 */
-		riscv_reg_t value = *(riscv_reg_t*)p;
+		riscv_reg_t value = *(riscv_reg_t *)p;
 		result = write_abstract_arg(target, 0, value, riscv_xlen(target));
 		if (result != ERROR_OK) {
 			LOG_ERROR("Failed to write arg0 during write_memory_abstract().");
@@ -3245,7 +3245,7 @@ static int write_memory(struct target *target, target_addr_t address,
 		return write_memory_progbuf(target, address, size, count, buffer);
 
 	return write_memory_abstract(target, address, size, count, buffer);
-
+}
 
 static int arch_state(struct target *target)
 {
