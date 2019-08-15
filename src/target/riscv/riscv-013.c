@@ -2427,7 +2427,8 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 	bool updateaddr = true;
 	for (uint32_t c = 0; c < count; c++) {
 		/* Move data to arg0 */
-		riscv_reg_t value = *p;
+		riscv_reg_t value = 0;
+		memcpy(&value, p, size);
 		result = write_abstract_arg(target, 0, value, riscv_xlen(target));
 		if (result != ERROR_OK) {
 			LOG_ERROR("Failed to write arg0 during write_memory_abstract().");
