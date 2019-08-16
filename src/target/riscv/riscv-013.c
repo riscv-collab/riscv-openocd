@@ -1954,6 +1954,30 @@ static int deassert_reset(struct target *target)
 /**
  * @par size in bytes
  */
+static void read_from_buf(uint64_t *value, const uint8_t *buffer, unsigned size)
+{
+	switch (size) {
+		case 1:
+			*value = buffer[0];
+			break;
+		case 2:
+			*value = buffer[0]
+				| ((uint64_t) buffer[1] << 8);
+			break;
+		case 4:
+			*value = buffer[0]
+				| ((uint64_t) buffer[1] << 8)
+				| ((uint64_t) buffer[2] << 16)
+				| ((uint64_t) buffer[3] << 24);
+			break;
+		default:
+			assert(false);
+	}
+}
+
+/**
+ * @par size in bytes
+ */
 static void write_to_buf(uint8_t *buffer, uint64_t value, unsigned size)
 {
 	switch (size) {
@@ -2388,7 +2412,7 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 
 		/* Copy arg0 to buffer (rounded width up to nearest 32) */
 		riscv_reg_t value = read_abstract_arg(target, 0, width32);
-		memcpy(p, &value, size);
+		write_to_buf(p, value, size);
 
 		updateaddr = false;
 		p += size;
@@ -2428,7 +2452,7 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 	for (uint32_t c = 0; c < count; c++) {
 		/* Move data to arg0 */
 		riscv_reg_t value = 0;
-		memcpy(&value, p, size);
+		read_from_buf(&value, p, size);
 		result = write_abstract_arg(target, 0, value, riscv_xlen(target));
 		if (result != ERROR_OK) {
 			LOG_ERROR("Failed to write arg0 during write_memory_abstract().");
@@ -2877,6 +2901,7 @@ static int write_memory_bus_v0(struct target *target, target_addr_t address,
 
 	/* B.8 Writing Memory, single write check if we write in one go */
 	if (count == 1) { /* count is in bytes here */
+		/* TODO: Test with read_from_buf(&value, t_buffer, size) */
 		/* check the size */
 		switch (size) {
 			case 1:
@@ -2921,6 +2946,7 @@ static int write_memory_bus_v0(struct target *target, target_addr_t address,
 		t_addr = address + offset;
 		t_buffer = buffer + offset;
 
+		/* TODO: Test with read_from_buf(&value, t_buffer, size) */
 		switch (size) {
 			case 1:
 				value = t_buffer[0];
@@ -3103,6 +3129,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 			unsigned offset = size*i;
 			const uint8_t *t_buffer = buffer + offset;
 
+			/* TODO: Test with read_from_buf(&value, t_buffer, size)*/
 			uint32_t value;
 			switch (size) {
 				case 1:
