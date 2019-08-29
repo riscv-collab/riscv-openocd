@@ -1583,7 +1583,7 @@ static int riscv_checksum_memory(struct target *target,
 		crc_code_size = sizeof(riscv64_crc_code);
 	}
 
-	if (count < crc_code_size * 4 || 1) { //<<<
+	if (count < crc_code_size * 4) {
 		/* Don't use the algorithm for relatively small buffers. It's faster
 		 * just to read the memory.  target_checksum_memory() will take care of
 		 * that if we fail. */
