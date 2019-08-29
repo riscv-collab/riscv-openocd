@@ -1496,8 +1496,6 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 		int64_t now = timeval_ms();
 		if (now - start > timeout_ms) {
 			LOG_ERROR("Algorithm timed out after %d ms.", timeout_ms);
-			LOG_ERROR("  now   = 0x%08x", (uint32_t) now);
-			LOG_ERROR("  start = 0x%08x", (uint32_t) start);
 			riscv_halt(target);
 			old_or_new_riscv_poll(target);
 			for (enum gdb_regno regno = 0; regno <= GDB_REGNO_PC; regno++) {
@@ -1538,23 +1536,23 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 		if (reg_params[i].direction == PARAM_IN ||
 				reg_params[i].direction == PARAM_IN_OUT) {
 			struct reg *r = register_get_by_name(target->reg_cache, reg_params[i].reg_name, 0);
-			if (r->type->get(r) != ERROR_OK)
+			if (r->type->get(r) != ERROR_OK) {
+				LOG_ERROR("get(%s) failed", r->name);
 				return ERROR_FAIL;
+			}
 			buf_cpy(r->value, reg_params[i].value, reg_params[i].size);
 		}
 		LOG_DEBUG("restore %s", reg_params[i].reg_name);
 		struct reg *r = register_get_by_name(target->reg_cache, reg_params[i].reg_name, 0);
 		buf_set_u64(buf, 0, info->xlen[0], saved_regs[r->number]);
-		if (r->type->set(r, buf) != ERROR_OK)
+		if (r->type->set(r, buf) != ERROR_OK) {
+			LOG_ERROR("set(%s) failed", r->name);
 			return ERROR_FAIL;
+		}
 	}
 
 	return ERROR_OK;
 }
-
-/* Should run code on the target to perform CRC of
-memory. Not yet implemented.
-*/
 
 static int riscv_checksum_memory(struct target *target,
 		target_addr_t address, uint32_t count,
@@ -1585,7 +1583,7 @@ static int riscv_checksum_memory(struct target *target,
 		crc_code_size = sizeof(riscv64_crc_code);
 	}
 
-	if (count < crc_code_size * 4) {
+	if (count < crc_code_size * 4 || 1) { //<<<
 		/* Don't use the algorithm for relatively small buffers. It's faster
 		 * just to read the memory.  target_checksum_memory() will take care of
 		 * that if we fail. */

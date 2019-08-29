@@ -80,7 +80,10 @@
 
 enum {
 	ERROR_OK,
-	ERROR_FAIL
+	ERROR_TXWM_WAIT_TIMEOUT,
+	ERROR_FESPI_TX_TIMEOUT,
+	ERROR_FESPI_RX_TIMEOUT,
+	ERROR_FESPI_WIP_TIMEOUT,
 };
 
 static int fespi_txwm_wait(volatile uint32_t *ctrl_base);
@@ -164,7 +167,7 @@ static int fespi_txwm_wait(volatile uint32_t *ctrl_base)
 			return ERROR_OK;
 	}
 
-	return ERROR_FAIL;
+	return ERROR_TXWM_WAIT_TIMEOUT;
 }
 
 static void fespi_set_dir(volatile uint32_t *ctrl_base, bool dir)
@@ -185,7 +188,7 @@ static int fespi_tx(volatile uint32_t *ctrl_base, uint8_t in)
 			return ERROR_OK;
 		}
 	}
-	return ERROR_FAIL;
+	return ERROR_FESPI_TX_TIMEOUT;
 }
 
 static int fespi_rx(volatile uint32_t *ctrl_base, uint8_t *out)
@@ -201,7 +204,7 @@ static int fespi_rx(volatile uint32_t *ctrl_base, uint8_t *out)
 		}
 	}
 
-	return ERROR_FAIL;
+	return ERROR_FESPI_RX_TIMEOUT;
 }
 
 static int fespi_wip(volatile uint32_t *ctrl_base)
@@ -211,15 +214,17 @@ static int fespi_wip(volatile uint32_t *ctrl_base)
 	fespi_write_reg(ctrl_base, FESPI_REG_CSMODE, FESPI_CSMODE_HOLD);
 
 	fespi_tx(ctrl_base, SPIFLASH_READ_STATUS);
-	if (fespi_rx(ctrl_base, NULL) != ERROR_OK)
-		return ERROR_FAIL;
+	int result = fespi_rx(ctrl_base, NULL);
+	if (result != ERROR_OK)
+		return result;
 
 	unsigned timeout = 1000;
 	while (timeout--) {
 		fespi_tx(ctrl_base, 0);
 		uint8_t rx;
-		if (fespi_rx(ctrl_base, &rx) != ERROR_OK)
-			return ERROR_FAIL;
+		result = fespi_rx(ctrl_base, &rx);
+		if (result != ERROR_OK)
+			return result;
 		if ((rx & SPIFLASH_BSY_BIT) == 0) {
 			fespi_write_reg(ctrl_base, FESPI_REG_CSMODE, FESPI_CSMODE_AUTO);
 			fespi_set_dir(ctrl_base, FESPI_DIR_TX);
@@ -227,7 +232,7 @@ static int fespi_wip(volatile uint32_t *ctrl_base)
 		}
 	}
 
-	return ERROR_FAIL;
+	return ERROR_FESPI_WIP_TIMEOUT;
 }
 
 static int slow_fespi_write_buffer(volatile uint32_t *ctrl_base,

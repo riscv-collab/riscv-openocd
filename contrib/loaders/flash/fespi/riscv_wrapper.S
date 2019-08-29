@@ -16,6 +16,7 @@ _start:
 		ebreak
 
 		.section .data
+		.balign REGBYTES
 stack:
 		.fill	16, REGBYTES, 0x8675309
 stack_end:
