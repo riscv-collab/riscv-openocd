@@ -490,7 +490,12 @@ int rtos_get_gdb_reg(struct connection *connection, int reg_num)
 			retval = target->rtos->type->get_thread_reg(target->rtos,
 					current_threadid, reg_num, &reg_list[0]);
 			if (retval != ERROR_OK) {
-				LOG_ERROR("RTOS: failed to get register %d", reg_num);
+				/*
+				 * Different RISC-V cores have varying register sets.  OpenOCD currently
+				 * operates on a fixed register list.  Just log a 'debug' message if a
+				 * reegister doesn't exist.
+				 */
+				LOG_DEBUG("RTOS: failed to get register %d", reg_num);
 				return retval;
 			}
 		} else {
@@ -499,7 +504,12 @@ int rtos_get_gdb_reg(struct connection *connection, int reg_num)
 					&reg_list,
 					&num_regs);
 			if (retval != ERROR_OK) {
-				LOG_ERROR("RTOS: failed to get register list");
+				/*
+				 * Different RISC-V cores have varying register sets.  OpenOCD currently
+				 * operates on a fixed register list.  Just log a 'debug' message if a
+				 * reegister doesn't exist.
+				 */
+				LOG_DEBUG("RTOS: failed to get register list");
 				return retval;
 			}
 		}
