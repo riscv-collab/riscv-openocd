@@ -137,6 +137,13 @@ struct fespi_target {
 static const struct fespi_target target_devices[] = {
 	/* name,   tap_idcode, ctrl_base */
 	{ "Freedom E300 SPI Flash",  0x10e31913 , 0x10014000 },
+	{ "Nuclei E203 SPI Flash",	0x1e200a6d,	0x10014000},
+	{ "Nuclei N201 SPI Flash",	0x12010a6d,	0x10014000},
+	{ "Nuclei N203 SPI Flash",	0x12030a6d,	0x10014000},
+	{ "Nuclei N205 SPI Flash",	0x12050a6d,	0x10014000},
+	{ "Nuclei N205f SPI Flash",	0x1205fa6d,	0x10014000},
+	{ "Nuclei N207 SPI Flash",	0x12070a6d,	0x10014000},
+	{ "Nuclei N207f SPI Flash",	0x1207fa6d,	0x10014000},
 	{ NULL,    0,           0          }
 };
 
