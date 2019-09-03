@@ -93,17 +93,21 @@ static int fespi_wip(volatile uint32_t *ctrl_base);
 static int slow_fespi_write_buffer(volatile uint32_t *ctrl_base,
 		const uint8_t *buffer, unsigned offset, unsigned len);
 
-int main(volatile uint32_t *ctrl_base, uint32_t page_size,
+int flash_fespi(volatile uint32_t *ctrl_base, uint32_t page_size,
 		const uint8_t *buffer, unsigned offset, uint32_t count)
 {
-	fespi_txwm_wait(ctrl_base);
+	int result;
+
+	result = fespi_txwm_wait(ctrl_base);
+	if (result != ERROR_OK)
+		return result;
 
 	/* Disable Hardware accesses*/
 	fespi_disable_hw_mode(ctrl_base);
 
 	/* poll WIP */
-	int retval = fespi_wip(ctrl_base);
-	if (retval != ERROR_OK)
+	result = fespi_wip(ctrl_base);
+	if (result != ERROR_OK)
 		goto err;
 
 	/* Assume page_size is a power of two so we don't need the modulus code. */
@@ -118,8 +122,8 @@ int main(volatile uint32_t *ctrl_base, uint32_t page_size,
 		else
 			cur_count = count;
 
-		retval = slow_fespi_write_buffer(ctrl_base, buffer, offset, cur_count);
-		if (retval != ERROR_OK)
+		result = slow_fespi_write_buffer(ctrl_base, buffer, offset, cur_count);
+		if (result != ERROR_OK)
 			goto err;
 
 		page_offset = 0;
@@ -132,7 +136,7 @@ err:
 	/* Switch to HW mode before return to prompt */
 	fespi_enable_hw_mode(ctrl_base);
 
-	return retval;
+	return result;
 }
 
 static uint32_t fespi_read_reg(volatile uint32_t *ctrl_base, unsigned address)
@@ -213,14 +217,18 @@ static int fespi_wip(volatile uint32_t *ctrl_base)
 
 	fespi_write_reg(ctrl_base, FESPI_REG_CSMODE, FESPI_CSMODE_HOLD);
 
-	fespi_tx(ctrl_base, SPIFLASH_READ_STATUS);
-	int result = fespi_rx(ctrl_base, NULL);
+	int result = fespi_tx(ctrl_base, SPIFLASH_READ_STATUS);
+	if (result != ERROR_OK)
+		return result;
+	result = fespi_rx(ctrl_base, NULL);
 	if (result != ERROR_OK)
 		return result;
 
 	unsigned timeout = 1000;
 	while (timeout--) {
-		fespi_tx(ctrl_base, 0);
+		result = fespi_tx(ctrl_base, 0);
+		if (result != ERROR_OK)
+			return result;
 		uint8_t rx;
 		result = fespi_rx(ctrl_base, &rx);
 		if (result != ERROR_OK)
@@ -238,21 +246,38 @@ static int fespi_wip(volatile uint32_t *ctrl_base)
 static int slow_fespi_write_buffer(volatile uint32_t *ctrl_base,
 		const uint8_t *buffer, unsigned offset, unsigned len)
 {
-	fespi_tx(ctrl_base, SPIFLASH_WRITE_ENABLE);
-	fespi_txwm_wait(ctrl_base);
+	int result = fespi_tx(ctrl_base, SPIFLASH_WRITE_ENABLE);
+	if (result != ERROR_OK)
+		return result;
+	result = fespi_txwm_wait(ctrl_base);
+	if (result != ERROR_OK)
+		return result;
 
 	fespi_write_reg(ctrl_base, FESPI_REG_CSMODE, FESPI_CSMODE_HOLD);
 
-	fespi_tx(ctrl_base, SPIFLASH_PAGE_PROGRAM);
+	result = fespi_tx(ctrl_base, SPIFLASH_PAGE_PROGRAM);
+	if (result != ERROR_OK)
+		return result;
 
-	fespi_tx(ctrl_base, offset >> 16);
-	fespi_tx(ctrl_base, offset >> 8);
-	fespi_tx(ctrl_base, offset);
+	result = fespi_tx(ctrl_base, offset >> 16);
+	if (result != ERROR_OK)
+		return result;
+	result = fespi_tx(ctrl_base, offset >> 8);
+	if (result != ERROR_OK)
+		return result;
+	result = fespi_tx(ctrl_base, offset);
+	if (result != ERROR_OK)
+		return result;
 
-	for (unsigned i = 0; i < len; i++)
-		fespi_tx(ctrl_base, buffer[i]);
+	for (unsigned i = 0; i < len; i++) {
+		result = fespi_tx(ctrl_base, buffer[i]);
+		if (result != ERROR_OK)
+			return result;
+	}
 
-	fespi_txwm_wait(ctrl_base);
+	result = fespi_txwm_wait(ctrl_base);
+	if (result != ERROR_OK)
+		return result;
 
 	fespi_write_reg(ctrl_base, FESPI_REG_CSMODE, FESPI_CSMODE_AUTO);
 

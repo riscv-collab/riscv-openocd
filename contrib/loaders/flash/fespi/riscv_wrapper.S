@@ -12,7 +12,7 @@
 		.global _start
 _start:
 		la 		sp, stack_end
-		jal 	main
+		jal 	flash_fespi
 		ebreak
 
 		.section .data
