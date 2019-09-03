@@ -1153,4 +1153,5 @@
 [9][0x12 - 1] = "Energous",
 [9][0x13 - 1] = "Raspberry Pi Trading Ltd.",
 [9][0x14 - 1] = "Shenzhen Chixingzhe Tech Co. Ltd.",
+[10][0x36 - 1] = "Nuclei System Technology Co.,Ltd.",
 /* EOF */
