@@ -6,7 +6,7 @@ RISCV_CC=$(CROSS_COMPILE)gcc
 RISCV_OBJCOPY=$(CROSS_COMPILE)objcopy
 RISCV_OBJDUMP=$(CROSS_COMPILE)objdump
 
-CFLAGS = -nostdlib -nostartfiles -Wall -Werror -Os -fPIC -Wunused-result
+CFLAGS = -nostdlib -nostartfiles -Wall -Werror -Os -fPIC -Wunused-result -g
 RISCV32_CFLAGS = -march=rv32e -mabi=ilp32e $(CFLAGS)
 RISCV64_CFLAGS = -march=rv64i -mabi=lp64 $(CFLAGS)
 
