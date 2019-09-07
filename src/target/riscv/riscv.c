@@ -1416,6 +1416,7 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 		target_addr_t exit_point, int timeout_ms, void *arch_info)
 {
 	riscv_info_t *info = (riscv_info_t *) target->arch_info;
+	int hartid = riscv_current_hartid(target);
 
 	if (num_mem_params > 0) {
 		LOG_ERROR("Memory parameters are not supported for RISC-V algorithms.");
@@ -1524,6 +1525,10 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 		if (result != ERROR_OK)
 			return result;
 	}
+
+	/* The current hart id might have been changed in poll(). */
+	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
+		return ERROR_FAIL;
 
 	if (reg_pc->type->get(reg_pc) != ERROR_OK)
 		return ERROR_FAIL;
