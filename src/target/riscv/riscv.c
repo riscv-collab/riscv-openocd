@@ -2609,7 +2609,7 @@ bool riscv_supports_extension(struct target *target, int hartid, char letter)
 	return r->misa[hartid] & (1 << num);
 }
 
-int riscv_xlen(const struct target *target)
+unsigned riscv_xlen(const struct target *target)
 {
 	return riscv_xlen_of_hart(target, riscv_current_hartid(target));
 }
