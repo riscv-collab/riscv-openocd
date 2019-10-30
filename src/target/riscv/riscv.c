@@ -2457,7 +2457,7 @@ const struct command_registration riscv_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-unsigned riscv_address_bits(struct target *target)
+static unsigned riscv_xlen_nonconst(struct target *target)
 {
 	return riscv_xlen(target);
 }
@@ -2500,7 +2500,8 @@ struct target_type riscv_target = {
 
 	.commands = riscv_command_handlers,
 
-	.address_bits = riscv_address_bits
+	.address_bits = riscv_xlen_nonconst,
+	.data_bits = riscv_xlen_nonconst
 };
 
 /*** RISC-V Interface ***/
