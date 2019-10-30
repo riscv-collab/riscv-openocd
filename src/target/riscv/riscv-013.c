@@ -1974,6 +1974,7 @@ static uint64_t read_from_buf(const uint8_t *buffer, unsigned size)
 		default:
 			assert(false);
 	}
+	return -1;
 }
 
 /**
