@@ -336,6 +336,11 @@ static int fespi_erase_sector(struct flash_bank *bank, int sector)
 	if (retval != ERROR_OK)
 		return retval;
 	sector = bank->sectors[sector].offset;
+	if (bank->size > 0xffffff) {
+		retval = fespi_tx(bank, sector >> 24);
+		if (retval != ERROR_OK)
+			return retval;
+	}
 	retval = fespi_tx(bank, sector >> 16);
 	if (retval != ERROR_OK)
 		return retval;
@@ -436,32 +441,38 @@ static int fespi_protect(struct flash_bank *bank, int set,
 static int slow_fespi_write_buffer(struct flash_bank *bank,
 		const uint8_t *buffer, uint32_t offset, uint32_t len)
 {
+	struct fespi_flash_bank *fespi_info = bank->driver_priv;
 	uint32_t ii;
-
-	if (offset & 0xFF000000) {
-		LOG_ERROR("FESPI interface does not support greater than 3B addressing, can't write to offset 0x%x",
-				offset);
-		return ERROR_FAIL;
-	}
 
 	/* TODO!!! assert that len < page size */
 
-	fespi_tx(bank, SPIFLASH_WRITE_ENABLE);
-	fespi_txwm_wait(bank);
+	if (fespi_tx(bank, SPIFLASH_WRITE_ENABLE) != ERROR_OK)
+		return ERROR_FAIL;
+	if (fespi_txwm_wait(bank) != ERROR_OK)
+		return ERROR_FAIL;
 
 	if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_HOLD) != ERROR_OK)
 		return ERROR_FAIL;
 
-	fespi_tx(bank, SPIFLASH_PAGE_PROGRAM);
+	if (fespi_tx(bank, fespi_info->dev->pprog_cmd) != ERROR_OK)
+		return ERROR_FAIL;
 
-	fespi_tx(bank, offset >> 16);
-	fespi_tx(bank, offset >> 8);
-	fespi_tx(bank, offset);
+	if (bank->size > 0xffffff && fespi_tx(bank, offset >> 24) != ERROR_OK)
+		return ERROR_FAIL;
+	if (fespi_tx(bank, offset >> 16) != ERROR_OK)
+		return ERROR_FAIL;
+	if (fespi_tx(bank, offset >> 8) != ERROR_OK)
+		return ERROR_FAIL;
+	if (fespi_tx(bank, offset) != ERROR_OK)
+		return ERROR_FAIL;
 
-	for (ii = 0; ii < len; ii++)
-		fespi_tx(bank, buffer[ii]);
+	for (ii = 0; ii < len; ii++) {
+		if (fespi_tx(bank, buffer[ii]) != ERROR_OK)
+			return ERROR_FAIL;
+	}
 
-	fespi_txwm_wait(bank);
+	if (fespi_txwm_wait(bank) != ERROR_OK)
+		return ERROR_FAIL;
 
 	if (fespi_write_reg(bank, FESPI_REG_CSMODE, FESPI_CSMODE_AUTO) != ERROR_OK)
 		return ERROR_FAIL;
@@ -488,7 +499,8 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 	int sector;
 	int retval = ERROR_OK;
 
-	LOG_DEBUG("offset=0x%08" PRIx32 " count=0x%08" PRIx32, offset, count);
+	LOG_DEBUG("bank->size=0x%x offset=0x%08" PRIx32 " count=0x%08" PRIx32,
+			bank->size, offset, count);
 
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
