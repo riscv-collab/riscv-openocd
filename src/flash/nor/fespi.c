@@ -573,12 +573,13 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 		fespi_info->dev->pagesize : SPIFLASH_DEF_PAGESIZE;
 
 	if (algorithm_wa) {
-		struct reg_param reg_params[5];
+		struct reg_param reg_params[6];
 		init_reg_param(&reg_params[0], "a0", xlen, PARAM_IN_OUT);
 		init_reg_param(&reg_params[1], "a1", xlen, PARAM_OUT);
 		init_reg_param(&reg_params[2], "a2", xlen, PARAM_OUT);
 		init_reg_param(&reg_params[3], "a3", xlen, PARAM_OUT);
 		init_reg_param(&reg_params[4], "a4", xlen, PARAM_OUT);
+		init_reg_param(&reg_params[5], "a5", xlen, PARAM_OUT);
 
 		while (count > 0) {
 			cur_count = MIN(count, data_wa_size);
@@ -587,6 +588,8 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 			buf_set_u64(reg_params[2].value, 0, xlen, data_wa->address);
 			buf_set_u64(reg_params[3].value, 0, xlen, offset);
 			buf_set_u64(reg_params[4].value, 0, xlen, cur_count);
+			buf_set_u64(reg_params[5].value, 0, xlen,
+					fespi_info->dev->pprog_cmd | (bank->size > 0xffffff ? 0x100 : 0));
 
 			retval = target_write_buffer(target, data_wa->address, cur_count,
 					buffer);
@@ -601,7 +604,8 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 					", count=0x%" PRIx32 "), buffer=%02x %02x %02x %02x %02x %02x ..." PRIx32,
 					fespi_info->ctrl_base, page_size, data_wa->address, offset, cur_count,
 					buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5]);
-			retval = target_run_algorithm(target, 0, NULL, 5, reg_params,
+			retval = target_run_algorithm(target, 0, NULL,
+					ARRAY_SIZE(reg_params), reg_params,
 					algorithm_wa->address, 0, cur_count * 2, NULL);
 			if (retval != ERROR_OK) {
 				LOG_ERROR("Failed to execute algorithm at " TARGET_ADDR_FMT ": %d",
@@ -802,8 +806,6 @@ static int fespi_probe(struct flash_bank *bank)
 
 	if (bank->size <= (1UL << 16))
 		LOG_WARNING("device needs 2-byte addresses - not implemented");
-	if (bank->size > (1UL << 24))
-		LOG_WARNING("device needs paging or 4-byte addresses - not implemented");
 
 	/* if no sectors, treat whole bank as single sector */
 	sectorsize = fespi_info->dev->sectorsize ?
