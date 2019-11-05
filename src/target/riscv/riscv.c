@@ -2257,6 +2257,13 @@ COMMAND_HANDLER(riscv_use_bscan_tunnel)
 
 	bscan_tunnel_type = tunnel_type;
 	bscan_tunnel_ir_width = irwidth;
+	/* Set things up to generate another one-time loading of USER4 into IR the first time
+	   a RISCV scan happens from this point,  in case somebody transitioned out of bscan
+	   tunneling mode and did some other activity on the outer JTAG chain after having
+	   been in bscan tunneling mode at an earlier time within the same lifetime of this
+	   process (which may have loaded a different IR value). */
+	bscan_user4_selected = false;  
+
 	return ERROR_OK;
 }
 
