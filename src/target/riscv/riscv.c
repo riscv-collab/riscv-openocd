@@ -172,7 +172,7 @@ struct scan_field select_idcode = {
 
 bscan_tunnel_type_t bscan_tunnel_type;
 int bscan_tunnel_ir_width; /* if zero, then tunneling is not present/active */
-bool bscan_user4_selected = false;
+bool bscan_user4_selected;
 
 uint8_t bscan_zero[4] = {0};
 uint8_t bscan_one[4] = {1};
@@ -277,7 +277,7 @@ static int riscv_resume_go_all_harts(struct target *target);
 void select_dmi_via_bscan(struct target *target)
 {
 	if (!bscan_user4_selected) {
-		jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);	  
+		jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
 		bscan_user4_selected = true;
 	}
 	if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER)
@@ -356,7 +356,7 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	}
 
 	if (!bscan_user4_selected) {
-		jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);		
+		jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
 		bscan_user4_selected = true;
 	}
 
