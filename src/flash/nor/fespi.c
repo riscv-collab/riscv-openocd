@@ -336,7 +336,7 @@ static int fespi_erase_sector(struct flash_bank *bank, int sector)
 	if (retval != ERROR_OK)
 		return retval;
 	sector = bank->sectors[sector].offset;
-	if (bank->size > 0xffffff) {
+	if (bank->size > 0x1000000) {
 		retval = fespi_tx(bank, sector >> 24);
 		if (retval != ERROR_OK)
 			return retval;
@@ -457,7 +457,7 @@ static int slow_fespi_write_buffer(struct flash_bank *bank,
 	if (fespi_tx(bank, fespi_info->dev->pprog_cmd) != ERROR_OK)
 		return ERROR_FAIL;
 
-	if (bank->size > 0xffffff && fespi_tx(bank, offset >> 24) != ERROR_OK)
+	if (bank->size > 0x1000000 && fespi_tx(bank, offset >> 24) != ERROR_OK)
 		return ERROR_FAIL;
 	if (fespi_tx(bank, offset >> 16) != ERROR_OK)
 		return ERROR_FAIL;
@@ -589,7 +589,7 @@ static int fespi_write(struct flash_bank *bank, const uint8_t *buffer,
 			buf_set_u64(reg_params[3].value, 0, xlen, offset);
 			buf_set_u64(reg_params[4].value, 0, xlen, cur_count);
 			buf_set_u64(reg_params[5].value, 0, xlen,
-					fespi_info->dev->pprog_cmd | (bank->size > 0xffffff ? 0x100 : 0));
+					fespi_info->dev->pprog_cmd | (bank->size > 0x1000000 ? 0x100 : 0));
 
 			retval = target_write_buffer(target, data_wa->address, cur_count,
 					buffer);
