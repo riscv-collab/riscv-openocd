@@ -108,7 +108,7 @@ static int fespi_write_buffer(volatile uint32_t *ctrl_base,
 /* flash_info contains:
  *   bits 7:0 -- pprog_cmd
  *   bit 8    -- 0 means send 3 bytes after pprog_cmd, 1 means send 4 bytes
- *    			 after pprog_cmd
+ *               after pprog_cmd
  */
 int flash_fespi(volatile uint32_t *ctrl_base, uint32_t page_size,
 		const uint8_t *buffer, unsigned offset, uint32_t count,
