@@ -8,6 +8,7 @@
 
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
+#define DIM(x)		(sizeof(x)/sizeof(*x))
 
 static void dump_field(int idle, const struct scan_field *field);
 
@@ -42,6 +43,9 @@ bool riscv_batch_full(struct riscv_batch *batch)
 
 int riscv_batch_run(struct riscv_batch *batch)
 {
+	uint8_t tunneled_dr_width;  
+	struct scan_field tunneled_dr[4];
+	
 	if (batch->used_scans == 0) {
 		LOG_DEBUG("Ignoring empty batch.");
 		return ERROR_OK;
@@ -52,7 +56,46 @@ int riscv_batch_run(struct riscv_batch *batch)
 	riscv_batch_add_nop(batch);
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
-		jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
+		if (bscan_tunnel_ir_width != 0) {
+			jtag_add_ir_scan(batch->target->tap, &select_user4, TAP_IDLE);
+
+			memset(tunneled_dr, 0, sizeof(tunneled_dr));
+			if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER) {
+				tunneled_dr[3].num_bits = 1;
+				tunneled_dr[3].out_value = bscan_one;
+				tunneled_dr[2].num_bits = 7;
+				tunneled_dr_width = (batch->fields + i)->num_bits;
+				tunneled_dr[2].out_value = &tunneled_dr_width;
+				/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
+				   scanning num_bits + 1, and then will right shift the input field after executing the queues */
+
+				tunneled_dr[1].num_bits = (batch->fields + i)->num_bits+1;
+				tunneled_dr[1].out_value = (batch->fields + i)->out_value;
+				tunneled_dr[1].in_value = (batch->fields + i)->in_value;
+
+
+				tunneled_dr[0].num_bits = 3;
+				tunneled_dr[0].out_value = bscan_zero;
+			} else {
+			  	/* BSCAN_TUNNEL_NESTED_TAP */
+				tunneled_dr[0].num_bits = 1;
+				tunneled_dr[0].out_value = bscan_one;
+				tunneled_dr[1].num_bits = 7;
+				tunneled_dr_width = (batch->fields + i)->num_bits;
+				tunneled_dr[1].out_value = &tunneled_dr_width;
+				/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
+				   scanning num_bits + 1, and then will right shift the input field after executing the queues */
+				tunneled_dr[2].num_bits = (batch->fields + i)->num_bits+1;
+				tunneled_dr[2].out_value = (batch->fields + i)->out_value;
+				tunneled_dr[2].in_value = (batch->fields + i)->in_value;
+				tunneled_dr[3].num_bits = 3;
+				tunneled_dr[3].out_value = bscan_zero;
+			}
+			jtag_add_dr_scan(batch->target->tap, DIM(tunneled_dr), tunneled_dr, TAP_IDLE);
+		  
+		} else {
+			jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
+		}
 		if (batch->idle_count > 0)
 			jtag_add_runtest(batch->idle_count, TAP_IDLE);
 	}
@@ -61,6 +104,10 @@ int riscv_batch_run(struct riscv_batch *batch)
 		LOG_ERROR("Unable to execute JTAG queue");
 		return ERROR_FAIL;
 	}
+
+	if (bscan_tunnel_ir_width != 0)
+		for (size_t i = 0; i < batch->used_scans; ++i)
+			buffer_shr((batch->fields + i)->in_value, sizeof(uint64_t), 1);	/* need to right-shift "in" by one bit, because of clock skew between BSCAN TAP and DM TAP */
 
 	for (size_t i = 0; i < batch->used_scans; ++i)
 		dump_field(batch->idle_count, batch->fields + i);
