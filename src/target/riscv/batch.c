@@ -8,7 +8,6 @@
 
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
-#define DIM(x)		(sizeof(x)/sizeof(*x))
 
 static void dump_field(int idle, const struct scan_field *field);
 
@@ -91,7 +90,7 @@ int riscv_batch_run(struct riscv_batch *batch)
 				tunneled_dr[3].num_bits = 3;
 				tunneled_dr[3].out_value = bscan_zero;
 			}
-			jtag_add_dr_scan(batch->target->tap, DIM(tunneled_dr), tunneled_dr, TAP_IDLE);
+			jtag_add_dr_scan(batch->target->tap, ARRAY_SIZE(tunneled_dr), tunneled_dr, TAP_IDLE);
 		} else {
 			jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
 		}
