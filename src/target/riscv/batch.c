@@ -42,8 +42,7 @@ bool riscv_batch_full(struct riscv_batch *batch)
 
 int riscv_batch_run(struct riscv_batch *batch)
 {
-	uint8_t tunneled_dr_width;
-	struct scan_field tunneled_dr[4];
+	riscv_bscan_tunneled_scan_context_t bscan_ctxt;
 
 	if (batch->used_scans == 0) {
 		LOG_DEBUG("Ignoring empty batch.");
@@ -56,41 +55,7 @@ int riscv_batch_run(struct riscv_batch *batch)
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
 		if (bscan_tunnel_ir_width != 0) {
-			jtag_add_ir_scan(batch->target->tap, &select_user4, TAP_IDLE);
-
-			memset(tunneled_dr, 0, sizeof(tunneled_dr));
-			if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER) {
-				tunneled_dr[3].num_bits = 1;
-				tunneled_dr[3].out_value = bscan_one;
-				tunneled_dr[2].num_bits = 7;
-				tunneled_dr_width = (batch->fields + i)->num_bits;
-				tunneled_dr[2].out_value = &tunneled_dr_width;
-				/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
-				   scanning num_bits + 1, and then will right shift the input field after executing the queues */
-
-				tunneled_dr[1].num_bits = (batch->fields + i)->num_bits+1;
-				tunneled_dr[1].out_value = (batch->fields + i)->out_value;
-				tunneled_dr[1].in_value = (batch->fields + i)->in_value;
-
-
-				tunneled_dr[0].num_bits = 3;
-				tunneled_dr[0].out_value = bscan_zero;
-			} else {
-				/* BSCAN_TUNNEL_NESTED_TAP */
-				tunneled_dr[0].num_bits = 1;
-				tunneled_dr[0].out_value = bscan_one;
-				tunneled_dr[1].num_bits = 7;
-				tunneled_dr_width = (batch->fields + i)->num_bits;
-				tunneled_dr[1].out_value = &tunneled_dr_width;
-				/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
-				   scanning num_bits + 1, and then will right shift the input field after executing the queues */
-				tunneled_dr[2].num_bits = (batch->fields + i)->num_bits+1;
-				tunneled_dr[2].out_value = (batch->fields + i)->out_value;
-				tunneled_dr[2].in_value = (batch->fields + i)->in_value;
-				tunneled_dr[3].num_bits = 3;
-				tunneled_dr[3].out_value = bscan_zero;
-			}
-			jtag_add_dr_scan(batch->target->tap, ARRAY_SIZE(tunneled_dr), tunneled_dr, TAP_IDLE);
+			riscv_add_bscan_tunneled_scan(batch->target, batch->fields+i, &bscan_ctxt);
 		} else {
 			jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
 		}
