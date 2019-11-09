@@ -21,6 +21,8 @@ struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_
 	out->data_out = malloc(sizeof(*out->data_out) * (scans) * sizeof(uint64_t));
 	out->data_in  = malloc(sizeof(*out->data_in)  * (scans) * sizeof(uint64_t));
 	out->fields = malloc(sizeof(*out->fields) * (scans));
+	if (bscan_tunnel_ir_width != 0)
+		out->bscan_ctxt = malloc(sizeof(*out->bscan_ctxt) * (scans));
 	out->last_scan = RISCV_SCAN_TYPE_INVALID;
 	out->read_keys = malloc(sizeof(*out->read_keys) * (scans));
 	return out;
@@ -31,6 +33,8 @@ void riscv_batch_free(struct riscv_batch *batch)
 	free(batch->data_in);
 	free(batch->data_out);
 	free(batch->fields);
+	if (batch->bscan_ctxt)
+		free(batch->bscan_ctxt);
 	free(batch->read_keys);
 	free(batch);
 }
@@ -42,8 +46,6 @@ bool riscv_batch_full(struct riscv_batch *batch)
 
 int riscv_batch_run(struct riscv_batch *batch)
 {
-	riscv_bscan_tunneled_scan_context_t bscan_ctxt;
-
 	if (batch->used_scans == 0) {
 		LOG_DEBUG("Ignoring empty batch.");
 		return ERROR_OK;
@@ -55,7 +57,7 @@ int riscv_batch_run(struct riscv_batch *batch)
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
 		if (bscan_tunnel_ir_width != 0) {
-			riscv_add_bscan_tunneled_scan(batch->target, batch->fields+i, &bscan_ctxt);
+			riscv_add_bscan_tunneled_scan(batch->target, batch->fields+i, batch->bscan_ctxt+i);
 		} else {
 			jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
 		}
