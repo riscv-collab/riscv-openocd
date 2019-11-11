@@ -56,11 +56,11 @@ int riscv_batch_run(struct riscv_batch *batch)
 	riscv_batch_add_nop(batch);
 
 	for (size_t i = 0; i < batch->used_scans; ++i) {
-		if (bscan_tunnel_ir_width != 0) {
+		if (bscan_tunnel_ir_width != 0)
 			riscv_add_bscan_tunneled_scan(batch->target, batch->fields+i, batch->bscan_ctxt+i);
-		} else {
+		else
 			jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
-		}
+
 		if (batch->idle_count > 0)
 			jtag_add_runtest(batch->idle_count, TAP_IDLE);
 	}
