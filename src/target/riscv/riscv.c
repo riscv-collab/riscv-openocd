@@ -1451,7 +1451,7 @@ static int riscv_address_translate(struct target *target,
 		if (!(pte & PTE_V) || (!(pte & PTE_R) && (pte & PTE_W)))
 			return ERROR_FAIL;
 
-		if ((pte & PTE_R) || (pte & PTE_X)) // Found leaf PTE.
+		if ((pte & PTE_R) || (pte & PTE_X)) /* Found leaf PTE. */
 			break;
 
 		i--;
@@ -1514,9 +1514,9 @@ static int riscv_read_memory(struct target *target, target_addr_t address,
 		return ERROR_FAIL;
 
 	target_addr_t physical_addr;
-	if (target->type->virt2phys(target, address, &physical_addr) == ERROR_OK) {
+	if (target->type->virt2phys(target, address, &physical_addr) == ERROR_OK)
 		address = physical_addr;
-	}
+
 	struct target_type *tt = get_target_type(target);
 	return tt->read_memory(target, address, size, count, buffer);
 }
@@ -1537,9 +1537,9 @@ static int riscv_write_memory(struct target *target, target_addr_t address,
 		return ERROR_FAIL;
 
 	target_addr_t physical_addr;
-	if (target->type->virt2phys(target, address, &physical_addr) == ERROR_OK) {
+	if (target->type->virt2phys(target, address, &physical_addr) == ERROR_OK)
 		address = physical_addr;
-	}
+
 	struct target_type *tt = get_target_type(target);
 	return tt->write_memory(target, address, size, count, buffer);
 }
