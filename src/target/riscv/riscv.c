@@ -1420,11 +1420,11 @@ static int riscv_address_translate(struct target *target,
 			break;
 		case SATP_MODE_OFF:
 			LOG_ERROR("No translation or protection." \
-				      " (satp: 0x%" TARGET_PRIxADDR")", satp_value);
+				      " (satp: 0x%" PRIx64")", satp_value);
 			return ERROR_FAIL;
 		default:
 			LOG_ERROR("The translation mode is not supported." \
-				      " (satp: 0x%" TARGET_PRIxADDR")", satp_value);
+				      " (satp: 0x%" PRIx64")", satp_value);
 			return ERROR_FAIL;
 	}
 
