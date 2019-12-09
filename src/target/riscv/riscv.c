@@ -251,7 +251,7 @@ int riscv_command_timeout_sec = DEFAULT_COMMAND_TIMEOUT_SEC;
 int riscv_reset_timeout_sec = DEFAULT_RESET_TIMEOUT_SEC;
 
 bool riscv_prefer_sba;
-bool riscv_no_virt2phys;
+bool riscv_enable_virt2phys = true;
 
 bool riscv_enable_virtual;
 
@@ -1483,7 +1483,7 @@ static int riscv_address_translate(struct target *target,
 
 static int riscv_virt2phys(struct target *target, target_addr_t virtual, target_addr_t *physical)
 {
-	if (riscv_no_virt2phys)
+	if (!riscv_enable_virt2phys)
 		return ERROR_FAIL;
 
 	int enabled;
@@ -2449,13 +2449,13 @@ COMMAND_HANDLER(riscv_use_bscan_tunnel)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(riscv_disable_virt2phys)
+COMMAND_HANDLER(riscv_set_enable_virt2phys)
 {
 	if (CMD_ARGC != 1) {
 		LOG_ERROR("Command takes exactly 1 parameter");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
-	COMMAND_PARSE_ON_OFF(CMD_ARGV[0], riscv_no_virt2phys);
+	COMMAND_PARSE_ON_OFF(CMD_ARGV[0], riscv_enable_virt2phys);
 	return ERROR_OK;
 }
 
@@ -2595,11 +2595,11 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 			"1: DATA_REGISTER}"
 	},
 	{
-		.name = "disable_virt2phys",
-		.handler = riscv_disable_virt2phys,
+		.name = "set_enable_virt2phys",
+		.handler = riscv_set_enable_virt2phys,
 		.mode = COMMAND_ANY,
-		.usage = "riscv disable_virt2phys on|off",
-		.help = "Disable translation from virtual address to physical address."
+		.usage = "riscv set_enable_virt2phys on|off",
+		.help = "Enable translation from virtual address to physical address."
 	},
 	COMMAND_REGISTRATION_DONE
 };
