@@ -190,5 +190,11 @@ static int riscv_semihosting_post_result(struct target *target)
 
 	LOG_DEBUG("0x%" PRIx64, semihosting->result);
 	riscv_set_register(target, GDB_REGNO_A0, semihosting->result);
+
+	riscv_reg_t dpc;
+	riscv_get_register(target, &dpc, GDB_REGNO_DPC);
+	riscv_set_register(target, GDB_REGNO_DPC, dpc + 4);
+
+
 	return 0;
 }
