@@ -606,6 +606,12 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in,
 					false);
 			if (status == DMI_STATUS_BUSY) {
 				increase_dmi_busy_delay(target);
+				if (dmi_op == DMI_OP_READ) {
+					/* The scan where we should have gotten the read value
+					 * returned busy.  It's anybody's guess whether the read
+					 * actually happened or not. */
+					return ERROR_BUSY;
+				}
 			} else if (status == DMI_STATUS_SUCCESS) {
 				break;
 			} else {
@@ -2060,25 +2066,29 @@ static int read_memory_bus_word(struct target *target, target_addr_t address,
 {
 	uint32_t value;
 	if (size > 12) {
-		if (dmi_read(target, &value, DMI_SBDATA3) != ERROR_OK)
-			return ERROR_FAIL;
+		int result = dmi_read(target, &value, DMI_SBDATA3);
+		if (result != ERROR_OK)
+			return result;
 		write_to_buf(buffer + 12, value, 4);
 		log_memory_access(address + 12, value, 4, true);
 	}
 	if (size > 8) {
-		if (dmi_read(target, &value, DMI_SBDATA2) != ERROR_OK)
-			return ERROR_FAIL;
+		int result = dmi_read(target, &value, DMI_SBDATA2);
+		if (result != ERROR_OK)
+			return result;
 		write_to_buf(buffer + 8, value, 4);
 		log_memory_access(address + 8, value, 4, true);
 	}
 	if (size > 4) {
-		if (dmi_read(target, &value, DMI_SBDATA1) != ERROR_OK)
-			return ERROR_FAIL;
+		int result = dmi_read(target, &value, DMI_SBDATA1);
+		if (result != ERROR_OK)
+			return result;
 		write_to_buf(buffer + 4, value, 4);
 		log_memory_access(address + 4, value, 4, true);
 	}
-	if (dmi_read(target, &value, DMI_SBDATA0) != ERROR_OK)
-		return ERROR_FAIL;
+	int result = dmi_read(target, &value, DMI_SBDATA0);
+	if (result != ERROR_OK)
+		return result;
 	write_to_buf(buffer, value, MIN(size, 4));
 	log_memory_access(address, value, MIN(size, 4), true);
 	return ERROR_OK;
@@ -2296,10 +2306,19 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 			}
 		}
 
-		for (uint32_t i = (next_address - address) / size; i < count - 1; i++) {
-			if (read_memory_bus_word(target, address + i * size, size,
-					buffer + i * size) != ERROR_OK)
-				return ERROR_FAIL;
+		bool busy = false;
+		for (uint32_t i = (next_address - address) / size;
+				i < (end_address - address) / size - 1;
+				i++) {
+			int result = read_memory_bus_word(target, address + i * size, size,
+					buffer + i * size);
+			if (result == ERROR_BUSY) {
+				busy = true;
+				break;
+			} else if (result != ERROR_OK) {
+				return result;
+			}
+			next_address += size;
 		}
 
 		uint32_t sbcs_read = 0;
@@ -2314,11 +2333,15 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 				return ERROR_FAIL;
 		}
 
-		if (!get_field(sbcs_read, DMI_SBCS_SBERROR) &&
+		if (!busy && !get_field(sbcs_read, DMI_SBCS_SBERROR) &&
 				!get_field(sbcs_read, DMI_SBCS_SBBUSYERROR)) {
-			if (read_memory_bus_word(target, address + (count - 1) * size, size,
-						buffer + (count - 1) * size) != ERROR_OK)
-				return ERROR_FAIL;
+			int result = read_memory_bus_word(target, address + (count - 1) * size, size,
+						buffer + (count - 1) * size);
+			if (result == ERROR_BUSY) {
+				busy = true;
+			} else if (result != ERROR_OK) {
+				return result;
+			}
 
 			if (read_sbcs_nonbusy(target, &sbcs_read) != ERROR_OK)
 				return ERROR_FAIL;
@@ -2326,15 +2349,18 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 
 		if (get_field(sbcs_read, DMI_SBCS_SBBUSYERROR)) {
 			/* We read while the target was busy. Slow down and try again. */
-			if (dmi_write(target, DMI_SBCS, DMI_SBCS_SBBUSYERROR) != ERROR_OK)
-				return ERROR_FAIL;
+			if (get_field(sbcs_read, DMI_SBCS_SBBUSYERROR))
+				if (dmi_write(target, DMI_SBCS, DMI_SBCS_SBBUSYERROR) != ERROR_OK)
+					return ERROR_FAIL;
 			next_address = sb_read_address(target);
 			info->bus_master_read_delay += info->bus_master_read_delay / 10 + 1;
 			continue;
 		}
 
 		unsigned error = get_field(sbcs_read, DMI_SBCS_SBERROR);
-		if (error == 0) {
+		if (busy) {
+			/* Nothing to do. next_address was already updated in the loop. */
+		} else if (error == 0) {
 			next_address = end_address;
 		} else {
 			/* Some error indicating the bus access failed, but not because of
