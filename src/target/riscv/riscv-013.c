@@ -610,7 +610,7 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in,
 					/* The scan where we should have gotten the read value
 					 * returned busy.  It's anybody's guess whether the read
 					 * actually happened or not. */
-					return ERROR_BUSY;
+					return ERROR_TARGET_BUSY;
 				}
 			} else if (status == DMI_STATUS_SUCCESS) {
 				break;
@@ -2312,7 +2312,7 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 				i++) {
 			int result = read_memory_bus_word(target, address + i * size, size,
 					buffer + i * size);
-			if (result == ERROR_BUSY) {
+			if (result == ERROR_TARGET_BUSY) {
 				busy = true;
 				break;
 			} else if (result != ERROR_OK) {
@@ -2337,7 +2337,7 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 				!get_field(sbcs_read, DMI_SBCS_SBBUSYERROR)) {
 			int result = read_memory_bus_word(target, address + (count - 1) * size, size,
 						buffer + (count - 1) * size);
-			if (result == ERROR_BUSY)
+			if (result == ERROR_TARGET_BUSY)
 				busy = true;
 			else if (result != ERROR_OK)
 				return result;
