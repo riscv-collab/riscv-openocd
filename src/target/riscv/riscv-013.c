@@ -2337,11 +2337,10 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 				!get_field(sbcs_read, DMI_SBCS_SBBUSYERROR)) {
 			int result = read_memory_bus_word(target, address + (count - 1) * size, size,
 						buffer + (count - 1) * size);
-			if (result == ERROR_BUSY) {
+			if (result == ERROR_BUSY)
 				busy = true;
-			} else if (result != ERROR_OK) {
+			else if (result != ERROR_OK)
 				return result;
-			}
 
 			if (read_sbcs_nonbusy(target, &sbcs_read) != ERROR_OK)
 				return ERROR_FAIL;
