@@ -1367,7 +1367,7 @@ static int riscv_mmu(struct target *target, int *enabled)
 	if (!riscv_enable_virt2phys) {
 		*enabled = 0;
 		return ERROR_OK;
-        }
+	}
 
 	if (riscv_rtos_enabled(target))
 		riscv_set_current_hartid(target, target->rtos->current_thread - 1);
