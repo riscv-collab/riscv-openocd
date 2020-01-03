@@ -548,7 +548,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
  * @param address  The address argument to that operation.
  * @param data_out The data to send to the target.
  * @param exec     When true, this scan will execute something, so extra RTI
- * 				   cycles may be added.
+ *                 cycles may be added.
  * @param ensure_success
  *                 Scan a nop after the requested operation, ensuring the
  *                 DMI operation succeeded.
