@@ -654,11 +654,6 @@ static int dmi_read(struct target *target, uint32_t *value, uint32_t address)
 	return dmi_op(target, value, DMI_OP_READ, address, 0, false, true, true);
 }
 
-static int dmi_read_exec(struct target *target, uint32_t *value, uint32_t address)
-{
-	return dmi_op(target, value, DMI_OP_READ, address, 0, true, true, true);
-}
-
 static int dmi_write(struct target *target, uint32_t address, uint32_t value)
 {
 	return dmi_op(target, NULL, DMI_OP_WRITE, address, value, false, true, true);
@@ -2058,14 +2053,15 @@ static void log_memory_access(target_addr_t address, uint64_t value,
 /* Read the relevant sbdata regs depending on size, and put the results into
  * buffer. */
 static int read_memory_bus_word(struct target *target, target_addr_t address,
-		uint32_t size, uint8_t *buffer)
+		uint32_t size, uint8_t *buffer, bool retry)
 {
 	uint32_t value;
 	int result;
 	static int sbdata[4] = { DMI_SBDATA0, DMI_SBDATA1, DMI_SBDATA2, DMI_SBDATA3 };
 	assert(size <= 16);
 	for (int i = (size-1) / 4; i >= 0; i--) {
-		result = dmi_op(target, &value, DMI_OP_READ, sbdata[i], 0, false, true, false);
+		result = dmi_op(target, &value, DMI_OP_READ, sbdata[i], 0, false, true,
+				retry);
 		if (result != ERROR_OK)
 			return result;
 		write_to_buf(buffer + i * 4, value, MIN(size, 4));
@@ -2289,7 +2285,7 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 		int result = ERROR_OK;
 		for (uint32_t i = (next_address - address) / size; i < count - 1; i++) {
 			result = read_memory_bus_word(target, address + i * size, size,
-					buffer + i * size);
+					buffer + i * size, false);
 			if (result == ERROR_TARGET_BUSY) {
 				next_address = address + i * size;
 				break;
@@ -2318,7 +2314,7 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 		if (!get_field(sbcs_read, DMI_SBCS_SBERROR) &&
 				!get_field(sbcs_read, DMI_SBCS_SBBUSYERROR)) {
 			if (read_memory_bus_word(target, address + (count - 1) * size, size,
-						buffer + (count - 1) * size) != ERROR_OK)
+						buffer + (count - 1) * size, true) != ERROR_OK)
 				return ERROR_FAIL;
 
 			if (read_sbcs_nonbusy(target, &sbcs_read) != ERROR_OK)
@@ -2495,36 +2491,44 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 	RISCV013_INFO(info);
 
 	int result = ERROR_OK;
+	uint32_t command = 0;
 
-	/* Write address to S0, and execute buffer. */
-	result = register_write_direct(target, GDB_REGNO_S0, address);
-	if (result != ERROR_OK)
-		goto error;
-	uint32_t command = access_register_command(target, GDB_REGNO_S1,
-			riscv_xlen(target),
-			AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
-	if (execute_abstract_command(target, command) != ERROR_OK)
-		return ERROR_FAIL;
-
-	/* First read has just triggered. Result is in s1. */
-
-	if (count == 1) {
-		uint64_t value;
-		if (register_read_direct(target, &value, GDB_REGNO_S1) != ERROR_OK)
+	while (1) {
+		/* Write address to S0. */
+		result = register_write_direct(target, GDB_REGNO_S0, address);
+		if (result != ERROR_OK)
+			return result;
+		command = access_register_command(target, GDB_REGNO_S1,
+				riscv_xlen(target),
+				AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
+		if (execute_abstract_command(target, command) != ERROR_OK)
 			return ERROR_FAIL;
-		write_to_buf(buffer, value, size);
-		log_memory_access(address, value, size, true);
-		return ERROR_OK;
-	}
 
-	if (dmi_write(target, DMI_ABSTRACTAUTO,
-			1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET) != ERROR_OK)
-		goto error;
-	/* Read garbage from dmi_data0, which triggers another execution of the
-	 * program. Now dmi_data0 contains the first good result, and s1 the next
-	 * memory value. */
-	if (dmi_read_exec(target, NULL, DMI_DATA0) != ERROR_OK)
-		goto error;
+		/* First read has just triggered. Result is in s1. */
+		if (count == 1) {
+			uint64_t value;
+			if (register_read_direct(target, &value, GDB_REGNO_S1) != ERROR_OK)
+				return ERROR_FAIL;
+			write_to_buf(buffer, value, size);
+			log_memory_access(address, value, size, true);
+			return ERROR_OK;
+		}
+
+		if (dmi_write(target, DMI_ABSTRACTAUTO,
+					1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET) != ERROR_OK)
+			goto error;
+		/* Read garbage from dmi_data0, which triggers another execution of the
+		 * program. Now dmi_data0 contains the first good result, and s1 the next
+		 * memory value. */
+		result = dmi_op(target, NULL, DMI_OP_READ, DMI_DATA0, 0, true, true, false);
+		if (result == ERROR_OK)
+			break;
+
+		dmi_write(target, DMI_ABSTRACTAUTO, 0);
+		if (result != ERROR_TARGET_BUSY)
+			return result;
+		/* Otherwise, try again. */
+	}
 
 	/* read_addr is the next address that the hart will read from, which is the
 	 * value in s0. */
