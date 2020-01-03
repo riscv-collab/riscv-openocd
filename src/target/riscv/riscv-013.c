@@ -2100,7 +2100,10 @@ static int assert_reset(struct target *target)
 
 	uint32_t control_base = set_field(0, DM_DMCONTROL_DMACTIVE, 1);
 
-	if (target->rtos) {
+	if (target_has_event_action(target, TARGET_EVENT_RESET_ASSERT)) {
+		/* Run the user-supplied script if there is one. */
+		target_handle_event(target, TARGET_EVENT_RESET_ASSERT);
+	} else if (target->rtos) {
 		/* There's only one target, and OpenOCD thinks each hart is a thread.
 		 * We must reset them all. */
 
