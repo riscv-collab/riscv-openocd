@@ -552,7 +552,9 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
  * @param ensure_success
  *                 Scan a nop after the requested operation, ensuring the
  *                 DMI operation succeeded.
- * @param retry    When true, retry the operation if busy was encountered.
+ * @param retry    When true, retry the operation if busy was encountered. This
+ *                 convenient and generally desirable, unless the command
+ *                 has side effects (e.g. incrementing an address).
  */
 static int dmi_op_timeout(struct target *target, uint32_t *data_in,
 		int dmi_op, uint32_t address, uint32_t data_out, int timeout_sec,
