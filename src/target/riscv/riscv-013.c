@@ -395,10 +395,9 @@ static void dump_field(int idle, const struct scan_field *field)
 
 	log_printf_lf(LOG_LVL_DEBUG,
 			__FILE__, __LINE__, "scan",
-			"%db %di %s %08x @%02x -> %s %08x @%02x",
-			field->num_bits, idle,
-			op_string[out_op], out_data, out_address,
-			status_string[in_op], in_data, in_address);
+			"%db %s %08x @%02x -> %s %08x @%02x; %di",
+			field->num_bits, op_string[out_op], out_data, out_address,
+			status_string[in_op], in_data, in_address, idle);
 
 	char out_text[500];
 	char in_text[500];
