@@ -545,6 +545,9 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 /**
  * @param data_in  The data we received from the target.
  * @param dmi_op   The operation to perform (read/write/nop).
+ * @param dmi_busy_encountered
+ *                 If non-NULL, will be updated to reflect whether DMI busy was
+ *                 encountered while executing this operation or not.
  * @param address  The address argument to that operation.
  * @param data_out The data to send to the target.
  * @param exec     When true, this scan will execute something, so extra RTI
@@ -552,14 +555,14 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
  * @param ensure_success
  *                 Scan a nop after the requested operation, ensuring the
  *                 DMI operation succeeded.
- * @param retry    When true, retry the operation if busy was encountered. This
- *                 convenient and generally desirable, unless the command
- *                 has side effects (e.g. incrementing an address).
  */
 static int dmi_op_timeout(struct target *target, uint32_t *data_in,
-		int dmi_op, uint32_t address, uint32_t data_out, int timeout_sec,
-		bool exec, bool ensure_success, bool retry)
+		bool *dmi_busy_encountered, int dmi_op, uint32_t address,
+		uint32_t data_out, int timeout_sec, bool exec, bool ensure_success)
 {
+	if (dmi_busy_encountered)
+		*dmi_busy_encountered = false;
+
 	select_dmi(target);
 
 	dmi_status_t status;
@@ -582,65 +585,63 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in,
 	}
 
 	time_t start = time(NULL);
+	/* This first loop performs the request.  Note that if for some reason this
+	 * stays busy, it is actually due to the previous access. */
 	while (1) {
-		/* This first loop performs the request.  Note that if for some reason this
-		 * stays busy, it is actually due to the previous access. */
+		status = dmi_scan(target, NULL, NULL, dmi_op, address, data_out,
+				exec);
+		if (status == DMI_STATUS_BUSY) {
+			increase_dmi_busy_delay(target);
+			if (dmi_busy_encountered)
+				*dmi_busy_encountered = true;
+		} else if (status == DMI_STATUS_SUCCESS) {
+			break;
+		} else {
+			LOG_ERROR("failed %s at 0x%x, status=%d", op_name, address, status);
+			return ERROR_FAIL;
+		}
+		if (time(NULL) - start > timeout_sec)
+			return ERROR_TIMEOUT_REACHED;
+	}
+
+	if (status != DMI_STATUS_SUCCESS) {
+		LOG_ERROR("Failed %s at 0x%x; status=%d", op_name, address, status);
+		return ERROR_FAIL;
+	}
+
+	if (ensure_success) {
+		/* This second loop ensures the request succeeded, and gets back data.
+		 * Note that NOP can result in a 'busy' result as well, but that would be
+		 * noticed on the next DMI access we do. */
 		while (1) {
-			status = dmi_scan(target, NULL, NULL, dmi_op, address, data_out,
-					exec);
+			status = dmi_scan(target, &address_in, data_in, DMI_OP_NOP, address, 0,
+					false);
 			if (status == DMI_STATUS_BUSY) {
 				increase_dmi_busy_delay(target);
-				if (!retry)
-					return ERROR_TARGET_BUSY;
+				if (dmi_busy_encountered)
+					*dmi_busy_encountered = true;
 			} else if (status == DMI_STATUS_SUCCESS) {
-				break;
+				return ERROR_OK;
 			} else {
-				LOG_ERROR("failed %s at 0x%x, status=%d", op_name, address, status);
+				LOG_ERROR("failed %s (NOP) at 0x%x, status=%d", op_name, address,
+						status);
 				return ERROR_FAIL;
 			}
 			if (time(NULL) - start > timeout_sec)
 				return ERROR_TIMEOUT_REACHED;
 		}
-
-		if (status != DMI_STATUS_SUCCESS) {
-			LOG_ERROR("Failed %s at 0x%x; status=%d", op_name, address, status);
-			return ERROR_FAIL;
-		}
-
-		if (ensure_success) {
-			/* This second loop ensures the request succeeded, and gets back data.
-			 * Note that NOP can result in a 'busy' result as well, but that would be
-			 * noticed on the next DMI access we do. */
-			while (1) {
-				status = dmi_scan(target, &address_in, data_in, DMI_OP_NOP, address, 0,
-						false);
-				if (status == DMI_STATUS_BUSY) {
-					increase_dmi_busy_delay(target);
-					if (!retry)
-						return ERROR_TARGET_BUSY;
-					break;
-				} else if (status == DMI_STATUS_SUCCESS) {
-					return ERROR_OK;
-				} else {
-					LOG_ERROR("failed %s (NOP) at 0x%x, status=%d", op_name, address,
-							status);
-					return ERROR_FAIL;
-				}
-				if (time(NULL) - start > timeout_sec)
-					return ERROR_TIMEOUT_REACHED;
-			}
-		} else {
-			return ERROR_OK;
-		}
+	} else {
+		return ERROR_OK;
 	}
 }
 
 static int dmi_op(struct target *target, uint32_t *data_in,
-		int dmi_op, uint32_t address,
-		uint32_t data_out, bool exec, bool ensure_success, bool retry)
+		bool *dmi_busy_encountered, int dmi_op, uint32_t address,
+		uint32_t data_out, bool exec, bool ensure_success)
 {
-	int result = dmi_op_timeout(target, data_in, dmi_op, address, data_out,
-			riscv_command_timeout_sec, exec, ensure_success, retry);
+	int result = dmi_op_timeout(target, data_in, dmi_busy_encountered, dmi_op,
+			address, data_out, riscv_command_timeout_sec, exec,
+			ensure_success);
 	if (result == ERROR_TIMEOUT_REACHED) {
 		LOG_ERROR("DMI operation didn't complete in %d seconds. The target is "
 				"either really slow or broken. You could increase the "
@@ -653,26 +654,27 @@ static int dmi_op(struct target *target, uint32_t *data_in,
 
 static int dmi_read(struct target *target, uint32_t *value, uint32_t address)
 {
-	return dmi_op(target, value, DMI_OP_READ, address, 0, false, true, true);
+	return dmi_op(target, value, NULL, DMI_OP_READ, address, 0, false, true);
 }
 
 static int dmi_write(struct target *target, uint32_t address, uint32_t value)
 {
-	return dmi_op(target, NULL, DMI_OP_WRITE, address, value, false, true, true);
+	return dmi_op(target, NULL, NULL, DMI_OP_WRITE, address, value, false,
+			true);
 }
 
 static int dmi_write_exec(struct target *target, uint32_t address,
 		uint32_t value, bool ensure_success)
 {
-	return dmi_op(target, NULL, DMI_OP_WRITE, address, value, true,
-			ensure_success, true);
+	return dmi_op(target, NULL, NULL, DMI_OP_WRITE, address, value, true,
+			ensure_success);
 }
 
 int dmstatus_read_timeout(struct target *target, uint32_t *dmstatus,
 		bool authenticated, unsigned timeout_sec)
 {
-	int result = dmi_op_timeout(target, dmstatus, DMI_OP_READ,
-			DMI_DMSTATUS, 0, timeout_sec, false, true, true);
+	int result = dmi_op_timeout(target, dmstatus, NULL, DMI_OP_READ,
+			DMI_DMSTATUS, 0, timeout_sec, false, true);
 	if (result != ERROR_OK)
 		return result;
 	if (authenticated && !get_field(*dmstatus, DMI_DMSTATUS_AUTHENTICATED)) {
@@ -2055,15 +2057,14 @@ static void log_memory_access(target_addr_t address, uint64_t value,
 /* Read the relevant sbdata regs depending on size, and put the results into
  * buffer. */
 static int read_memory_bus_word(struct target *target, target_addr_t address,
-		uint32_t size, uint8_t *buffer, bool retry)
+		uint32_t size, uint8_t *buffer)
 {
 	uint32_t value;
 	int result;
 	static int sbdata[4] = { DMI_SBDATA0, DMI_SBDATA1, DMI_SBDATA2, DMI_SBDATA3 };
 	assert(size <= 16);
 	for (int i = (size-1) / 4; i >= 0; i--) {
-		result = dmi_op(target, &value, DMI_OP_READ, sbdata[i], 0, false, true,
-				retry);
+		result = dmi_op(target, &value, NULL, DMI_OP_READ, sbdata[i], 0, false, true);
 		if (result != ERROR_OK)
 			return result;
 		write_to_buf(buffer + i * 4, value, MIN(size, 4));
@@ -2284,20 +2285,11 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 			}
 		}
 
-		int result = ERROR_OK;
 		for (uint32_t i = (next_address - address) / size; i < count - 1; i++) {
-			result = read_memory_bus_word(target, address + i * size, size,
-					buffer + i * size, false);
-			if (result == ERROR_TARGET_BUSY) {
-				next_address = address + i * size;
-				break;
-			}
+			int result = read_memory_bus_word(target, address + i * size, size,
+					buffer + i * size);
 			if (result != ERROR_OK)
-				return ERROR_FAIL;
-		}
-		if (result == ERROR_TARGET_BUSY) {
-			/* next_address was updated above. Retry reading from the same address. */
-			continue;
+				return result;
 		}
 
 		uint32_t sbcs_read = 0;
@@ -2316,7 +2308,7 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 		if (!get_field(sbcs_read, DMI_SBCS_SBERROR) &&
 				!get_field(sbcs_read, DMI_SBCS_SBBUSYERROR)) {
 			if (read_memory_bus_word(target, address + (count - 1) * size, size,
-						buffer + (count - 1) * size, true) != ERROR_OK)
+						buffer + (count - 1) * size) != ERROR_OK)
 				return ERROR_FAIL;
 
 			if (read_sbcs_nonbusy(target, &sbcs_read) != ERROR_OK)
@@ -2493,44 +2485,36 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 	RISCV013_INFO(info);
 
 	int result = ERROR_OK;
-	uint32_t command = 0;
 
-	while (1) {
-		/* Write address to S0. */
-		result = register_write_direct(target, GDB_REGNO_S0, address);
-		if (result != ERROR_OK)
-			return result;
-		command = access_register_command(target, GDB_REGNO_S1,
-				riscv_xlen(target),
-				AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
-		if (execute_abstract_command(target, command) != ERROR_OK)
+	/* Write address to S0. */
+	result = register_write_direct(target, GDB_REGNO_S0, address);
+	if (result != ERROR_OK)
+		return result;
+	uint32_t command = access_register_command(target, GDB_REGNO_S1,
+			riscv_xlen(target),
+			AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
+	if (execute_abstract_command(target, command) != ERROR_OK)
+		return ERROR_FAIL;
+
+	/* First read has just triggered. Result is in s1. */
+	if (count == 1) {
+		uint64_t value;
+		if (register_read_direct(target, &value, GDB_REGNO_S1) != ERROR_OK)
 			return ERROR_FAIL;
-
-		/* First read has just triggered. Result is in s1. */
-		if (count == 1) {
-			uint64_t value;
-			if (register_read_direct(target, &value, GDB_REGNO_S1) != ERROR_OK)
-				return ERROR_FAIL;
-			write_to_buf(buffer, value, size);
-			log_memory_access(address, value, size, true);
-			return ERROR_OK;
-		}
-
-		if (dmi_write(target, DMI_ABSTRACTAUTO,
-					1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET) != ERROR_OK)
-			goto error;
-		/* Read garbage from dmi_data0, which triggers another execution of the
-		 * program. Now dmi_data0 contains the first good result, and s1 the next
-		 * memory value. */
-		result = dmi_op(target, NULL, DMI_OP_READ, DMI_DATA0, 0, true, true, false);
-		if (result == ERROR_OK)
-			break;
-
-		dmi_write(target, DMI_ABSTRACTAUTO, 0);
-		if (result != ERROR_TARGET_BUSY)
-			return result;
-		/* Otherwise, try again. */
+		write_to_buf(buffer, value, size);
+		log_memory_access(address, value, size, true);
+		return ERROR_OK;
 	}
+
+	if (dmi_write(target, DMI_ABSTRACTAUTO,
+				1 << DMI_ABSTRACTAUTO_AUTOEXECDATA_OFFSET) != ERROR_OK)
+		goto error;
+	/* Read garbage from dmi_data0, which triggers another execution of the
+	 * program. Now dmi_data0 contains the first good result, and s1 the next
+	 * memory value. */
+	result = dmi_op(target, NULL, NULL, DMI_OP_READ, DMI_DATA0, 0, true, true);
+	if (result != ERROR_OK)
+		return result;
 
 	/* read_addr is the next address that the hart will read from, which is the
 	 * value in s0. */
@@ -3088,12 +3072,13 @@ static int write_memory_bus_v1(struct target *target, target_addr_t address,
 		if (result != ERROR_OK)
 			return result;
 
-		result = dmi_op(target, &sbcs, DMI_OP_READ, DMI_SBCS, 0, false,
-				true, false);
-		bool dmi_busy_encountered = result == ERROR_TARGET_BUSY;
+		bool dmi_busy_encountered;
+		result = dmi_op(target, &sbcs, &dmi_busy_encountered, DMI_OP_READ,
+				DMI_SBCS, 0, false, true);
 
 		time_t start = time(NULL);
-		while (get_field(sbcs, DMI_SBCS_SBBUSY)) {
+		bool dmi_busy = dmi_busy_encountered;
+		while (get_field(sbcs, DMI_SBCS_SBBUSY) || dmi_busy) {
 			if (time(NULL) - start > riscv_command_timeout_sec) {
 				LOG_ERROR("Timed out after %ds waiting for sbbusy to go low (sbcs=0x%x). "
 					  "Increase the timeout with riscv set_command_timeout_sec.",
@@ -3101,7 +3086,8 @@ static int write_memory_bus_v1(struct target *target, target_addr_t address,
 				return ERROR_FAIL;
 			}
 
-			if (dmi_read(target, &sbcs, DMI_SBCS) != ERROR_OK)
+			if (dmi_op(target, &sbcs, &dmi_busy, DMI_OP_READ,
+						DMI_SBCS, 0, false, true) != ERROR_OK)
 				return ERROR_FAIL;
 		}
 
@@ -3274,13 +3260,9 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 		 * to be incremented if necessary. */
 
 		uint32_t abstractcs;
-		result = dmi_op(target, &abstractcs, DMI_OP_READ, DMI_ABSTRACTCS,
-				0, false, true, false);
-		bool dmi_busy_encountered = result == ERROR_TARGET_BUSY;
-		if (result == ERROR_TARGET_BUSY) {
-			/* Read again, but with retry. */
-			result = dmi_read(target, &abstractcs, DMI_ABSTRACTCS);
-		}
+		bool dmi_busy_encountered;
+		result = dmi_op(target, &abstractcs, &dmi_busy_encountered,
+				DMI_OP_READ, DMI_ABSTRACTCS, 0, false, true);
 		if (result != ERROR_OK)
 			goto error;
 		while (get_field(abstractcs, DMI_ABSTRACTCS_BUSY))
