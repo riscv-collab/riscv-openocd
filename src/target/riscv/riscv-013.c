@@ -622,14 +622,6 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in,
 			} else if (status == DMI_STATUS_SUCCESS) {
 				break;
 			} else {
-				LOG_ERROR("failed %s (NOP) at 0x%x, status=%d", op_name, address,
-						status);
-				return ERROR_FAIL;
-			}
-			if (time(NULL) - start > timeout_sec)
-				return ERROR_TIMEOUT_REACHED;
-
-			if (status == DMI_STATUS_FAILED) {
 				if (data_in) {
 					LOG_ERROR("Failed %s (NOP) at 0x%x; value=0x%x, status=%d",
 							op_name, address, *data_in, status);
@@ -639,6 +631,8 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in,
 				}
 				return ERROR_FAIL;
 			}
+			if (time(NULL) - start > timeout_sec)
+				return ERROR_TIMEOUT_REACHED;
 		}
 	}
 
