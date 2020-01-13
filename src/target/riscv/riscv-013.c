@@ -853,6 +853,8 @@ static uint32_t access_register_command(struct target *target, uint32_t number,
 			command = set_field(command, AC_ACCESS_REGISTER_AARSIZE, 3);
 			break;
 		default:
+			LOG_ERROR("%d-bit register %s not supported.", size,
+					gdb_regno_name(number));
 			assert(0);
 	}
 
@@ -872,6 +874,8 @@ static uint32_t access_register_command(struct target *target, uint32_t number,
 		assert(reg_info);
 		command = set_field(command, AC_ACCESS_REGISTER_REGNO,
 				0xc000 + reg_info->custom_number);
+	} else {
+		assert(0);
 	}
 
 	command |= flags;
@@ -889,6 +893,9 @@ static int register_read_abstract(struct target *target, uint64_t *value,
 		return ERROR_FAIL;
 	if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095 &&
 			!info->abstract_read_csr_supported)
+		return ERROR_FAIL;
+	/* The spec doesn't define abstract register numbers for vector registers. */
+	if (number >= GDB_REGNO_V0 && number <= GDB_REGNO_V31)
 		return ERROR_FAIL;
 
 	uint32_t command = access_register_command(target, number, size,
@@ -1279,6 +1286,15 @@ static int register_write_direct(struct target *target, unsigned number,
 				riscv_program_insert(&program, fmv_d_x(number - GDB_REGNO_FPR0, S0));
 			else
 				riscv_program_insert(&program, fmv_w_x(number - GDB_REGNO_FPR0, S0));
+		} else if (number == GDB_REGNO_VL) {
+			/* "The XLEN-bit-wide read-only vl CSR can only be updated by the
+			 * vsetvli and vsetvl instructions, and the fault-only-rst vector
+			 * load instruction variants." */
+			riscv_reg_t vtype;
+			if (register_read(target, &vtype, GDB_REGNO_VTYPE) != ERROR_OK)
+				return ERROR_FAIL;
+			if (riscv_program_insert(&program, vsetvli(ZERO, S0, vtype)) != ERROR_OK)
+				return ERROR_FAIL;
 		} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
 			riscv_program_csrw(&program, S0, number);
 		} else {
@@ -1329,6 +1345,17 @@ static int is_fpu_reg(uint32_t gdb_regno)
 		(gdb_regno == GDB_REGNO_CSR0 + CSR_FCSR);
 }
 
+static int is_vector_reg(uint32_t gdb_regno)
+{
+	return (gdb_regno >= GDB_REGNO_V0 && gdb_regno <= GDB_REGNO_V31) ||
+		gdb_regno == GDB_REGNO_VSTART ||
+		gdb_regno == GDB_REGNO_VXSAT ||
+		gdb_regno == GDB_REGNO_VXRM ||
+		gdb_regno == GDB_REGNO_VL ||
+		gdb_regno == GDB_REGNO_VTYPE ||
+		gdb_regno == GDB_REGNO_VLENB;
+}
+
 /** Actually read registers from the target right now. */
 static int register_read_direct(struct target *target, uint64_t *value, uint32_t number)
 {
@@ -1347,20 +1374,25 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 		scratch_mem_t scratch;
 		bool use_scratch = false;
 
-		uint64_t s0;
+		riscv_reg_t s0;
 		if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
 			return ERROR_FAIL;
 
 		/* Write program to move data into s0. */
 
 		uint64_t mstatus;
-		if (is_fpu_reg(number)) {
+		if (is_fpu_reg(number) || is_vector_reg(number)) {
 			if (register_read(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK)
 				return ERROR_FAIL;
-			if ((mstatus & MSTATUS_FS) == 0)
+			if (is_fpu_reg(number) && (mstatus & MSTATUS_FS) == 0) {
 				if (register_write_direct(target, GDB_REGNO_MSTATUS,
 							set_field(mstatus, MSTATUS_FS, 1)) != ERROR_OK)
 					return ERROR_FAIL;
+			} else if (is_vector_reg(number) && (mstatus & MSTATUS_VS) == 0) {
+				if (register_write_direct(target, GDB_REGNO_MSTATUS,
+							set_field(mstatus, MSTATUS_VS, 1)) != ERROR_OK)
+					return ERROR_FAIL;
+			}
 		}
 
 		if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
@@ -1388,8 +1420,80 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 			}
 		} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
 			riscv_program_csrr(&program, S0, number);
+		} else if (number >= GDB_REGNO_V0 && number <= GDB_REGNO_V31) {
+			/*
+			 * The idea is that you read a vector register destructively: read
+			 * element 0 using vmv.x.s into t0; send t0 to the debugger; then
+			 * vslide1down with t0 as the scalar argument. This is effectively
+			 * rotating the vector one element at a time, so after vl steps,
+			 * the vector register is back to its original value."
+			 *
+			 * The two instructions vmv.x.s and vmv.s.x are described in
+			 * section 17.1.
+			 *
+			 * The vmv.x.s instruction copies a single SEW-wide element from
+			 * index 0 of the source vector register to a destination integer
+			 * register. 
+			 *
+			 * The vmv.s.x instruction copies the scalar integer register to
+			 * element 0 of the destination vector register. 
+			 *
+			 * Executing the two instructions in the PROGBUF and reading or
+			 * writing the x register in a loop would not be that much slower
+			 * than executing the instruction to move a vector reg to memory
+			 * then reading memory sequentially.
+			 *
+			 * I recommend not using memory-based vector register read/writes -
+			 * it would add user complication to have to allocate target memory
+			 * for a vector register buffer just for debug - and require adding
+			 * to the linker script to do this allocation and then informing
+			 * the debugger where it is. */
+			/* TODO: this continuous save/restore is terrible for performance. */
+
+			uint64_t vtype, vl;
+			/* Save vtype and vl. */
+			if (register_read(target, &vtype, GDB_REGNO_VTYPE) != ERROR_OK)
+				return ERROR_FAIL;
+			if (register_read(target, &vl, GDB_REGNO_VL) != ERROR_OK)
+				return ERROR_FAIL;
+
+			/* Restore vtype and vl. */
+			unsigned encoded_vsew;
+			switch (riscv_xlen(target)) {
+				case 32:
+					encoded_vsew = 2;
+					break;
+				case 64:
+					encoded_vsew = 3;
+					break;
+				default:
+					LOG_ERROR("Unsupported xlen: %d", riscv_xlen(target));
+					return ERROR_FAIL;
+			}
+			if (register_write_direct(target, GDB_REGNO_VTYPE, encoded_vsew << 2) != ERROR_OK)
+				return ERROR_FAIL;
+			unsigned debug_vl = DIV_ROUND_UP(r->vlenb[r->current_hartid] * 8,
+					riscv_xlen(target));
+			if (register_write_direct(target, GDB_REGNO_VL, debug_vl) != ERROR_OK)
+				return ERROR_FAIL;
+
+			unsigned vnum = number - GDB_REGNO_V0;
+			riscv_program_insert(&program, vmv_x_s(S0, vnum));
+			riscv_program_insert(&program, vslide1down_vx(vnum, vnum, S0, false));
+			for (unsigned i = 0; i < debug_vl; i++) {
+				if (riscv_program_exec(&program, target) != ERROR_OK)
+					return ERROR_FAIL;
+				if (register_read_direct(target, value, GDB_REGNO_S0) != ERROR_OK)
+					return ERROR_FAIL;
+			}
+
+			/* Restore vtype and vl. */
+			if (register_write_direct(target, GDB_REGNO_VTYPE, vtype) != ERROR_OK)
+				return ERROR_FAIL;
+			if (register_write_direct(target, GDB_REGNO_VL, vl) != ERROR_OK)
+				return ERROR_FAIL;
 		} else {
-			LOG_ERROR("Unsupported register (enum gdb_regno)(%d)", number);
+			LOG_ERROR("Unsupported register: %s", gdb_regno_name(number));
 			return ERROR_FAIL;
 		}
 
@@ -1408,7 +1512,8 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 				return ERROR_FAIL;
 		}
 
-		if (is_fpu_reg(number) && (mstatus & MSTATUS_FS) == 0)
+		if ((is_fpu_reg(number) && (mstatus & MSTATUS_FS) == 0) ||
+				(is_vector_reg(number) && (mstatus & MSTATUS_VS) == 0))
 			if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus) != ERROR_OK)
 				return ERROR_FAIL;
 
@@ -1468,6 +1573,20 @@ static int set_haltgroup(struct target *target, bool *supported)
 	if (dmi_read(target, &read, DMI_DMCS2) != ERROR_OK)
 		return ERROR_FAIL;
 	*supported = get_field(read, DMI_DMCS2_HALTGROUP) == (unsigned) target->smp;
+	return ERROR_OK;
+}
+
+static int discover_vlenb(struct target *target, int hartid)
+{
+	RISCV_INFO(r);
+	riscv_reg_t vlenb;
+
+	if (register_read(target, &vlenb, GDB_REGNO_VLENB) != ERROR_OK)
+		return ERROR_FAIL;
+	r->vlenb[hartid] = vlenb;
+
+	LOG_INFO("hart %d: Vector support with vlenb=%d", hartid, r->vlenb[hartid]);
+
 	return ERROR_OK;
 }
 
@@ -1648,6 +1767,11 @@ static int examine(struct target *target)
 		if (register_read(target, &r->misa[i], GDB_REGNO_MISA)) {
 			LOG_ERROR("Fatal: Failed to read MISA from hart %d.", i);
 			return ERROR_FAIL;
+		}
+
+		if (riscv_supports_extension(target, i, 'V')) {
+			if (discover_vlenb(target, i) != ERROR_OK)
+				return ERROR_FAIL;
 		}
 
 		/* Now init registers based on what we discovered. */

@@ -3229,6 +3229,70 @@ const char *gdb_regno_name(enum gdb_regno regno)
 			return "priv";
 		case GDB_REGNO_SATP:
 			return "satp";
+		case GDB_REGNO_V0:
+			return "v0";
+		case GDB_REGNO_V1:
+			return "v1";
+		case GDB_REGNO_V2:
+			return "v2";
+		case GDB_REGNO_V3:
+			return "v3";
+		case GDB_REGNO_V4:
+			return "v4";
+		case GDB_REGNO_V5:
+			return "v5";
+		case GDB_REGNO_V6:
+			return "v6";
+		case GDB_REGNO_V7:
+			return "v7";
+		case GDB_REGNO_V8:
+			return "v8";
+		case GDB_REGNO_V9:
+			return "v9";
+		case GDB_REGNO_V10:
+			return "v10";
+		case GDB_REGNO_V11:
+			return "v11";
+		case GDB_REGNO_V12:
+			return "v12";
+		case GDB_REGNO_V13:
+			return "v13";
+		case GDB_REGNO_V14:
+			return "v14";
+		case GDB_REGNO_V15:
+			return "v15";
+		case GDB_REGNO_V16:
+			return "v16";
+		case GDB_REGNO_V17:
+			return "v17";
+		case GDB_REGNO_V18:
+			return "v18";
+		case GDB_REGNO_V19:
+			return "v19";
+		case GDB_REGNO_V20:
+			return "v20";
+		case GDB_REGNO_V21:
+			return "v21";
+		case GDB_REGNO_V22:
+			return "v22";
+		case GDB_REGNO_V23:
+			return "v23";
+		case GDB_REGNO_V24:
+			return "v24";
+		case GDB_REGNO_V25:
+			return "v25";
+		case GDB_REGNO_V26:
+			return "v26";
+		case GDB_REGNO_V27:
+			return "v27";
+		case GDB_REGNO_V28:
+			return "v28";
+		case GDB_REGNO_V29:
+			return "v29";
+		case GDB_REGNO_V30:
+			return "v30";
+		case GDB_REGNO_V31:
+			return "v31";
 		default:
 			if (regno <= GDB_REGNO_XPR31)
 				sprintf(buf, "x%d", regno - GDB_REGNO_ZERO);
@@ -3342,6 +3406,9 @@ int riscv_init_registers(struct target *target)
 	static struct reg_feature feature_csr = {
 		.name = "org.gnu.gdb.riscv.csr"
 	};
+	static struct reg_feature feature_vector = {
+		.name = "org.gnu.gdb.riscv.vector"
+	};
 	static struct reg_feature feature_virtual = {
 		.name = "org.gnu.gdb.riscv.virtual"
 	};
@@ -3357,6 +3424,14 @@ int riscv_init_registers(struct target *target)
 		.type = REG_TYPE_IEEE_DOUBLE,
 		.id = "ieee_double"
 	};
+//	static struct reg_data_type_vector reg_type_vector = {
+//	};
+//	static struct reg_data_type type_arch_defined = {
+//		.type = REG_TYPE_ARCH_DEFINED,
+//		.id = "arch_defined",
+//		.type_class = REG_TYPE_CLASS_VECTOR,
+//		.reg_type_vector = &reg_type_vector
+//	};
 	struct csr_info csr_info[] = {
 #define DECLARE_CSR(name, number) { number, #name },
 #include "encoding.h"
@@ -3731,6 +3806,16 @@ int riscv_init_registers(struct target *target)
 				case CSR_MHPMCOUNTER31H:
 					r->exist = riscv_xlen(target) == 32;
 					break;
+
+				case CSR_VSTART:
+				case CSR_VXSAT:
+				case CSR_VXRM:
+				case CSR_VL:
+					// TODO: write using vsetvli and vsetvl
+				case CSR_VTYPE:
+				case CSR_VLENB:
+					r->exist = riscv_supports_extension(target, hartid, 'V');
+					break;
 			}
 
 			if (!r->exist && expose_csr) {
@@ -3748,6 +3833,15 @@ int riscv_init_registers(struct target *target)
 			r->group = "general";
 			r->feature = &feature_virtual;
 			r->size = 8;
+
+		} else if (number >= GDB_REGNO_V0 && number <= GDB_REGNO_V31) {
+			r->caller_save = true;
+			r->exist = riscv_supports_extension(target, hartid, 'V');
+			//r->reg_data_type = &type_arch_defined;
+			r->size = info->vlenb[hartid] * 8;
+			sprintf(reg_name, "v%d", number - GDB_REGNO_V0);
+			r->group = "vector";
+			r->feature = &feature_vector;
 
 		} else if (number >= GDB_REGNO_COUNT) {
 			/* Custom registers. */
