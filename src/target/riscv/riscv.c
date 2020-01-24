@@ -3229,6 +3229,10 @@ const char *gdb_regno_name(enum gdb_regno regno)
 			return "priv";
 		case GDB_REGNO_SATP:
 			return "satp";
+		case GDB_REGNO_VTYPE:
+			return "vtype";
+		case GDB_REGNO_VL:
+			return "vl";
 		case GDB_REGNO_V0:
 			return "v0";
 		case GDB_REGNO_V1:
@@ -3310,20 +3314,35 @@ static int register_get(struct reg *reg)
 {
 	riscv_reg_info_t *reg_info = reg->arch_info;
 	struct target *target = reg_info->target;
-	uint64_t value;
-	int result = riscv_get_register(target, &value, reg->number);
-	if (result != ERROR_OK)
-		return result;
-	buf_set_u64(reg->value, 0, reg->size, value);
+	RISCV_INFO(r);
+
+	if (reg->number >= GDB_REGNO_V0 && reg->number <= GDB_REGNO_V31) {
+		if (!r->get_register_buf) {
+			LOG_ERROR("Reading register %s not supported on this RISC-V target.",
+					gdb_regno_name(reg->number));
+			return ERROR_FAIL;
+		}
+
+		if (r->get_register_buf(target, reg->value, reg->number) != ERROR_OK)
+			return ERROR_FAIL;
+	} else {
+		uint64_t value;
+		int result = riscv_get_register(target, &value, reg->number);
+		if (result != ERROR_OK)
+			return result;
+		buf_set_u64(reg->value, 0, reg->size, value);
+	}
 	/* CSRs (and possibly other extension) registers may change value at any
 	 * time. */
 	if (reg->number <= GDB_REGNO_XPR31 ||
 			(reg->number >= GDB_REGNO_FPR0 && reg->number <= GDB_REGNO_FPR31) ||
+			(reg->number >= GDB_REGNO_V0 && reg->number <= GDB_REGNO_V31) ||
 			reg->number == GDB_REGNO_PC)
 		reg->valid = true;
-	LOG_DEBUG("[%d]{%d} read 0x%" PRIx64 " from %s (valid=%d)",
-			target->coreid, riscv_current_hartid(target), value, reg->name,
-			reg->valid);
+	char *str = buf_to_str(reg->value, reg->size, 16);
+	LOG_DEBUG("[%d]{%d} read 0x%s from %s (valid=%d)", target->coreid,
+			riscv_current_hartid(target), str, reg->name, reg->valid);
+	free(str);
 	return ERROR_OK;
 }
 
@@ -3331,22 +3350,37 @@ static int register_set(struct reg *reg, uint8_t *buf)
 {
 	riscv_reg_info_t *reg_info = reg->arch_info;
 	struct target *target = reg_info->target;
+	RISCV_INFO(r);
 
-	uint64_t value = buf_get_u64(buf, 0, reg->size);
+	char *str = buf_to_str(reg->value, reg->size, 16);
+	LOG_DEBUG("[%d]{%d} write 0x%s to %s (valid=%d)", target->coreid,
+			riscv_current_hartid(target), str, reg->name, reg->valid);
+	free(str);
 
-	LOG_DEBUG("[%d]{%d} write 0x%" PRIx64 " to %s (valid=%d)",
-			target->coreid, riscv_current_hartid(target), value, reg->name,
-			reg->valid);
-	struct reg *r = &target->reg_cache->reg_list[reg->number];
+	memcpy(reg->value, buf, DIV_ROUND_UP(reg->size, 8));
 	/* CSRs (and possibly other extension) registers may change value at any
 	 * time. */
 	if (reg->number <= GDB_REGNO_XPR31 ||
 			(reg->number >= GDB_REGNO_FPR0 && reg->number <= GDB_REGNO_FPR31) ||
+			(reg->number >= GDB_REGNO_V0 && reg->number <= GDB_REGNO_V31) ||
 			reg->number == GDB_REGNO_PC)
-		r->valid = true;
-	memcpy(r->value, buf, (r->size + 7) / 8);
+		reg->valid = true;
 
-	riscv_set_register(target, reg->number, value);
+	if (reg->number >= GDB_REGNO_V0 && reg->number <= GDB_REGNO_V31) {
+		if (!r->set_register_buf) {
+			LOG_ERROR("Reading register %s not supported on this RISC-V target.",
+					gdb_regno_name(reg->number));
+			return ERROR_FAIL;
+		}
+
+		if (r->set_register_buf(target, reg->number, reg->value) != ERROR_OK)
+			return ERROR_FAIL;
+	} else {
+		uint64_t value = buf_get_u64(buf, 0, reg->size);
+		if (riscv_set_register(target, reg->number, value) != ERROR_OK)
+			return ERROR_FAIL;
+	}
+
 	return ERROR_OK;
 }
 
@@ -3835,9 +3869,11 @@ int riscv_init_registers(struct target *target)
 			r->size = 8;
 
 		} else if (number >= GDB_REGNO_V0 && number <= GDB_REGNO_V31) {
-			r->caller_save = true;
+			/* TODO: These should be caller saved, but if I say it's true then
+			 * gdb only tries to save 32 bits, which makes OpenOCD unhappy when
+			 * it tries to write a 32-bit value to a larger register. */
+			r->caller_save = false;
 			r->exist = riscv_supports_extension(target, hartid, 'V');
-			//r->reg_data_type = &type_arch_defined;
 			r->size = info->vlenb[hartid] * 8;
 			sprintf(reg_name, "v%d", number - GDB_REGNO_V0);
 			r->group = "vector";

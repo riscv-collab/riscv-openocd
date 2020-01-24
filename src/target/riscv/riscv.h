@@ -111,6 +111,9 @@ typedef struct {
 		riscv_reg_t *value, int hid, int rid);
 	int (*set_register)(struct target *, int hartid, int regid,
 			uint64_t value);
+	int (*get_register_buf)(struct target *target, uint8_t *buf, int regno);
+	int (*set_register_buf)(struct target *target, int regno,
+			const uint8_t *buf);
 	int (*select_current_hart)(struct target *);
 	bool (*is_halted)(struct target *target);
 	/* Resume this target, as well as every other prepped target that can be
