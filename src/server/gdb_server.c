@@ -2268,11 +2268,6 @@ static int smp_reg_list_noread(struct target *target,
 	return ERROR_OK;
 }
 
-// >>>
-#include "src/target/riscv/encoding.h"
-#include "src/target/riscv/gdb_regs.h"
-// <<<
-
 static int gdb_generate_target_description(struct target *target, char **tdesc_out)
 {
 	int retval = ERROR_OK;
@@ -2333,21 +2328,6 @@ static int gdb_generate_target_description(struct target *target, char **tdesc_o
 			xml_printf(&retval, &tdesc, &pos, &size,
 					"<feature name=\"%s\">\n",
 					features[current_feature]);
-			if (!strcmp(features[current_feature], "org.gnu.gdb.riscv.vector")) {
-				xml_printf(&retval, &tdesc, &pos, &size,
-						"<vector id=\"bytes\" type=\"uint8\" count=\"16\"/>\n"
-						"<vector id=\"shorts\" type=\"uint16\" count=\"8\"/>\n"
-						"<vector id=\"words\" type=\"uint32\" count=\"4\"/>\n"
-						"<vector id=\"longs\" type=\"uint64\" count=\"2\"/>\n"
-						"<vector id=\"quads\" type=\"uint128\" count=\"1\"/>\n"
-						"<union id=\"riscv_vector_type\">\n"
-						"  <field name=\"b\" type=\"bytes\"/>\n"
-						"  <field name=\"s\" type=\"shorts\"/>\n"
-						"  <field name=\"w\" type=\"words\"/>\n"
-						"  <field name=\"l\" type=\"longs\"/>\n"
-						"  <field name=\"q\" type=\"quads\"/>\n"
-						"</union>\n");
-			}
 
 			int i;
 			for (i = 0; i < reg_list_size; i++) {
@@ -2381,35 +2361,28 @@ static int gdb_generate_target_description(struct target *target, char **tdesc_o
 					type_str = "int";
 				}
 
-				if (i >= GDB_REGNO_V0 && i <= GDB_REGNO_V31) {
+				xml_printf(&retval, &tdesc, &pos, &size,
+						"<reg name=\"%s\"", reg_list[i]->name);
+				xml_printf(&retval, &tdesc, &pos, &size,
+						" bitsize=\"%d\"", reg_list[i]->size);
+				xml_printf(&retval, &tdesc, &pos, &size,
+						" regnum=\"%d\"", reg_list[i]->number);
+				if (reg_list[i]->caller_save)
 					xml_printf(&retval, &tdesc, &pos, &size,
-							"<reg name=\"%s\" bitsize=\"128\" regnum=\"%d\" save-restore=\"no\" type=\"riscv_vector_type\" group=\"vector\"/>\n",
-							reg_list[i]->name,
-							reg_list[i]->number);
-				} else {
+							" save-restore=\"yes\"");
+				else
 					xml_printf(&retval, &tdesc, &pos, &size,
-							"<reg name=\"%s\"", reg_list[i]->name);
-					xml_printf(&retval, &tdesc, &pos, &size,
-							" bitsize=\"%d\"", reg_list[i]->size);
-					xml_printf(&retval, &tdesc, &pos, &size,
-							" regnum=\"%d\"", reg_list[i]->number);
-					if (reg_list[i]->caller_save)
-						xml_printf(&retval, &tdesc, &pos, &size,
-								" save-restore=\"yes\"");
-					else
-						xml_printf(&retval, &tdesc, &pos, &size,
-								" save-restore=\"no\"");
+							" save-restore=\"no\"");
 
-					xml_printf(&retval, &tdesc, &pos, &size,
-							" type=\"%s\"", type_str);
+				xml_printf(&retval, &tdesc, &pos, &size,
+						" type=\"%s\"", type_str);
 
-					if (reg_list[i]->group != NULL)
-						xml_printf(&retval, &tdesc, &pos, &size,
-								" group=\"%s\"", reg_list[i]->group);
-
+				if (reg_list[i]->group != NULL)
 					xml_printf(&retval, &tdesc, &pos, &size,
-							"/>\n");
-				}
+							" group=\"%s\"", reg_list[i]->group);
+
+				xml_printf(&retval, &tdesc, &pos, &size,
+						"/>\n");
 			}
 
 			xml_printf(&retval, &tdesc, &pos, &size,

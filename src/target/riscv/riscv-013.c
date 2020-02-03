@@ -1074,7 +1074,7 @@ static int is_vector_reg(uint32_t gdb_regno)
 		gdb_regno == GDB_REGNO_VLENB;
 }
 
-int prep_for_register_access(struct target *target, uint64_t *mstatus,
+static int prep_for_register_access(struct target *target, uint64_t *mstatus,
 		int regno)
 {
 	if (is_fpu_reg(regno) || is_vector_reg(regno)) {
@@ -1093,8 +1093,8 @@ int prep_for_register_access(struct target *target, uint64_t *mstatus,
 	return ERROR_OK;
 }
 
-int cleanup_after_register_access(struct target *target, uint64_t mstatus,
-		int regno)
+static int cleanup_after_register_access(struct target *target,
+		uint64_t mstatus, int regno)
 {
 	if ((is_fpu_reg(regno) && (mstatus & MSTATUS_FS) == 0) ||
 			(is_vector_reg(regno) && (mstatus & MSTATUS_VS) == 0))
@@ -1836,57 +1836,11 @@ static unsigned riscv013_data_bits(struct target *target)
 	return riscv_xlen(target);
 }
 
-static int riscv013_get_register_buf(struct target *target,
-		uint8_t *value, int regno)
+static int prep_for_vector_access(struct target *target, uint64_t *vtype,
+		uint64_t *vl, unsigned *debug_vl)
 {
 	RISCV_INFO(r);
-	assert(regno >= GDB_REGNO_V0 && regno <= GDB_REGNO_V31);
-
-	riscv_reg_t s0;
-	if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
-		return ERROR_FAIL;
-
-	uint64_t mstatus;
-	if (prep_for_register_access(target, &mstatus, regno) != ERROR_OK)
-		return ERROR_FAIL;
-
-	/*
-	 * The idea is that you read a vector register destructively: read
-	 * element 0 using vmv.x.s into t0; send t0 to the debugger; then
-	 * vslide1down with t0 as the scalar argument. This is effectively
-	 * rotating the vector one element at a time, so after vl steps,
-	 * the vector register is back to its original value."
-	 *
-	 * The two instructions vmv.x.s and vmv.s.x are described in
-	 * section 17.1.
-	 *
-	 * The vmv.x.s instruction copies a single SEW-wide element from
-	 * index 0 of the source vector register to a destination integer
-	 * register.
-	 *
-	 * The vmv.s.x instruction copies the scalar integer register to
-	 * element 0 of the destination vector register.
-	 *
-	 * Executing the two instructions in the PROGBUF and reading or
-	 * writing the x register in a loop would not be that much slower
-	 * than executing the instruction to move a vector reg to memory
-	 * then reading memory sequentially.
-	 *
-	 * I recommend not using memory-based vector register read/writes -
-	 * it would add user complication to have to allocate target memory
-	 * for a vector register buffer just for debug - and require adding
-	 * to the linker script to do this allocation and then informing
-	 * the debugger where it is. */
-
 	/* TODO: this continuous save/restore is terrible for performance. */
-
-	uint64_t vtype, vl;
-	/* Save vtype and vl. */
-	if (register_read(target, &vtype, GDB_REGNO_VTYPE) != ERROR_OK)
-		return ERROR_FAIL;
-	if (register_read(target, &vl, GDB_REGNO_VL) != ERROR_OK)
-		return ERROR_FAIL;
-
 	/* Write vtype and vl. */
 	unsigned encoded_vsew;
 	switch (riscv_xlen(target)) {
@@ -1900,11 +1854,73 @@ static int riscv013_get_register_buf(struct target *target,
 			LOG_ERROR("Unsupported xlen: %d", riscv_xlen(target));
 			return ERROR_FAIL;
 	}
+
+	/* Save vtype and vl. */
+	if (register_read(target, vtype, GDB_REGNO_VTYPE) != ERROR_OK)
+		return ERROR_FAIL;
+	if (register_read(target, vl, GDB_REGNO_VL) != ERROR_OK)
+		return ERROR_FAIL;
+
 	if (register_write_direct(target, GDB_REGNO_VTYPE, encoded_vsew << 2) != ERROR_OK)
 		return ERROR_FAIL;
-	unsigned debug_vl = DIV_ROUND_UP(r->vlenb[r->current_hartid] * 8,
+	*debug_vl = DIV_ROUND_UP(r->vlenb[r->current_hartid] * 8,
 			riscv_xlen(target));
-	if (register_write_direct(target, GDB_REGNO_VL, debug_vl) != ERROR_OK)
+	if (register_write_direct(target, GDB_REGNO_VL, *debug_vl) != ERROR_OK)
+		return ERROR_FAIL;
+
+	return ERROR_OK;
+}
+
+static int cleanup_after_vector_access(struct target *target, uint64_t vtype,
+		uint64_t vl)
+{
+	/* Restore vtype and vl. */
+	if (register_write_direct(target, GDB_REGNO_VTYPE, vtype) != ERROR_OK)
+		return ERROR_FAIL;
+	if (register_write_direct(target, GDB_REGNO_VL, vl) != ERROR_OK)
+		return ERROR_FAIL;
+	return ERROR_OK;
+}
+
+/*
+ * The idea is that you read a vector register destructively: read element 0
+ * using vmv.x.s into t0; send t0 to the debugger; then vslide1down with t0 as
+ * the scalar argument. This is effectively rotating the vector one element at
+ * a time, so after vl steps, the vector register is back to its original
+ * value."
+ *
+ * The two instructions vmv.x.s and vmv.s.x are described in section 17.1.
+ *
+ * The vmv.x.s instruction copies a single SEW-wide element from index 0 of the
+ * source vector register to a destination integer register.
+ *
+ * The vmv.s.x instruction copies the scalar integer register to element 0 of
+ * the destination vector register.
+ *
+ * Executing the two instructions in the PROGBUF and reading or writing the x
+ * register in a loop would not be that much slower than executing the
+ * instruction to move a vector reg to memory then reading memory sequentially.
+ *
+ * I recommend not using memory-based vector register read/writes - it would
+ * add user complication to have to allocate target memory for a vector
+ * register buffer just for debug - and require adding to the linker script to
+ * do this allocation and then informing the debugger where it is. */
+static int riscv013_get_register_buf(struct target *target,
+		uint8_t *value, int regno)
+{
+	assert(regno >= GDB_REGNO_V0 && regno <= GDB_REGNO_V31);
+
+	riscv_reg_t s0;
+	if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+		return ERROR_FAIL;
+
+	uint64_t mstatus;
+	if (prep_for_register_access(target, &mstatus, regno) != ERROR_OK)
+		return ERROR_FAIL;
+
+	uint64_t vtype, vl;
+	unsigned debug_vl;
+	if (prep_for_vector_access(target, &vtype, &vl, &debug_vl) != ERROR_OK)
 		return ERROR_FAIL;
 
 	unsigned vnum = regno - GDB_REGNO_V0;
@@ -1913,7 +1929,7 @@ static int riscv013_get_register_buf(struct target *target,
 	struct riscv_program program;
 	riscv_program_init(&program, target);
 	riscv_program_insert(&program, vmv_x_s(S0, vnum));
-	riscv_program_insert(&program, vslide1down_vx(vnum, vnum, S0, false));
+	riscv_program_insert(&program, vslide1down_vx(vnum, vnum, S0, true));
 	for (unsigned i = 0; i < debug_vl; i++) {
 		if (riscv_program_exec(&program, target) != ERROR_OK)
 			return ERROR_FAIL;
@@ -1923,10 +1939,7 @@ static int riscv013_get_register_buf(struct target *target,
 		buf_set_u64(value, xlen * i, xlen, v);
 	}
 
-	/* Restore vtype and vl. */
-	if (register_write_direct(target, GDB_REGNO_VTYPE, vtype) != ERROR_OK)
-		return ERROR_FAIL;
-	if (register_write_direct(target, GDB_REGNO_VL, vl) != ERROR_OK)
+	if (cleanup_after_vector_access(target, vtype, vl) != ERROR_OK)
 		return ERROR_FAIL;
 
 	if (cleanup_after_register_access(target, mstatus, regno) != ERROR_OK)
@@ -1941,7 +1954,43 @@ static int riscv013_set_register_buf(struct target *target,
 		int regno, const uint8_t *value)
 {
 	assert(regno >= GDB_REGNO_V0 && regno <= GDB_REGNO_V31);
-	return ERROR_FAIL;
+
+	riscv_reg_t s0;
+	if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+		return ERROR_FAIL;
+
+	uint64_t mstatus;
+	if (prep_for_register_access(target, &mstatus, regno) != ERROR_OK)
+		return ERROR_FAIL;
+
+	uint64_t vtype, vl;
+	unsigned debug_vl;
+	if (prep_for_vector_access(target, &vtype, &vl, &debug_vl) != ERROR_OK)
+		return ERROR_FAIL;
+
+	unsigned vnum = regno - GDB_REGNO_V0;
+	unsigned xlen = riscv_xlen(target);
+
+	struct riscv_program program;
+	riscv_program_init(&program, target);
+	riscv_program_insert(&program, vslide1down_vx(vnum, vnum, S0, true));
+	for (unsigned i = 0; i < debug_vl; i++) {
+		if (register_write_direct(target, GDB_REGNO_S0,
+					buf_get_u64(value, xlen * i, xlen)) != ERROR_OK)
+			return ERROR_FAIL;
+		if (riscv_program_exec(&program, target) != ERROR_OK)
+			return ERROR_FAIL;
+	}
+
+	if (cleanup_after_vector_access(target, vtype, vl) != ERROR_OK)
+		return ERROR_FAIL;
+
+	if (cleanup_after_register_access(target, mstatus, regno) != ERROR_OK)
+		return ERROR_FAIL;
+	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
+		return ERROR_FAIL;
+
+	return ERROR_OK;
 }
 
 static int init_target(struct command_context *cmd_ctx,

@@ -339,6 +339,12 @@ static uint32_t vmv_x_s(unsigned int rd, unsigned int vs2)
 	return (vs2 << 20) | (rd << 7) | MATCH_VMV_X_S;
 }
 
+static uint32_t vmv_s_x(unsigned int vd, unsigned int vs2) __attribute__((unused));
+static uint32_t vmv_s_x(unsigned int vd, unsigned int rs1)
+{
+	return (rs1 << 15) | (vd << 7) | MATCH_VMV_S_X;
+}
+
 static uint32_t vslide1down_vx(unsigned int vd, unsigned int vs2,
 		unsigned int rs1, unsigned int vm) __attribute__((unused));
 static uint32_t vslide1down_vx(unsigned int vd, unsigned int vs2,

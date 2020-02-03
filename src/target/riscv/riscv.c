@@ -3368,7 +3368,7 @@ static int register_set(struct reg *reg, uint8_t *buf)
 
 	if (reg->number >= GDB_REGNO_V0 && reg->number <= GDB_REGNO_V31) {
 		if (!r->set_register_buf) {
-			LOG_ERROR("Reading register %s not supported on this RISC-V target.",
+			LOG_ERROR("Writing register %s not supported on this RISC-V target.",
 					gdb_regno_name(reg->number));
 			return ERROR_FAIL;
 		}
@@ -3431,6 +3431,8 @@ int riscv_init_registers(struct target *target)
 		calloc(target->reg_cache->num_regs, max_reg_name_len);
 	char *reg_name = info->reg_names;
 
+	int hartid = riscv_current_hartid(target);
+
 	static struct reg_feature feature_cpu = {
 		.name = "org.gnu.gdb.riscv.cpu"
 	};
@@ -3450,22 +3452,83 @@ int riscv_init_registers(struct target *target)
 		.name = "org.gnu.gdb.riscv.custom"
 	};
 
-	static struct reg_data_type type_ieee_single = {
-		.type = REG_TYPE_IEEE_SINGLE,
-		.id = "ieee_single"
+	/* These types are built into gdb. */
+	static struct reg_data_type type_ieee_single = { .type = REG_TYPE_IEEE_SINGLE, .id = "ieee_single" };
+	static struct reg_data_type type_ieee_double = { .type = REG_TYPE_IEEE_DOUBLE, .id = "ieee_double" };
+	static struct reg_data_type type_uint8 = { .type = REG_TYPE_UINT8, .id = "uint8" };
+	static struct reg_data_type type_uint16 = { .type = REG_TYPE_UINT16, .id = "uint16" };
+	static struct reg_data_type type_uint32 = { .type = REG_TYPE_UINT32, .id = "uint32" };
+	static struct reg_data_type type_uint64 = { .type = REG_TYPE_UINT64, .id = "uint64" };
+	static struct reg_data_type type_uint128 = { .type = REG_TYPE_UINT128, .id = "uint128" };
+
+	/* This is the XML we want:
+	 * <vector id="bytes" type="uint8" count="16"/>
+	 * <vector id="shorts" type="uint16" count="8"/>
+	 * <vector id="words" type="uint32" count="4"/>
+	 * <vector id="longs" type="uint64" count="2"/>
+	 * <vector id="quads" type="uint128" count="1"/>
+	 * <union id="riscv_vector_type">
+	 *   <field name="b" type="bytes"/>
+	 *   <field name="s" type="shorts"/>
+	 *   <field name="w" type="words"/>
+	 *   <field name="l" type="longs"/>
+	 *   <field name="q" type="quads"/>
+	 * </union>
+	 */
+
+	// TODO: info->vlenb[hartid]
+	static struct reg_data_type_vector vector_uint8 = { &type_uint8, 16 };
+	static struct reg_data_type type_uint8_vector = {
+		.type = REG_TYPE_ARCH_DEFINED,
+		.id = "bytes",
+		.type_class = REG_TYPE_CLASS_VECTOR,
+		.reg_type_vector = &vector_uint8
 	};
-	static struct reg_data_type type_ieee_double = {
-		.type = REG_TYPE_IEEE_DOUBLE,
-		.id = "ieee_double"
+	static struct reg_data_type_vector vector_uint16 = { &type_uint16, 8 };
+	static struct reg_data_type type_uint16_vector = {
+		.type = REG_TYPE_ARCH_DEFINED,
+		.id = "shorts",
+		.type_class = REG_TYPE_CLASS_VECTOR,
+		.reg_type_vector = &vector_uint16
 	};
-//	static struct reg_data_type_vector reg_type_vector = {
-//	};
-//	static struct reg_data_type type_arch_defined = {
-//		.type = REG_TYPE_ARCH_DEFINED,
-//		.id = "arch_defined",
-//		.type_class = REG_TYPE_CLASS_VECTOR,
-//		.reg_type_vector = &reg_type_vector
-//	};
+	static struct reg_data_type_vector vector_uint32 = { &type_uint32, 4 };
+	static struct reg_data_type type_uint32_vector = {
+		.type = REG_TYPE_ARCH_DEFINED,
+		.id = "words",
+		.type_class = REG_TYPE_CLASS_VECTOR,
+		.reg_type_vector = &vector_uint32
+	};
+	static struct reg_data_type_vector vector_uint64 = { &type_uint64, 2 };
+	static struct reg_data_type type_uint64_vector = {
+		.type = REG_TYPE_ARCH_DEFINED,
+		.id = "longs",
+		.type_class = REG_TYPE_CLASS_VECTOR,
+		.reg_type_vector = &vector_uint64
+	};
+	static struct reg_data_type_vector vector_uint128 = { &type_uint128, 1 };
+	static struct reg_data_type type_uint128_vector = {
+		.type = REG_TYPE_ARCH_DEFINED,
+		.id = "quads",
+		.type_class = REG_TYPE_CLASS_VECTOR,
+		.reg_type_vector = &vector_uint128
+	};
+
+	static struct reg_data_type_union_field vector_fields[] = {
+		{ .name = "b", .type = &type_uint8_vector, .next = vector_fields + 1 },
+		{ .name = "s", .type = &type_uint16_vector, .next = vector_fields + 2 },
+		{ .name = "w", .type = &type_uint32_vector, .next = vector_fields + 3 },
+		{ .name = "l", .type = &type_uint64_vector, .next = vector_fields + 4 },
+		{ .name = "q", .type = &type_uint128_vector, .next = NULL },
+	};
+	static struct reg_data_type_union vector_union = {
+		.fields = vector_fields
+	};
+	static struct reg_data_type type_vector = {
+		.type = REG_TYPE_ARCH_DEFINED,
+		.id = "riscv_vector",
+		.type_class = REG_TYPE_CLASS_UNION,
+		.reg_type_union = &vector_union
+	};
 	struct csr_info csr_info[] = {
 #define DECLARE_CSR(name, number) { number, #name },
 #include "encoding.h"
@@ -3480,8 +3543,6 @@ int riscv_init_registers(struct target *target)
 
 	riscv_reg_info_t *shared_reg_info = calloc(1, sizeof(riscv_reg_info_t));
 	shared_reg_info->target = target;
-
-	int hartid = riscv_current_hartid(target);
 
 	/* When gdb requests register N, gdb_get_register_packet() assumes that this
 	 * is register at index N in reg_list. So if there are certain registers
@@ -3869,15 +3930,13 @@ int riscv_init_registers(struct target *target)
 			r->size = 8;
 
 		} else if (number >= GDB_REGNO_V0 && number <= GDB_REGNO_V31) {
-			/* TODO: These should be caller saved, but if I say it's true then
-			 * gdb only tries to save 32 bits, which makes OpenOCD unhappy when
-			 * it tries to write a 32-bit value to a larger register. */
 			r->caller_save = false;
 			r->exist = riscv_supports_extension(target, hartid, 'V');
 			r->size = info->vlenb[hartid] * 8;
 			sprintf(reg_name, "v%d", number - GDB_REGNO_V0);
 			r->group = "vector";
 			r->feature = &feature_vector;
+			r->reg_data_type = &type_vector;
 
 		} else if (number >= GDB_REGNO_COUNT) {
 			/* Custom registers. */
