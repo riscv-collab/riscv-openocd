@@ -34,9 +34,6 @@
 #if IS_DARWIN
 #include <libproc.h>
 #endif
-#ifdef HAVE_SYS_SYSCTL_H
-#include <sys/sysctl.h>
-#endif
 #if IS_WIN32 && !IS_CYGWIN
 #include <windows.h>
 #endif
