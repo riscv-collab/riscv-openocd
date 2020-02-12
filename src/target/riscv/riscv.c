@@ -3927,7 +3927,6 @@ int riscv_init_registers(struct target *target)
 				case CSR_VXSAT:
 				case CSR_VXRM:
 				case CSR_VL:
-					// TODO: write using vsetvli and vsetvl
 				case CSR_VTYPE:
 				case CSR_VLENB:
 					r->exist = riscv_supports_extension(target, hartid, 'V');
