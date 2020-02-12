@@ -3461,7 +3461,7 @@ int riscv_init_registers(struct target *target)
 	static struct reg_data_type type_uint64 = { .type = REG_TYPE_UINT64, .id = "uint64" };
 	static struct reg_data_type type_uint128 = { .type = REG_TYPE_UINT128, .id = "uint128" };
 
-	/* This is the XML we want:
+	/* This is roughly the XML we want:
 	 * <vector id="bytes" type="uint8" count="16"/>
 	 * <vector id="shorts" type="uint16" count="8"/>
 	 * <vector id="words" type="uint32" count="4"/>
@@ -3475,8 +3475,6 @@ int riscv_init_registers(struct target *target)
 	 *   <field name="q" type="quads"/>
 	 * </union>
 	 */
-
-	// TODO: info->vlenb[hartid]
 
 	info->vector_uint8.type = &type_uint8;
 	info->vector_uint8.count = info->vlenb[hartid];
