@@ -1882,29 +1882,6 @@ static int cleanup_after_vector_access(struct target *target, uint64_t vtype,
 	return ERROR_OK;
 }
 
-/*
- * The idea is that you read a vector register destructively: read element 0
- * using vmv.x.s into t0; send t0 to the debugger; then vslide1down with t0 as
- * the scalar argument. This is effectively rotating the vector one element at
- * a time, so after vl steps, the vector register is back to its original
- * value."
- *
- * The two instructions vmv.x.s and vmv.s.x are described in section 17.1.
- *
- * The vmv.x.s instruction copies a single SEW-wide element from index 0 of the
- * source vector register to a destination integer register.
- *
- * The vmv.s.x instruction copies the scalar integer register to element 0 of
- * the destination vector register.
- *
- * Executing the two instructions in the PROGBUF and reading or writing the x
- * register in a loop would not be that much slower than executing the
- * instruction to move a vector reg to memory then reading memory sequentially.
- *
- * I recommend not using memory-based vector register read/writes - it would
- * add user complication to have to allocate target memory for a vector
- * register buffer just for debug - and require adding to the linker script to
- * do this allocation and then informing the debugger where it is. */
 static int riscv013_get_register_buf(struct target *target,
 		uint8_t *value, int regno)
 {

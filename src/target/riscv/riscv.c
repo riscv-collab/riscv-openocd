@@ -3352,7 +3352,7 @@ static int register_set(struct reg *reg, uint8_t *buf)
 	struct target *target = reg_info->target;
 	RISCV_INFO(r);
 
-	char *str = buf_to_str(reg->value, reg->size, 16);
+	char *str = buf_to_str(buf, reg->size, 16);
 	LOG_DEBUG("[%d]{%d} write 0x%s to %s (valid=%d)", target->coreid,
 			riscv_current_hartid(target), str, reg->name, reg->valid);
 	free(str);
@@ -3477,58 +3477,81 @@ int riscv_init_registers(struct target *target)
 	 */
 
 	// TODO: info->vlenb[hartid]
-	static struct reg_data_type_vector vector_uint8 = { &type_uint8, 16 };
-	static struct reg_data_type type_uint8_vector = {
-		.type = REG_TYPE_ARCH_DEFINED,
-		.id = "bytes",
-		.type_class = REG_TYPE_CLASS_VECTOR,
-		.reg_type_vector = &vector_uint8
-	};
-	static struct reg_data_type_vector vector_uint16 = { &type_uint16, 8 };
-	static struct reg_data_type type_uint16_vector = {
-		.type = REG_TYPE_ARCH_DEFINED,
-		.id = "shorts",
-		.type_class = REG_TYPE_CLASS_VECTOR,
-		.reg_type_vector = &vector_uint16
-	};
-	static struct reg_data_type_vector vector_uint32 = { &type_uint32, 4 };
-	static struct reg_data_type type_uint32_vector = {
-		.type = REG_TYPE_ARCH_DEFINED,
-		.id = "words",
-		.type_class = REG_TYPE_CLASS_VECTOR,
-		.reg_type_vector = &vector_uint32
-	};
-	static struct reg_data_type_vector vector_uint64 = { &type_uint64, 2 };
-	static struct reg_data_type type_uint64_vector = {
-		.type = REG_TYPE_ARCH_DEFINED,
-		.id = "longs",
-		.type_class = REG_TYPE_CLASS_VECTOR,
-		.reg_type_vector = &vector_uint64
-	};
-	static struct reg_data_type_vector vector_uint128 = { &type_uint128, 1 };
-	static struct reg_data_type type_uint128_vector = {
-		.type = REG_TYPE_ARCH_DEFINED,
-		.id = "quads",
-		.type_class = REG_TYPE_CLASS_VECTOR,
-		.reg_type_vector = &vector_uint128
-	};
 
-	static struct reg_data_type_union_field vector_fields[] = {
-		{ .name = "b", .type = &type_uint8_vector, .next = vector_fields + 1 },
-		{ .name = "s", .type = &type_uint16_vector, .next = vector_fields + 2 },
-		{ .name = "w", .type = &type_uint32_vector, .next = vector_fields + 3 },
-		{ .name = "l", .type = &type_uint64_vector, .next = vector_fields + 4 },
-		{ .name = "q", .type = &type_uint128_vector, .next = NULL },
-	};
-	static struct reg_data_type_union vector_union = {
-		.fields = vector_fields
-	};
-	static struct reg_data_type type_vector = {
-		.type = REG_TYPE_ARCH_DEFINED,
-		.id = "riscv_vector",
-		.type_class = REG_TYPE_CLASS_UNION,
-		.reg_type_union = &vector_union
-	};
+	info->vector_uint8.type = &type_uint8;
+	info->vector_uint8.count = info->vlenb[hartid];
+	info->type_uint8_vector.type = REG_TYPE_ARCH_DEFINED;
+	info->type_uint8_vector.id = "bytes";
+	info->type_uint8_vector.type_class = REG_TYPE_CLASS_VECTOR;
+	info->type_uint8_vector.reg_type_vector = &info->vector_uint8;
+
+	info->vector_uint16.type = &type_uint16;
+	info->vector_uint16.count = info->vlenb[hartid] / 2;
+	info->type_uint16_vector.type = REG_TYPE_ARCH_DEFINED;
+	info->type_uint16_vector.id = "shorts";
+	info->type_uint16_vector.type_class = REG_TYPE_CLASS_VECTOR;
+	info->type_uint16_vector.reg_type_vector = &info->vector_uint16;
+
+	info->vector_uint32.type = &type_uint32;
+	info->vector_uint32.count = info->vlenb[hartid] / 4;
+	info->type_uint32_vector.type = REG_TYPE_ARCH_DEFINED;
+	info->type_uint32_vector.id = "words";
+	info->type_uint32_vector.type_class = REG_TYPE_CLASS_VECTOR;
+	info->type_uint32_vector.reg_type_vector = &info->vector_uint32;
+
+	info->vector_uint64.type = &type_uint64;
+	info->vector_uint64.count = info->vlenb[hartid] / 8;
+	info->type_uint64_vector.type = REG_TYPE_ARCH_DEFINED;
+	info->type_uint64_vector.id = "longs";
+	info->type_uint64_vector.type_class = REG_TYPE_CLASS_VECTOR;
+	info->type_uint64_vector.reg_type_vector = &info->vector_uint64;
+
+	info->vector_uint128.type = &type_uint128;
+	info->vector_uint128.count = info->vlenb[hartid] / 16;
+	info->type_uint128_vector.type = REG_TYPE_ARCH_DEFINED;
+	info->type_uint128_vector.id = "quads";
+	info->type_uint128_vector.type_class = REG_TYPE_CLASS_VECTOR;
+	info->type_uint128_vector.reg_type_vector = &info->vector_uint128;
+
+	info->vector_fields[0].name = "b";
+	info->vector_fields[0].type = &info->type_uint8_vector;
+	if (info->vlenb[hartid] >= 2) {
+		info->vector_fields[0].next = info->vector_fields + 1;
+		info->vector_fields[1].name = "s";
+		info->vector_fields[1].type = &info->type_uint16_vector;
+	} else {
+		info->vector_fields[0].next = NULL;
+	}
+	if (info->vlenb[hartid] >= 4) {
+		info->vector_fields[1].next = info->vector_fields + 2;
+		info->vector_fields[2].name = "w";
+		info->vector_fields[2].type = &info->type_uint32_vector;
+	} else {
+		info->vector_fields[1].next = NULL;
+	}
+	if (info->vlenb[hartid] >= 8) {
+		info->vector_fields[2].next = info->vector_fields + 3;
+		info->vector_fields[3].name = "l";
+		info->vector_fields[3].type = &info->type_uint64_vector;
+	} else {
+		info->vector_fields[2].next = NULL;
+	}
+	if (info->vlenb[hartid] >= 16) {
+		info->vector_fields[3].next = info->vector_fields + 4;
+		info->vector_fields[4].name = "q";
+		info->vector_fields[4].type = &info->type_uint128_vector;
+	} else {
+		info->vector_fields[3].next = NULL;
+	}
+	info->vector_fields[4].next = NULL;
+
+	info->vector_union.fields = info->vector_fields;
+
+	info->type_vector.type = REG_TYPE_ARCH_DEFINED;
+	info->type_vector.id = "riscv_vector";
+	info->type_vector.type_class = REG_TYPE_CLASS_UNION;
+	info->type_vector.reg_type_union = &info->vector_union;
+
 	struct csr_info csr_info[] = {
 #define DECLARE_CSR(name, number) { number, #name },
 #include "encoding.h"
@@ -3936,7 +3959,7 @@ int riscv_init_registers(struct target *target)
 			sprintf(reg_name, "v%d", number - GDB_REGNO_V0);
 			r->group = "vector";
 			r->feature = &feature_vector;
-			r->reg_data_type = &type_vector;
+			r->reg_data_type = &info->type_vector;
 
 		} else if (number >= GDB_REGNO_COUNT) {
 			/* Custom registers. */
