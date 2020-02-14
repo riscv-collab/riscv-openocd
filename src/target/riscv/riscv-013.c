@@ -1907,13 +1907,24 @@ static int riscv013_get_register_buf(struct target *target,
 	riscv_program_init(&program, target);
 	riscv_program_insert(&program, vmv_x_s(S0, vnum));
 	riscv_program_insert(&program, vslide1down_vx(vnum, vnum, S0, true));
+
+	int result = ERROR_OK;
 	for (unsigned i = 0; i < debug_vl; i++) {
-		if (riscv_program_exec(&program, target) != ERROR_OK)
-			return ERROR_FAIL;
-		uint64_t v;
-		if (register_read_direct(target, &v, GDB_REGNO_S0) != ERROR_OK)
-			return ERROR_FAIL;
-		buf_set_u64(value, xlen * i, xlen, v);
+		/* Executing the program might result in an exception if there is some
+		 * issue with the vector implementation/instructions we're using. If that
+		 * happens, attempt to restore as usual. We may have clobbered the
+		 * vector register we tried to read already.
+		 * For other failures, we just return error because things are probably
+		 * so messed up that attempting to restore isn't going to help. */
+		result = riscv_program_exec(&program, target);
+		if (result == ERROR_OK) {
+			uint64_t v;
+			if (register_read_direct(target, &v, GDB_REGNO_S0) != ERROR_OK)
+				return ERROR_FAIL;
+			buf_set_u64(value, xlen * i, xlen, v);
+		} else {
+			break;
+		}
 	}
 
 	if (cleanup_after_vector_access(target, vtype, vl) != ERROR_OK)
@@ -1924,7 +1935,7 @@ static int riscv013_get_register_buf(struct target *target,
 	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
 		return ERROR_FAIL;
 
-	return ERROR_OK;
+	return result;
 }
 
 static int riscv013_set_register_buf(struct target *target,
@@ -1951,12 +1962,14 @@ static int riscv013_set_register_buf(struct target *target,
 	struct riscv_program program;
 	riscv_program_init(&program, target);
 	riscv_program_insert(&program, vslide1down_vx(vnum, vnum, S0, true));
+	int result = ERROR_OK;
 	for (unsigned i = 0; i < debug_vl; i++) {
 		if (register_write_direct(target, GDB_REGNO_S0,
 					buf_get_u64(value, xlen * i, xlen)) != ERROR_OK)
 			return ERROR_FAIL;
-		if (riscv_program_exec(&program, target) != ERROR_OK)
-			return ERROR_FAIL;
+		result = riscv_program_exec(&program, target);
+		if (result != ERROR_OK)
+			break;
 	}
 
 	if (cleanup_after_vector_access(target, vtype, vl) != ERROR_OK)
@@ -1967,7 +1980,7 @@ static int riscv013_set_register_buf(struct target *target,
 	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
 		return ERROR_FAIL;
 
-	return ERROR_OK;
+	return result;
 }
 
 static int init_target(struct command_context *cmd_ctx,
