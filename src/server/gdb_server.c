@@ -1425,7 +1425,7 @@ static int gdb_read_memory_packet(struct connection *connection,
 	uint8_t *buffer;
 	char *hex_buffer;
 
-	int retval = ERROR_OK;
+	int retval;
 
 	/* skip command character */
 	packet++;
@@ -1449,7 +1449,11 @@ static int gdb_read_memory_packet(struct connection *connection,
 
 	LOG_DEBUG("addr: 0x%16.16" PRIx64 ", len: 0x%8.8" PRIx32 "", addr, len);
 
-	retval = target_read_buffer(target, addr, len, buffer);
+	retval = ERROR_NOT_IMPLEMENTED;
+	if (target->rtos != NULL)
+		retval = rtos_read_buffer(target, addr, len, buffer);
+	if (retval == ERROR_NOT_IMPLEMENTED)
+		retval = target_read_buffer(target, addr, len, buffer);
 
 	if ((retval != ERROR_OK) && !gdb_report_data_abort) {
 		/* TODO : Here we have to lie and send back all zero's lest stack traces won't work.

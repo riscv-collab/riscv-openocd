@@ -136,5 +136,7 @@ int rtos_smp_init(struct target *target);
 /*  function for handling symbol access */
 int rtos_qsymbol(struct connection *connection, char const *packet, int packet_size);
 bool rtos_needs_fake_step(struct target *target, int64_t thread_id);
+int rtos_read_buffer(struct target *target, target_addr_t address,
+		uint32_t size, uint8_t *buffer);
 
 #endif /* OPENOCD_RTOS_RTOS_H */
