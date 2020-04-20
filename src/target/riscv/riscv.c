@@ -1059,11 +1059,13 @@ int halt_prep(struct target *target)
 		if (!riscv_hart_enabled(target, i))
 			continue;
 
-		LOG_DEBUG("prep hart %d", i);
+		LOG_DEBUG("[%s] prep hart, debug_reason=%d", target_name(target),
+				  target->debug_reason);
 		if (riscv_set_current_hartid(target, i) != ERROR_OK)
 			return ERROR_FAIL;
 		if (riscv_is_halted(target)) {
-			LOG_DEBUG("Hart %d is already halted.", i);
+			LOG_DEBUG("Hart %d is already halted (reason=%d).", i,
+					  target->debug_reason);
 		} else {
 			if (r->halt_prep(target) != ERROR_OK)
 				return ERROR_FAIL;
@@ -1305,7 +1307,7 @@ static int resume_finish(struct target *target)
  * @par single_hart When true, only resume a single hart even if SMP is
  * configured.  This is used to run algorithms on just one hart.
  */
-int riscv_resume_internal(
+int riscv_resume(
 		struct target *target,
 		int current,
 		target_addr_t address,
@@ -1353,10 +1355,10 @@ int riscv_resume_internal(
 	return result;
 }
 
-int riscv_resume(struct target *target, int current, target_addr_t address,
+static int riscv_target_resume(struct target *target, int current, target_addr_t address,
 		int handle_breakpoints, int debug_execution)
 {
-	return riscv_resume_internal(target, current, address, handle_breakpoints,
+	return riscv_resume(target, current, address, handle_breakpoints,
 			debug_execution, false);
 }
 
@@ -1718,7 +1720,7 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 
 	/* Run algorithm */
 	LOG_DEBUG("resume at 0x%" TARGET_PRIxADDR, entry_point);
-	if (riscv_resume_internal(target, 0, entry_point, 0, 0, true) != ERROR_OK)
+	if (riscv_resume(target, 0, entry_point, 0, 0, true) != ERROR_OK)
 		return ERROR_FAIL;
 
 	int64_t start = timeval_ms();
@@ -1908,7 +1910,7 @@ static enum riscv_poll_hart riscv_poll_hart(struct target *target, int hartid)
 	 * to raise an event. */
 	bool halted = riscv_is_halted(target);
 	if (target->state != TARGET_HALTED && halted) {
-		LOG_DEBUG("  triggered a halt");
+		LOG_DEBUG("  triggered a halt (reason=%d)", target->debug_reason);
 		r->on_halt(target);
 		return RPH_DISCOVERED_HALTED;
 	} else if (target->state != TARGET_RUNNING && !halted) {
@@ -1943,6 +1945,7 @@ int set_debug_reason(struct target *target, int hartid)
 		case RISCV_HALT_ERROR:
 			return ERROR_FAIL;
 	}
+	LOG_DEBUG("%s: debug_reason=%d", target_name(target), target->debug_reason);
 	return ERROR_OK;
 }
 
@@ -1989,11 +1992,13 @@ int riscv_openocd_poll(struct target *target)
 		riscv_halt(target);
 
 	} else if (target->smp) {
-		bool halt_discovered = false;
-		bool newly_halted[128] = {0};
+		unsigned halts_discovered = 0;
+		unsigned total_targets = 0;
+		bool newly_halted[128] = {0};	// TODO: remove
 		unsigned i = 0;
 		for (struct target_list *list = target->head; list != NULL;
 				list = list->next, i++) {
+			total_targets++;
 			struct target *t = list->target;
 			riscv_info_t *r = riscv_info(t);
 			assert(i < DIM(newly_halted));
@@ -2006,7 +2011,7 @@ int riscv_openocd_poll(struct target *target)
 					t->debug_reason = DBG_REASON_NOTHALTED;
 					break;
 				case RPH_DISCOVERED_HALTED:
-					halt_discovered = true;
+					halts_discovered++;
 					newly_halted[i] = true;
 					t->state = TARGET_HALTED;
 					if (set_debug_reason(t, r->current_hartid) != ERROR_OK)
@@ -2017,17 +2022,33 @@ int riscv_openocd_poll(struct target *target)
 			}
 		}
 
-		if (halt_discovered) {
-			i = 0;
-			for (struct target_list *list = target->head; list != NULL;
-					list = list->next, i++) {
+		if (halts_discovered) {
+			bool semihosting_happened = false;
+			semihosting_result_t semi = SEMI_NONE;
+			for (struct target_list *list = target->head; list != NULL; list = list->next)
+			{
 				struct target *t = list->target;
-				if (newly_halted[i])
-					target_call_event_callbacks(t, TARGET_EVENT_HALTED);
+				if (t->debug_reason == DBG_REASON_BREAKPOINT) {
+					int retval;
+					semi = riscv_semihosting(t, &retval);
+					// TODO: what if two harts simultaneously hit semihosting breakpoints?
+					if (riscv_semihosting(t, &retval))
+						semihosting_happened = true;
+				}
 			}
 
-			LOG_DEBUG("Halt other targets in this SMP group.");
-			riscv_halt(target);
+			if (semihosting_happened) {
+				riscv_resume(target, 0, 0, 0, 0, false);
+			} else {
+				LOG_DEBUG("Halt other targets in this SMP group.");
+				// TODO: Only do this if not all harts were halted.
+				riscv_halt(target);
+				for (struct target_list *list = target->head; list != NULL; list = list->next)
+				{
+					struct target *t = list->target;
+					target_call_event_callbacks(t, TARGET_EVENT_HALTED);
+				}
+			}
 		}
 		return ERROR_OK;
 
@@ -2777,7 +2798,7 @@ struct target_type riscv_target = {
 	.poll = old_or_new_riscv_poll,
 
 	.halt = riscv_halt,
-	.resume = riscv_resume,
+	.resume = riscv_target_resume,
 	.step = old_or_new_riscv_step,
 
 	.assert_reset = riscv_assert_reset,
