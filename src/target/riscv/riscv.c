@@ -3001,7 +3001,7 @@ bool riscv_has_register(struct target *target, int hartid, int regid)
 	return 1;
 }
 
-/** 
+/**
  * If write is true:
  *   return true iff we are guaranteed that the register will contain exactly
  *       the value we just wrote when it's read.
@@ -3035,7 +3035,7 @@ static bool gdb_regno_cacheable(enum gdb_regno regno, bool write)
 		case GDB_REGNO_MEPC:
 		case GDB_REGNO_MCAUSE:
 		case GDB_REGNO_SATP:
-			/* 
+			/*
 			 * WARL registers might not contain the value we just wrote, but
 			 * these ones won't spontaneously change their value either. *
 			 */
