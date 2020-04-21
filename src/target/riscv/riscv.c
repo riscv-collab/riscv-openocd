@@ -3096,6 +3096,11 @@ int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 	RISCV_INFO(r);
 
 	struct reg *reg = &target->reg_cache->reg_list[regid];
+	if (!reg->exist) {
+		LOG_DEBUG("[%s]{%d} %s does not exist.",
+				  target_name(target), hartid, gdb_regno_name(regid));
+		return ERROR_FAIL;
+	}
 
 	if (reg && reg->valid && hartid == riscv_current_hartid(target)) {
 		*value = buf_get_u64(reg->value, 0, reg->size);
