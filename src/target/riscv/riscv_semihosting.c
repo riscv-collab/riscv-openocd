@@ -69,12 +69,12 @@ semihosting_result_t riscv_semihosting(struct target *target, int *retval)
 {
 	struct semihosting *semihosting = target->semihosting;
 	if (!semihosting) {
-		LOG_DEBUG("   -> 0 (!semihosting)");
+		LOG_DEBUG("   -> NONE (!semihosting)");
 		return SEMI_NONE;
 	}
 
 	if (!semihosting->is_active) {
-		LOG_DEBUG("   -> 0 (!semihosting->is_active)");
+		LOG_DEBUG("   -> NONE (!semihosting->is_active)");
 		return SEMI_NONE;
 	}
 
@@ -105,7 +105,7 @@ semihosting_result_t riscv_semihosting(struct target *target, int *retval)
 
 	if (pre != 0x01f01013 || ebreak != 0x00100073 || post != 0x40705013) {
 		/* Not the magic sequence defining semihosting. */
-		LOG_DEBUG("   -> 0 (no magic)");
+		LOG_DEBUG("   -> NONE (no magic)");
 		return SEMI_NONE;
 	}
 
@@ -120,13 +120,13 @@ semihosting_result_t riscv_semihosting(struct target *target, int *retval)
 
 		result = riscv_get_register(target, &r0, GDB_REGNO_A0);
 		if (result != ERROR_OK) {
-			LOG_DEBUG("   -> 0 (couldn't read a0)");
+			LOG_DEBUG("   -> ERROR (couldn't read a0)");
 			return SEMI_ERROR;
 		}
 
 		result = riscv_get_register(target, &r1, GDB_REGNO_A1);
 		if (result != ERROR_OK) {
-			LOG_DEBUG("   -> 0 (couldn't read a1)");
+			LOG_DEBUG("   -> ERROR (couldn't read a1)");
 			return SEMI_ERROR;
 		}
 
@@ -143,7 +143,7 @@ semihosting_result_t riscv_semihosting(struct target *target, int *retval)
 			}
 		} else {
 			/* Unknown operation number, not a semihosting call. */
-			LOG_DEBUG("   -> 0 (unknown operation number)");
+			LOG_DEBUG("   -> NONE (unknown operation number)");
 			return SEMI_NONE;
 		}
 	}
@@ -160,11 +160,11 @@ semihosting_result_t riscv_semihosting(struct target *target, int *retval)
 			return SEMI_ERROR;
 		}
 
-		LOG_DEBUG("   -> 1");
+		LOG_DEBUG("   -> HANDLED");
 		return SEMI_HANDLED;
 	}
 
-	LOG_DEBUG("   -> 0");
+	LOG_DEBUG("   -> WAITING");
 	return SEMI_WAITING;
 }
 

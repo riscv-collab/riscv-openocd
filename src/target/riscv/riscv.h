@@ -339,9 +339,10 @@ int riscv_init_registers(struct target *target);
 
 void riscv_semihosting_init(struct target *target);
 typedef enum {
-	SEMI_NONE,	/* Not halted for a semihosting call. */
+	SEMI_NONE,		/* Not halted for a semihosting call. */
 	SEMI_HANDLED,	/* Call handled, and target was resumed. */
 	SEMI_WAITING,	/* Call handled, target is halted waiting until we can resume. */
+	SEMI_ERROR		/* Something went wrong. */
 } semihosting_result_t;
 semihosting_result_t riscv_semihosting(struct target *target, int *retval);
 

@@ -1910,7 +1910,7 @@ static enum riscv_poll_hart riscv_poll_hart(struct target *target, int hartid)
 	 * to raise an event. */
 	bool halted = riscv_is_halted(target);
 	if (target->state != TARGET_HALTED && halted) {
-		LOG_DEBUG("  triggered a halt (reason=%d)", target->debug_reason);
+		LOG_DEBUG("  triggered a halt");
 		r->on_halt(target);
 		return RPH_DISCOVERED_HALTED;
 	} else if (target->state != TARGET_RUNNING && !halted) {
@@ -1945,7 +1945,7 @@ int set_debug_reason(struct target *target, int hartid)
 		case RISCV_HALT_ERROR:
 			return ERROR_FAIL;
 	}
-	LOG_DEBUG("%s: debug_reason=%d", target_name(target), target->debug_reason);
+	LOG_DEBUG("[%s] debug_reason=%d", target_name(target), target->debug_reason);
 	return ERROR_OK;
 }
 
@@ -2023,23 +2023,27 @@ int riscv_openocd_poll(struct target *target)
 		}
 
 		if (halts_discovered) {
-			bool semihosting_happened = false;
-			semihosting_result_t semi = SEMI_NONE;
+			bool halt_all = false;
 			for (struct target_list *list = target->head; list != NULL; list = list->next)
 			{
 				struct target *t = list->target;
 				if (t->debug_reason == DBG_REASON_BREAKPOINT) {
 					int retval;
-					semi = riscv_semihosting(t, &retval);
 					// TODO: what if two harts simultaneously hit semihosting breakpoints?
-					if (riscv_semihosting(t, &retval))
-						semihosting_happened = true;
+					switch (riscv_semihosting(t, &retval)) {
+						case SEMI_NONE:
+							halt_all = true;
+							break;
+						case SEMI_HANDLED:
+						case SEMI_WAITING:
+							break;
+						case SEMI_ERROR:
+							return ERROR_FAIL;
+					}
 				}
 			}
 
-			if (semihosting_happened) {
-				riscv_resume(target, 0, 0, 0, 0, false);
-			} else {
+			if (halt_all) {
 				LOG_DEBUG("Halt other targets in this SMP group.");
 				// TODO: Only do this if not all harts were halted.
 				riscv_halt(target);
