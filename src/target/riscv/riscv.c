@@ -2023,14 +2023,17 @@ int riscv_openocd_poll(struct target *target)
 		}
 
 		if (halts_discovered) {
+			LOG_DEBUG("%d halts discovered", halts_discovered);
 			bool halt_all = false;
 			for (struct target_list *list = target->head; list != NULL; list = list->next)
 			{
 				struct target *t = list->target;
-				if (t->debug_reason == DBG_REASON_BREAKPOINT) {
-					int retval;
-					// TODO: what if two harts simultaneously hit semihosting breakpoints?
-					switch (riscv_semihosting(t, &retval)) {
+				if (t->state == TARGET_HALTED) {
+					if (t->debug_reason == DBG_REASON_BREAKPOINT) {
+						int retval;
+						// TODO: what if two harts simultaneously hit semihosting breakpoints?
+						switch (riscv_semihosting(t, &retval))
+						{
 						case SEMI_NONE:
 							halt_all = true;
 							break;
@@ -2039,7 +2042,10 @@ int riscv_openocd_poll(struct target *target)
 							break;
 						case SEMI_ERROR:
 							return ERROR_FAIL;
+						}
 					}
+				} else {
+					halt_all = true;
 				}
 			}
 
