@@ -2043,9 +2043,9 @@ int riscv_openocd_poll(struct target *target)
 						case SEMI_ERROR:
 							return ERROR_FAIL;
 						}
+					} else {
+						halt_all = true;
 					}
-				} else {
-					halt_all = true;
 				}
 			}
 
