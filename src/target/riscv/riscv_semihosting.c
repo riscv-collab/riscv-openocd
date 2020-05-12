@@ -154,11 +154,9 @@ semihosting_result_t riscv_semihosting(struct target *target, int *retval)
 	 */
 	if (semihosting->is_resumable && !semihosting->hit_fileio) {
 		/* Resume right after the EBREAK 4 bytes instruction. */
-		*retval = riscv_resume(target, 0, pc+4, 0, 0, true);
-		if (*retval != ERROR_OK) {
-			LOG_ERROR("Failed to resume %s", target_name(target));
+		*retval = riscv_set_register(target, GDB_REGNO_PC, pc + 4);
+		if (*retval != ERROR_OK)
 			return SEMI_ERROR;
-		}
 
 		LOG_DEBUG("   -> HANDLED");
 		return SEMI_HANDLED;
