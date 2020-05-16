@@ -2087,13 +2087,12 @@ int riscv_openocd_poll(struct target *target)
 		target->state = TARGET_HALTED;
 	}
 
-	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
-
 	if (target->debug_reason == DBG_REASON_BREAKPOINT) {
 		int retval;
 		switch (riscv_semihosting(target, &retval)) {
 			case SEMI_NONE:
 			case SEMI_WAITING:
+				target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 				break;
 			case SEMI_HANDLED:
 				if (riscv_resume(target, true, 0, 0, 0, false) != ERROR_OK)
@@ -2102,6 +2101,8 @@ int riscv_openocd_poll(struct target *target)
 			case SEMI_ERROR:
 				return retval;
 		}
+	} else {
+		target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 	}
 
 	return ERROR_OK;
