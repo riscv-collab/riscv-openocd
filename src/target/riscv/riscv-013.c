@@ -2543,31 +2543,25 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 		assert(size <= 16);
 		target_addr_t next_read = address - 1;
 		for (uint32_t i = (next_address - address) / size; i < count - 1; i++) {
-			for (int j = (size - 1) / 4; j >= 0; j--)
-			{
+			for (int j = (size - 1) / 4; j >= 0; j--) {
 				uint32_t value;
 				unsigned attempt = 0;
-				while (1)
-				{
-					{
-						if (attempt++ > 100)
-						{
-							LOG_ERROR("DMI keeps being busy in while reading memory just past " TARGET_ADDR_FMT,
-									  next_read);
-							return ERROR_FAIL;
-						}
-						dmi_status_t status = dmi_scan(target, NULL, &value,
-													   DMI_OP_READ, sbdata[j], 0, false);
-						if (status == DMI_STATUS_BUSY)
-							increase_dmi_busy_delay(target);
-						else if (status == DMI_STATUS_SUCCESS)
-							break;
-						else
-							return ERROR_FAIL;
+				while (1) {
+					if (attempt++ > 100) {
+						LOG_ERROR("DMI keeps being busy in while reading memory just past " TARGET_ADDR_FMT,
+								  next_read);
+						return ERROR_FAIL;
 					}
+					dmi_status_t status = dmi_scan(target, NULL, &value,
+												   DMI_OP_READ, sbdata[j], 0, false);
+					if (status == DMI_STATUS_BUSY)
+						increase_dmi_busy_delay(target);
+					else if (status == DMI_STATUS_SUCCESS)
+						break;
+					else
+						return ERROR_FAIL;
 				}
-				if (next_read != address - 1)
-				{
+				if (next_read != address - 1) {
 					write_to_buf(buffer + next_read - address, value, MIN(size, 4));
 					log_memory_access(next_read, value, MIN(size, 4), true);
 				}
@@ -2579,23 +2573,19 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 		if (count > 1) {
 			uint32_t value;
 			unsigned attempt = 0;
-			while (1)
-			{
-				{
-					if (attempt++ > 100)
-					{
-						LOG_ERROR("DMI keeps being busy in while reading memory just past " TARGET_ADDR_FMT,
-									next_read);
-						return ERROR_FAIL;
-					}
-					dmi_status_t status = dmi_scan(target, NULL, &value, DMI_OP_NOP, 0, 0, false);
-					if (status == DMI_STATUS_BUSY)
-						increase_dmi_busy_delay(target);
-					else if (status == DMI_STATUS_SUCCESS)
-						break;
-					else
-						return ERROR_FAIL;
+			while (1) {
+				if (attempt++ > 100) {
+					LOG_ERROR("DMI keeps being busy in while reading memory just past " TARGET_ADDR_FMT,
+								next_read);
+					return ERROR_FAIL;
 				}
+				dmi_status_t status = dmi_scan(target, NULL, &value, DMI_OP_NOP, 0, 0, false);
+				if (status == DMI_STATUS_BUSY)
+					increase_dmi_busy_delay(target);
+				else if (status == DMI_STATUS_SUCCESS)
+					break;
+				else
+					return ERROR_FAIL;
 			}
 			write_to_buf(buffer + next_read - address, value, MIN(size, 4));
 			log_memory_access(next_read, value, MIN(size, 4), true);
