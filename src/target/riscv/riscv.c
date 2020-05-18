@@ -1995,7 +1995,7 @@ int riscv_openocd_poll(struct target *target)
 	} else if (target->smp) {
 		unsigned halts_discovered = 0;
 		unsigned total_targets = 0;
-		bool newly_halted[128] = {0};	// TODO: remove
+		bool newly_halted[128] = {0};
 		unsigned should_remain_halted = 0;
 		unsigned should_resume = 0;
 		unsigned i = 0;
@@ -2006,8 +2006,7 @@ int riscv_openocd_poll(struct target *target)
 			riscv_info_t *r = riscv_info(t);
 			assert(i < DIM(newly_halted));
 			enum riscv_poll_hart out = riscv_poll_hart(t, r->current_hartid);
-			switch (out)
-			{
+			switch (out) {
 			case RPH_NO_CHANGE:
 				if (t->state == TARGET_HALTED)
 					should_remain_halted++;
@@ -2025,11 +2024,9 @@ int riscv_openocd_poll(struct target *target)
 				if (set_debug_reason(t, halt_reason) != ERROR_OK)
 					return ERROR_FAIL;
 
-				if (halt_reason == RISCV_HALT_BREAKPOINT)
-				{
+				if (halt_reason == RISCV_HALT_BREAKPOINT) {
 					int retval;
-					switch (riscv_semihosting(t, &retval))
-					{
+					switch (riscv_semihosting(t, &retval)) {
 					case SEMI_NONE:
 					case SEMI_WAITING:
 						/* This hart should remain halted. */
@@ -2043,9 +2040,7 @@ int riscv_openocd_poll(struct target *target)
 					case SEMI_ERROR:
 						return retval;
 					}
-				}
-				else if (halt_reason != RISCV_HALT_GROUP)
-				{
+				} else if (halt_reason != RISCV_HALT_GROUP) {
 					should_remain_halted++;
 				}
 				break;
