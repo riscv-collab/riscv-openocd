@@ -1383,15 +1383,26 @@ static int riscv_mmu(struct target *target, int *enabled)
 	if (riscv_rtos_enabled(target))
 		riscv_set_current_hartid(target, target->rtos->current_thread - 1);
 
-	riscv_reg_t value;
-	if (riscv_get_register(target, &value, GDB_REGNO_SATP) != ERROR_OK) {
+	/* Don't use MMU in explicit or effective M (machine) mode */
+	riscv_reg_t priv;
+	riscv_reg_t mstatus;
+	if ((riscv_get_register(target, &priv, GDB_REGNO_PRIV) == ERROR_OK) &&
+	    (riscv_get_register(target, &mstatus, GDB_REGNO_MSTATUS) == ERROR_OK) &&
+	    ((get_field(mstatus, MSTATUS_MPRV) ? get_field(mstatus, MSTATUS_MPP) : priv) == PRV_M)) {
+		LOG_DEBUG("SATP/MMU ignored in M mode.");
+		*enabled = 0;
+		return ERROR_OK;
+	}
+
+	riscv_reg_t satp;
+	if (riscv_get_register(target, &satp, GDB_REGNO_SATP) != ERROR_OK) {
 		LOG_DEBUG("Couldn't read SATP.");
 		/* If we can't read SATP, then there must not be an MMU. */
 		*enabled = 0;
 		return ERROR_OK;
 	}
 
-	if (get_field(value, RISCV_SATP_MODE(riscv_xlen(target))) == SATP_MODE_OFF) {
+	if (get_field(satp, RISCV_SATP_MODE(riscv_xlen(target))) == SATP_MODE_OFF) {
 		LOG_DEBUG("MMU is disabled.");
 		*enabled = 0;
 	} else {
