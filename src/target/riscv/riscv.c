@@ -1229,6 +1229,9 @@ static int resume_prep(struct target *target, int current,
 		/* To be able to run off a trigger, disable all the triggers, step, and
 		 * then resume as usual. */
 		LOG_DEBUG("deal with triggers");
+		if (riscv_enumerate_triggers(target) != ERROR_OK)
+			return ERROR_FAIL;
+
 		riscv_reg_t trigger_temporarily_cleared[RISCV_MAX_HWBPS] = {0};
 
 		int result = ERROR_OK;
