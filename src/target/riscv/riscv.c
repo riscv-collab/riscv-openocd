@@ -1288,11 +1288,9 @@ static int enable_triggers(struct target *target, riscv_reg_t *state)
 	} else {
 		struct watchpoint *watchpoint = target->watchpoints;
 		int i = 0;
-		while (watchpoint)
-		{
+		while (watchpoint) {
 			LOG_DEBUG("watchpoint %d: cleared=%" PRId64, i, state[i]);
-			if (state[i])
-			{
+			if (state[i]) {
 				if (riscv_add_watchpoint(target, watchpoint) != ERROR_OK)
 					return ERROR_FAIL;
 			}
