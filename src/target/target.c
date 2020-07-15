@@ -5948,7 +5948,7 @@ COMMAND_HANDLER(handle_fast_load_command)
 	return retval;
 }
 
-bool enable_rtos_riscv = false;
+bool enable_rtos_riscv;
 COMMAND_HANDLER(handle_enable_rtos_riscv_command)
 {
 	if (CMD_ARGC != 0) {
