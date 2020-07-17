@@ -2067,28 +2067,35 @@ int set_debug_reason(struct target *target, enum riscv_halt_reason halt_reason)
 	return ERROR_OK;
 }
 
+void sample_memory(struct target *target)
+{
+	if (riscv_sample_buf) {
+		riscv_sample_buf_maybe_add_timestamp();
+		uint64_t start = timeval_ms();
+		while (timeval_ms() - start < 50) {
+			for (unsigned i = 0; i < DIM(riscv_sample_config); i++) {
+				if (riscv_sample_config[i].enabled &&
+						riscv_sample_buf_used + 1 + riscv_sample_config[i].size_bytes <
+						riscv_sample_buf_size) {
+					assert(i < SAMPLE_BUF_TIMESTAMP);
+					riscv_sample_buf[riscv_sample_buf_used] = i;
+					int result = riscv_read_phys_memory(
+						target, riscv_sample_config[i].address,
+						riscv_sample_config[i].size_bytes, 1,
+						riscv_sample_buf + riscv_sample_buf_used + 1);
+					if (result == ERROR_OK)
+						riscv_sample_buf_used += 1 + riscv_sample_config[i].size_bytes;
+				}
+			}
+		}
+	}
+}
+
 /*** OpenOCD Interface ***/
 int riscv_openocd_poll(struct target *target)
 {
 	LOG_DEBUG("polling all harts");
 	int halted_hart = -1;
-
-	if (riscv_sample_buf) {
-		riscv_sample_buf_maybe_add_timestamp();
-		for (unsigned i = 0; i < DIM(riscv_sample_config); i++) {
-			if (riscv_sample_config[i].enabled &&
-					riscv_sample_buf_used + 1 + riscv_sample_config[i].size_bytes <
-							riscv_sample_buf_size) {
-				assert(i < SAMPLE_BUF_TIMESTAMP);
-				riscv_sample_buf[riscv_sample_buf_used] = i;
-				int result = riscv_read_memory(target, riscv_sample_config[i].address,
-										   riscv_sample_config[i].size_bytes, 1,
-										   riscv_sample_buf + riscv_sample_buf_used + 1);
-				if (result == ERROR_OK)
-					riscv_sample_buf_used += 1 + riscv_sample_config[i].size_bytes;
-			}
-		}
-	}
 
 	if (riscv_rtos_enabled(target)) {
 		/* Check every hart for an event. */
@@ -2195,13 +2202,27 @@ int riscv_openocd_poll(struct target *target)
 			LOG_DEBUG("resume all");
 			riscv_resume(target, true, 0, 0, 0, false);
 		}
+
+		/* Sample memory if any target is running. */
+		for (struct target_list *list = target->head; list != NULL;
+				list = list->next, i++) {
+			struct target *t = list->target;
+			if (t->state == TARGET_RUNNING) {
+				sample_memory(target);
+				break;
+			}
+		}
+
 		return ERROR_OK;
 
 	} else {
 		enum riscv_poll_hart out = riscv_poll_hart(target,
 				riscv_current_hartid(target));
-		if (out == RPH_NO_CHANGE || out == RPH_DISCOVERED_RUNNING)
+		if (out == RPH_NO_CHANGE || out == RPH_DISCOVERED_RUNNING) {
+			if (target->state == TARGET_RUNNING)
+				sample_memory(target);
 			return ERROR_OK;
+		}
 		else if (out == RPH_ERROR)
 			return ERROR_FAIL;
 
@@ -2785,11 +2806,6 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 			return ERROR_COMMAND_SYNTAX_ERROR;
 		}
 	}
-
-	for (unsigned i = 0; i < 16; i++) {
-		command_print_sameline(CMD, "%02x ", riscv_sample_buf[i]);
-	}
-	command_print(CMD, " ");
 
 	if (raw) {
 		command_print(CMD, "length_bytes=%d", riscv_sample_buf_used);
