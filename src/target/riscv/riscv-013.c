@@ -3186,7 +3186,7 @@ static int read_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	RISCV013_INFO(info);
-	if (info->progbufsize >= 2 && !riscv_prefer_sba)
+	if (info->progbufsize >= 2 && !riscv_prefer_sba && target->state == TARGET_HALTED)
 		return read_memory_progbuf(target, address, size, count, buffer);
 
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
