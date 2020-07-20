@@ -13,6 +13,7 @@
 #include "jtag/jtag.h"
 #include "target/register.h"
 #include "target/breakpoints.h"
+#include "helper/base64.h"
 #include "helper/time_support.h"
 #include "riscv.h"
 #include "gdb_regs.h"
@@ -2797,19 +2798,25 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 		LOG_ERROR("Command takes at most 1 arguments.");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
-	bool raw = false;
+	bool base64 = false;
 	if (CMD_ARGC > 0) {
-		if (!strcmp(CMD_ARGV[0], "raw")) {
-			raw = true;
+		if (!strcmp(CMD_ARGV[0], "base64")) {
+			base64 = true;
 		} else {
 			LOG_ERROR("Unknown argument: %s", CMD_ARGV[0]);
 			return ERROR_COMMAND_SYNTAX_ERROR;
 		}
 	}
 
-	if (raw) {
-		command_print(CMD, "length_bytes=%d", riscv_sample_buf_used);
-		command_print(CMD, "TODO: raw data");
+	if (base64) {
+		unsigned char *encoded = base64_encode(riscv_sample_buf,
+									  riscv_sample_buf_used, NULL);
+		if (!encoded) {
+			LOG_ERROR("Failed base64 encode!");
+			return ERROR_FAIL;
+		}
+		command_print(CMD, "%s", encoded);
+		free(encoded);
 	} else {
 		unsigned i = 0;
 		while (i < riscv_sample_buf_used) {
@@ -2849,7 +2856,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "dump_sample_buf",
 		.handler = handle_dump_sample_buf_command,
 		.mode = COMMAND_ANY,
-		.usage = "riscv dump_sample_buf [raw]",
+		.usage = "riscv dump_sample_buf [base64]",
 		.help = "Print the contents of the sample buffer, and clear the buffer."
 	},
 	{
