@@ -1997,6 +1997,143 @@ static int riscv013_set_register_buf(struct target *target,
 	return result;
 }
 
+/**
+ * @par size in bytes
+ */
+static void write_to_buf(uint8_t *buffer, uint64_t value, unsigned size)
+{
+	switch (size) {
+		case 8:
+			buffer[7] = value >> 56;
+			buffer[6] = value >> 48;
+			buffer[5] = value >> 40;
+			buffer[4] = value >> 32;
+			/* falls through */
+		case 4:
+			buffer[3] = value >> 24;
+			buffer[2] = value >> 16;
+			/* falls through */
+		case 2:
+			buffer[1] = value >> 8;
+			/* falls through */
+		case 1:
+			buffer[0] = value;
+			break;
+		default:
+			assert(false);
+	}
+}
+
+static uint32_t sb_sbaccess(unsigned size_bytes)
+{
+	switch (size_bytes) {
+		case 1:
+			return set_field(0, DMI_SBCS_SBACCESS, 0);
+		case 2:
+			return set_field(0, DMI_SBCS_SBACCESS, 1);
+		case 4:
+			return set_field(0, DMI_SBCS_SBACCESS, 2);
+		case 8:
+			return set_field(0, DMI_SBCS_SBACCESS, 3);
+		case 16:
+			return set_field(0, DMI_SBCS_SBACCESS, 4);
+	}
+	assert(0);
+	return 0;	/* Make mingw happy. */
+}
+
+static int sb_write_address(struct target *target, target_addr_t address)
+{
+	RISCV013_INFO(info);
+	unsigned sbasize = get_field(info->sbcs, DMI_SBCS_SBASIZE);
+	/* There currently is no support for >64-bit addresses in OpenOCD. */
+	if (sbasize > 96)
+		dmi_write(target, DMI_SBADDRESS3, 0);
+	if (sbasize > 64)
+		dmi_write(target, DMI_SBADDRESS2, 0);
+	if (sbasize > 32)
+		dmi_write(target, DMI_SBADDRESS1, address >> 32);
+	return dmi_write(target, DMI_SBADDRESS0, address);
+}
+
+static int sample_memory_bus_v1(struct target *target,
+								riscv_sample_buf_t *buf,
+								const riscv_sample_config_t *config,
+								int64_t until_ms)
+{
+	RISCV013_INFO(info);
+	uint32_t sbcs_write = set_field(0, DMI_SBCS_SBREADONADDR, 1);
+	sbcs_write |= sb_sbaccess(4);
+	LOG_DEBUG(">>> sbcs write 0x%x", sbcs_write);
+	if (dmi_write(target, DMI_SBCS, sbcs_write) != ERROR_OK)
+		return ERROR_FAIL;
+
+	while (timeval_ms() < until_ms) {
+		for (unsigned i = 0; i < DIM(config->bucket); i++) {
+			if (config->bucket[i].enabled &&
+				buf->used + 1 + config->bucket[i].size_bytes <
+					buf->size) {
+				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
+				buf->buf[buf->used] = i;
+
+				/* This address write will trigger the first read. */
+				if (sb_write_address(target, config->bucket[i].address) != ERROR_OK)
+					return ERROR_FAIL;
+
+				if (info->bus_master_read_delay) {
+					jtag_add_runtest(info->bus_master_read_delay, TAP_IDLE);
+					if (jtag_execute_queue() != ERROR_OK) {
+						LOG_ERROR("Failed to scan idle sequence");
+						return ERROR_FAIL;
+					}
+				}
+
+				assert(config->bucket[i].size_bytes == 4);
+				uint32_t value;
+				if (dmi_read(target, &value, DMI_SBDATA0) != ERROR_OK)
+					return ERROR_FAIL;
+
+				write_to_buf(buf->buf + buf->used + 1, value, config->bucket[i].size_bytes);
+
+				buf->used += 1 + config->bucket[i].size_bytes;
+			}
+		}
+	}
+
+	return ERROR_OK;
+}
+
+static int sample_memory(struct target *target,
+						 riscv_sample_buf_t *buf,
+						 const riscv_sample_config_t *config,
+						 int64_t until_ms)
+{
+	RISCV013_INFO(info);
+
+	if (get_field(info->sbcs, DMI_SBCS_SBACCESS32) &&
+			get_field(info->sbcs, DMI_SBCS_SBVERSION) == 1) {
+		return sample_memory_bus_v1(target, buf, config, until_ms);
+	}
+
+	while (timeval_ms() < until_ms) {
+		for (unsigned i = 0; i < DIM(config->bucket); i++) {
+			if (config->bucket[i].enabled &&
+				buf->used + 1 + config->bucket[i].size_bytes <
+					buf->size) {
+				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
+				buf->buf[buf->used] = i;
+				int result = read_memory(
+					target, config->bucket[i].address,
+					config->bucket[i].size_bytes, 1,
+					buf->buf + buf->used + 1);
+				if (result == ERROR_OK)
+					buf->used += 1 + config->bucket[i].size_bytes;
+			}
+		}
+	}
+	return ERROR_OK;
+}
+
 static int init_target(struct command_context *cmd_ctx,
 		struct target *target)
 {
@@ -2035,6 +2172,7 @@ static int init_target(struct command_context *cmd_ctx,
 	generic_info->version_specific = calloc(1, sizeof(riscv013_info_t));
 	if (!generic_info->version_specific)
 		return ERROR_FAIL;
+    generic_info->sample_memory = sample_memory;
 	riscv013_info_t *info = get_info(target);
 
 	info->progbufsize = -1;
@@ -2212,33 +2350,6 @@ static uint64_t read_from_buf(const uint8_t *buffer, unsigned size)
 	return -1;
 }
 
-/**
- * @par size in bytes
- */
-static void write_to_buf(uint8_t *buffer, uint64_t value, unsigned size)
-{
-	switch (size) {
-		case 8:
-			buffer[7] = value >> 56;
-			buffer[6] = value >> 48;
-			buffer[5] = value >> 40;
-			buffer[4] = value >> 32;
-			/* falls through */
-		case 4:
-			buffer[3] = value >> 24;
-			buffer[2] = value >> 16;
-			/* falls through */
-		case 2:
-			buffer[1] = value >> 8;
-			/* falls through */
-		case 1:
-			buffer[0] = value;
-			break;
-		default:
-			assert(false);
-	}
-}
-
 static int execute_fence(struct target *target)
 {
 	int old_hartid = riscv_current_hartid(target);
@@ -2325,24 +2436,6 @@ static int read_memory_bus_word(struct target *target, target_addr_t address,
 	return ERROR_OK;
 }
 
-static uint32_t sb_sbaccess(unsigned size_bytes)
-{
-	switch (size_bytes) {
-		case 1:
-			return set_field(0, DMI_SBCS_SBACCESS, 0);
-		case 2:
-			return set_field(0, DMI_SBCS_SBACCESS, 1);
-		case 4:
-			return set_field(0, DMI_SBCS_SBACCESS, 2);
-		case 8:
-			return set_field(0, DMI_SBCS_SBACCESS, 3);
-		case 16:
-			return set_field(0, DMI_SBCS_SBACCESS, 4);
-	}
-	assert(0);
-	return 0;	/* Make mingw happy. */
-}
-
 static target_addr_t sb_read_address(struct target *target)
 {
 	RISCV013_INFO(info);
@@ -2357,20 +2450,6 @@ static target_addr_t sb_read_address(struct target *target)
 	dmi_read(target, &v, DMI_SBADDRESS0);
 	address |= v;
 	return address;
-}
-
-static int sb_write_address(struct target *target, target_addr_t address)
-{
-	RISCV013_INFO(info);
-	unsigned sbasize = get_field(info->sbcs, DMI_SBCS_SBASIZE);
-	/* There currently is no support for >64-bit addresses in OpenOCD. */
-	if (sbasize > 96)
-		dmi_write(target, DMI_SBADDRESS3, 0);
-	if (sbasize > 64)
-		dmi_write(target, DMI_SBADDRESS2, 0);
-	if (sbasize > 32)
-		dmi_write(target, DMI_SBADDRESS1, address >> 32);
-	return dmi_write(target, DMI_SBADDRESS0, address);
 }
 
 static int read_sbcs_nonbusy(struct target *target, uint32_t *sbcs)
@@ -2496,6 +2575,10 @@ static int read_memory_bus_v0(struct target *target, target_addr_t address,
 			write_to_buf(t_buffer, value, size);
 		}
 	}
+
+	uint32_t sbcs;
+	if (dmi_read(target, &sbcs, DMI_SBCS) != ERROR_OK)
+		return ERROR_FAIL;
 
 	return ERROR_OK;
 }
@@ -3648,7 +3731,7 @@ struct target_type riscv013_target = {
 	.read_memory = read_memory,
 	.write_memory = write_memory,
 
-	.arch_state = arch_state,
+	.arch_state = arch_state
 };
 
 /*** 0.13-specific implementations of various RISC-V helper functions. ***/

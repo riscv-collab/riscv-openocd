@@ -276,15 +276,8 @@ static enum {
 	RO_REVERSED
 } resume_order;
 
-struct {
-	bool enabled;
-	target_addr_t address;
-	uint32_t size_bytes;
-} riscv_sample_config[16];
-
-uint8_t *riscv_sample_buf;
-unsigned riscv_sample_buf_used;
-unsigned riscv_sample_buf_size;
+static riscv_sample_buf_t sample_buf;
+static riscv_sample_config_t sample_config;
 
 virt2phys_info_t sv32 = {
 	.name = "Sv32",
@@ -326,18 +319,17 @@ virt2phys_info_t sv48 = {
 };
 
 static uint32_t sample_buf_last_timestamp;
-#define SAMPLE_BUF_TIMESTAMP	0x80
 void riscv_sample_buf_maybe_add_timestamp(void)
 {
 	uint32_t now = timeval_ms() & 0xffffffff;
-	if (riscv_sample_buf_used + 5 < riscv_sample_buf_size &&
-			(riscv_sample_buf_used == 0 || sample_buf_last_timestamp != now))
+	if (sample_buf.used + 5 < sample_buf.size &&
+			(sample_buf.used == 0 || sample_buf_last_timestamp != now))
 	{
-		riscv_sample_buf[riscv_sample_buf_used++] = SAMPLE_BUF_TIMESTAMP;
-		riscv_sample_buf[riscv_sample_buf_used++] = now & 0xff;
-		riscv_sample_buf[riscv_sample_buf_used++] = (now >> 8) & 0xff;
-		riscv_sample_buf[riscv_sample_buf_used++] = (now >> 16) & 0xff;
-		riscv_sample_buf[riscv_sample_buf_used++] = (now >> 24) & 0xff;
+		sample_buf.buf[sample_buf.used++] = RISCV_SAMPLE_BUF_TIMESTAMP;
+		sample_buf.buf[sample_buf.used++] = now & 0xff;
+		sample_buf.buf[sample_buf.used++] = (now >> 8) & 0xff;
+		sample_buf.buf[sample_buf.used++] = (now >> 16) & 0xff;
+		sample_buf.buf[sample_buf.used++] = (now >> 24) & 0xff;
 	}
 }
 
@@ -2068,28 +2060,39 @@ int set_debug_reason(struct target *target, enum riscv_halt_reason halt_reason)
 	return ERROR_OK;
 }
 
-void sample_memory(struct target *target)
+int sample_memory(struct target *target)
 {
-	if (riscv_sample_buf) {
-		riscv_sample_buf_maybe_add_timestamp();
-		uint64_t start = timeval_ms();
+	RISCV_INFO(r);
+
+	if (!sample_buf.buf)
+		return ERROR_OK;
+
+	uint64_t start = timeval_ms();
+	riscv_sample_buf_maybe_add_timestamp();
+	if (r->sample_memory) {
+		if (r->sample_memory(target, &sample_buf, &sample_config,
+							start + 50) != ERROR_OK)
+			return ERROR_FAIL;
+	} else {
 		while (timeval_ms() - start < 50) {
-			for (unsigned i = 0; i < DIM(riscv_sample_config); i++) {
-				if (riscv_sample_config[i].enabled &&
-						riscv_sample_buf_used + 1 + riscv_sample_config[i].size_bytes <
-						riscv_sample_buf_size) {
-					assert(i < SAMPLE_BUF_TIMESTAMP);
-					riscv_sample_buf[riscv_sample_buf_used] = i;
+			for (unsigned i = 0; i < DIM(sample_config.bucket); i++) {
+				if (sample_config.bucket[i].enabled &&
+					sample_buf.used + 1 + sample_config.bucket[i].size_bytes <
+						sample_buf.size) {
+					assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
+					sample_buf.buf[sample_buf.used] = i;
 					int result = riscv_read_phys_memory(
-						target, riscv_sample_config[i].address,
-						riscv_sample_config[i].size_bytes, 1,
-						riscv_sample_buf + riscv_sample_buf_used + 1);
+						target, sample_config.bucket[i].address,
+						sample_config.bucket[i].size_bytes, 1,
+						sample_buf.buf + sample_buf.used + 1);
 					if (result == ERROR_OK)
-						riscv_sample_buf_used += 1 + riscv_sample_config[i].size_bytes;
+						sample_buf.used += 1 + sample_config.bucket[i].size_bytes;
 				}
 			}
 		}
 	}
+
+	return ERROR_OK;
 }
 
 /*** OpenOCD Interface ***/
@@ -2723,11 +2726,11 @@ COMMAND_HANDLER(riscv_set_ebreaku)
 COMMAND_HANDLER(handle_memory_sample_command)
 {
 	if (CMD_ARGC == 0) {
-		for (unsigned i = 0; i < DIM(riscv_sample_config); i++) {
-			if (riscv_sample_config[i].enabled) {
+		for (unsigned i = 0; i < DIM(sample_config.bucket); i++) {
+			if (sample_config.bucket[i].enabled) {
 				command_print(CMD, "bucket %d; address=0x%" TARGET_PRIxADDR "; size=%d", i,
-							  riscv_sample_config[i].address,
-							  riscv_sample_config[i].size_bytes);
+							  sample_config.bucket[i].address,
+							  sample_config.bucket[i].size_bytes);
 			} else {
 				command_print(CMD, "bucket %d; disabled", i);
 			}
@@ -2746,51 +2749,51 @@ COMMAND_HANDLER(handle_memory_sample_command)
 
 	uint32_t bucket;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], bucket);
-	if (bucket > DIM(riscv_sample_config)) {
-		LOG_ERROR("Max bucket number is %d.", (unsigned) DIM(riscv_sample_config));
+	if (bucket > DIM(sample_config.bucket)) {
+		LOG_ERROR("Max bucket number is %d.", (unsigned) DIM(sample_config.bucket));
 		return ERROR_COMMAND_ARGUMENT_INVALID;
 	}
 
-	riscv_sample_config[bucket].enabled = true;
-	COMMAND_PARSE_ADDRESS(CMD_ARGV[1], riscv_sample_config[bucket].address);
+	sample_config.bucket[bucket].enabled = true;
+	COMMAND_PARSE_ADDRESS(CMD_ARGV[1], sample_config.bucket[bucket].address);
 
 	if (CMD_ARGC > 2) {
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], riscv_sample_config[bucket].size_bytes);
-		if (riscv_sample_config[bucket].size_bytes != 4 &&
-				riscv_sample_config[bucket].size_bytes != 8) {
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], sample_config.bucket[bucket].size_bytes);
+		if (sample_config.bucket[bucket].size_bytes != 4 &&
+				sample_config.bucket[bucket].size_bytes != 8) {
 			LOG_ERROR("Only 4-byte and 8-byte sizes are supported.");
 			return ERROR_COMMAND_ARGUMENT_INVALID;
 		}
 	} else {
-		riscv_sample_config[bucket].size_bytes = 4;
+		sample_config.bucket[bucket].size_bytes = 4;
 	}
 
-	if (!riscv_sample_buf) {
-		riscv_sample_buf_size = 1024 * 1024;
-		riscv_sample_buf = malloc(riscv_sample_buf_size);
+	if (!sample_buf.buf) {
+		sample_buf.size = 1024 * 1024;
+		sample_buf.buf = malloc(sample_buf.size);
 	}
 	/* Clear the buffer when the configuration is changed. */
-	riscv_sample_buf_used = 0;
+	sample_buf.used = 0;
 
 	return ERROR_OK;
 }
 
 uint32_t sample_buf_read32(unsigned offset){
-	return riscv_sample_buf[offset] |
-		   (((uint32_t)riscv_sample_buf[offset + 1]) << 8) |
-		   (((uint32_t)riscv_sample_buf[offset + 2]) << 16) |
-		   (((uint32_t)riscv_sample_buf[offset + 3]) << 24);
+	return sample_buf.buf[offset] |
+		   (((uint32_t)sample_buf.buf[offset + 1]) << 8) |
+		   (((uint32_t)sample_buf.buf[offset + 2]) << 16) |
+		   (((uint32_t)sample_buf.buf[offset + 3]) << 24);
 }
 
 uint64_t sample_buf_read64(unsigned offset){
-	return riscv_sample_buf[offset] |
-		   (((uint64_t)riscv_sample_buf[offset + 1]) << 8) |
-		   (((uint64_t)riscv_sample_buf[offset + 2]) << 16) |
-		   (((uint64_t)riscv_sample_buf[offset + 3]) << 24) |
-		   (((uint64_t)riscv_sample_buf[offset + 4]) << 32) |
-		   (((uint64_t)riscv_sample_buf[offset + 5]) << 40) |
-		   (((uint64_t)riscv_sample_buf[offset + 6]) << 48) |
-		   (((uint64_t)riscv_sample_buf[offset + 7]) << 56);
+	return sample_buf.buf[offset] |
+		   (((uint64_t)sample_buf.buf[offset + 1]) << 8) |
+		   (((uint64_t)sample_buf.buf[offset + 2]) << 16) |
+		   (((uint64_t)sample_buf.buf[offset + 3]) << 24) |
+		   (((uint64_t)sample_buf.buf[offset + 4]) << 32) |
+		   (((uint64_t)sample_buf.buf[offset + 5]) << 40) |
+		   (((uint64_t)sample_buf.buf[offset + 6]) << 48) |
+		   (((uint64_t)sample_buf.buf[offset + 7]) << 56);
 }
 COMMAND_HANDLER(handle_dump_sample_buf_command)
 {
@@ -2809,8 +2812,8 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 	}
 
 	if (base64) {
-		unsigned char *encoded = base64_encode(riscv_sample_buf,
-									  riscv_sample_buf_used, NULL);
+		unsigned char *encoded = base64_encode(sample_buf.buf,
+									  sample_buf.used, NULL);
 		if (!encoded) {
 			LOG_ERROR("Failed base64 encode!");
 			return ERROR_FAIL;
@@ -2819,26 +2822,26 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 		free(encoded);
 	} else {
 		unsigned i = 0;
-		while (i < riscv_sample_buf_used) {
-			uint8_t command = riscv_sample_buf[i++];
-			if (command == SAMPLE_BUF_TIMESTAMP) {
+		while (i < sample_buf.used) {
+			uint8_t command = sample_buf.buf[i++];
+			if (command == RISCV_SAMPLE_BUF_TIMESTAMP) {
 				uint32_t timestamp = sample_buf_read32(i);
 				i += 4;
 				command_print(CMD, "timestamp: %d", timestamp);
-			} else if (command < DIM(riscv_sample_config)) {
+			} else if (command < DIM(sample_config.bucket)) {
 				command_print_sameline(CMD, "0x%" TARGET_PRIxADDR ": ",
-									   riscv_sample_config[command].address);
-				if (riscv_sample_config[command].size_bytes == 4) {
+									   sample_config.bucket[command].address);
+				if (sample_config.bucket[command].size_bytes == 4) {
 					uint32_t value = sample_buf_read32(i);
 					i += 4;
 					command_print(CMD, "0x%08x", value);
-				} else if (riscv_sample_config[command].size_bytes == 8) {
+				} else if (sample_config.bucket[command].size_bytes == 8) {
 					uint64_t value = sample_buf_read64(i);
 					i += 8;
 					command_print(CMD, "0x%016lx", value);
 				} else {
 					LOG_ERROR("Found invalid size in bucket %d: %d", command,
-							  riscv_sample_config[command].size_bytes);
+							  sample_config.bucket[command].size_bytes);
 					return ERROR_FAIL;
 				}
 			} else {

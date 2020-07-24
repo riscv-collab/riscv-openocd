@@ -49,6 +49,21 @@ typedef struct {
 	unsigned custom_number;
 } riscv_reg_info_t;
 
+#define RISCV_SAMPLE_BUF_TIMESTAMP	0x80
+typedef struct {
+	uint8_t *buf;
+	unsigned used;
+	unsigned size;
+} riscv_sample_buf_t;
+
+typedef struct {
+	struct {
+		bool enabled;
+		target_addr_t address;
+		uint32_t size_bytes;
+	} bucket[16];
+} riscv_sample_config_t;
+
 typedef struct {
 	unsigned dtm_version;
 
@@ -151,6 +166,11 @@ typedef struct {
 			uint32_t num_words, target_addr_t illegal_address, bool run_sbbusyerror_test);
 
 	int (*test_compliance)(struct target *target);
+
+	int (*sample_memory)(struct target *target,
+						 riscv_sample_buf_t *buf,
+						 const riscv_sample_config_t *config,
+						 int64_t until_ms);
 
 	/* How many harts are attached to the DM that this target is attached to? */
 	int (*hart_count)(struct target *target);
