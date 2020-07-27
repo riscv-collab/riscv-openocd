@@ -2067,27 +2067,30 @@ int sample_memory(struct target *target)
 	if (!sample_buf.buf)
 		return ERROR_OK;
 
+    LOG_DEBUG("buf used/size: %d/%d", sample_buf.used, sample_buf.size);
+
 	uint64_t start = timeval_ms();
 	riscv_sample_buf_maybe_add_timestamp();
 	if (r->sample_memory) {
-		if (r->sample_memory(target, &sample_buf, &sample_config,
-							start + 50) != ERROR_OK)
-			return ERROR_FAIL;
-	} else {
-		while (timeval_ms() - start < 50) {
-			for (unsigned i = 0; i < DIM(sample_config.bucket); i++) {
-				if (sample_config.bucket[i].enabled &&
-					sample_buf.used + 1 + sample_config.bucket[i].size_bytes <
-						sample_buf.size) {
-					assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
-					sample_buf.buf[sample_buf.used] = i;
-					int result = riscv_read_phys_memory(
-						target, sample_config.bucket[i].address,
-						sample_config.bucket[i].size_bytes, 1,
-						sample_buf.buf + sample_buf.used + 1);
-					if (result == ERROR_OK)
-						sample_buf.used += 1 + sample_config.bucket[i].size_bytes;
-				}
+		int result = r->sample_memory(target, &sample_buf, &sample_config, start + 50);
+		if (result != ERROR_NOT_IMPLEMENTED)
+			return result;
+	}
+
+	/* Default slow path. */
+	while (timeval_ms() - start < 50) {
+		for (unsigned i = 0; i < DIM(sample_config.bucket); i++) {
+			if (sample_config.bucket[i].enabled &&
+				sample_buf.used + 1 + sample_config.bucket[i].size_bytes <
+					sample_buf.size) {
+				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
+				sample_buf.buf[sample_buf.used] = i;
+				int result = riscv_read_phys_memory(
+					target, sample_config.bucket[i].address,
+					sample_config.bucket[i].size_bytes, 1,
+					sample_buf.buf + sample_buf.used + 1);
+				if (result == ERROR_OK)
+					sample_buf.used += 1 + sample_config.bucket[i].size_bytes;
 			}
 		}
 	}

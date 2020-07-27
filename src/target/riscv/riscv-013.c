@@ -2048,11 +2048,11 @@ static int sb_write_address(struct target *target, target_addr_t address)
 	unsigned sbasize = get_field(info->sbcs, DMI_SBCS_SBASIZE);
 	/* There currently is no support for >64-bit addresses in OpenOCD. */
 	if (sbasize > 96)
-		dmi_write(target, DMI_SBADDRESS3, 0);
+		dmi_op(target, NULL, NULL, DMI_OP_WRITE, DMI_SBADDRESS3, 0, false, false);
 	if (sbasize > 64)
-		dmi_write(target, DMI_SBADDRESS2, 0);
+		dmi_op(target, NULL, NULL, DMI_OP_WRITE, DMI_SBADDRESS2, 0, false, false);
 	if (sbasize > 32)
-		dmi_write(target, DMI_SBADDRESS1, address >> 32);
+		dmi_op(target, NULL, NULL, DMI_OP_WRITE, DMI_SBADDRESS1, address >> 32, false, false);
 	return dmi_write(target, DMI_SBADDRESS0, address);
 }
 
@@ -2064,15 +2064,13 @@ static int sample_memory_bus_v1(struct target *target,
 	RISCV013_INFO(info);
 	uint32_t sbcs_write = set_field(0, DMI_SBCS_SBREADONADDR, 1);
 	sbcs_write |= sb_sbaccess(4);
-	LOG_DEBUG(">>> sbcs write 0x%x", sbcs_write);
 	if (dmi_write(target, DMI_SBCS, sbcs_write) != ERROR_OK)
 		return ERROR_FAIL;
 
 	while (timeval_ms() < until_ms) {
 		for (unsigned i = 0; i < DIM(config->bucket); i++) {
 			if (config->bucket[i].enabled &&
-				buf->used + 1 + config->bucket[i].size_bytes <
-					buf->size) {
+					buf->used + 1 + config->bucket[i].size_bytes < buf->size) {
 				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
 				buf->buf[buf->used] = i;
 
@@ -2115,23 +2113,7 @@ static int sample_memory(struct target *target,
 		return sample_memory_bus_v1(target, buf, config, until_ms);
 	}
 
-	while (timeval_ms() < until_ms) {
-		for (unsigned i = 0; i < DIM(config->bucket); i++) {
-			if (config->bucket[i].enabled &&
-				buf->used + 1 + config->bucket[i].size_bytes <
-					buf->size) {
-				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
-				buf->buf[buf->used] = i;
-				int result = read_memory(
-					target, config->bucket[i].address,
-					config->bucket[i].size_bytes, 1,
-					buf->buf + buf->used + 1);
-				if (result == ERROR_OK)
-					buf->used += 1 + config->bucket[i].size_bytes;
-			}
-		}
-	}
-	return ERROR_OK;
+	return ERROR_NOT_IMPLEMENTED;
 }
 
 static int init_target(struct command_context *cmd_ctx,
