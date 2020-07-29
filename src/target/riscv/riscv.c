@@ -2830,7 +2830,7 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 			if (command == RISCV_SAMPLE_BUF_TIMESTAMP) {
 				uint32_t timestamp = sample_buf_read32(i);
 				i += 4;
-				command_print(CMD, "timestamp: %d", timestamp);
+				command_print(CMD, "timestamp: %u", timestamp);
 			} else if (command < DIM(sample_config.bucket)) {
 				command_print_sameline(CMD, "0x%" TARGET_PRIxADDR ": ",
 									   sample_config.bucket[command].address);
