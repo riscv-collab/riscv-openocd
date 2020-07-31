@@ -2072,13 +2072,14 @@ int sample_memory(struct target *target)
 	uint64_t start = timeval_ms();
 	riscv_sample_buf_maybe_add_timestamp();
 	if (r->sample_memory) {
-		int result = r->sample_memory(target, &sample_buf, &sample_config, start + 50);
+		int result = r->sample_memory(target, &sample_buf, &sample_config,
+									  start + TARGET_DEFAULT_POLLING_INTERVAL);
 		if (result != ERROR_NOT_IMPLEMENTED)
 			return result;
 	}
 
 	/* Default slow path. */
-	while (timeval_ms() - start < 50) {
+	while (timeval_ms() - start < TARGET_DEFAULT_POLLING_INTERVAL) {
 		for (unsigned i = 0; i < DIM(sample_config.bucket); i++) {
 			if (sample_config.bucket[i].enabled &&
 				sample_buf.used + 1 + sample_config.bucket[i].size_bytes <
