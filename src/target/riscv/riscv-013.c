@@ -1830,10 +1830,11 @@ static int riscv013_hart_count(struct target *target)
 static unsigned riscv013_data_bits(struct target *target)
 {
 	RISCV013_INFO(info);
+	RISCV_INFO(r);
 	/* TODO: Once there is a spec for discovering abstract commands, we can
 	 * take those into account as well.  For now we assume abstract commands
 	 * support XLEN-wide accesses. */
-	if (info->progbufsize >= 2 && !riscv_prefer_sba)
+	if (info->progbufsize + r->impebreak >= 3 && !riscv_prefer_sba)
 		return riscv_xlen(target);
 
 	if (get_field(info->sbcs, DMI_SBCS_SBACCESS128))
@@ -2393,8 +2394,9 @@ static int read_sbcs_nonbusy(struct target *target, uint32_t *sbcs)
 static int modify_privilege(struct target *target, uint64_t *mstatus, uint64_t *mstatus_old)
 {
 	RISCV013_INFO(info);
+	RISCV_INFO(r);
 
-	if (riscv_enable_virtual && info->progbufsize >= 4) {
+	if (riscv_enable_virtual && info->progbufsize + r->impebreak >= 5) {
 		/* Read DCSR */
 		uint64_t dcsr;
 		if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
@@ -3000,6 +3002,7 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 		uint32_t size, uint8_t *buffer)
 {
 	RISCV013_INFO(info);
+	RISCV_INFO(r);
 
 	uint64_t mstatus = 0;
 	uint64_t mstatus_old = 0;
@@ -3014,7 +3017,7 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 	/* Write the program (load, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize + r->impebreak >= 5 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	switch (size) {
 		case 1:
@@ -3033,7 +3036,7 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 			LOG_ERROR("Unsupported size: %d", size);
 			return ERROR_FAIL;
 	}
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize + r->impebreak >= 5 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	if (riscv_program_ebreak(&program) != ERROR_OK)
@@ -3074,6 +3077,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	RISCV013_INFO(info);
+	RISCV_INFO(r);
 
 	if (riscv_xlen(target) < size * 8) {
 		LOG_ERROR("XLEN (%d) is too short for %d-bit memory read.",
@@ -3113,7 +3117,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (load, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize + r->impebreak >= 5 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	switch (size) {
@@ -3134,7 +3138,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 			return ERROR_FAIL;
 	}
 
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize + r->impebreak >= 5 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 
@@ -3186,7 +3190,9 @@ static int read_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	RISCV013_INFO(info);
-	if (info->progbufsize >= 2 && !riscv_prefer_sba)
+	RISCV_INFO(r);
+
+	if (info->progbufsize + r->impebreak >= 3 && !riscv_prefer_sba)
 		return read_memory_progbuf(target, address, size, count, buffer);
 
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
@@ -3200,7 +3206,7 @@ static int read_memory(struct target *target, target_addr_t address,
 			return read_memory_bus_v1(target, address, size, count, buffer);
 	}
 
-	if (info->progbufsize >= 2)
+	if (info->progbufsize + r->impebreak >= 3)
 		return read_memory_progbuf(target, address, size, count, buffer);
 
 	return read_memory_abstract(target, address, size, count, buffer);
@@ -3416,6 +3422,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	RISCV013_INFO(info);
+	RISCV_INFO(r);
 
 	if (riscv_xlen(target) < size * 8) {
 		LOG_ERROR("XLEN (%d) is too short for %d-bit memory write.",
@@ -3446,7 +3453,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (store, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize + r->impebreak >= 5 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	switch (size) {
@@ -3468,7 +3475,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 			goto error;
 	}
 
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && info->progbufsize + r->impebreak >= 5 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 
@@ -3606,7 +3613,9 @@ static int write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	RISCV013_INFO(info);
-	if (info->progbufsize >= 2 && !riscv_prefer_sba)
+	RISCV_INFO(r);
+
+	if (info->progbufsize + r->impebreak >= 3 && !riscv_prefer_sba)
 		return write_memory_progbuf(target, address, size, count, buffer);
 
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
@@ -3620,7 +3629,7 @@ static int write_memory(struct target *target, target_addr_t address,
 			return write_memory_bus_v1(target, address, size, count, buffer);
 	}
 
-	if (info->progbufsize >= 2)
+	if (info->progbufsize + r->impebreak >= 3)
 		return write_memory_progbuf(target, address, size, count, buffer);
 
 	return write_memory_abstract(target, address, size, count, buffer);
