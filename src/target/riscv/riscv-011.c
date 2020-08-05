@@ -1980,8 +1980,13 @@ static int deassert_reset(struct target *target)
 }
 
 static int read_memory(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+		uint32_t size, uint32_t count, uint8_t *buffer, bool increment)
 {
+	if (!increment) {
+		LOG_ERROR("read_memory without increment not implemented");
+		return ERROR_NOT_IMPLEMENTED;
+	}
+
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
 	cache_set32(target, 0, lw(S0, ZERO, DEBUG_RAM_START + 16));
@@ -2300,7 +2305,6 @@ struct target_type riscv011_target = {
 	.assert_reset = assert_reset,
 	.deassert_reset = deassert_reset,
 
-	.read_memory = read_memory,
 	.write_memory = write_memory,
 
 	.arch_state = arch_state,

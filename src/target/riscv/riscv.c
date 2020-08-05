@@ -2656,7 +2656,181 @@ COMMAND_HANDLER(riscv_set_ebreaku)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(handle_memory_sample_command)
+{
+	if (CMD_ARGC == 0) {
+		for (unsigned i = 0; i < DIM(sample_config.bucket); i++) {
+			if (sample_config.bucket[i].enabled) {
+				command_print(CMD, "bucket %d; address=0x%" TARGET_PRIxADDR "; size=%d", i,
+							  sample_config.bucket[i].address,
+							  sample_config.bucket[i].size_bytes);
+			} else {
+				command_print(CMD, "bucket %d; disabled", i);
+			}
+		}
+		return ERROR_OK;
+	}
+
+	if (CMD_ARGC < 2) {
+		LOG_ERROR("Command requires at least bucket and address arguments.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+	if (CMD_ARGC > 3) {
+		LOG_ERROR("Command takes at most 3 arguments.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	uint32_t bucket;
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], bucket);
+	if (bucket > DIM(sample_config.bucket)) {
+		LOG_ERROR("Max bucket number is %d.", (unsigned) DIM(sample_config.bucket));
+		return ERROR_COMMAND_ARGUMENT_INVALID;
+	}
+
+	sample_config.bucket[bucket].enabled = true;
+	COMMAND_PARSE_ADDRESS(CMD_ARGV[1], sample_config.bucket[bucket].address);
+
+	if (CMD_ARGC > 2) {
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], sample_config.bucket[bucket].size_bytes);
+		if (sample_config.bucket[bucket].size_bytes != 4 &&
+				sample_config.bucket[bucket].size_bytes != 8) {
+			LOG_ERROR("Only 4-byte and 8-byte sizes are supported.");
+			return ERROR_COMMAND_ARGUMENT_INVALID;
+		}
+	} else {
+		sample_config.bucket[bucket].size_bytes = 4;
+	}
+
+	if (!sample_buf.buf) {
+		sample_buf.size = 1024 * 1024;
+		sample_buf.buf = malloc(sample_buf.size);
+	}
+	/* Clear the buffer when the configuration is changed. */
+	sample_buf.used = 0;
+
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(handle_repeat_read)
+{
+
+	if (CMD_ARGC < 2) {
+		LOG_ERROR("Command requires at least count and address arguments.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+	if (CMD_ARGC > 3) {
+		LOG_ERROR("Command takes at most 3 arguments.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	// .usage = "riscv repeat_read count address [size=4]",
+	uint32_t count;
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], count);
+	target_addr_t address;
+	COMMAND_PARSE_ADDRESS(CMD_ARGV[1], address);
+	uint32_t size = 4;
+	if (CMD_ARGC > 2)
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], size);
+}
+
+uint32_t sample_buf_read32(unsigned offset){
+	return sample_buf.buf[offset] |
+		   (((uint32_t)sample_buf.buf[offset + 1]) << 8) |
+		   (((uint32_t)sample_buf.buf[offset + 2]) << 16) |
+		   (((uint32_t)sample_buf.buf[offset + 3]) << 24);
+}
+
+uint64_t sample_buf_read64(unsigned offset){
+	return sample_buf.buf[offset] |
+		   (((uint64_t)sample_buf.buf[offset + 1]) << 8) |
+		   (((uint64_t)sample_buf.buf[offset + 2]) << 16) |
+		   (((uint64_t)sample_buf.buf[offset + 3]) << 24) |
+		   (((uint64_t)sample_buf.buf[offset + 4]) << 32) |
+		   (((uint64_t)sample_buf.buf[offset + 5]) << 40) |
+		   (((uint64_t)sample_buf.buf[offset + 6]) << 48) |
+		   (((uint64_t)sample_buf.buf[offset + 7]) << 56);
+}
+COMMAND_HANDLER(handle_dump_sample_buf_command)
+{
+	if (CMD_ARGC > 1) {
+		LOG_ERROR("Command takes at most 1 arguments.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+	bool base64 = false;
+	if (CMD_ARGC > 0) {
+		if (!strcmp(CMD_ARGV[0], "base64")) {
+			base64 = true;
+		} else {
+			LOG_ERROR("Unknown argument: %s", CMD_ARGV[0]);
+			return ERROR_COMMAND_SYNTAX_ERROR;
+		}
+	}
+
+	if (base64) {
+		unsigned char *encoded = base64_encode(sample_buf.buf,
+									  sample_buf.used, NULL);
+		if (!encoded) {
+			LOG_ERROR("Failed base64 encode!");
+			return ERROR_FAIL;
+		}
+		command_print(CMD, "%s", encoded);
+		free(encoded);
+	} else {
+		unsigned i = 0;
+		while (i < sample_buf.used) {
+			uint8_t command = sample_buf.buf[i++];
+			if (command == RISCV_SAMPLE_BUF_TIMESTAMP) {
+				uint32_t timestamp = sample_buf_read32(i);
+				i += 4;
+				command_print(CMD, "timestamp: %u", timestamp);
+			} else if (command < DIM(sample_config.bucket)) {
+				command_print_sameline(CMD, "0x%" TARGET_PRIxADDR ": ",
+									   sample_config.bucket[command].address);
+				if (sample_config.bucket[command].size_bytes == 4) {
+					uint32_t value = sample_buf_read32(i);
+					i += 4;
+					command_print(CMD, "0x%08x", value);
+				} else if (sample_config.bucket[command].size_bytes == 8) {
+					uint64_t value = sample_buf_read64(i);
+					i += 8;
+					command_print(CMD, "0x%016lx", value);
+				} else {
+					LOG_ERROR("Found invalid size in bucket %d: %d", command,
+							  sample_config.bucket[command].size_bytes);
+					return ERROR_FAIL;
+				}
+			} else {
+				LOG_ERROR("Found invalid command byte in sample buf: 0x%2x at offset 0x%x",
+					command, i - 1);
+				return ERROR_FAIL;
+			}
+		}
+	}
+	return ERROR_OK;
+}
+
 static const struct command_registration riscv_exec_command_handlers[] = {
+	{
+		.name = "dump_sample_buf",
+		.handler = handle_dump_sample_buf_command,
+		.mode = COMMAND_ANY,
+		.usage = "riscv dump_sample_buf [base64]",
+		.help = "Print the contents of the sample buffer, and clear the buffer."
+	},
+	{
+		.name = "memory_sample",
+		.handler = handle_memory_sample_command,
+		.mode = COMMAND_ANY,
+		.usage = "riscv memory_sample bucket address [size=4]",
+		.help = "Causes OpenOCD to frequently read size bytes at the given address"
+	},
+	{
+		.name = "repeat_read",
+		.handler = handle_repeat_read,
+		.mode = COMMAND_ANY,
+		.usage = "riscv repeat_read count address [size=4]",
+		.help = "Repeatedly read the value at address."
+	},
 	{
 		.name = "test_compliance",
 		.handler = riscv_test_compliance,

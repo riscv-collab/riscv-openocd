@@ -3645,7 +3645,6 @@ struct target_type riscv013_target = {
 	.assert_reset = assert_reset,
 	.deassert_reset = deassert_reset,
 
-	.read_memory = read_memory,
 	.write_memory = write_memory,
 
 	.arch_state = arch_state,
