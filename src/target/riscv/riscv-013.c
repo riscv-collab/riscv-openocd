@@ -2112,13 +2112,13 @@ static int sample_memory_bus_v1(struct target *target,
 			break;
 		}
 
-		int result = batch_run(target, batch);
+		/*int result =*/ batch_run(target, batch);
 		unsigned read = 0;
 		for (unsigned i = 0; i < DIM(config->bucket); i++) {
 			if (config->bucket[i].enabled) {
 				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
 				uint64_t dmi_out = riscv_batch_get_dmi_read(batch, read++);
-				dmi_status_t status = get_field(dmi_out, DTM_DMI_OP);
+				//dmi_status_t status = get_field(dmi_out, DTM_DMI_OP);
 				uint64_t value = get_field(dmi_out, DTM_DMI_DATA);
 
 				buf->buf[buf->used] = i;
