@@ -152,10 +152,6 @@ typedef struct {
 
 	int (*test_compliance)(struct target *target);
 
-	int (*sample_memory)(struct target *target,
-						 riscv_sample_buf_t *buf,
-						 const riscv_sample_config_t *config,
-						 int64_t until_ms);
 	int (*read_memory)(struct target *target, target_addr_t address,
 			uint32_t size, uint32_t count, uint8_t *buffer, bool increment);
 
