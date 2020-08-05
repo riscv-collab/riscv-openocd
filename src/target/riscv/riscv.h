@@ -153,7 +153,7 @@ typedef struct {
 	int (*test_compliance)(struct target *target);
 
 	int (*read_memory)(struct target *target, target_addr_t address,
-			uint32_t size, uint32_t count, uint8_t *buffer, bool increment);
+			uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment);
 
 	/* How many harts are attached to the DM that this target is attached to? */
 	int (*hart_count)(struct target *target);

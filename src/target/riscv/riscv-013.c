@@ -64,7 +64,7 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 static int register_write_direct(struct target *target, unsigned number,
 		uint64_t value);
 static int read_memory(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer);
+		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment);
 static int write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer);
 static int riscv013_test_sba_config_reg(struct target *target, target_addr_t legal_address,
@@ -1226,7 +1226,7 @@ static int scratch_read64(struct target *target, scratch_mem_t *scratch,
 		case SPACE_DMI_RAM:
 			{
 				uint8_t buffer[8] = {0};
-				if (read_memory(target, scratch->debug_address, 4, 2, buffer) != ERROR_OK)
+				if (read_memory(target, scratch->debug_address, 4, 2, buffer, 4) != ERROR_OK)
 					return ERROR_FAIL;
 				*value = buffer[0] |
 					(((uint64_t) buffer[1]) << 8) |
@@ -2028,6 +2028,7 @@ static int init_target(struct command_context *cmd_ctx,
 	generic_info->authdata_write = &riscv013_authdata_write;
 	generic_info->dmi_read = &dmi_read;
 	generic_info->dmi_write = &dmi_write;
+	generic_info->read_memory = read_memory;
 	generic_info->test_sba_config_reg = &riscv013_test_sba_config_reg;
 	generic_info->test_compliance = &riscv013_test_compliance;
 	generic_info->hart_count = &riscv013_hart_count;
@@ -2424,8 +2425,13 @@ static int modify_privilege(struct target *target, uint64_t *mstatus, uint64_t *
 }
 
 static int read_memory_bus_v0(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
+	if (size != increment) {
+		LOG_ERROR("sba v0 reads only support size==increment");
+		return ERROR_NOT_IMPLEMENTED;
+	}
+
 	LOG_DEBUG("System Bus Access: size: %d\tcount:%d\tstart address: 0x%08"
 			TARGET_PRIxADDR, size, count, address);
 	uint8_t *t_buffer = buffer;
@@ -2504,8 +2510,13 @@ static int read_memory_bus_v0(struct target *target, target_addr_t address,
  * Read the requested memory using the system bus interface.
  */
 static int read_memory_bus_v1(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
+	if (increment != size && increment != 0) {
+		LOG_ERROR("sba v1 reads only support increment of size or 0");
+		return ERROR_NOT_IMPLEMENTED;
+	}
+
 	RISCV013_INFO(info);
 	target_addr_t next_address = address;
 	target_addr_t end_address = address + count * size;
@@ -2513,7 +2524,8 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 	while (next_address < end_address) {
 		uint32_t sbcs_write = set_field(0, DMI_SBCS_SBREADONADDR, 1);
 		sbcs_write |= sb_sbaccess(size);
-		sbcs_write = set_field(sbcs_write, DMI_SBCS_SBAUTOINCREMENT, 1);
+		if (increment == size)
+			sbcs_write = set_field(sbcs_write, DMI_SBCS_SBAUTOINCREMENT, 1);
 		if (count > 1)
 			sbcs_write = set_field(sbcs_write, DMI_SBCS_SBREADONDATA, count > 1);
 		if (dmi_write(target, DMI_SBCS, sbcs_write) != ERROR_OK)
@@ -2651,8 +2663,13 @@ static int batch_run(const struct target *target, struct riscv_batch *batch)
  * aamsize fields in the memory access abstract command.
  */
 static int read_memory_abstract(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
+	if (size != increment) {
+		LOG_ERROR("program buffer reads only support size==increment");
+		return ERROR_NOT_IMPLEMENTED;
+	}
+
 	int result = ERROR_OK;
 
 	LOG_DEBUG("reading %d words of %d bytes from 0x%" TARGET_PRIxADDR, count,
@@ -3071,9 +3088,14 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
  * Read the requested memory, silently handling memory access errors.
  */
 static int read_memory_progbuf(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
 	RISCV013_INFO(info);
+
+	if (size != increment) {
+		LOG_ERROR("program buffer reads only support size==increment");
+		return ERROR_NOT_IMPLEMENTED;
+	}
 
 	if (riscv_xlen(target) < size * 8) {
 		LOG_ERROR("XLEN (%d) is too short for %d-bit memory read.",
@@ -3183,11 +3205,12 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 }
 
 static int read_memory(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
 	RISCV013_INFO(info);
 	if (info->progbufsize >= 2 && !riscv_prefer_sba)
-		return read_memory_progbuf(target, address, size, count, buffer);
+		return read_memory_progbuf(target, address, size, count, buffer,
+			increment);
 
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
 			(get_field(info->sbcs, DMI_SBCS_SBACCESS16) && size == 2) ||
@@ -3195,15 +3218,19 @@ static int read_memory(struct target *target, target_addr_t address,
 			(get_field(info->sbcs, DMI_SBCS_SBACCESS64) && size == 8) ||
 			(get_field(info->sbcs, DMI_SBCS_SBACCESS128) && size == 16)) {
 		if (get_field(info->sbcs, DMI_SBCS_SBVERSION) == 0)
-			return read_memory_bus_v0(target, address, size, count, buffer);
+			return read_memory_bus_v0(target, address, size, count, buffer,
+				increment);
 		else if (get_field(info->sbcs, DMI_SBCS_SBVERSION) == 1)
-			return read_memory_bus_v1(target, address, size, count, buffer);
+			return read_memory_bus_v1(target, address, size, count, buffer,
+				increment);
 	}
 
 	if (info->progbufsize >= 2)
-		return read_memory_progbuf(target, address, size, count, buffer);
+		return read_memory_progbuf(target, address, size, count, buffer,
+			increment);
 
-	return read_memory_abstract(target, address, size, count, buffer);
+	return read_memory_abstract(target, address, size, count, buffer,
+		increment);
 }
 
 static int write_memory_bus_v0(struct target *target, target_addr_t address,

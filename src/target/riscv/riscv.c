@@ -1487,12 +1487,12 @@ static int riscv_mmu(struct target *target, int *enabled)
 static int riscv_address_translate(struct target *target,
 		target_addr_t virtual, target_addr_t *physical)
 {
+	RISCV_INFO(r);
 	riscv_reg_t satp_value;
 	int mode;
 	uint64_t ppn_value;
 	target_addr_t table_address;
 	virt2phys_info_t *info;
-	struct target_type *tt = get_target_type(target);
 	uint64_t pte;
 	int i;
 
@@ -1545,8 +1545,8 @@ static int riscv_address_translate(struct target *target,
 									(vpn << info->pte_shift);
 		uint8_t buffer[8];
 		assert(info->pte_shift <= 3);
-		int retval = tt->read_memory(target, pte_address,
-				4, (1 << info->pte_shift) / 4, buffer);
+		int retval = r->read_memory(target, pte_address,
+				4, (1 << info->pte_shift) / 4, buffer, 4);
 		if (retval != ERROR_OK)
 			return ERROR_FAIL;
 
@@ -1610,10 +1610,10 @@ static int riscv_virt2phys(struct target *target, target_addr_t virtual, target_
 static int riscv_read_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, uint8_t *buffer)
 {
+	RISCV_INFO(r);
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
-	struct target_type *tt = get_target_type(target);
-	return tt->read_memory(target, phys_address, size, count, buffer);
+	return r->read_memory(target, phys_address, size, count, buffer, size);
 }
 
 static int riscv_read_memory(struct target *target, target_addr_t address,
@@ -1631,8 +1631,8 @@ static int riscv_read_memory(struct target *target, target_addr_t address,
 	if (target->type->virt2phys(target, address, &physical_addr) == ERROR_OK)
 		address = physical_addr;
 
-	struct target_type *tt = get_target_type(target);
-	return tt->read_memory(target, address, size, count, buffer);
+	RISCV_INFO(r);
+	return r->read_memory(target, address, size, count, buffer, size);
 }
 
 static int riscv_write_phys_memory(struct target *target, target_addr_t phys_address,
@@ -2658,6 +2658,8 @@ COMMAND_HANDLER(riscv_set_ebreaku)
 
 COMMAND_HANDLER(handle_repeat_read)
 {
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
 
 	if (CMD_ARGC < 2) {
 		LOG_ERROR("Command requires at least count and address arguments.");
@@ -2668,7 +2670,6 @@ COMMAND_HANDLER(handle_repeat_read)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	// .usage = "riscv repeat_read count address [size=4]",
 	uint32_t count;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], count);
 	target_addr_t address;
@@ -2676,6 +2677,18 @@ COMMAND_HANDLER(handle_repeat_read)
 	uint32_t size = 4;
 	if (CMD_ARGC > 2)
 		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], size);
+
+	uint8_t *buffer = malloc(size * count);
+	if (!buffer) {
+		LOG_ERROR("malloc failed");
+		return ERROR_FAIL;
+	}
+	int result = r->read_memory(target, address, size, count, buffer, 0);
+	if (result == ERROR_OK) {
+		target_handle_md_output(cmd, target, address, size, count, buffer);
+	}
+	free(buffer);
+	return result;
 }
 
 static const struct command_registration riscv_exec_command_handlers[] = {
