@@ -2841,7 +2841,7 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 		struct riscv_batch *batch = riscv_batch_alloc(target, 32,
 				info->dmi_busy_delay + info->ac_busy_delay);
 
-		size_t reads = 0;
+		unsigned reads = 0;
 		for (unsigned j = index; j < count; j++) {
 			if (size > 4)
 				riscv_batch_add_dmi_read(batch, DMI_DATA1);
@@ -2865,7 +2865,7 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 				return ERROR_FAIL;
 		info->cmderr = get_field(abstractcs, DMI_ABSTRACTCS_CMDERR);
 
-		riscv_addr_t next_index;
+		unsigned next_index;
 		unsigned ignore_last = 0;
 		switch (info->cmderr) {
 			case CMDERR_NONE:
@@ -2904,11 +2904,11 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 				}
 				result = register_read_direct(target, &next_read_addr,
 						GDB_REGNO_S0);
-				next_index = (next_read_addr - address) / increment;
 				if (result != ERROR_OK) {
 					riscv_batch_free(batch);
 					goto error;
 				}
+				next_index = (next_read_addr - address) / increment;
 				uint64_t value64 = (((uint64_t) dmi_data1) << 32) | dmi_data0;
 				write_to_buf(buffer + (next_index - 2) * size, value64, size);
 				log_memory_access(address + (next_index - 2) * size, value64, size, true);
@@ -2936,9 +2936,11 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 		/* Now read whatever we got out of the batch. */
 		dmi_status_t status = DMI_STATUS_SUCCESS;
 		unsigned read = 0;
-		for (size_t j = index - 2; j < index + reads; j++) {
+		for (unsigned j = index - 2; j < index + reads; j++) {
 			//riscv_addr_t receive_addr = read_addr - size * 2;
 			assert(j < count);
+			LOG_DEBUG("index=%d, reads=%d, next_index=%d, ignore_last=%d, j=%d",
+				index, reads, next_index, ignore_last, j);
 			if (j > next_index - (3 + ignore_last))
 				break;
 
