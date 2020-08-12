@@ -2685,9 +2685,6 @@ COMMAND_HANDLER(handle_repeat_read)
 	}
 	int result = r->read_memory(target, address, size, count, buffer, 0);
 	if (result == ERROR_OK) {
-		for (unsigned i = 0; i < count; i++) {
-
-		}
 		target_handle_md_output(cmd, target, address, size, count, buffer,
 			false);
 	}

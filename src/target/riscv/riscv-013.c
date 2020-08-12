@@ -2896,10 +2896,15 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 				/* See how far we got, clobbering dmi_data0. */
 				uint64_t next_read_addr;
 				if (increment == 0) {
+					/* TODO: We could fix this by incrementing a counter in a
+					 * register as we read. There is space for that instruction
+					 * in the program buffer because we no longer need to
+					 * increment the address. */
 					LOG_ERROR("Aborting program buffer read with increment 0 "
 						"because something went wrong and we can't tell how many "
 						"reads succeeded.");
 					riscv_batch_free(batch);
+					result = ERROR_FAIL;
 					goto error;
 				}
 				result = register_read_direct(target, &next_read_addr,
@@ -2936,12 +2941,13 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 		/* Now read whatever we got out of the batch. */
 		dmi_status_t status = DMI_STATUS_SUCCESS;
 		unsigned read = 0;
+		assert(index >= 2);
 		for (unsigned j = index - 2; j < index + reads; j++) {
 			//riscv_addr_t receive_addr = read_addr - size * 2;
 			assert(j < count);
 			LOG_DEBUG("index=%d, reads=%d, next_index=%d, ignore_last=%d, j=%d",
 				index, reads, next_index, ignore_last, j);
-			if (j > next_index - (3 + ignore_last))
+			if (j + 3 + ignore_last > next_index)
 				break;
 
 			uint64_t dmi_out = riscv_batch_get_dmi_read(batch, read++);
