@@ -2790,7 +2790,6 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 static int read_memory_progbuf_inner(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
-	// TODO: don't use address as counter, because increment might be 0
 	RISCV013_INFO(info);
 
 	int result = ERROR_OK;
@@ -2799,6 +2798,11 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 	result = register_write_direct(target, GDB_REGNO_S0, address);
 	if (result != ERROR_OK)
 		return result;
+
+	if (increment == 0 &&
+			register_write_direct(target, GDB_REGNO_S2, 0) != ERROR_OK)
+		return ERROR_FAIL;
+
 	uint32_t command = access_register_command(target, GDB_REGNO_S1,
 			riscv_xlen(target),
 			AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
@@ -2894,26 +2898,21 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 				}
 
 				/* See how far we got, clobbering dmi_data0. */
-				uint64_t next_read_addr;
 				if (increment == 0) {
-					/* TODO: We could fix this by incrementing a counter in a
-					 * register as we read. There is space for that instruction
-					 * in the program buffer because we no longer need to
-					 * increment the address. */
-					LOG_ERROR("Aborting program buffer read with increment 0 "
-						"because something went wrong and we can't tell how many "
-						"reads succeeded.");
-					riscv_batch_free(batch);
-					result = ERROR_FAIL;
-					goto error;
+					uint64_t counter;
+					result = register_read_direct(target, &counter, GDB_REGNO_S2);
+					next_index = counter;
+				} else {
+					uint64_t next_read_addr;
+					result = register_read_direct(target, &next_read_addr,
+												  GDB_REGNO_S0);
+					next_index = (next_read_addr - address) / increment;
 				}
-				result = register_read_direct(target, &next_read_addr,
-						GDB_REGNO_S0);
 				if (result != ERROR_OK) {
 					riscv_batch_free(batch);
 					goto error;
 				}
-				next_index = (next_read_addr - address) / increment;
+
 				uint64_t value64 = (((uint64_t) dmi_data1) << 32) | dmi_data0;
 				write_to_buf(buffer + (next_index - 2) * size, value64, size);
 				log_memory_access(address + (next_index - 2) * size, value64, size, true);
@@ -3130,11 +3129,14 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 	/* s0 holds the next address to write to
 	 * s1 holds the next data value to write
+	 * s2 is a counter in case increment is 0
 	 */
-	uint64_t s0, s1;
+	uint64_t s0, s1, s2;
 	if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 	if (register_read(target, &s1, GDB_REGNO_S1) != ERROR_OK)
+		return ERROR_FAIL;
+	if (increment == 0 && register_read(target, &s2, GDB_REGNO_S1) != ERROR_OK)
 		return ERROR_FAIL;
 
 	/* Write the program (load, increment) */
@@ -3163,7 +3165,10 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
-	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, increment);
+	if (increment == 0)
+		riscv_program_addi(&program, GDB_REGNO_S2, GDB_REGNO_S2, 1);
+	else
+		riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, increment);
 
 	if (riscv_program_ebreak(&program) != ERROR_OK)
 		return ERROR_FAIL;
@@ -3200,6 +3205,8 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 
 	riscv_set_register(target, GDB_REGNO_S0, s0);
 	riscv_set_register(target, GDB_REGNO_S1, s1);
+	if (increment == 0)
+		riscv_set_register(target, GDB_REGNO_S2, s2);
 
 	/* Restore MSTATUS */
 	if (mstatus != mstatus_old)
