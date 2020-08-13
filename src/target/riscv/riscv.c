@@ -2678,6 +2678,9 @@ COMMAND_HANDLER(handle_repeat_read)
 	if (CMD_ARGC > 2)
 		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], size);
 
+	if (count == 0)
+		return ERROR_OK;
+
 	uint8_t *buffer = malloc(size * count);
 	if (!buffer) {
 		LOG_ERROR("malloc failed");
