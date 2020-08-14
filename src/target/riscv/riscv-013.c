@@ -2942,7 +2942,6 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 		unsigned read = 0;
 		assert(index >= 2);
 		for (unsigned j = index - 2; j < index + reads; j++) {
-			//riscv_addr_t receive_addr = read_addr - size * 2;
 			assert(j < count);
 			LOG_DEBUG("index=%d, reads=%d, next_index=%d, ignore_last=%d, j=%d",
 				index, reads, next_index, ignore_last, j);
