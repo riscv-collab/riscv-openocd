@@ -1285,6 +1285,14 @@ static unsigned register_size(struct target *target, unsigned number)
 		return riscv_xlen(target);
 }
 
+static bool has_sufficient_progbuf(struct target *target, unsigned size)
+{
+	RISCV013_INFO(info);
+	RISCV_INFO(r);
+
+	return info->progbufsize + r->impebreak >= size ;
+}
+
 /**
  * Immediately write the new value to the requested register. This mechanism
  * bypasses any caches.
@@ -1292,15 +1300,12 @@ static unsigned register_size(struct target *target, unsigned number)
 static int register_write_direct(struct target *target, unsigned number,
 		uint64_t value)
 {
-	RISCV013_INFO(info);
-	RISCV_INFO(r);
-
 	LOG_DEBUG("{%d} %s <- 0x%" PRIx64, riscv_current_hartid(target),
 			gdb_regno_name(number), value);
 
 	int result = register_write_abstract(target, number, value,
 			register_size(target, number));
-	if (result == ERROR_OK || info->progbufsize + r->impebreak < 2 ||
+	if (result == ERROR_OK || !has_sufficient_progbuf(target, 2) ||
 			!riscv_is_halted(target))
 		return result;
 
@@ -1409,14 +1414,11 @@ static int register_read(struct target *target, uint64_t *value, uint32_t number
 /** Actually read registers from the target right now. */
 static int register_read_direct(struct target *target, uint64_t *value, uint32_t number)
 {
-	RISCV013_INFO(info);
-	RISCV_INFO(r);
-
 	int result = register_read_abstract(target, value, number,
 			register_size(target, number));
 
 	if (result != ERROR_OK &&
-			info->progbufsize + r->impebreak >= 2 &&
+			has_sufficient_progbuf(target, 2) &&
 			number > GDB_REGNO_XPR31) {
 		struct riscv_program program;
 		riscv_program_init(&program, target);
@@ -1664,7 +1666,7 @@ static int examine(struct target *target)
 	RISCV_INFO(r);
 	r->impebreak = get_field(dmstatus, DMI_DMSTATUS_IMPEBREAK);
 
-	if (info->progbufsize + r->impebreak < 2) {
+	if (!has_sufficient_progbuf(target, 2)) {
 		LOG_WARNING("We won't be able to execute fence instructions on this "
 				"target. Memory may not always appear consistent. "
 				"(progbufsize=%d, impebreak=%d)", info->progbufsize,
@@ -1833,7 +1835,7 @@ static unsigned riscv013_data_bits(struct target *target)
 	/* TODO: Once there is a spec for discovering abstract commands, we can
 	 * take those into account as well.  For now we assume abstract commands
 	 * support XLEN-wide accesses. */
-	if (info->progbufsize >= 2 && !riscv_prefer_sba)
+	if (has_sufficient_progbuf(target, 3) && !riscv_prefer_sba)
 		return riscv_xlen(target);
 
 	if (get_field(info->sbcs, DMI_SBCS_SBACCESS128))
@@ -2393,9 +2395,7 @@ static int read_sbcs_nonbusy(struct target *target, uint32_t *sbcs)
 
 static int modify_privilege(struct target *target, uint64_t *mstatus, uint64_t *mstatus_old)
 {
-	RISCV013_INFO(info);
-
-	if (riscv_enable_virtual && info->progbufsize >= 4) {
+	if (riscv_enable_virtual && has_sufficient_progbuf(target, 5)) {
 		/* Read DCSR */
 		uint64_t dcsr;
 		if (register_read(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
@@ -3024,8 +3024,6 @@ error:
 static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 		uint32_t size, uint8_t *buffer)
 {
-	RISCV013_INFO(info);
-
 	uint64_t mstatus = 0;
 	uint64_t mstatus_old = 0;
 	if (modify_privilege(target, &mstatus, &mstatus_old) != ERROR_OK)
@@ -3039,7 +3037,7 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 	/* Write the program (load, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && has_sufficient_progbuf(target, 5) && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	switch (size) {
 		case 1:
@@ -3058,7 +3056,7 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 			LOG_ERROR("Unsupported size: %d", size);
 			return ERROR_FAIL;
 	}
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && has_sufficient_progbuf(target, 5) && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	if (riscv_program_ebreak(&program) != ERROR_OK)
@@ -3098,8 +3096,6 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 static int read_memory_progbuf(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
-	RISCV013_INFO(info);
-
 	if (riscv_xlen(target) < size * 8) {
 		LOG_ERROR("XLEN (%d) is too short for %d-bit memory read.",
 				riscv_xlen(target), size * 8);
@@ -3141,7 +3137,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (load, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && has_sufficient_progbuf(target, 5) && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	switch (size) {
@@ -3162,7 +3158,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 			return ERROR_FAIL;
 	}
 
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && has_sufficient_progbuf(target, 5) && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	if (increment == 0)
 		riscv_program_addi(&program, GDB_REGNO_S2, GDB_REGNO_S2, 1);
@@ -3222,7 +3218,7 @@ static int read_memory(struct target *target, target_addr_t address,
 		return ERROR_OK;
 
 	RISCV013_INFO(info);
-	if (info->progbufsize >= 2 && !riscv_prefer_sba)
+	if (has_sufficient_progbuf(target, 3) && !riscv_prefer_sba)
 		return read_memory_progbuf(target, address, size, count, buffer,
 			increment);
 
@@ -3239,7 +3235,7 @@ static int read_memory(struct target *target, target_addr_t address,
 				increment);
 	}
 
-	if (info->progbufsize >= 2)
+	if (has_sufficient_progbuf(target, 3))
 		return read_memory_progbuf(target, address, size, count, buffer,
 			increment);
 
@@ -3487,7 +3483,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 	/* Write the program (store, increment) */
 	struct riscv_program program;
 	riscv_program_init(&program, target);
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && has_sufficient_progbuf(target, 5) && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrsi(&program, GDB_REGNO_ZERO, CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 
 	switch (size) {
@@ -3509,7 +3505,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 			goto error;
 	}
 
-	if (riscv_enable_virtual && info->progbufsize >= 4 && get_field(mstatus, MSTATUS_MPRV))
+	if (riscv_enable_virtual && has_sufficient_progbuf(target, 5) && get_field(mstatus, MSTATUS_MPRV))
 		riscv_program_csrrci(&program, GDB_REGNO_ZERO,  CSR_DCSR_MPRVEN, GDB_REGNO_DCSR);
 	riscv_program_addi(&program, GDB_REGNO_S0, GDB_REGNO_S0, size);
 
@@ -3647,7 +3643,8 @@ static int write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	RISCV013_INFO(info);
-	if (info->progbufsize >= 2 && !riscv_prefer_sba)
+
+	if (has_sufficient_progbuf(target, 3) && !riscv_prefer_sba)
 		return write_memory_progbuf(target, address, size, count, buffer);
 
 	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
@@ -3661,7 +3658,7 @@ static int write_memory(struct target *target, target_addr_t address,
 			return write_memory_bus_v1(target, address, size, count, buffer);
 	}
 
-	if (info->progbufsize >= 2)
+	if (has_sufficient_progbuf(target, 3))
 		return write_memory_progbuf(target, address, size, count, buffer);
 
 	return write_memory_abstract(target, address, size, count, buffer);
@@ -4382,9 +4379,7 @@ int riscv013_dmi_write_u64_bits(struct target *target)
 
 static int maybe_execute_fence_i(struct target *target)
 {
-	RISCV013_INFO(info);
-	RISCV_INFO(r);
-	if (info->progbufsize + r->impebreak >= 3)
+	if (has_sufficient_progbuf(target, 3))
 		return execute_fence(target);
 	return ERROR_OK;
 }
