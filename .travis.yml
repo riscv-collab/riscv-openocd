@@ -58,6 +58,8 @@ matrix:
                       - binutils-mingw-w64-i686 gcc-mingw-w64-i686 g++-mingw-w64-i686 patchutils
 
 script:
+    # This is here for the signoff check.
+    - ./tools/checkpatch.sh
     # Ideally we'd diff back to where we either branched off OpenOCD or master,
     # or riscv. But that's tricky, and the default git clone only gets the last
     # 50 changes any case. Most merges won't consist of more than 40 changes,
@@ -65,6 +67,6 @@ script:
     # checking at all.
     - git diff -U20 HEAD~40 |
         filterdiff -x "a/src/jtag/drivers/libjaylink/*" -x "a/tools/git2cl/*" |
-        ./tools/scripts/checkpatch.pl -
+        ./tools/scripts/checkpatch.pl --no-signoff -
     - ./bootstrap && ./configure --enable-remote-bitbang --enable-jtag_vpi $CONFIGURE_ARGS && make
     - file src/$EXECUTABLE
