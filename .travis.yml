@@ -65,6 +65,6 @@ script:
     # checking at all.
     - git diff -U20 HEAD~40 |
         filterdiff -x "a/src/jtag/drivers/libjaylink/*" -x "a/tools/git2cl/*" |
-        ./tools/scripts/checkpatch.pl --no-signoff -
+        ./tools/scripts/checkpatch.pl -
     - ./bootstrap && ./configure --enable-remote-bitbang --enable-jtag_vpi $CONFIGURE_ARGS && make
     - file src/$EXECUTABLE
