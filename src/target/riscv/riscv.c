@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 #include <assert.h>
 #include <stdlib.h>
 #include <time.h>
@@ -375,7 +377,7 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		tunneled_dr[0].num_bits = 3;
 		tunneled_dr[0].out_value = bscan_zero;
 		tunneled_dr[0].in_value = NULL;
-		tunneled_dr[1].num_bits = 32+1;
+		tunneled_dr[1].num_bits = 32 + 1;
 		tunneled_dr[1].out_value = out_value;
 		tunneled_dr[1].in_value = in_value;
 		tunneled_dr[2].num_bits = 7;
@@ -384,7 +386,7 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		tunneled_dr[3].num_bits = 1;
 		tunneled_dr[3].out_value = bscan_one;
 		tunneled_dr[3].in_value = NULL;
-	} else{
+	} else {
 		/* BSCAN_TUNNEL_NESTED_TAP */
 		tunneled_ir[3].num_bits = 3;
 		tunneled_ir[3].out_value = bscan_zero;
@@ -402,7 +404,7 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		tunneled_dr[3].num_bits = 3;
 		tunneled_dr[3].out_value = bscan_zero;
 		tunneled_dr[3].in_value = NULL;
-		tunneled_dr[2].num_bits = 32+1;
+		tunneled_dr[2].num_bits = 32 + 1;
 		tunneled_dr[2].out_value = out_value;
 		tunneled_dr[2].in_value = in_value;
 		tunneled_dr[1].num_bits = 7;
@@ -1506,12 +1508,12 @@ static int riscv_mmu(struct target *target, int *enabled)
 static int riscv_address_translate(struct target *target,
 		target_addr_t virtual, target_addr_t *physical)
 {
+	RISCV_INFO(r);
 	riscv_reg_t satp_value;
 	int mode;
 	uint64_t ppn_value;
 	target_addr_t table_address;
 	virt2phys_info_t *info;
-	struct target_type *tt = get_target_type(target);
 	uint64_t pte;
 	int i;
 
@@ -1536,18 +1538,18 @@ static int riscv_address_translate(struct target *target,
 			break;
 		case SATP_MODE_OFF:
 			LOG_ERROR("No translation or protection." \
-				      " (satp: 0x%" PRIx64")", satp_value);
+				      " (satp: 0x%" PRIx64 ")", satp_value);
 			return ERROR_FAIL;
 		default:
 			LOG_ERROR("The translation mode is not supported." \
-				      " (satp: 0x%" PRIx64")", satp_value);
+				      " (satp: 0x%" PRIx64 ")", satp_value);
 			return ERROR_FAIL;
 	}
 	LOG_DEBUG("virtual=0x%" TARGET_PRIxADDR "; mode=%s", virtual, info->name);
 
 	/* verify bits xlen-1:va_bits-1 are all equal */
-	target_addr_t mask = ((target_addr_t) 1 << (xlen - (info->va_bits-1))) - 1;
-	target_addr_t masked_msbs = (virtual >> (info->va_bits-1)) & mask;
+	target_addr_t mask = ((target_addr_t)1 << (xlen - (info->va_bits - 1))) - 1;
+	target_addr_t masked_msbs = (virtual >> (info->va_bits - 1)) & mask;
 	if (masked_msbs != 0 && masked_msbs != mask) {
 		LOG_ERROR("Virtual address 0x%" TARGET_PRIxADDR " is not sign-extended "
 				"for %s mode.", virtual, info->name);
@@ -1564,8 +1566,8 @@ static int riscv_address_translate(struct target *target,
 									(vpn << info->pte_shift);
 		uint8_t buffer[8];
 		assert(info->pte_shift <= 3);
-		int retval = tt->read_memory(target, pte_address,
-				4, (1 << info->pte_shift) / 4, buffer);
+		int retval = r->read_memory(target, pte_address,
+				4, (1 << info->pte_shift) / 4, buffer, 4);
 		if (retval != ERROR_OK)
 			return ERROR_FAIL;
 
@@ -1596,12 +1598,12 @@ static int riscv_address_translate(struct target *target,
 	}
 
 	/* Make sure to clear out the high bits that may be set. */
-	*physical = virtual & (((target_addr_t) 1 << info->va_bits) - 1);
+	*physical = virtual & (((target_addr_t)1 << info->va_bits) - 1);
 
 	while (i < info->level) {
 		ppn_value = pte >> info->pte_ppn_shift[i];
 		ppn_value &= info->pte_ppn_mask[i];
-		*physical &= ~(((target_addr_t) info->pa_ppn_mask[i]) <<
+		*physical &= ~(((target_addr_t)info->pa_ppn_mask[i]) <<
 				info->pa_ppn_shift[i]);
 		*physical |= (ppn_value << info->pa_ppn_shift[i]);
 		i++;
@@ -1629,10 +1631,10 @@ static int riscv_virt2phys(struct target *target, target_addr_t virtual, target_
 static int riscv_read_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, uint8_t *buffer)
 {
+	RISCV_INFO(r);
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
-	struct target_type *tt = get_target_type(target);
-	return tt->read_memory(target, phys_address, size, count, buffer);
+	return r->read_memory(target, phys_address, size, count, buffer, size);
 }
 
 static int riscv_read_memory(struct target *target, target_addr_t address,
@@ -1650,8 +1652,8 @@ static int riscv_read_memory(struct target *target, target_addr_t address,
 	if (target->type->virt2phys(target, address, &physical_addr) == ERROR_OK)
 		address = physical_addr;
 
-	struct target_type *tt = get_target_type(target);
-	return tt->read_memory(target, address, size, count, buffer);
+	RISCV_INFO(r);
+	return r->read_memory(target, address, size, count, buffer, size);
 }
 
 static int riscv_write_phys_memory(struct target *target, target_addr_t phys_address,
@@ -2727,6 +2729,45 @@ COMMAND_HANDLER(riscv_set_ebreaku)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(handle_repeat_read)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (CMD_ARGC < 2) {
+		LOG_ERROR("Command requires at least count and address arguments.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+	if (CMD_ARGC > 3) {
+		LOG_ERROR("Command takes at most 3 arguments.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	uint32_t count;
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], count);
+	target_addr_t address;
+	COMMAND_PARSE_ADDRESS(CMD_ARGV[1], address);
+	uint32_t size = 4;
+	if (CMD_ARGC > 2)
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], size);
+
+	if (count == 0)
+		return ERROR_OK;
+
+	uint8_t *buffer = malloc(size * count);
+	if (!buffer) {
+		LOG_ERROR("malloc failed");
+		return ERROR_FAIL;
+	}
+	int result = r->read_memory(target, address, size, count, buffer, 0);
+	if (result == ERROR_OK) {
+		target_handle_md_output(cmd, target, address, size, count, buffer,
+			false);
+	}
+	free(buffer);
+	return result;
+}
+
 COMMAND_HANDLER(handle_memory_sample_command)
 {
 	if (CMD_ARGC == 0) {
@@ -2744,13 +2785,6 @@ COMMAND_HANDLER(handle_memory_sample_command)
 
 	if (CMD_ARGC < 2) {
 		LOG_ERROR("Command requires at least bucket and address arguments.");
-		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
-	if (CMD_ARGC > 3) {
-		LOG_ERROR("Command takes at most 3 arguments.");
-		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
-
 	uint32_t bucket;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], bucket);
 	if (bucket > DIM(sample_config.bucket)) {
@@ -2872,6 +2906,13 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.mode = COMMAND_ANY,
 		.usage = "riscv memory_sample bucket address [size=4]",
 		.help = "Causes OpenOCD to frequently read size bytes at the given address"
+	},
+	{
+		.name = "repeat_read",
+		.handler = handle_repeat_read,
+		.mode = COMMAND_ANY,
+		.usage = "riscv repeat_read count address [size=4]",
+		.help = "Repeatedly read the value at address."
 	},
 	{
 		.name = "test_compliance",
@@ -3354,7 +3395,7 @@ static bool gdb_regno_cacheable(enum gdb_regno regno, bool write)
 		case GDB_REGNO_VTYPE:
 		case GDB_REGNO_MISA:
 		case GDB_REGNO_DCSR:
-		case GDB_REGNO_DSCRATCH:
+		case GDB_REGNO_DSCRATCH0:
 		case GDB_REGNO_MSTATUS:
 		case GDB_REGNO_MEPC:
 		case GDB_REGNO_MCAUSE:
@@ -3687,8 +3728,8 @@ const char *gdb_regno_name(enum gdb_regno regno)
 			return "dpc";
 		case GDB_REGNO_DCSR:
 			return "dcsr";
-		case GDB_REGNO_DSCRATCH:
-			return "dscratch";
+		case GDB_REGNO_DSCRATCH0:
+			return "dscratch0";
 		case GDB_REGNO_MSTATUS:
 			return "mstatus";
 		case GDB_REGNO_MEPC:
@@ -4493,7 +4534,7 @@ void riscv_add_bscan_tunneled_scan(struct target *target, struct scan_field *fie
 		/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
 		   scanning num_bits + 1, and then will right shift the input field after executing the queues */
 
-		ctxt->tunneled_dr[1].num_bits = field->num_bits+1;
+		ctxt->tunneled_dr[1].num_bits = field->num_bits + 1;
 		ctxt->tunneled_dr[1].out_value = field->out_value;
 		ctxt->tunneled_dr[1].in_value = field->in_value;
 
@@ -4508,7 +4549,7 @@ void riscv_add_bscan_tunneled_scan(struct target *target, struct scan_field *fie
 		ctxt->tunneled_dr[1].out_value = &ctxt->tunneled_dr_width;
 		/* for BSCAN tunnel, there is a one-TCK skew between shift in and shift out, so
 		   scanning num_bits + 1, and then will right shift the input field after executing the queues */
-		ctxt->tunneled_dr[2].num_bits = field->num_bits+1;
+		ctxt->tunneled_dr[2].num_bits = field->num_bits + 1;
 		ctxt->tunneled_dr[2].out_value = field->out_value;
 		ctxt->tunneled_dr[2].in_value = field->in_value;
 		ctxt->tunneled_dr[3].num_bits = 3;

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /*
  * Support for RISC-V, debug version 0.11. This was never an officially adopted
  * spec, but SiFive made some silicon that uses it.
@@ -1257,7 +1259,7 @@ static int register_write(struct target *target, unsigned int number,
 
 	if (number == S0) {
 		cache_set_load(target, 0, S0, SLOT0);
-		cache_set32(target, 1, csrw(S0, CSR_DSCRATCH));
+		cache_set32(target, 1, csrw(S0, CSR_DSCRATCH0));
 		cache_set_jump(target, 2);
 	} else if (number == S1) {
 		cache_set_load(target, 0, S0, SLOT0);
@@ -1382,25 +1384,6 @@ static int halt(struct target *target)
 		LOG_ERROR("cache_write() failed.");
 		return ERROR_FAIL;
 	}
-
-	return ERROR_OK;
-}
-
-static int init_target(struct command_context *cmd_ctx,
-		struct target *target)
-{
-	LOG_DEBUG("init");
-	riscv_info_t *generic_info = (riscv_info_t *) target->arch_info;
-	generic_info->get_register = get_register;
-	generic_info->set_register = set_register;
-
-	generic_info->version_specific = calloc(1, sizeof(riscv011_info_t));
-	if (!generic_info->version_specific)
-		return ERROR_FAIL;
-
-	/* Assume 32-bit until we discover the real value in examine(). */
-	generic_info->xlen[0] = 32;
-	riscv_init_registers(target);
 
 	return ERROR_OK;
 }
@@ -1629,7 +1612,7 @@ static riscv_error_t handle_halt_routine(struct target *target)
 	scans_add_read(scans, SLOT0, false);
 
 	/* Read S0 from dscratch */
-	unsigned int csr[] = {CSR_DSCRATCH, CSR_DPC, CSR_DCSR};
+	unsigned int csr[] = {CSR_DSCRATCH0, CSR_DPC, CSR_DCSR};
 	for (unsigned int i = 0; i < DIM(csr); i++) {
 		scans_add_write32(scans, 0, csrr(S0, csr[i]), true);
 		scans_add_read(scans, SLOT0, false);
@@ -1980,8 +1963,13 @@ static int deassert_reset(struct target *target)
 }
 
 static int read_memory(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
+	if (increment != size) {
+		LOG_ERROR("read_memory with custom increment not implemented");
+		return ERROR_NOT_IMPLEMENTED;
+	}
+
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
 	cache_set32(target, 0, lw(S0, ZERO, DEBUG_RAM_START + 16));
@@ -2283,6 +2271,26 @@ static int arch_state(struct target *target)
 	return ERROR_OK;
 }
 
+static int init_target(struct command_context *cmd_ctx,
+		struct target *target)
+{
+	LOG_DEBUG("init");
+	riscv_info_t *generic_info = (riscv_info_t *)target->arch_info;
+	generic_info->get_register = get_register;
+	generic_info->set_register = set_register;
+	generic_info->read_memory = read_memory;
+
+	generic_info->version_specific = calloc(1, sizeof(riscv011_info_t));
+	if (!generic_info->version_specific)
+		return ERROR_FAIL;
+
+	/* Assume 32-bit until we discover the real value in examine(). */
+	generic_info->xlen[0] = 32;
+	riscv_init_registers(target);
+
+	return ERROR_OK;
+}
+
 struct target_type riscv011_target = {
 	.name = "riscv",
 
@@ -2300,7 +2308,6 @@ struct target_type riscv011_target = {
 	.assert_reset = assert_reset,
 	.deassert_reset = deassert_reset,
 
-	.read_memory = read_memory,
 	.write_memory = write_memory,
 
 	.arch_state = arch_state,
