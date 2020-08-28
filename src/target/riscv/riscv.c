@@ -2785,6 +2785,9 @@ COMMAND_HANDLER(handle_memory_sample_command)
 
 	if (CMD_ARGC < 2) {
 		LOG_ERROR("Command requires at least bucket and address arguments.");
+		return ERROR_FAIL;
+	}
+
 	uint32_t bucket;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], bucket);
 	if (bucket > DIM(sample_config.bucket)) {
@@ -2833,6 +2836,7 @@ uint64_t sample_buf_read64(unsigned offset){
 		   (((uint64_t)sample_buf.buf[offset + 6]) << 48) |
 		   (((uint64_t)sample_buf.buf[offset + 7]) << 56);
 }
+
 COMMAND_HANDLER(handle_dump_sample_buf_command)
 {
 	if (CMD_ARGC > 1) {

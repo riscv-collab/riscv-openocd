@@ -2032,15 +2032,15 @@ static uint32_t sb_sbaccess(unsigned size_bytes)
 {
 	switch (size_bytes) {
 		case 1:
-			return set_field(0, DMI_SBCS_SBACCESS, 0);
+			return set_field(0, DM_SBCS_SBACCESS, 0);
 		case 2:
-			return set_field(0, DMI_SBCS_SBACCESS, 1);
+			return set_field(0, DM_SBCS_SBACCESS, 1);
 		case 4:
-			return set_field(0, DMI_SBCS_SBACCESS, 2);
+			return set_field(0, DM_SBCS_SBACCESS, 2);
 		case 8:
-			return set_field(0, DMI_SBCS_SBACCESS, 3);
+			return set_field(0, DM_SBCS_SBACCESS, 3);
 		case 16:
-			return set_field(0, DMI_SBCS_SBACCESS, 4);
+			return set_field(0, DM_SBCS_SBACCESS, 4);
 	}
 	assert(0);
 	return 0;	/* Make mingw happy. */
@@ -2050,15 +2050,15 @@ static int sb_write_address(struct target *target, target_addr_t address,
 							bool ensure_success)
 {
 	RISCV013_INFO(info);
-	unsigned sbasize = get_field(info->sbcs, DMI_SBCS_SBASIZE);
+	unsigned sbasize = get_field(info->sbcs, DM_SBCS_SBASIZE);
 	/* There currently is no support for >64-bit addresses in OpenOCD. */
 	if (sbasize > 96)
-		dmi_op(target, NULL, NULL, DMI_OP_WRITE, DMI_SBADDRESS3, 0, false, false);
+		dmi_op(target, NULL, NULL, DMI_OP_WRITE, DM_SBADDRESS3, 0, false, false);
 	if (sbasize > 64)
-		dmi_op(target, NULL, NULL, DMI_OP_WRITE, DMI_SBADDRESS2, 0, false, false);
+		dmi_op(target, NULL, NULL, DMI_OP_WRITE, DM_SBADDRESS2, 0, false, false);
 	if (sbasize > 32)
-		dmi_op(target, NULL, NULL, DMI_OP_WRITE, DMI_SBADDRESS1, address >> 32, false, false);
-	return dmi_op(target, NULL, NULL, DMI_OP_WRITE, DMI_SBADDRESS0, address,
+		dmi_op(target, NULL, NULL, DMI_OP_WRITE, DM_SBADDRESS1, address >> 32, false, false);
+	return dmi_op(target, NULL, NULL, DMI_OP_WRITE, DM_SBADDRESS0, address,
 				  false, ensure_success);
 }
 
@@ -2083,10 +2083,10 @@ static int sample_memory_bus_v1(struct target *target,
 								int64_t until_ms)
 {
 	RISCV013_INFO(info);
-	unsigned sbasize = get_field(info->sbcs, DMI_SBCS_SBASIZE);
-	uint32_t sbcs_write = set_field(0, DMI_SBCS_SBREADONADDR, 1);
+	unsigned sbasize = get_field(info->sbcs, DM_SBCS_SBASIZE);
+	uint32_t sbcs_write = set_field(0, DM_SBCS_SBREADONADDR, 1);
 	sbcs_write |= sb_sbaccess(4);
-	if (dmi_write(target, DMI_SBCS, sbcs_write) != ERROR_OK)
+	if (dmi_write(target, DM_SBCS, sbcs_write) != ERROR_OK)
 		return ERROR_FAIL;
 
 	while (timeval_ms() < until_ms) {
@@ -2103,10 +2103,10 @@ static int sample_memory_bus_v1(struct target *target,
 		for (unsigned i = 0; i < DIM(config->bucket); i++) {
 			if (config->bucket[i].enabled) {
 				assert(sbasize == 32);	// TODO
-				riscv_batch_add_dmi_write(batch, DMI_SBADDRESS0,
+				riscv_batch_add_dmi_write(batch, DM_SBADDRESS0,
 										config->bucket[i].address);
 				assert(config->bucket[i].size_bytes == 4);	// TODO
-				riscv_batch_add_dmi_read(batch, DMI_SBDATA0);
+				riscv_batch_add_dmi_read(batch, DM_SBDATA0);
 				result_bytes += 1 + config->bucket[i].size_bytes;
 			}
 		}
@@ -2121,9 +2121,7 @@ static int sample_memory_bus_v1(struct target *target,
 		for (unsigned i = 0; i < DIM(config->bucket); i++) {
 			if (config->bucket[i].enabled) {
 				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
-				uint64_t dmi_out = riscv_batch_get_dmi_read(batch, read++);
-				//dmi_status_t status = get_field(dmi_out, DTM_DMI_OP);
-				uint64_t value = get_field(dmi_out, DTM_DMI_DATA);
+				uint64_t value = riscv_batch_get_dmi_read_data(batch, read++);
 
 				buf->buf[buf->used] = i;
 				write_to_buf(buf->buf + buf->used + 1, value, config->bucket[i].size_bytes);
@@ -2144,8 +2142,8 @@ static int sample_memory(struct target *target,
 {
 	RISCV013_INFO(info);
 
-	if (get_field(info->sbcs, DMI_SBCS_SBACCESS32) &&
-			get_field(info->sbcs, DMI_SBCS_SBVERSION) == 1) {
+	if (get_field(info->sbcs, DM_SBCS_SBACCESS32) &&
+			get_field(info->sbcs, DM_SBCS_SBVERSION) == 1) {
 		return sample_memory_bus_v1(target, buf, config, until_ms);
 	}
 
@@ -2455,24 +2453,6 @@ static int read_memory_bus_word(struct target *target, target_addr_t address,
 	return ERROR_OK;
 }
 
-static uint32_t sb_sbaccess(unsigned size_bytes)
-{
-	switch (size_bytes) {
-		case 1:
-			return set_field(0, DM_SBCS_SBACCESS, 0);
-		case 2:
-			return set_field(0, DM_SBCS_SBACCESS, 1);
-		case 4:
-			return set_field(0, DM_SBCS_SBACCESS, 2);
-		case 8:
-			return set_field(0, DM_SBCS_SBACCESS, 3);
-		case 16:
-			return set_field(0, DM_SBCS_SBACCESS, 4);
-	}
-	assert(0);
-	return 0;	/* Make mingw happy. */
-}
-
 static target_addr_t sb_read_address(struct target *target)
 {
 	RISCV013_INFO(info);
@@ -2487,20 +2467,6 @@ static target_addr_t sb_read_address(struct target *target)
 	dmi_read(target, &v, DM_SBADDRESS0);
 	address |= v;
 	return address;
-}
-
-static int sb_write_address(struct target *target, target_addr_t address)
-{
-	RISCV013_INFO(info);
-	unsigned sbasize = get_field(info->sbcs, DM_SBCS_SBASIZE);
-	/* There currently is no support for >64-bit addresses in OpenOCD. */
-	if (sbasize > 96)
-		dmi_write(target, DM_SBADDRESS3, 0);
-	if (sbasize > 64)
-		dmi_write(target, DM_SBADDRESS2, 0);
-	if (sbasize > 32)
-		dmi_write(target, DM_SBADDRESS1, address >> 32);
-	return dmi_write(target, DM_SBADDRESS0, address);
 }
 
 static int read_sbcs_nonbusy(struct target *target, uint32_t *sbcs)
@@ -2631,7 +2597,7 @@ static int read_memory_bus_v0(struct target *target, target_addr_t address,
 	}
 
 	uint32_t sbcs;
-	if (dmi_read(target, &sbcs, DMI_SBCS) != ERROR_OK)
+	if (dmi_read(target, &sbcs, DM_SBCS) != ERROR_OK)
 		return ERROR_FAIL;
 
 	return ERROR_OK;
@@ -3332,24 +3298,6 @@ static int read_memory(struct target *target, target_addr_t address,
 {
 	if (count == 0)
 		return ERROR_OK;
-
-	RISCV013_INFO(info);
-	if (info->progbufsize >= 2 && !riscv_prefer_sba && target->state == TARGET_HALTED)
-		return read_memory_progbuf(target, address, size, count, buffer);
-
-	if ((get_field(info->sbcs, DMI_SBCS_SBACCESS8) && size == 1) ||
-			(get_field(info->sbcs, DMI_SBCS_SBACCESS16) && size == 2) ||
-			(get_field(info->sbcs, DMI_SBCS_SBACCESS32) && size == 4) ||
-			(get_field(info->sbcs, DMI_SBCS_SBACCESS64) && size == 8) ||
-			(get_field(info->sbcs, DMI_SBCS_SBACCESS128) && size == 16)) {
-		if (get_field(info->sbcs, DMI_SBCS_SBVERSION) == 0)
-			return read_memory_bus_v0(target, address, size, count, buffer);
-		else if (get_field(info->sbcs, DMI_SBCS_SBVERSION) == 1)
-			return read_memory_bus_v1(target, address, size, count, buffer);
-	}
-
-	if (info->progbufsize >= 2)
-		return read_memory_progbuf(target, address, size, count, buffer);
 
 	RISCV013_INFO(info);
 	if (has_sufficient_progbuf(target, 3) && !riscv_prefer_sba)
