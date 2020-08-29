@@ -311,14 +311,14 @@ static int gd32vf103_write_options(struct flash_bank *bank)
 
 	uint8_t opt_bytes[16];
 
-	target_buffer_set_u16(target, opt_bytes, gd32vf103_info->option_bytes.RDP);	//SPC
-	target_buffer_set_u16(target, opt_bytes + 2, gd32vf103_info->option_bytes.user_options);//USER
-	target_buffer_set_u16(target, opt_bytes + 4, gd32vf103_info->option_bytes.user_data & 0xff);//DATA[7:0]
-	target_buffer_set_u16(target, opt_bytes + 6, (gd32vf103_info->option_bytes.user_data >> 8) & 0xff);//DATA[15:8]
-	target_buffer_set_u16(target, opt_bytes + 8, gd32vf103_info->option_bytes.protection[0]);//WP[7:0]
-	target_buffer_set_u16(target, opt_bytes + 10, gd32vf103_info->option_bytes.protection[1]);//WP[15:8]
-	target_buffer_set_u16(target, opt_bytes + 12, gd32vf103_info->option_bytes.protection[2]);//WP[23:16]
-	target_buffer_set_u16(target, opt_bytes + 14, gd32vf103_info->option_bytes.protection[3]);//WP[31:24]
+	target_buffer_set_u16(target, opt_bytes, gd32vf103_info->option_bytes.RDP);	/* SPC */
+	target_buffer_set_u16(target, opt_bytes + 2, gd32vf103_info->option_bytes.user_options); /* USER */
+	target_buffer_set_u16(target, opt_bytes + 4, gd32vf103_info->option_bytes.user_data & 0xff); /* DATA[7:0] */
+	target_buffer_set_u16(target, opt_bytes + 6, (gd32vf103_info->option_bytes.user_data >> 8) & 0xff); /* DATA[15:8] */
+	target_buffer_set_u16(target, opt_bytes + 8, gd32vf103_info->option_bytes.protection[0]); /* WP[7:0] */
+	target_buffer_set_u16(target, opt_bytes + 10, gd32vf103_info->option_bytes.protection[1]); /* WP[15:8] */
+	target_buffer_set_u16(target, opt_bytes + 12, gd32vf103_info->option_bytes.protection[2]); /* WP[23:16] */
+	target_buffer_set_u16(target, opt_bytes + 14, gd32vf103_info->option_bytes.protection[3]); /* WP[31:24] */
 
 	uint32_t offset = FMC_OB_RDP - bank->base;
 	retval = gd32vf103_write_block(bank, opt_bytes, offset, sizeof(opt_bytes) / 2);
@@ -406,7 +406,7 @@ static int gd32vf103_erase(struct flash_bank *bank, int first, int last)
 	int i;
 	uint32_t optiondata;
 	uint32_t obstat;
-		
+
 	struct gd32vf103_flash_bank *gd32vf103_info = NULL;
 	gd32vf103_info = bank->driver_priv;
 
@@ -416,7 +416,7 @@ static int gd32vf103_erase(struct flash_bank *bank, int first, int last)
 	}
 	target_read_u32(target, FMC_WP_B0, &optiondata);
 	target_read_u32(target, FMC_OBSTAT_B0, &obstat);
-	if((0xFFFFFFFF != optiondata) || ((obstat & 0x2) !=0 )){
+	if ((0xFFFFFFFF != optiondata) || ((obstat & 0x2) != 0)) {
 		gd32vf103_erase_options(bank);
 		optiondata = 0xFFFFFFFF;
 		gd32vf103_info->option_bytes.RDP = 0x5AA5;
@@ -424,9 +424,9 @@ static int gd32vf103_erase(struct flash_bank *bank, int first, int last)
 		gd32vf103_info->option_bytes.protection[1] = (uint16_t)(optiondata >> 8);
 		gd32vf103_info->option_bytes.protection[2] = (uint16_t)(optiondata >> 16);
 		gd32vf103_info->option_bytes.protection[3] = (uint16_t)(optiondata >> 24);
-		
+
 		gd32vf103_write_options(bank);
-		LOG_INFO(" Unlock flash Sucess !!! Pls Reset Platfrom !! \n");
+		LOG_INFO(" Unlock flash Sucess !!! Pls Reset Platfrom !!\n");
 		return ERROR_FAIL;
 	}
 	if ((first == 0) && (last == (bank->num_sectors - 1)))
@@ -619,12 +619,12 @@ static int gd32vf103_write_block(struct flash_bank *bank, const uint8_t *buffer,
 
 	uint32_t wp = fifo_start_addr;
 	uint32_t rp = fifo_start_addr;
-	uint32_t thisrun_bytes = fifo_end_addr-fifo_start_addr-2;//(2:block size)
+	uint32_t thisrun_bytes = fifo_end_addr-fifo_start_addr-2; /* (2:block size) */
 
 	retval = target_write_u32(target, rp_addr, rp);
 	if (retval != ERROR_OK)
 		return retval;
-	
+
 	while (count > 0) {
 		retval = target_read_u32(target, rp_addr, &rp);
 		if (retval != ERROR_OK) {
@@ -632,8 +632,8 @@ static int gd32vf103_write_block(struct flash_bank *bank, const uint8_t *buffer,
 			break;
 		}
 
-		if(wp  != rp){
-			LOG_ERROR("Failed to write flash ;;  rp = 0x%x ;;; wp = 0x%x",rp,wp);
+		if (wp != rp) {
+			LOG_ERROR("Failed to write flash ;;  rp = 0x%x ;;; wp = 0x%x", rp, wp);
 			break;
 		}
 		wp = fifo_start_addr;
@@ -671,16 +671,16 @@ static int gd32vf103_write_block(struct flash_bank *bank, const uint8_t *buffer,
 		buf_set_u32(reg_params[4].value, 0, 32, address);
 
 		retval = target_run_algorithm(target, 0, NULL, 5, reg_params,
-				write_algorithm->address,write_algorithm->address+4,
+				write_algorithm->address, write_algorithm->address+4,
 				10000, NULL);
-		
+
 		if (retval != ERROR_OK) {
 			LOG_ERROR("Failed to execute algorithm at 0x%" TARGET_PRIxADDR ": %d",
 					write_algorithm->address, retval);
 			return retval;
 			}
-		address +=thisrun_bytes;
-		
+		address += thisrun_bytes;
+
 	}
 
 
@@ -803,7 +803,7 @@ static int gd32vf103_get_device_id(struct flash_bank *bank, uint32_t *device_id)
 
 	struct target *target = bank->target;
 	uint32_t device_id_register = 0xE0042000;
-	// read GD32VF103 device id register 
+	/* read GD32VF103 device id register */
 	int retval = target_read_u32(target, device_id_register, device_id);
 	if (retval != ERROR_OK)
 		return retval;
@@ -815,7 +815,7 @@ static int gd32vf103_get_flash_size(struct flash_bank *bank, uint16_t *flash_siz
 {
 	struct target *target = bank->target;
 	uint32_t  flash_size_reg = 0x1FFFF7E0;
-	
+
 	int  retval = target_read_u16(target, flash_size_reg, flash_size_in_kb);
 	if (retval != ERROR_OK)
 		return retval;
@@ -862,7 +862,7 @@ static int gd32vf103_probe(struct flash_bank *bank)
 	}
 
 	/* get flash size from target. */
-	retval = gd32vf103_get_flash_size(bank, &flash_size_in_kb);	
+	retval = gd32vf103_get_flash_size(bank, &flash_size_in_kb);
 	LOG_INFO("flash_size_in_kb = 0x%08" PRIx32 "", flash_size_in_kb);
 	/* failed reading flash size or flash size invalid, default to max target family */
 	if (retval != ERROR_OK || flash_size_in_kb == 0xffff || flash_size_in_kb == 0) {
