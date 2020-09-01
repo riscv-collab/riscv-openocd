@@ -219,21 +219,11 @@ static inline riscv_info_t *riscv_info(const struct target *target)
 { return target->arch_info; }
 #define RISCV_INFO(R) riscv_info_t *R = riscv_info(target);
 
-extern uint8_t ir_dtmcontrol[4];
-extern struct scan_field select_dtmcontrol;
-extern uint8_t ir_dbus[4];
-extern struct scan_field select_dbus;
-extern uint8_t ir_idcode[4];
-extern struct scan_field select_idcode;
+extern struct scan_field riscv_select_dtmcontrol;
+extern struct scan_field riscv_select_dbus;
+extern struct scan_field riscv_select_idcode;
 
-extern struct scan_field select_user4;
-extern struct scan_field *bscan_tunneled_select_dmi;
-extern uint32_t bscan_tunneled_select_dmi_num_fields;
-extern uint8_t bscan_zero[4];
-extern uint8_t bscan_one[4];
-typedef enum { BSCAN_TUNNEL_NESTED_TAP, BSCAN_TUNNEL_DATA_REGISTER } bscan_tunnel_type_t;
-extern int bscan_tunnel_ir_width;
-extern bscan_tunnel_type_t bscan_tunnel_type;
+extern int riscv_bscan_tunnel_ir_width;
 
 uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out);
 void select_dmi_via_bscan(struct target *target);

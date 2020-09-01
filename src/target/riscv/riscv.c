@@ -156,30 +156,34 @@ typedef enum slot {
 #define MAX_HWBPS			16
 #define DRAM_CACHE_SIZE		16
 
-uint8_t ir_dtmcontrol[4] = {DTMCONTROL};
-struct scan_field select_dtmcontrol = {
+uint8_t riscv_ir_dtmcontrol[4] = {DTMCONTROL};
+struct scan_field riscv_select_dtmcontrol = {
 	.in_value = NULL,
-	.out_value = ir_dtmcontrol
+	.out_value = riscv_ir_dtmcontrol
 };
-uint8_t ir_dbus[4] = {DBUS};
-struct scan_field select_dbus = {
+uint8_t riscv_ir_dbus[4] = {DBUS};
+struct scan_field riscv_select_dbus = {
 	.in_value = NULL,
-	.out_value = ir_dbus
+	.out_value = riscv_ir_dbus
 };
-uint8_t ir_idcode[4] = {0x1};
-struct scan_field select_idcode = {
+uint8_t riscv_ir_idcode[4] = {0x1};
+struct scan_field riscv_select_idcode = {
 	.in_value = NULL,
-	.out_value = ir_idcode
+	.out_value = riscv_ir_idcode
 };
 
-bscan_tunnel_type_t bscan_tunnel_type;
-int bscan_tunnel_ir_width; /* if zero, then tunneling is not present/active */
+typedef enum {
+	BSCAN_TUNNEL_NESTED_TAP,
+	BSCAN_TUNNEL_DATA_REGISTER
+} bscan_tunnel_type_t;
+static bscan_tunnel_type_t bscan_tunnel_type;
+int riscv_bscan_tunnel_ir_width; /* if zero, then tunneling is not present/active */
 
 uint8_t bscan_zero[4] = {0};
 uint8_t bscan_one[4] = {1};
 
-uint8_t ir_user4[4];
-struct scan_field select_user4 = {
+static uint8_t ir_user4[4];
+static struct scan_field select_user4 = {
 	.in_value = NULL,
 	.out_value = ir_user4
 };
@@ -194,7 +198,7 @@ struct scan_field _bscan_tunnel_data_register_select_dmi[] = {
 		},
 		{
 			.num_bits = 5, /* initialized in riscv_init_target to ir width of DM */
-			.out_value = ir_dbus,
+			.out_value = riscv_ir_dbus,
 			.in_value = NULL,
 		},
 		{
@@ -222,7 +226,7 @@ struct scan_field _bscan_tunnel_nested_tap_select_dmi[] = {
 		},
 		{
 			.num_bits = 0, /* initialized in riscv_init_target to ir width of DM */
-			.out_value = ir_dbus,
+			.out_value = riscv_ir_dbus,
 			.in_value = NULL,
 		},
 		{
@@ -332,7 +336,7 @@ void select_dmi_via_bscan(struct target *target)
 uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 {
 	/* On BSCAN TAP: Select IR=USER4, issue tunneled IR scan via BSCAN TAP's DR */
-	uint8_t tunneled_ir_width[4] = {bscan_tunnel_ir_width};
+	uint8_t tunneled_ir_width[4] = {riscv_bscan_tunnel_ir_width};
 	uint8_t tunneled_dr_width[4] = {32};
 	uint8_t out_value[5] = {0};
 	uint8_t in_value[5] = {0};
@@ -345,8 +349,8 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		tunneled_ir[0].num_bits = 3;
 		tunneled_ir[0].out_value = bscan_zero;
 		tunneled_ir[0].in_value = NULL;
-		tunneled_ir[1].num_bits = bscan_tunnel_ir_width;
-		tunneled_ir[1].out_value = ir_dtmcontrol;
+		tunneled_ir[1].num_bits = riscv_bscan_tunnel_ir_width;
+		tunneled_ir[1].out_value = riscv_ir_dtmcontrol;
 		tunneled_ir[1].in_value = NULL;
 		tunneled_ir[2].num_bits = 7;
 		tunneled_ir[2].out_value = tunneled_ir_width;
@@ -372,8 +376,8 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 		tunneled_ir[3].num_bits = 3;
 		tunneled_ir[3].out_value = bscan_zero;
 		tunneled_ir[3].in_value = NULL;
-		tunneled_ir[2].num_bits = bscan_tunnel_ir_width;
-		tunneled_ir[2].out_value = ir_dtmcontrol;
+		tunneled_ir[2].num_bits = riscv_bscan_tunnel_ir_width;
+		tunneled_ir[2].out_value = riscv_ir_dtmcontrol;
 		tunneled_ir[1].in_value = NULL;
 		tunneled_ir[1].num_bits = 7;
 		tunneled_ir[1].out_value = tunneled_ir_width;
@@ -421,13 +425,13 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 	uint8_t in_value[4];
 	uint8_t out_value[4] = { 0 };
 
-	if (bscan_tunnel_ir_width != 0)
+	if (riscv_bscan_tunnel_ir_width != 0)
 		return dtmcontrol_scan_via_bscan(target, out);
 
 
 	buf_set_u32(out_value, 0, 32, out);
 
-	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
+	jtag_add_ir_scan(target->tap, &riscv_select_dtmcontrol, TAP_IDLE);
 
 	field.num_bits = 32;
 	field.out_value = out_value;
@@ -435,7 +439,7 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
 
 	/* Always return to dbus. */
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	jtag_add_ir_scan(target->tap, &riscv_select_dbus, TAP_IDLE);
 
 	int retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
@@ -480,11 +484,11 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 	riscv_info_init(target, info);
 	info->cmd_ctx = cmd_ctx;
 
-	select_dtmcontrol.num_bits = target->tap->ir_length;
-	select_dbus.num_bits = target->tap->ir_length;
-	select_idcode.num_bits = target->tap->ir_length;
+	riscv_select_dtmcontrol.num_bits = target->tap->ir_length;
+	riscv_select_dbus.num_bits = target->tap->ir_length;
+	riscv_select_idcode.num_bits = target->tap->ir_length;
 
-	if (bscan_tunnel_ir_width != 0) {
+	if (riscv_bscan_tunnel_ir_width != 0) {
 		assert(target->tap->ir_length >= 6);
 		uint32_t ir_user4_raw = 0x23 << (target->tap->ir_length - 6);
 		ir_user4[0] = (uint8_t)ir_user4_raw;
@@ -492,11 +496,11 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 		ir_user4[2] = (uint8_t)(ir_user4_raw >>= 8);
 		ir_user4[3] = (uint8_t)(ir_user4_raw >>= 8);
 		select_user4.num_bits = target->tap->ir_length;
-		bscan_tunneled_ir_width[0] = bscan_tunnel_ir_width;
+		bscan_tunneled_ir_width[0] = riscv_bscan_tunnel_ir_width;
 		if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER)
-			bscan_tunnel_data_register_select_dmi[1].num_bits = bscan_tunnel_ir_width;
+			bscan_tunnel_data_register_select_dmi[1].num_bits = riscv_bscan_tunnel_ir_width;
 		else /* BSCAN_TUNNEL_NESTED_TAP */
-			bscan_tunnel_nested_tap_select_dmi[2].num_bits = bscan_tunnel_ir_width;
+			bscan_tunnel_nested_tap_select_dmi[2].num_bits = riscv_bscan_tunnel_ir_width;
 	}
 
 	riscv_semihosting_init(target);
@@ -2568,11 +2572,11 @@ COMMAND_HANDLER(riscv_set_ir)
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], value);
 
 	if (!strcmp(CMD_ARGV[0], "idcode"))
-		buf_set_u32(ir_idcode, 0, 32, value);
+		buf_set_u32(riscv_ir_idcode, 0, 32, value);
 	else if (!strcmp(CMD_ARGV[0], "dtmcs"))
-		buf_set_u32(ir_dtmcontrol, 0, 32, value);
+		buf_set_u32(riscv_ir_dtmcontrol, 0, 32, value);
 	else if (!strcmp(CMD_ARGV[0], "dmi"))
-		buf_set_u32(ir_dbus, 0, 32, value);
+		buf_set_u32(riscv_ir_dbus, 0, 32, value);
 	else
 		return ERROR_FAIL;
 
@@ -2620,7 +2624,7 @@ COMMAND_HANDLER(riscv_use_bscan_tunnel)
 		LOG_INFO("Invalid Tunnel type selected ! : selecting default Nested Tap Type");
 
 	bscan_tunnel_type = tunnel_type;
-	bscan_tunnel_ir_width = irwidth;
+	riscv_bscan_tunnel_ir_width = irwidth;
 	return ERROR_OK;
 }
 

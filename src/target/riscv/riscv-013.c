@@ -416,11 +416,11 @@ static void dump_field(int idle, const struct scan_field *field)
 
 static void select_dmi(struct target *target)
 {
-	if (bscan_tunnel_ir_width != 0) {
+	if (riscv_bscan_tunnel_ir_width != 0) {
 		select_dmi_via_bscan(target);
 		return;
 	}
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	jtag_add_ir_scan(target->tap, &riscv_select_dbus, TAP_IDLE);
 }
 
 static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
@@ -429,12 +429,12 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 	uint8_t in_value[4];
 	uint8_t out_value[4] = { 0 };
 
-	if (bscan_tunnel_ir_width != 0)
+	if (riscv_bscan_tunnel_ir_width != 0)
 		return dtmcontrol_scan_via_bscan(target, out);
 
 	buf_set_u32(out_value, 0, 32, out);
 
-	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
+	jtag_add_ir_scan(target->tap, &riscv_select_dtmcontrol, TAP_IDLE);
 
 	field.num_bits = 32;
 	field.out_value = out_value;
@@ -511,7 +511,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 	   the jtag_execute_queue() call.  Heap or static fields in this case doesn't seem
 	   the best fit.  Declaring stack based field values in a subsidiary function call wouldn't
 	   work. */
-	if (bscan_tunnel_ir_width != 0) {
+	if (riscv_bscan_tunnel_ir_width != 0) {
 		riscv_add_bscan_tunneled_scan(target, &field, &bscan_ctxt);
 	} else {
 		/* Assume dbus is already selected. */
@@ -533,7 +533,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 		return DMI_STATUS_FAILED;
 	}
 
-	if (bscan_tunnel_ir_width != 0) {
+	if (riscv_bscan_tunnel_ir_width != 0) {
 		/* need to right-shift "in" by one bit, because of clock skew between BSCAN TAP and DM TAP */
 		buffer_shr(in, num_bytes, 1);
 	}
