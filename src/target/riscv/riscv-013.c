@@ -3430,8 +3430,7 @@ static int read_memory(struct target *target, target_addr_t address,
 		int method = r->mem_access_methods[i];
 
 		if (method == RISCV_MEM_ACCESS_PROGBUF) {
-			bool skip = mem_should_skip_progbuf(target, address, size, true, &progbuf_result);
-			if (skip)
+			if (mem_should_skip_progbuf(target, address, size, true, &progbuf_result))
 				continue;
 
 			ret = read_memory_progbuf(target, address, size, count, buffer, increment);
@@ -3439,8 +3438,7 @@ static int read_memory(struct target *target, target_addr_t address,
 			if (ret != ERROR_OK)
 				progbuf_result = "failed";
 		} else if (method == RISCV_MEM_ACCESS_SYSBUS) {
-			bool skip = mem_should_skip_sysbus(target, address, size, increment, true, &sysbus_result);
-			if (skip)
+			if (mem_should_skip_sysbus(target, address, size, increment, true, &sysbus_result))
 				continue;
 
 			if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 0)
@@ -3451,8 +3449,7 @@ static int read_memory(struct target *target, target_addr_t address,
 			if (ret != ERROR_OK)
 				sysbus_result = "failed";
 		} else if (method == RISCV_MEM_ACCESS_ABSTRACT) {
-			bool skip = mem_should_skip_abstract(target, address, size, increment, true, &abstract_result);
-			if (skip)
+			if (mem_should_skip_abstract(target, address, size, increment, true, &abstract_result))
 				continue;
 
 			ret = read_memory_abstract(target, address, size, count, buffer, increment);
@@ -3888,8 +3885,7 @@ static int write_memory(struct target *target, target_addr_t address,
 		int method = r->mem_access_methods[i];
 
 		if (method == RISCV_MEM_ACCESS_PROGBUF) {
-			bool skip = mem_should_skip_progbuf(target, address, size, false, &progbuf_result);
-			if (skip)
+			if (mem_should_skip_progbuf(target, address, size, false, &progbuf_result))
 				continue;
 
 			ret = write_memory_progbuf(target, address, size, count, buffer);
@@ -3897,8 +3893,7 @@ static int write_memory(struct target *target, target_addr_t address,
 			if (ret != ERROR_OK)
 				progbuf_result = "failed";
 		} else if (method == RISCV_MEM_ACCESS_SYSBUS) {
-			bool skip = mem_should_skip_sysbus(target, address, size, 0, false, &sysbus_result);
-			if (skip)
+			if (mem_should_skip_sysbus(target, address, size, 0, false, &sysbus_result))
 				continue;
 
 			if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 0)
@@ -3909,8 +3904,7 @@ static int write_memory(struct target *target, target_addr_t address,
 			if (ret != ERROR_OK)
 				sysbus_result = "failed";
 		} else if (method == RISCV_MEM_ACCESS_ABSTRACT) {
-			bool skip = mem_should_skip_abstract(target, address, size, 0, false, &abstract_result);
-			if (skip)
+			if (mem_should_skip_abstract(target, address, size, 0, false, &abstract_result))
 				continue;
 
 			ret = write_memory_abstract(target, address, size, count, buffer);
