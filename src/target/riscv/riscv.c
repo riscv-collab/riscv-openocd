@@ -746,15 +746,11 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 	return ERROR_OK;
 }
 
-static int write_by_any_size(struct target *target, target_addr_t address,
+static int write_by_given_size(struct target *target, target_addr_t address,
 		uint32_t size, uint8_t *buffer, uint32_t access_size)
 {
 	assert(size == 4 || size == 2);
 	assert(access_size == 1 || access_size == 2 || access_size == 4 || access_size == 8);
-
-	if (address % size == 0 && target_write_memory(target, address, size, 1, buffer) == ERROR_OK)
-		/* Succeeded with original size. */
-		return ERROR_OK;
 
 	if (access_size <= size && address % access_size == 0)
 		/* Can do the memory access directly without a helper buffer. */
@@ -774,15 +770,11 @@ static int write_by_any_size(struct target *target, target_addr_t address,
 			access_size, n_blocks, helper_buf);
 }
 
-static int read_by_any_size(struct target *target, target_addr_t address,
+static int read_by_given_size(struct target *target, target_addr_t address,
 	uint32_t size, uint8_t *buffer, uint32_t access_size)
 {
 	assert(size == 4 || size == 2);
 	assert(access_size == 1 || access_size == 2 || access_size == 4 || access_size == 8);
-
-	if (address % size == 0 && target_read_memory(target, address, size, 1, buffer) == ERROR_OK)
-		/* Succeeded with original size. */
-		return ERROR_OK;
 
 	if (access_size <= size && address % access_size == 0)
 		/* Can do the memory access directly without a helper buffer. */
@@ -799,6 +791,30 @@ static int read_by_any_size(struct target *target, target_addr_t address,
 	/* Pick the requested portion from the buffer */
 	memcpy(buffer, helper_buf + offset_head, size);
 	return ERROR_OK;
+}
+
+static int sw_breakpoint_write_by_any_size(struct target *target, struct breakpoint *breakpoint, uint8_t *buff)
+{
+	/* Try access using direct 16-bit access. */
+	if (target_write_memory(
+			target, breakpoint->address, 2, breakpoint->length / 2, buff) == ERROR_OK)
+			return ERROR_OK;
+
+	/* If failed, retry with a different access size, more natural to the platform (32 or 64 bits) */
+	return write_by_given_size(
+			target, breakpoint->address, breakpoint->length, buff, target_data_bits(target) / 8);
+}
+
+static int sw_breakpoint_read_by_any_size(struct target *target, struct breakpoint *breakpoint)
+{
+	/* Try access using direct 16-bit access. */
+	if (target_read_memory(
+			target, breakpoint->address, 2, breakpoint->length / 2, breakpoint->orig_instr) == ERROR_OK)
+		return ERROR_OK;
+
+	/* If failed, retry with a different access size, more natural to the platform (32 or 64 bits) */
+	return read_by_given_size(
+			target, breakpoint->address, breakpoint->length, breakpoint->orig_instr, target_data_bits(target) / 8);
 }
 
 int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
@@ -818,8 +834,7 @@ int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 		}
 
 		/* Try reading the original instruction using direct 16-bit access. */
-		if (read_by_any_size(target, breakpoint->address, breakpoint->length,
-				breakpoint->orig_instr, target_data_bits(target) / 8) != ERROR_OK) {
+		if (sw_breakpoint_read_by_any_size(target, breakpoint) != ERROR_OK) {
 			LOG_ERROR("Failed to read original instruction at 0x%" TARGET_PRIxADDR,
 					breakpoint->address);
 			return ERROR_FAIL;
@@ -828,8 +843,7 @@ int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 		uint8_t buff[4] = { 0 };
 		buf_set_u32(buff, 0, breakpoint->length * CHAR_BIT, breakpoint->length == 4 ? ebreak() : ebreak_c());
 		/* Try write the ebreak instruction using direct 16-bit access */
-		if (write_by_any_size(target, breakpoint->address, breakpoint->length,
-				buff, target_data_bits(target) / 8) != ERROR_OK) {
+		if (sw_breakpoint_write_by_any_size(target, breakpoint, buff) != ERROR_OK) {
 			LOG_ERROR("Failed to write %d-byte breakpoint instruction at 0x%"
 					TARGET_PRIxADDR, breakpoint->length, breakpoint->address);
 			return ERROR_FAIL;
@@ -901,8 +915,7 @@ int riscv_remove_breakpoint(struct target *target,
 {
 	if (breakpoint->type == BKPT_SOFT) {
 		/* Try write the original instruction using direct 16-bit access */
-		if (write_by_any_size(target, breakpoint->address, breakpoint->length,
-				breakpoint->orig_instr, target_data_bits(target) / 8) != ERROR_OK) {
+		if (sw_breakpoint_write_by_any_size(target, breakpoint, breakpoint->orig_instr) != ERROR_OK) {
 			LOG_ERROR("Failed to restore instruction for %d-byte breakpoint at "
 					"0x%" TARGET_PRIxADDR, breakpoint->length, breakpoint->address);
 			return ERROR_FAIL;
