@@ -9686,7 +9686,7 @@ Use the command @command{riscv set_mem_access} instead.}
 
 When on, prefer to use System Bus Access to access memory.  When off (default),
 prefer to use the Program Buffer to access memory.
-Disables Abstract Memory Access, this method won't be used.
+Abstract Memory Access will be used with the lowest priority.
 @end deffn
 
 @deffn Command {riscv set_mem_access} method1 [method2] [method3]
