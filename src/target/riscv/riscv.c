@@ -818,8 +818,7 @@ static int write_by_any_size(struct target *target, target_addr_t address, uint3
 
 	/* On failure, try other access sizes.
 	   Minimize the number of accesses by trying first the largest size. */
-	for (unsigned access_size = 8; access_size > 0; access_size /= 2)
-	{
+	for (unsigned access_size = 8; access_size > 0; access_size /= 2) {
 		if (access_size == preferred_size)
 			/* Already tried this size. */
 			continue;
@@ -851,8 +850,7 @@ static int read_by_any_size(struct target *target, target_addr_t address, uint32
 
 	/* On failure, try other access sizes.
 	   Minimize the number of accesses by trying first the largest size. */
-	for (unsigned access_size = 8; access_size > 0; access_size /= 2)
-	{
+	for (unsigned access_size = 8; access_size > 0; access_size /= 2) {
 		if (access_size == preferred_size)
 			/* Already tried this size. */
 			continue;
