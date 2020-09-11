@@ -774,7 +774,7 @@ static int write_by_given_size(struct target *target, target_addr_t address,
 
 /**
  * Read one memory item of given "size". Use memory access of given "access_size".
- * Utilize read larger section of memory and pick out the required portion, if needed.
+ * Read larger section of memory and pick out the required portion, if needed.
  * */
 static int read_by_given_size(struct target *target, target_addr_t address,
 	uint32_t size, uint8_t *buffer, uint32_t access_size)
@@ -799,30 +799,70 @@ static int read_by_given_size(struct target *target, target_addr_t address,
 	return ERROR_OK;
 }
 
-static int sw_breakpoint_write_instr(struct target *target, struct breakpoint *breakpoint, uint8_t *instr)
+/**
+ * Write one memory item using any memory access size that will work.
+ * Utilize read-modify-write, if needed.
+ * */
+static int write_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer)
 {
-	/* Try direct 16-bit access. Should work on most targets. */
-	if (target_write_memory(
-			target, breakpoint->address, 2, breakpoint->length / 2, instr) == ERROR_OK)
-			return ERROR_OK;
+	assert(size == 1 || size == 2 ||  size == 4 || size == 8);
 
-	/* Retry with a different size, more natural for the platform (32 or 64 bits).
-	   Intended for special instruction memories that may not support arbitrary access size. */
-	return write_by_given_size(
-			target, breakpoint->address, breakpoint->length, instr, target_data_bits(target) / 8);
-}
+	/* Find access size that correspond to data size and the alignment. */
+	unsigned preferred_size = size;
+	while (address % preferred_size != 0)
+		preferred_size /= 2;
 
-static int sw_breakpoint_read_orig_instr(struct target *target, struct breakpoint *breakpoint)
-{
-	/* Try direct 16-bit access. Should work on most targets. */
-	if (target_read_memory(
-			target, breakpoint->address, 2, breakpoint->length / 2, breakpoint->orig_instr) == ERROR_OK)
+	/* First try the preferred (most natural) access size. */
+	if (write_by_given_size(target, address, size, buffer, preferred_size) == ERROR_OK)
 		return ERROR_OK;
 
-	/* Retry with a different size, more natural for the platform (32 or 64 bits).
-	   Intended for special instruction memories that may not support arbitrary access size. */
-	return read_by_given_size(
-			target, breakpoint->address, breakpoint->length, breakpoint->orig_instr, target_data_bits(target) / 8);
+	/* On failure, try other access sizes.
+	   Minimize the number of accesses by trying first the largest size. */
+	for (unsigned access_size = 8; access_size > 0; access_size /= 2)
+	{
+		if (access_size == preferred_size)
+			/* Already tried this size. */
+			continue;
+
+		if (write_by_given_size(target, address, size, buffer, access_size) == ERROR_OK)
+			return ERROR_OK;
+	}
+
+	/* No access attempt succeeded. */
+	return ERROR_FAIL;
+}
+
+/**
+ * Read one memory item using any memory access size that will work.
+ * Read larger section of memory and pick out the required portion, if needed.
+ * */
+static int read_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer)
+{
+	assert(size == 1 || size == 2 ||  size == 4 || size == 8);
+
+	/* Find access size that correspond to data size and the alignment. */
+	unsigned preferred_size = size;
+	while (address % preferred_size != 0)
+		preferred_size /= 2;
+
+	/* First try the preferred (most natural) access size. */
+	if (read_by_given_size(target, address, size, buffer, preferred_size) == ERROR_OK)
+			return ERROR_OK;
+
+	/* On failure, try other access sizes.
+	   Minimize the number of accesses by trying first the largest size. */
+	for (unsigned access_size = 8; access_size > 0; access_size /= 2)
+	{
+		if (access_size == preferred_size)
+			/* Already tried this size. */
+			continue;
+
+		if (read_by_given_size(target, address, size, buffer, access_size) == ERROR_OK)
+			return ERROR_OK;
+	}
+
+	/* No access attempt succeeded. */
+	return ERROR_FAIL;
 }
 
 int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
@@ -842,7 +882,8 @@ int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 		}
 
 		/* Read the original instruction. */
-		if (sw_breakpoint_read_orig_instr(target, breakpoint) != ERROR_OK) {
+		if (read_by_any_size(
+				target, breakpoint->address, breakpoint->length, breakpoint->orig_instr) != ERROR_OK) {
 			LOG_ERROR("Failed to read original instruction at 0x%" TARGET_PRIxADDR,
 					breakpoint->address);
 			return ERROR_FAIL;
@@ -851,7 +892,7 @@ int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 		uint8_t buff[4] = { 0 };
 		buf_set_u32(buff, 0, breakpoint->length * CHAR_BIT, breakpoint->length == 4 ? ebreak() : ebreak_c());
 		/* Write the ebreak instruction. */
-		if (sw_breakpoint_write_instr(target, breakpoint, buff) != ERROR_OK) {
+		if (write_by_any_size(target, breakpoint->address, breakpoint->length, buff) != ERROR_OK) {
 			LOG_ERROR("Failed to write %d-byte breakpoint instruction at 0x%"
 					TARGET_PRIxADDR, breakpoint->length, breakpoint->address);
 			return ERROR_FAIL;
@@ -923,7 +964,8 @@ int riscv_remove_breakpoint(struct target *target,
 {
 	if (breakpoint->type == BKPT_SOFT) {
 		/* Write the original instruction. */
-		if (sw_breakpoint_write_instr(target, breakpoint, breakpoint->orig_instr) != ERROR_OK) {
+		if (write_by_any_size(
+				target, breakpoint->address, breakpoint->length, breakpoint->orig_instr) != ERROR_OK) {
 			LOG_ERROR("Failed to restore instruction for %d-byte breakpoint at "
 					"0x%" TARGET_PRIxADDR, breakpoint->length, breakpoint->address);
 			return ERROR_FAIL;
