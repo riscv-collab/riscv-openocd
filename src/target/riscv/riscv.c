@@ -2286,6 +2286,11 @@ COMMAND_HANDLER(riscv_test_compliance) {
 
 COMMAND_HANDLER(riscv_set_prefer_sba)
 {
+	if (CMD_CTX->mode != COMMAND_EXEC) {
+		LOG_ERROR("Cannot use `riscv set_prefer_sba` in the config phase. "
+				"Please call it only in OpenOCD execution phase (after `init`).");
+		return ERROR_FAIL;
+	}
 	struct target *target = get_current_target(CMD_CTX);
 	RISCV_INFO(r);
 	bool prefer_sba;
@@ -2816,7 +2821,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "set_mem_access",
 		.handler = riscv_set_mem_access,
-		.mode = COMMAND_ANY,
+		.mode = COMMAND_EXEC,
 		.usage = "method1 [method2] [method3]",
 		.help = "Set which memory access methods shall be used and in which order "
 			"of priority. Method can be one of: 'progbuf', 'sysbus' or 'abstract'."
