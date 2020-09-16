@@ -474,8 +474,6 @@ static int riscv_create_target(struct target *target, Jim_Interp *interp)
 	target->arch_info = calloc(1, sizeof(riscv_info_t));
 	if (!target->arch_info)
 		return ERROR_FAIL;
-	/* TODO: Explicitly initialize all arch_info members in riscv_info_init().
-	   Don't misuse calloc/memset for that. */
 	riscv_info_init(target, target->arch_info);
 	return ERROR_OK;
 }
