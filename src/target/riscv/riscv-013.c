@@ -2089,6 +2089,9 @@ static int sample_memory_bus_v1(struct target *target,
 	if (dmi_write(target, DM_SBCS, sbcs_write) != ERROR_OK)
 		return ERROR_FAIL;
 
+	uint32_t sbaddress1 = 0;
+	bool sbaddress1_valid = false;
+
 	while (timeval_ms() < until_ms) {
 		/* 
 		 * batch_run() adds to the batch, so we can't simply reuse the same
@@ -2102,7 +2105,14 @@ static int sample_memory_bus_v1(struct target *target,
 		unsigned result_bytes = 0;
 		for (unsigned i = 0; i < DIM(config->bucket); i++) {
 			if (config->bucket[i].enabled) {
-				assert(sbasize == 32);	// TODO
+				assert(sbasize <= 64);
+				if (sbasize > 32 &&
+						(!sbaddress1_valid ||
+						 sbaddress1 != config->bucket[i].address >> 32)) {
+					sbaddress1 = config->bucket[i].address >> 32;
+					riscv_batch_add_dmi_write(batch, DM_SBADDRESS1, sbaddress1);
+					sbaddress1_valid = true;
+				}
 				riscv_batch_add_dmi_write(batch, DM_SBADDRESS0,
 										config->bucket[i].address);
 				assert(config->bucket[i].size_bytes == 4);	// TODO
