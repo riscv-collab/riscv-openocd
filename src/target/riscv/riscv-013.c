@@ -2115,7 +2115,10 @@ static int sample_memory_bus_v1(struct target *target,
 				}
 				riscv_batch_add_dmi_write(batch, DM_SBADDRESS0,
 										config->bucket[i].address);
-				assert(config->bucket[i].size_bytes == 4);	// TODO
+				assert(config->bucket[i].size_bytes == 4 ||
+					   config->bucket[i].size_bytes == 8);
+				if (config->bucket[i].size_bytes > 4)
+					riscv_batch_add_dmi_read(batch, DM_SBDATA1);
 				riscv_batch_add_dmi_read(batch, DM_SBDATA0);
 				result_bytes += 1 + config->bucket[i].size_bytes;
 			}
@@ -2131,7 +2134,10 @@ static int sample_memory_bus_v1(struct target *target,
 		for (unsigned i = 0; i < DIM(config->bucket); i++) {
 			if (config->bucket[i].enabled) {
 				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
-				uint64_t value = riscv_batch_get_dmi_read_data(batch, read++);
+				uint64_t value = 0;
+				if (config->bucket[i].size_bytes > 4)
+					value = ((uint64_t) riscv_batch_get_dmi_read_data(batch, read++)) << 32;
+				value |= riscv_batch_get_dmi_read_data(batch, read++);
 
 				buf->buf[buf->used] = i;
 				write_to_buf(buf->buf + buf->used + 1, value, config->bucket[i].size_bytes);
