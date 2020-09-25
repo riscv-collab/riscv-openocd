@@ -2084,10 +2084,18 @@ static int sample_memory_bus_v1(struct target *target,
 {
 	RISCV013_INFO(info);
 	unsigned sbasize = get_field(info->sbcs, DM_SBCS_SBASIZE);
-	uint32_t sbcs_write = set_field(0, DM_SBCS_SBREADONADDR, 1);
-	sbcs_write |= sb_sbaccess(4);
-	if (dmi_write(target, DM_SBCS, sbcs_write) != ERROR_OK)
-		return ERROR_FAIL;
+	if (sbasize > 64) {
+		LOG_ERROR("Memory sampling is only implemented for sbasize <= 64.");
+		return ERROR_NOT_IMPLEMENTED;
+	}
+
+	if (get_field(info->sbcs, DM_SBCS_SBVERSION) != 1) {
+		LOG_ERROR("Memory sampling is only implemented for SBA version 1.");
+		return ERROR_NOT_IMPLEMENTED;
+	}
+
+	uint32_t sbcs = 0;
+	uint32_t sbcs_valid = false;
 
 	uint32_t sbaddress1 = 0;
 	bool sbaddress1_valid = false;
@@ -2105,7 +2113,39 @@ static int sample_memory_bus_v1(struct target *target,
 		unsigned result_bytes = 0;
 		for (unsigned i = 0; i < DIM(config->bucket); i++) {
 			if (config->bucket[i].enabled) {
-				assert(sbasize <= 64);
+				uint32_t sbaccess = 0;
+				switch (config->bucket[i].size_bytes) {
+					case 1:
+						sbaccess = DM_SBCS_SBACCESS8;
+						break;
+					case 2:
+						sbaccess = DM_SBCS_SBACCESS16;
+						break;
+					case 4:
+						sbaccess = DM_SBCS_SBACCESS32;
+						break;
+					case 8:
+						sbaccess = DM_SBCS_SBACCESS64;
+						break;
+					default:
+						LOG_ERROR("Unsupported SBA access size: %d",
+								  config->bucket[i].size_bytes);
+						return ERROR_NOT_IMPLEMENTED;
+				}
+				if (!(info->sbcs & sbaccess)) {
+					LOG_ERROR("Hardware does not support SBA access for %d-byte memory sampling.",
+							  config->bucket[i].size_bytes);
+					return ERROR_NOT_IMPLEMENTED;
+				}
+
+				uint32_t sbcs_write = set_field(0, DM_SBCS_SBREADONADDR, 1);
+				sbcs_write |= sb_sbaccess(config->bucket[i].size_bytes);
+				if (!sbcs_valid || sbcs_write != sbcs) {
+					riscv_batch_add_dmi_write(batch, DM_SBCS, sbcs_write);
+					sbcs = sbcs_write;
+					sbcs_valid = true;
+				}
+
 				if (sbasize > 32 &&
 						(!sbaddress1_valid ||
 						 sbaddress1 != config->bucket[i].address >> 32)) {
@@ -2115,8 +2155,6 @@ static int sample_memory_bus_v1(struct target *target,
 				}
 				riscv_batch_add_dmi_write(batch, DM_SBADDRESS0,
 										config->bucket[i].address);
-				assert(config->bucket[i].size_bytes == 4 ||
-					   config->bucket[i].size_bytes == 8);
 				if (config->bucket[i].size_bytes > 4)
 					riscv_batch_add_dmi_read(batch, DM_SBDATA1);
 				riscv_batch_add_dmi_read(batch, DM_SBDATA0);
@@ -2153,17 +2191,20 @@ static int sample_memory_bus_v1(struct target *target,
 
 static int sample_memory(struct target *target,
 						 riscv_sample_buf_t *buf,
-						 const riscv_sample_config_t *config,
+						 riscv_sample_config_t *config,
 						 int64_t until_ms)
 {
-	RISCV013_INFO(info);
+	if (!config->enabled)
+		return ERROR_OK;
 
-	if (get_field(info->sbcs, DM_SBCS_SBACCESS32) &&
-			get_field(info->sbcs, DM_SBCS_SBVERSION) == 1) {
-		return sample_memory_bus_v1(target, buf, config, until_ms);
+	int result = sample_memory_bus_v1(target, buf, config, until_ms);
+
+	if (result != ERROR_OK) {
+		LOG_INFO("Turning off memory sampling because it failed.");
+		config->enabled = false;
 	}
 
-	return ERROR_NOT_IMPLEMENTED;
+	return result;
 }
 
 static int init_target(struct command_context *cmd_ctx,

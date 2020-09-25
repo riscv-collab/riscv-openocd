@@ -2770,6 +2770,8 @@ COMMAND_HANDLER(handle_repeat_read)
 
 COMMAND_HANDLER(handle_memory_sample_command)
 {
+	struct target *target = get_current_target(CMD_CTX);
+
 	if (CMD_ARGC == 0) {
 		for (unsigned i = 0; i < DIM(sample_config.bucket); i++) {
 			if (sample_config.bucket[i].enabled) {
@@ -2785,6 +2787,11 @@ COMMAND_HANDLER(handle_memory_sample_command)
 
 	if (CMD_ARGC < 2) {
 		LOG_ERROR("Command requires at least bucket and address arguments.");
+		return ERROR_FAIL;
+	}
+
+	if (riscv_rtos_enabled(target)) {
+		LOG_ERROR("Memory sampling is not supported with `-rtos riscv`.");
 		return ERROR_FAIL;
 	}
 
@@ -2815,6 +2822,8 @@ COMMAND_HANDLER(handle_memory_sample_command)
 	}
 	/* Clear the buffer when the configuration is changed. */
 	sample_buf.used = 0;
+
+	sample_config.enabled = true;
 
 	return ERROR_OK;
 }
