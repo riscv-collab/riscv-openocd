@@ -2097,8 +2097,16 @@ static int sample_memory_bus_v1(struct target *target,
 	uint32_t sbcs = 0;
 	uint32_t sbcs_valid = false;
 
+	uint32_t sbaddress0 = 0;
+	bool sbaddress0_valid = false;
 	uint32_t sbaddress1 = 0;
 	bool sbaddress1_valid = false;
+
+	unsigned enabled_count = 0;
+	for (unsigned i = 0; i < DIM(config->bucket); i++) {
+		if (config->bucket[i].enabled)
+			enabled_count++;
+	}
 
 	while (timeval_ms() < until_ms) {
 		/* 
@@ -2138,7 +2146,9 @@ static int sample_memory_bus_v1(struct target *target,
 					return ERROR_NOT_IMPLEMENTED;
 				}
 
-				uint32_t sbcs_write = set_field(0, DM_SBCS_SBREADONADDR, 1);
+				uint32_t sbcs_write = DM_SBCS_SBREADONADDR;
+				if (enabled_count == 1)
+					sbcs_write |= DM_SBCS_SBREADONDATA;
 				sbcs_write |= sb_sbaccess(config->bucket[i].size_bytes);
 				if (!sbcs_valid || sbcs_write != sbcs) {
 					riscv_batch_add_dmi_write(batch, DM_SBCS, sbcs_write);
@@ -2153,8 +2163,12 @@ static int sample_memory_bus_v1(struct target *target,
 					riscv_batch_add_dmi_write(batch, DM_SBADDRESS1, sbaddress1);
 					sbaddress1_valid = true;
 				}
-				riscv_batch_add_dmi_write(batch, DM_SBADDRESS0,
-										config->bucket[i].address);
+				if (!sbaddress0_valid ||
+						sbaddress0 != (config->bucket[i].address & 0xffffffff)) {
+					sbaddress0 = config->bucket[i].address;
+					riscv_batch_add_dmi_write(batch, DM_SBADDRESS0, sbaddress0);
+					sbaddress0_valid = true;
+				}
 				if (config->bucket[i].size_bytes > 4)
 					riscv_batch_add_dmi_read(batch, DM_SBDATA1);
 				riscv_batch_add_dmi_read(batch, DM_SBDATA0);
