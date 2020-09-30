@@ -286,7 +286,6 @@ dm013_info_t *get_dm(struct target *target)
 	}
 	target_entry = calloc(1, sizeof(*target_entry));
 	if (!target_entry) {
-		free(info->dm);
 		info->dm = NULL;
 		return NULL;
 	}
@@ -1538,17 +1537,10 @@ int wait_for_authbusy(struct target *target, uint32_t *dmstatus)
 static void deinit_target(struct target *target)
 {
 	LOG_DEBUG("riscv_deinit_target()");
-	RISCV_INFO(r);
-	RISCV013_INFO(info);
-
-	target_list_t *entry, *tmp;
-	list_for_each_entry_safe(entry, tmp, &info->dm->target_list, list)
-		free(entry);
-
-	free(info->dm);
-	free(r->version_specific);
+	riscv_info_t *info = (riscv_info_t *) target->arch_info;
+	free(info->version_specific);
 	/* TODO: free register arch_info */
-	r->version_specific = NULL;
+	info->version_specific = NULL;
 }
 
 static int set_haltgroup(struct target *target, bool *supported)

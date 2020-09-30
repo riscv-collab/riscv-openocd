@@ -63,7 +63,7 @@ typedef struct {
 typedef struct {
 	struct list_head list;
 	uint16_t low, high;
-	char *id;
+	char *name;
 } range_list_t;
 
 typedef struct {
