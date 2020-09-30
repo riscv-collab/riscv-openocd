@@ -2573,8 +2573,8 @@ int parse_ranges(struct list_head *ranges, const char *tcl_arg, const char *reg_
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
 		} else {
+			LOG_ERROR("Invalid argument '%s'.", arg);
 			free(args);
-			LOG_ERROR("Failed to parse single register number from '%s'.", arg);
 			return ERROR_COMMAND_SYNTAX_ERROR;
 		}
 
