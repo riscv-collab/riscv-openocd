@@ -3623,8 +3623,11 @@ int riscv_enumerate_triggers(struct target *target)
 		riscv_reg_t tselect;
 		int result = riscv_get_register_on_hart(target, &tselect, hartid,
 				GDB_REGNO_TSELECT);
+		/* If tselect is not readable, the trigger module is likely not
+		 * implemented. There are no triggers to enumerate then and no error
+		 * should be thrown. */
 		if (result != ERROR_OK)
-			return result;
+			return ERROR_OK;
 
 		for (unsigned t = 0; t < RISCV_MAX_TRIGGERS; ++t) {
 			r->trigger_count[hartid] = t;
