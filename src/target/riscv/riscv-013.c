@@ -2023,33 +2023,6 @@ static int riscv013_set_register_buf(struct target *target,
 	return result;
 }
 
-/**
- * @par size in bytes
- */
-static void write_to_buf(uint8_t *buffer, uint64_t value, unsigned size)
-{
-	switch (size) {
-		case 8:
-			buffer[7] = value >> 56;
-			buffer[6] = value >> 48;
-			buffer[5] = value >> 40;
-			buffer[4] = value >> 32;
-			/* falls through */
-		case 4:
-			buffer[3] = value >> 24;
-			buffer[2] = value >> 16;
-			/* falls through */
-		case 2:
-			buffer[1] = value >> 8;
-			/* falls through */
-		case 1:
-			buffer[0] = value;
-			break;
-		default:
-			assert(false);
-	}
-}
-
 static uint32_t sb_sbaccess(unsigned size_bytes)
 {
 	switch (size_bytes) {
@@ -2099,6 +2072,25 @@ static int batch_run(const struct target *target, struct riscv_batch *batch)
 	return riscv_batch_run(batch);
 }
 
+static int sba_supports_access(struct target *target, unsigned size_bytes)
+{
+	RISCV013_INFO(info);
+	switch (size_bytes) {
+		case 1:
+			return get_field(info->sbcs, DM_SBCS_SBACCESS8);
+		case 2:
+			return get_field(info->sbcs, DM_SBCS_SBACCESS16);
+		case 4:
+			return get_field(info->sbcs, DM_SBCS_SBACCESS32);
+		case 8:
+			return get_field(info->sbcs, DM_SBCS_SBACCESS64);
+		case 16:
+			return get_field(info->sbcs, DM_SBCS_SBACCESS128);
+		default:
+			return 0;
+	}
+}
+
 static int sample_memory_bus_v1(struct target *target,
 								riscv_sample_buf_t *buf,
 								const riscv_sample_config_t *config,
@@ -2124,6 +2116,9 @@ static int sample_memory_bus_v1(struct target *target,
 	uint32_t sbaddress1 = 0;
 	bool sbaddress1_valid = false;
 
+	/* How often to read each value in a batch. */
+	const unsigned repeat = 5;
+
 	unsigned enabled_count = 0;
 	for (unsigned i = 0; i < DIM(config->bucket); i++) {
 		if (config->bucket[i].enabled)
@@ -2137,64 +2132,47 @@ static int sample_memory_bus_v1(struct target *target,
 		 * loop. *
 		 */
 		struct riscv_batch *batch = riscv_batch_alloc(
-			target, DIM(config->bucket) * 6,
+			target, 1 + enabled_count * 5 * repeat,
 			info->dmi_busy_delay + info->bus_master_read_delay);
 
 		unsigned result_bytes = 0;
-		for (unsigned i = 0; i < DIM(config->bucket); i++) {
-			if (config->bucket[i].enabled) {
-				uint32_t sbaccess = 0;
-				switch (config->bucket[i].size_bytes) {
-					case 1:
-						sbaccess = DM_SBCS_SBACCESS8;
-						break;
-					case 2:
-						sbaccess = DM_SBCS_SBACCESS16;
-						break;
-					case 4:
-						sbaccess = DM_SBCS_SBACCESS32;
-						break;
-					case 8:
-						sbaccess = DM_SBCS_SBACCESS64;
-						break;
-					default:
-						LOG_ERROR("Unsupported SBA access size: %d",
-								  config->bucket[i].size_bytes);
+		for (unsigned n = 0; n < repeat; n++) {
+			for (unsigned i = 0; i < DIM(config->bucket); i++) {
+				if (config->bucket[i].enabled) {
+					if (!sba_supports_access(target, config->bucket[i].size_bytes)) {
+						LOG_ERROR("Hardware does not support SBA access for %d-byte memory sampling.",
+								config->bucket[i].size_bytes);
 						return ERROR_NOT_IMPLEMENTED;
-				}
-				if (!(info->sbcs & sbaccess)) {
-					LOG_ERROR("Hardware does not support SBA access for %d-byte memory sampling.",
-							  config->bucket[i].size_bytes);
-					return ERROR_NOT_IMPLEMENTED;
-				}
+					}
 
-				uint32_t sbcs_write = DM_SBCS_SBREADONADDR;
-				if (enabled_count == 1)
-					sbcs_write |= DM_SBCS_SBREADONDATA;
-				sbcs_write |= sb_sbaccess(config->bucket[i].size_bytes);
-				if (!sbcs_valid || sbcs_write != sbcs) {
-					riscv_batch_add_dmi_write(batch, DM_SBCS, sbcs_write);
-					sbcs = sbcs_write;
-					sbcs_valid = true;
-				}
+					uint32_t sbcs_write = DM_SBCS_SBREADONADDR;
+					if (enabled_count == 1)
+						sbcs_write |= DM_SBCS_SBREADONDATA;
+					sbcs_write |= sb_sbaccess(config->bucket[i].size_bytes);
+					if (!sbcs_valid || sbcs_write != sbcs) {
+						riscv_batch_add_dmi_write(batch, DM_SBCS, sbcs_write);
+						sbcs = sbcs_write;
+						sbcs_valid = true;
+					}
 
-				if (sbasize > 32 &&
-						(!sbaddress1_valid ||
-						 sbaddress1 != config->bucket[i].address >> 32)) {
-					sbaddress1 = config->bucket[i].address >> 32;
-					riscv_batch_add_dmi_write(batch, DM_SBADDRESS1, sbaddress1);
-					sbaddress1_valid = true;
+					if (sbasize > 32 &&
+							(!sbaddress1_valid ||
+							sbaddress1 != config->bucket[i].address >> 32)) {
+						sbaddress1 = config->bucket[i].address >> 32;
+						riscv_batch_add_dmi_write(batch, DM_SBADDRESS1, sbaddress1);
+						sbaddress1_valid = true;
+					}
+					if (!sbaddress0_valid ||
+							sbaddress0 != (config->bucket[i].address & 0xffffffff)) {
+						sbaddress0 = config->bucket[i].address;
+						riscv_batch_add_dmi_write(batch, DM_SBADDRESS0, sbaddress0);
+						sbaddress0_valid = true;
+					}
+					if (config->bucket[i].size_bytes > 4)
+						riscv_batch_add_dmi_read(batch, DM_SBDATA1);
+					riscv_batch_add_dmi_read(batch, DM_SBDATA0);
+					result_bytes += 1 + config->bucket[i].size_bytes;
 				}
-				if (!sbaddress0_valid ||
-						sbaddress0 != (config->bucket[i].address & 0xffffffff)) {
-					sbaddress0 = config->bucket[i].address;
-					riscv_batch_add_dmi_write(batch, DM_SBADDRESS0, sbaddress0);
-					sbaddress0_valid = true;
-				}
-				if (config->bucket[i].size_bytes > 4)
-					riscv_batch_add_dmi_read(batch, DM_SBDATA1);
-				riscv_batch_add_dmi_read(batch, DM_SBDATA0);
-				result_bytes += 1 + config->bucket[i].size_bytes;
 			}
 		}
 
@@ -2203,19 +2181,42 @@ static int sample_memory_bus_v1(struct target *target,
 			break;
 		}
 
-		/*int result =*/ batch_run(target, batch);
-		unsigned read = 0;
-		for (unsigned i = 0; i < DIM(config->bucket); i++) {
-			if (config->bucket[i].enabled) {
-				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
-				uint64_t value = 0;
-				if (config->bucket[i].size_bytes > 4)
-					value = ((uint64_t) riscv_batch_get_dmi_read_data(batch, read++)) << 32;
-				value |= riscv_batch_get_dmi_read_data(batch, read++);
+		size_t sbcs_key = riscv_batch_add_dmi_read(batch, DM_SBCS);
 
-				buf->buf[buf->used] = i;
-				write_to_buf(buf->buf + buf->used + 1, value, config->bucket[i].size_bytes);
-				buf->used += 1 + config->bucket[i].size_bytes;
+		int result = batch_run(target, batch);
+		if (result != ERROR_OK)
+			return result;
+
+		uint32_t sbcs_read = riscv_batch_get_dmi_read_data(batch, sbcs_key);
+		if (get_field(sbcs_read, DM_SBCS_SBBUSYERROR)) {
+			/* Discard this batch (too much hassle to try to recover partial
+			 * data) and try again with a larger delay. */
+			info->bus_master_read_delay += info->bus_master_read_delay / 10 + 1;
+			dmi_write(target, DM_SBCS, DM_SBCS_SBBUSYERROR | DM_SBCS_SBERROR);
+			riscv_batch_free(batch);
+			continue;
+		}
+		if (get_field(sbcs_read, DM_SBCS_SBERROR)) {
+			/* The memory we're sampling was unreadable, somehow. Give up. */
+			dmi_write(target, DM_SBCS, DM_SBCS_SBBUSYERROR | DM_SBCS_SBERROR);
+			riscv_batch_free(batch);
+			return ERROR_FAIL;
+		}
+
+		unsigned read = 0;
+		for (unsigned n = 0; n < repeat; n++) {
+			for (unsigned i = 0; i < DIM(config->bucket); i++) {
+				if (config->bucket[i].enabled) {
+					assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
+					uint64_t value = 0;
+					if (config->bucket[i].size_bytes > 4)
+						value = ((uint64_t) riscv_batch_get_dmi_read_data(batch, read++)) << 32;
+					value |= riscv_batch_get_dmi_read_data(batch, read++);
+
+					buf->buf[buf->used] = i;
+					buf_set_u64(buf->buf + buf->used + 1, 0, config->bucket[i].size_bytes * 8, value);
+					buf->used += 1 + config->bucket[i].size_bytes;
+				}
 			}
 		}
 
@@ -2233,14 +2234,7 @@ static int sample_memory(struct target *target,
 	if (!config->enabled)
 		return ERROR_OK;
 
-	int result = sample_memory_bus_v1(target, buf, config, until_ms);
-
-	if (result != ERROR_OK) {
-		LOG_INFO("Turning off memory sampling because it failed.");
-		config->enabled = false;
-	}
-
-	return result;
+	return sample_memory_bus_v1(target, buf, config, until_ms);
 }
 
 static int init_target(struct command_context *cmd_ctx,
@@ -2886,11 +2880,7 @@ static bool mem_should_skip_sysbus(struct target *target, target_addr_t address,
 	assert(skip_reason);
 
 	RISCV013_INFO(info);
-	if ((!get_field(info->sbcs, DM_SBCS_SBACCESS8) || size != 1) &&
-			(!get_field(info->sbcs, DM_SBCS_SBACCESS16) || size != 2) &&
-			(!get_field(info->sbcs, DM_SBCS_SBACCESS32) || size != 4) &&
-			(!get_field(info->sbcs, DM_SBCS_SBACCESS64) || size != 8) &&
-			(!get_field(info->sbcs, DM_SBCS_SBACCESS128) || size != 16)) {
+	if (!sba_supports_access(target, size)) {
 		LOG_DEBUG("Skipping mem %s via system bus - unsupported size.",
 				read ? "read" : "write");
 		*skip_reason = "skipped (unsupported size)";
