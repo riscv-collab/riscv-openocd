@@ -11,7 +11,7 @@
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
 
-#define DTM_DMI_MAX_ADDRESS_LENGTH	((1<<DTM_DTMCS_ABITS_LENGTH)-1)
+#define DTM_DMI_MAX_ADDRESS_LENGTH	((1 << DTM_DTMCS_ABITS_LENGTH) - 1)
 #define DMI_SCAN_MAX_BIT_LENGTH (DTM_DMI_MAX_ADDRESS_LENGTH + DTM_DMI_DATA_LENGTH + DTM_DMI_OP_LENGTH)
 #define DMI_SCAN_BUF_SIZE (DIV_ROUND_UP(DMI_SCAN_MAX_BIT_LENGTH, 8))
 
@@ -21,17 +21,43 @@ struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_
 {
 	scans += 4;
 	struct riscv_batch *out = calloc(1, sizeof(*out));
+	if (!out)
+		goto error0;
 	out->target = target;
 	out->allocated_scans = scans;
 	out->idle_count = idle;
 	out->data_out = malloc(sizeof(*out->data_out) * (scans) * DMI_SCAN_BUF_SIZE);
-	out->data_in  = malloc(sizeof(*out->data_in)  * (scans) * DMI_SCAN_BUF_SIZE);
+	if (!out->data_out)
+		goto error1;
+	out->data_in = malloc(sizeof(*out->data_in) * (scans) * DMI_SCAN_BUF_SIZE);
+	if (!out->data_in)
+		goto error2;
 	out->fields = malloc(sizeof(*out->fields) * (scans));
-	if (bscan_tunnel_ir_width != 0)
+	if (!out->fields)
+		goto error3;
+	if (bscan_tunnel_ir_width != 0) {
 		out->bscan_ctxt = malloc(sizeof(*out->bscan_ctxt) * (scans));
+		if (!out->bscan_ctxt)
+			goto error4;
+	}
 	out->last_scan = RISCV_SCAN_TYPE_INVALID;
 	out->read_keys = malloc(sizeof(*out->read_keys) * (scans));
+	if (!out->read_keys)
+		goto error5;
 	return out;
+
+error5:
+	free(out->bscan_ctxt);
+error4:
+	free(out->fields);
+error3:
+	free(out->data_in);
+error2:
+	free(out->data_out);
+error1:
+	free(out);
+error0:
+	return NULL;
 }
 
 void riscv_batch_free(struct riscv_batch *batch)
@@ -39,8 +65,7 @@ void riscv_batch_free(struct riscv_batch *batch)
 	free(batch->data_in);
 	free(batch->data_out);
 	free(batch->fields);
-	if (batch->bscan_ctxt)
-		free(batch->bscan_ctxt);
+	free(batch->bscan_ctxt);
 	free(batch->read_keys);
 	free(batch);
 }
@@ -134,7 +159,7 @@ uint32_t riscv_batch_get_dmi_read_data(struct riscv_batch *batch, size_t key)
 	assert(index <= batch->used_scans);
 	uint8_t *base = batch->data_in + DMI_SCAN_BUF_SIZE * index;
 	/* extract "data" field from the DMI read result */
-	return (uint32_t)buf_get_u32(base, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH);
+	return buf_get_u32(base, DTM_DMI_DATA_OFFSET, DTM_DMI_DATA_LENGTH);
 }
 
 void riscv_batch_add_nop(struct riscv_batch *batch)

@@ -111,12 +111,6 @@ typedef enum {
 	DMI_STATUS_BUSY = 3
 } dmi_status_t;
 
-typedef enum {
-	RE_OK,
-	RE_FAIL,
-	RE_AGAIN
-} riscv_error_t;
-
 typedef enum slot {
 	SLOT0,
 	SLOT1,
@@ -215,6 +209,8 @@ typedef struct {
 	bool abstract_read_fpr_supported;
 	bool abstract_write_fpr_supported;
 
+	yes_no_maybe_t has_aampostincrement;
+
 	/* When a function returns some error due to a failure indicated by the
 	 * target in cmderr, the caller can look here to see what that error was.
 	 * (Compare with errno.) */
@@ -237,6 +233,8 @@ LIST_HEAD(dm_list);
 static riscv013_info_t *get_info(const struct target *target)
 {
 	riscv_info_t *info = (riscv_info_t *) target->arch_info;
+	assert(info);
+	assert(info->version_specific);
 	return (riscv013_info_t *) info->version_specific;
 }
 
@@ -265,6 +263,8 @@ dm013_info_t *get_dm(struct target *target)
 	if (!dm) {
 		LOG_DEBUG("[%d] Allocating new DM", target->coreid);
 		dm = calloc(1, sizeof(dm013_info_t));
+		if (!dm)
+			return NULL;
 		dm->abs_chain_position = abs_chain_position;
 		dm->current_hartid = -1;
 		dm->hart_count = -1;
@@ -279,6 +279,10 @@ dm013_info_t *get_dm(struct target *target)
 			return dm;
 	}
 	target_entry = calloc(1, sizeof(*target_entry));
+	if (!target_entry) {
+		info->dm = NULL;
+		return NULL;
+	}
 	target_entry->target = target;
 	list_add(&target_entry->list, &dm->target_list);
 
@@ -1551,8 +1555,8 @@ static int discover_vlenb(struct target *target, int hartid)
 	riscv_reg_t vlenb;
 
 	if (register_read(target, &vlenb, GDB_REGNO_VLENB) != ERROR_OK) {
-		LOG_WARNING("Couldn't read vlenb for %s; vector register access won't "
-				"work.", target_name(target));
+		LOG_WARNING("Couldn't read vlenb for %s; vector register access won't work.",
+				target_name(target));
 		r->vlenb[hartid] = 0;
 		return ERROR_OK;
 	}
@@ -1592,6 +1596,8 @@ static int examine(struct target *target)
 
 	/* Reset the Debug Module. */
 	dm013_info_t *dm = get_dm(target);
+	if (!dm)
+		return ERROR_FAIL;
 	if (!dm->was_reset) {
 		dmi_write(target, DM_DMCONTROL, 0);
 		dmi_write(target, DM_DMCONTROL, DM_DMCONTROL_DMACTIVE);
@@ -1814,6 +1820,8 @@ int riscv013_authdata_write(struct target *target, uint32_t value)
 		LOG_INFO("authdata_write resulted in successful authentication");
 		int result = ERROR_OK;
 		dm013_info_t *dm = get_dm(target);
+		if (!dm)
+			return ERROR_FAIL;
 		target_list_t *entry;
 		list_for_each_entry(entry, &dm->target_list, list) {
 			if (examine(entry->target) != ERROR_OK)
@@ -1828,30 +1836,44 @@ int riscv013_authdata_write(struct target *target, uint32_t value)
 static int riscv013_hart_count(struct target *target)
 {
 	dm013_info_t *dm = get_dm(target);
+	assert(dm);
 	return dm->hart_count;
 }
 
+/* Try to find out the widest memory access size depending on the selected memory access methods. */
 static unsigned riscv013_data_bits(struct target *target)
 {
 	RISCV013_INFO(info);
-	/* TODO: Once there is a spec for discovering abstract commands, we can
-	 * take those into account as well.  For now we assume abstract commands
-	 * support XLEN-wide accesses. */
-	if (has_sufficient_progbuf(target, 3) && !riscv_prefer_sba)
-		return riscv_xlen(target);
+	RISCV_INFO(r);
 
-	if (get_field(info->sbcs, DM_SBCS_SBACCESS128))
-		return 128;
-	if (get_field(info->sbcs, DM_SBCS_SBACCESS64))
-		return 64;
-	if (get_field(info->sbcs, DM_SBCS_SBACCESS32))
-		return 32;
-	if (get_field(info->sbcs, DM_SBCS_SBACCESS16))
-		return 16;
-	if (get_field(info->sbcs, DM_SBCS_SBACCESS8))
-		return 8;
+	for (unsigned i = 0; i < RISCV_NUM_MEM_ACCESS_METHODS; i++) {
+		int method = r->mem_access_methods[i];
 
-	return riscv_xlen(target);
+		if (method == RISCV_MEM_ACCESS_PROGBUF) {
+			if (has_sufficient_progbuf(target, 3))
+				return riscv_xlen(target);
+		} else if (method == RISCV_MEM_ACCESS_SYSBUS) {
+			if (get_field(info->sbcs, DM_SBCS_SBACCESS128))
+				return 128;
+			if (get_field(info->sbcs, DM_SBCS_SBACCESS64))
+				return 64;
+			if (get_field(info->sbcs, DM_SBCS_SBACCESS32))
+				return 32;
+			if (get_field(info->sbcs, DM_SBCS_SBACCESS16))
+				return 16;
+			if (get_field(info->sbcs, DM_SBCS_SBACCESS8))
+				return 8;
+		} else if (method == RISCV_MEM_ACCESS_ABSTRACT) {
+			/* TODO: Once there is a spec for discovering abstract commands, we can
+			 * take those into account as well.  For now we assume abstract commands
+			 * support XLEN-wide accesses. */
+			return riscv_xlen(target);
+		} else if (method == RISCV_MEM_ACCESS_UNSPECIFIED)
+			/* No further mem access method to try. */
+			break;
+	}
+	LOG_ERROR("Unable to determine supported data bits on this target. Assuming 32 bits.");
+	return 32;
 }
 
 static int prep_for_vector_access(struct target *target, uint64_t *vtype,
@@ -2225,7 +2247,7 @@ static int init_target(struct command_context *cmd_ctx,
 		struct target *target)
 {
 	LOG_DEBUG("init");
-	riscv_info_t *generic_info = (riscv_info_t *) target->arch_info;
+	RISCV_INFO(generic_info);
 
 	generic_info->get_register = &riscv013_get_register;
 	generic_info->set_register = &riscv013_set_register;
@@ -2280,6 +2302,8 @@ static int init_target(struct command_context *cmd_ctx,
 	info->abstract_read_fpr_supported = true;
 	info->abstract_write_fpr_supported = true;
 
+	info->has_aampostincrement = YNM_MAYBE;
+
 	return ERROR_OK;
 }
 
@@ -2291,7 +2315,10 @@ static int assert_reset(struct target *target)
 
 	uint32_t control_base = set_field(0, DM_DMCONTROL_DMACTIVE, 1);
 
-	if (target->rtos) {
+	if (target_has_event_action(target, TARGET_EVENT_RESET_ASSERT)) {
+		/* Run the user-supplied script if there is one. */
+		target_handle_event(target, TARGET_EVENT_RESET_ASSERT);
+	} else if (target->rtos) {
 		/* There's only one target, and OpenOCD thinks each hart is a thread.
 		 * We must reset them all. */
 
@@ -2324,6 +2351,8 @@ static int assert_reset(struct target *target)
 	target->state = TARGET_RESET;
 
 	dm013_info_t *dm = get_dm(target);
+	if (!dm)
+		return ERROR_FAIL;
 
 	/* The DM might have gotten reset if OpenOCD called us in some reset that
 	 * involves SRST being toggled. So clear our cache which may be out of
@@ -2361,16 +2390,7 @@ static int deassert_reset(struct target *target)
 			index = r->current_hartid;
 		}
 
-		char *operation;
-		uint32_t expected_field;
-		if (target->reset_halt) {
-			operation = "halt";
-			expected_field = DM_DMSTATUS_ALLHALTED;
-		} else {
-			operation = "run";
-			expected_field = DM_DMSTATUS_ALLRUNNING;
-		}
-		LOG_DEBUG("Waiting for hart %d to %s out of reset.", index, operation);
+		LOG_DEBUG("Waiting for hart %d to come out of reset.", index);
 		while (1) {
 			int result = dmstatus_read_timeout(target, &dmstatus, true,
 					riscv_reset_timeout_sec);
@@ -2381,13 +2401,20 @@ static int deassert_reset(struct target *target)
 						index, riscv_reset_timeout_sec);
 			if (result != ERROR_OK)
 				return result;
-			if (get_field(dmstatus, expected_field))
+			/* Certain debug modules, like the one in GD32VF103
+			 * MCUs, violate the specification's requirement that
+			 * each hart is in "exactly one of four states" and,
+			 * during reset, report harts as both unavailable and
+			 * halted/running. To work around this, we check for
+			 * the absence of the unavailable state rather than
+			 * the presence of any other state. */
+			if (!get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL))
 				break;
 			if (time(NULL) - start > riscv_reset_timeout_sec) {
-				LOG_ERROR("Hart %d didn't %s coming out of reset in %ds; "
+				LOG_ERROR("Hart %d didn't leave reset in %ds; "
 						"dmstatus=0x%x; "
 						"Increase the timeout with riscv set_reset_timeout_sec.",
-						index, operation, riscv_reset_timeout_sec, dmstatus);
+						index, riscv_reset_timeout_sec, dmstatus);
 				return ERROR_FAIL;
 			}
 		}
@@ -2405,37 +2432,6 @@ static int deassert_reset(struct target *target)
 	}
 	info->dmi_busy_delay = dmi_busy_delay;
 	return ERROR_OK;
-}
-
-/**
- * @par size in bytes
- */
-static uint64_t read_from_buf(const uint8_t *buffer, unsigned size)
-{
-	switch (size) {
-		case 1:
-			return buffer[0];
-		case 2:
-			return buffer[0]
-				| ((uint64_t)buffer[1] << 8);
-		case 4:
-			return buffer[0]
-				| ((uint64_t)buffer[1] << 8)
-				| ((uint64_t)buffer[2] << 16)
-				| ((uint64_t)buffer[3] << 24);
-		case 8:
-			return buffer[0]
-				| ((uint64_t)buffer[1] << 8)
-				| ((uint64_t)buffer[2] << 16)
-				| ((uint64_t)buffer[3] << 24)
-				| ((uint64_t)buffer[4] << 32)
-				| ((uint64_t)buffer[5] << 40)
-				| ((uint64_t)buffer[6] << 48)
-				| ((uint64_t)buffer[7] << 56);
-		default:
-			assert(false);
-	}
-	return -1;
 }
 
 static int execute_fence(struct target *target)
@@ -2495,7 +2491,7 @@ static void log_memory_access(target_addr_t address, uint64_t value,
 			value &= 0xffff;
 			break;
 		case 4:
-			value &= 0xffffffff;
+			value &= 0xffffffffUL;
 			break;
 		case 8:
 			break;
@@ -2518,7 +2514,7 @@ static int read_memory_bus_word(struct target *target, target_addr_t address,
 		result = dmi_op(target, &value, NULL, DMI_OP_READ, sbdata[i], 0, false, true);
 		if (result != ERROR_OK)
 			return result;
-		write_to_buf(buffer + i * 4, value, MIN(size, 4));
+		buf_set_u32(buffer + i * 4, 0, 8 * MIN(size, 4), value);
 		log_memory_access(address + i * 4, value, MIN(size, 4), true);
 	}
 	return ERROR_OK;
@@ -2625,7 +2621,7 @@ static int read_memory_bus_v0(struct target *target, target_addr_t address,
 			if (dmi_read(target, &value, DM_SBDATA0) != ERROR_OK)
 				return ERROR_FAIL;
 			LOG_DEBUG("\r\nread_memory: sab: value:  0x%08x", value);
-			write_to_buf(t_buffer, value, size);
+			buf_set_u32(t_buffer, 0, 8 * size, value);
 			t_buffer += size;
 			cur_addr += size;
 		}
@@ -2654,7 +2650,7 @@ static int read_memory_bus_v0(struct target *target, target_addr_t address,
 		uint32_t value;
 		if (dmi_read(target, &value, DM_SBDATA0) != ERROR_OK)
 			return ERROR_FAIL;
-		write_to_buf(t_buffer, value, size);
+		buf_set_u32(t_buffer, 0, 8 * size, value);
 		cur_addr += size;
 		t_buffer += size;
 
@@ -2663,7 +2659,7 @@ static int read_memory_bus_v0(struct target *target, target_addr_t address,
 			dmi_write(target, DM_SBCS, 0);
 			if (dmi_read(target, &value, DM_SBDATA0) != ERROR_OK)
 				return ERROR_FAIL;
-			write_to_buf(t_buffer, value, size);
+			buf_set_u32(t_buffer, 0, 8 * size, value);
 		}
 	}
 
@@ -2737,7 +2733,7 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 						return ERROR_FAIL;
 				}
 				if (next_read != address - 1) {
-					write_to_buf(buffer + next_read - address, value, MIN(size, 4));
+					buf_set_u32(buffer + next_read - address, 0, 8 * MIN(size, 4), value);
 					log_memory_access(next_read, value, MIN(size, 4), true);
 				}
 				next_read = address + i * size + j * 4;
@@ -2762,7 +2758,7 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 				else
 					return ERROR_FAIL;
 			}
-			write_to_buf(buffer + next_read - address, value, MIN(size, 4));
+			buf_set_u32(buffer + next_read - address, 0, 8 * MIN(size, 4), value);
 			log_memory_access(next_read, value, MIN(size, 4), true);
 
 			/* "Writes to sbcs while sbbusy is high result in undefined behavior.
@@ -2810,6 +2806,142 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 	return ERROR_OK;
 }
 
+static void log_mem_access_result(struct target *target, bool success, int method, bool read)
+{
+	RISCV_INFO(r);
+	bool warn = false;
+	char msg[60];
+
+	/* Compose the message */
+	snprintf(msg, 60, "%s to %s memory via %s.",
+			success ? "Succeeded" : "Failed",
+			read ? "read" : "write",
+			(method == RISCV_MEM_ACCESS_PROGBUF) ? "program buffer" :
+			(method == RISCV_MEM_ACCESS_SYSBUS) ? "system bus" : "abstract access");
+
+	/* Determine the log message severity. Show warnings only once. */
+	if (!success) {
+		if (method == RISCV_MEM_ACCESS_PROGBUF) {
+			warn = r->mem_access_progbuf_warn;
+			r->mem_access_progbuf_warn = false;
+		}
+		if (method == RISCV_MEM_ACCESS_SYSBUS) {
+			warn = r->mem_access_sysbus_warn;
+			r->mem_access_sysbus_warn = false;
+		}
+		if (method == RISCV_MEM_ACCESS_ABSTRACT) {
+			warn = r->mem_access_abstract_warn;
+			r->mem_access_abstract_warn = false;
+		}
+	}
+
+	if (warn)
+		LOG_WARNING("%s", msg);
+	else
+		LOG_DEBUG("%s", msg);
+}
+
+static bool mem_should_skip_progbuf(struct target *target, target_addr_t address,
+		uint32_t size, bool read, char **skip_reason)
+{
+	assert(skip_reason);
+
+	if (!has_sufficient_progbuf(target, 3)) {
+		LOG_DEBUG("Skipping mem %s via progbuf - insufficient progbuf size.",
+				read ? "read" : "write");
+		*skip_reason = "skipped (insufficient progbuf)";
+		return true;
+	}
+	if (target->state != TARGET_HALTED) {
+		LOG_DEBUG("Skipping mem %s via progbuf - target not halted.",
+				read ? "read" : "write");
+		*skip_reason = "skipped (target not halted)";
+		return true;
+	}
+	if (riscv_xlen(target) < size * 8) {
+		LOG_DEBUG("Skipping mem %s via progbuf - XLEN (%d) is too short for %d-bit memory access.",
+				read ? "read" : "write", riscv_xlen(target), size * 8);
+		*skip_reason = "skipped (XLEN too short)";
+		return true;
+	}
+	if (size > 8) {
+		LOG_DEBUG("Skipping mem %s via progbuf - unsupported size.",
+				read ? "read" : "write");
+		*skip_reason = "skipped (unsupported size)";
+		return true;
+	}
+	if ((sizeof(address) * 8 > riscv_xlen(target)) && (address >> riscv_xlen(target))) {
+		LOG_DEBUG("Skipping mem %s via progbuf - progbuf only supports %u-bit address.",
+				read ? "read" : "write", riscv_xlen(target));
+		*skip_reason = "skipped (too large address)";
+		return true;
+	}
+
+	return false;
+}
+
+static bool mem_should_skip_sysbus(struct target *target, target_addr_t address,
+		uint32_t size, uint32_t increment, bool read, char **skip_reason)
+{
+	assert(skip_reason);
+
+	RISCV013_INFO(info);
+	if ((!get_field(info->sbcs, DM_SBCS_SBACCESS8) || size != 1) &&
+			(!get_field(info->sbcs, DM_SBCS_SBACCESS16) || size != 2) &&
+			(!get_field(info->sbcs, DM_SBCS_SBACCESS32) || size != 4) &&
+			(!get_field(info->sbcs, DM_SBCS_SBACCESS64) || size != 8) &&
+			(!get_field(info->sbcs, DM_SBCS_SBACCESS128) || size != 16)) {
+		LOG_DEBUG("Skipping mem %s via system bus - unsupported size.",
+				read ? "read" : "write");
+		*skip_reason = "skipped (unsupported size)";
+		return true;
+	}
+	unsigned sbasize = get_field(info->sbcs, DM_SBCS_SBASIZE);
+	if ((sizeof(address) * 8 > sbasize) && (address >> sbasize)) {
+		LOG_DEBUG("Skipping mem %s via system bus - sba only supports %u-bit address.",
+				read ? "read" : "write", sbasize);
+		*skip_reason = "skipped (too large address)";
+		return true;
+	}
+	if (read && increment != size && (get_field(info->sbcs, DM_SBCS_SBVERSION) == 0 || increment != 0)) {
+		LOG_DEBUG("Skipping mem read via system bus - "
+				"sba reads only support size==increment or also size==0 for sba v1.");
+		*skip_reason = "skipped (unsupported increment)";
+		return true;
+	}
+
+	return false;
+}
+
+static bool mem_should_skip_abstract(struct target *target, target_addr_t address,
+		uint32_t size, uint32_t increment, bool read, char **skip_reason)
+{
+	assert(skip_reason);
+
+	if (size > 8) {
+		/* TODO: Add 128b support if it's ever used. Involves modifying
+				 read/write_abstract_arg() to work on two 64b values. */
+		LOG_DEBUG("Skipping mem %s via abstract access - unsupported size: %d bits",
+				read ? "read" : "write", size * 8);
+		*skip_reason = "skipped (unsupported size)";
+		return true;
+	}
+	if ((sizeof(address) * 8 > riscv_xlen(target)) && (address >> riscv_xlen(target))) {
+		LOG_DEBUG("Skipping mem %s via abstract access - abstract access only supports %u-bit address.",
+				read ? "read" : "write", riscv_xlen(target));
+		*skip_reason = "skipped (too large address)";
+		return true;
+	}
+	if (read && size != increment) {
+		LOG_ERROR("Skipping mem read via abstract access - "
+				"abstract command reads only support size==increment.");
+		*skip_reason = "skipped (unsupported increment)";
+		return true;
+	}
+
+	return false;
+}
+
 /*
  * Performs a memory read using memory access abstract commands. The read sizes
  * supported are 1, 2, and 4 bytes despite the spec's support of 8 and 16 byte
@@ -2818,12 +2950,10 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 static int read_memory_abstract(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
-	if (size != increment) {
-		LOG_ERROR("abstract command reads only support size==increment");
-		return ERROR_NOT_IMPLEMENTED;
-	}
+	RISCV013_INFO(info);
 
 	int result = ERROR_OK;
+	bool use_aampostincrement = info->has_aampostincrement != YNM_NO;
 
 	LOG_DEBUG("reading %d words of %d bytes from 0x%" TARGET_PRIxADDR, count,
 			  size, address);
@@ -2832,25 +2962,19 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 
 	/* Convert the size (bytes) to width (bits) */
 	unsigned width = size << 3;
-	if (width > 64) {
-		/* TODO: Add 128b support if it's ever used. Involves modifying
-				 read/write_abstract_arg() to work on two 64b values. */
-		LOG_ERROR("Unsupported size: %d bits", size);
-		return ERROR_FAIL;
-	}
 
 	/* Create the command (physical address, postincrement, read) */
-	uint32_t command = access_memory_command(target, false, width, true, false);
+	uint32_t command = access_memory_command(target, false, width, use_aampostincrement, false);
 
 	/* Execute the reads */
 	uint8_t *p = buffer;
 	bool updateaddr = true;
-	unsigned width32 = (width + 31) / 32 * 32;
+	unsigned width32 = (width < 32) ? 32 : width;
 	for (uint32_t c = 0; c < count; c++) {
-		/* Only update the address initially and let postincrement update it */
+		/* Update the address if it is the first time or aampostincrement is not supported by the target. */
 		if (updateaddr) {
 			/* Set arg1 to the address: address + c * size */
-			result = write_abstract_arg(target, 1, address, riscv_xlen(target));
+			result = write_abstract_arg(target, 1, address + c * size, riscv_xlen(target));
 			if (result != ERROR_OK) {
 				LOG_ERROR("Failed to write arg1 during read_memory_abstract().");
 				return result;
@@ -2859,16 +2983,38 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 
 		/* Execute the command */
 		result = execute_abstract_command(target, command);
-		if (result != ERROR_OK) {
-			LOG_ERROR("Failed to execute command read_memory_abstract().");
-			return result;
+
+		if (info->has_aampostincrement == YNM_MAYBE) {
+			if (result == ERROR_OK) {
+				/* Safety: double-check that the address was really auto-incremented */
+				riscv_reg_t new_address = read_abstract_arg(target, 1, riscv_xlen(target));
+				if (new_address == address + size) {
+					LOG_DEBUG("aampostincrement is supported on this target.");
+					info->has_aampostincrement = YNM_YES;
+				} else {
+					LOG_WARNING("Buggy aampostincrement! Address not incremented correctly.");
+					info->has_aampostincrement = YNM_NO;
+				}
+			} else {
+				/* Try the same access but with postincrement disabled. */
+				command = access_memory_command(target, false, width, false, false);
+				result = execute_abstract_command(target, command);
+				if (result == ERROR_OK) {
+					LOG_DEBUG("aampostincrement is not supported on this target.");
+					info->has_aampostincrement = YNM_NO;
+				}
+			}
 		}
+
+		if (result != ERROR_OK)
+			return result;
 
 		/* Copy arg0 to buffer (rounded width up to nearest 32) */
 		riscv_reg_t value = read_abstract_arg(target, 0, width32);
-		write_to_buf(p, value, size);
+		buf_set_u64(p, 0, 8 * size, value);
 
-		updateaddr = false;
+		if (info->has_aampostincrement == YNM_YES)
+			updateaddr = false;
 		p += size;
 	}
 
@@ -2883,39 +3029,35 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 static int write_memory_abstract(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
+	RISCV013_INFO(info);
 	int result = ERROR_OK;
+	bool use_aampostincrement = info->has_aampostincrement != YNM_NO;
 
 	LOG_DEBUG("writing %d words of %d bytes from 0x%" TARGET_PRIxADDR, count,
 			  size, address);
 
 	/* Convert the size (bytes) to width (bits) */
 	unsigned width = size << 3;
-	if (width > 64) {
-		/* TODO: Add 128b support if it's ever used. Involves modifying
-				 read/write_abstract_arg() to work on two 64b values. */
-		LOG_ERROR("Unsupported size: %d bits", width);
-		return ERROR_FAIL;
-	}
 
 	/* Create the command (physical address, postincrement, write) */
-	uint32_t command = access_memory_command(target, false, width, true, true);
+	uint32_t command = access_memory_command(target, false, width, use_aampostincrement, true);
 
 	/* Execute the writes */
 	const uint8_t *p = buffer;
 	bool updateaddr = true;
 	for (uint32_t c = 0; c < count; c++) {
 		/* Move data to arg0 */
-		riscv_reg_t value = read_from_buf(p, size);
+		riscv_reg_t value = buf_get_u64(p, 0, 8 * size);
 		result = write_abstract_arg(target, 0, value, riscv_xlen(target));
 		if (result != ERROR_OK) {
 			LOG_ERROR("Failed to write arg0 during write_memory_abstract().");
 			return result;
 		}
 
-		/* Only update the address initially and let postincrement update it */
+		/* Update the address if it is the first time or aampostincrement is not supported by the target. */
 		if (updateaddr) {
 			/* Set arg1 to the address: address + c * size */
-			result = write_abstract_arg(target, 1, address, riscv_xlen(target));
+			result = write_abstract_arg(target, 1, address + c * size, riscv_xlen(target));
 			if (result != ERROR_OK) {
 				LOG_ERROR("Failed to write arg1 during write_memory_abstract().");
 				return result;
@@ -2924,12 +3066,34 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 
 		/* Execute the command */
 		result = execute_abstract_command(target, command);
-		if (result != ERROR_OK) {
-			LOG_ERROR("Failed to execute command write_memory_abstract().");
-			return result;
+
+		if (info->has_aampostincrement == YNM_MAYBE) {
+			if (result == ERROR_OK) {
+				/* Safety: double-check that the address was really auto-incremented */
+				riscv_reg_t new_address = read_abstract_arg(target, 1, riscv_xlen(target));
+				if (new_address == address + size) {
+					LOG_DEBUG("aampostincrement is supported on this target.");
+					info->has_aampostincrement = YNM_YES;
+				} else {
+					LOG_WARNING("Buggy aampostincrement! Address not incremented correctly.");
+					info->has_aampostincrement = YNM_NO;
+				}
+			} else {
+				/* Try the same access but with postincrement disabled. */
+				command = access_memory_command(target, false, width, false, true);
+				result = execute_abstract_command(target, command);
+				if (result == ERROR_OK) {
+					LOG_DEBUG("aampostincrement is not supported on this target.");
+					info->has_aampostincrement = YNM_NO;
+				}
+			}
 		}
 
-		updateaddr = false;
+		if (result != ERROR_OK)
+			return result;
+
+		if (info->has_aampostincrement == YNM_YES)
+			updateaddr = false;
 		p += size;
 	}
 
@@ -2967,7 +3131,7 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 		uint64_t value;
 		if (register_read_direct(target, &value, GDB_REGNO_S1) != ERROR_OK)
 			return ERROR_FAIL;
-		write_to_buf(buffer, value, size);
+		buf_set_u64(buffer, 0, 8 * size, value);
 		log_memory_access(address, value, size, true);
 		return ERROR_OK;
 	}
@@ -2997,6 +3161,8 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 
 		struct riscv_batch *batch = riscv_batch_alloc(target, 32,
 				info->dmi_busy_delay + info->ac_busy_delay);
+		if (!batch)
+			return ERROR_FAIL;
 
 		unsigned reads = 0;
 		for (unsigned j = index; j < count; j++) {
@@ -3067,7 +3233,7 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 				}
 
 				uint64_t value64 = (((uint64_t)dmi_data1) << 32) | dmi_data0;
-				write_to_buf(buffer + (next_index - 2) * size, value64, size);
+				buf_set_u64(buffer + (next_index - 2) * size, 0, 8 * size, value64);
 				log_memory_access(address + (next_index - 2) * size, value64, size, true);
 
 				/* Restore the command, and execute it.
@@ -3133,7 +3299,7 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 				read++;
 			}
 			riscv_addr_t offset = j * size;
-			write_to_buf(buffer + offset, value, size);
+			buf_set_u64(buffer + offset, 0, 8 * size, value);
 			log_memory_access(address + j * increment, value, size, true);
 		}
 
@@ -3152,7 +3318,7 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 		if (size > 4 && dmi_read(target, &dmi_data1, DM_DATA1) != ERROR_OK)
 			return ERROR_FAIL;
 		uint64_t value64 = (((uint64_t)dmi_data1) << 32) | dmi_data0;
-		write_to_buf(buffer + size * (count - 2), value64, size);
+		buf_set_u64(buffer + size * (count - 2), 0, 8 * size, value64);
 		log_memory_access(address + size * (count - 2), value64, size, true);
 	}
 
@@ -3161,7 +3327,7 @@ static int read_memory_progbuf_inner(struct target *target, target_addr_t addres
 	result = register_read_direct(target, &value, GDB_REGNO_S1);
 	if (result != ERROR_OK)
 		goto error;
-	write_to_buf(buffer + size * (count-1), value, size);
+	buf_set_u64(buffer + size * (count-1), 0, 8 * size, value);
 	log_memory_access(address + size * (count-1), value, size, true);
 
 	return ERROR_OK;
@@ -3229,7 +3395,7 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 	uint64_t value;
 	if (register_read(target, &value, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
-	write_to_buf(buffer, value, size);
+	buf_set_u64(buffer, 0, 8 * size, value);
 	log_memory_access(address, value, size, true);
 
 	if (riscv_set_register(target, GDB_REGNO_S0, s0) != ERROR_OK)
@@ -3249,12 +3415,6 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 static int read_memory_progbuf(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
 {
-	if (riscv_xlen(target) < size * 8) {
-		LOG_ERROR("XLEN (%d) is too short for %d-bit memory read.",
-				riscv_xlen(target), size * 8);
-		return ERROR_FAIL;
-	}
-
 	int result = ERROR_OK;
 
 	LOG_DEBUG("reading %d words of %d bytes from 0x%" TARGET_PRIxADDR, count,
@@ -3344,8 +3504,7 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 				LOG_DEBUG("error reading single word of %d bytes from 0x%" TARGET_PRIxADDR,
 						size, address_i);
 
-				uint64_t value_i = 0;
-				write_to_buf(buffer_i, value_i, size);
+				buf_set_u64(buffer_i, 0, 8 * size, 0);
 			}
 		}
 		result = ERROR_OK;
@@ -3370,30 +3529,62 @@ static int read_memory(struct target *target, target_addr_t address,
 	if (count == 0)
 		return ERROR_OK;
 
-	RISCV013_INFO(info);
-	if (has_sufficient_progbuf(target, 3) && !riscv_prefer_sba)
-		return read_memory_progbuf(target, address, size, count, buffer,
-			increment);
-
-	if ((get_field(info->sbcs, DM_SBCS_SBACCESS8) && size == 1) ||
-			(get_field(info->sbcs, DM_SBCS_SBACCESS16) && size == 2) ||
-			(get_field(info->sbcs, DM_SBCS_SBACCESS32) && size == 4) ||
-			(get_field(info->sbcs, DM_SBCS_SBACCESS64) && size == 8) ||
-			(get_field(info->sbcs, DM_SBCS_SBACCESS128) && size == 16)) {
-		if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 0)
-			return read_memory_bus_v0(target, address, size, count, buffer,
-				increment);
-		else if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 1)
-			return read_memory_bus_v1(target, address, size, count, buffer,
-				increment);
+	if (size != 1 && size != 2 && size != 4 && size != 8 && size != 16) {
+		LOG_ERROR("BUG: Unsupported size for memory read: %d", size);
+		return ERROR_FAIL;
 	}
 
-	if (has_sufficient_progbuf(target, 3))
-		return read_memory_progbuf(target, address, size, count, buffer,
-			increment);
+	int ret = ERROR_FAIL;
+	RISCV_INFO(r);
+	RISCV013_INFO(info);
 
-	return read_memory_abstract(target, address, size, count, buffer,
-		increment);
+	char *progbuf_result = "disabled";
+	char *sysbus_result = "disabled";
+	char *abstract_result = "disabled";
+
+	for (unsigned i = 0; i < RISCV_NUM_MEM_ACCESS_METHODS; i++) {
+		int method = r->mem_access_methods[i];
+
+		if (method == RISCV_MEM_ACCESS_PROGBUF) {
+			if (mem_should_skip_progbuf(target, address, size, true, &progbuf_result))
+				continue;
+
+			ret = read_memory_progbuf(target, address, size, count, buffer, increment);
+
+			if (ret != ERROR_OK)
+				progbuf_result = "failed";
+		} else if (method == RISCV_MEM_ACCESS_SYSBUS) {
+			if (mem_should_skip_sysbus(target, address, size, increment, true, &sysbus_result))
+				continue;
+
+			if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 0)
+				ret = read_memory_bus_v0(target, address, size, count, buffer, increment);
+			else if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 1)
+				ret = read_memory_bus_v1(target, address, size, count, buffer, increment);
+
+			if (ret != ERROR_OK)
+				sysbus_result = "failed";
+		} else if (method == RISCV_MEM_ACCESS_ABSTRACT) {
+			if (mem_should_skip_abstract(target, address, size, increment, true, &abstract_result))
+				continue;
+
+			ret = read_memory_abstract(target, address, size, count, buffer, increment);
+
+			if (ret != ERROR_OK)
+				abstract_result = "failed";
+		} else if (method == RISCV_MEM_ACCESS_UNSPECIFIED)
+			/* No further mem access method to try. */
+			break;
+
+		log_mem_access_result(target, ret == ERROR_OK, method, true);
+
+		if (ret == ERROR_OK)
+			return ret;
+	}
+
+	LOG_ERROR("Target %s: Failed to read memory (addr=0x%" PRIx64 ")", target_name(target), address);
+	LOG_ERROR("  progbuf=%s, sysbus=%s, abstract=%s", progbuf_result, sysbus_result, abstract_result);
+	return ret;
 }
 
 static int write_memory_bus_v0(struct target *target, target_addr_t address,
@@ -3411,26 +3602,7 @@ static int write_memory_bus_v0(struct target *target, target_addr_t address,
 
 	/* B.8 Writing Memory, single write check if we write in one go */
 	if (count == 1) { /* count is in bytes here */
-		/* TODO: Test with read_from_buf(&value, t_buffer, size) */
-		/* check the size */
-		switch (size) {
-			case 1:
-				value = t_buffer[0];
-				break;
-			case 2:
-				value = t_buffer[0]
-					| ((uint32_t) t_buffer[1] << 8);
-				break;
-			case 4:
-				value = t_buffer[0]
-					| ((uint32_t) t_buffer[1] << 8)
-					| ((uint32_t) t_buffer[2] << 16)
-					| ((uint32_t) t_buffer[3] << 24);
-				break;
-			default:
-				LOG_ERROR("unsupported access size: %d", size);
-				return ERROR_FAIL;
-		}
+		value = buf_get_u64(t_buffer, 0, 8 * size);
 
 		access = 0;
 		access = set_field(access, DM_SBCS_SBACCESS, size/2);
@@ -3456,25 +3628,7 @@ static int write_memory_bus_v0(struct target *target, target_addr_t address,
 		t_addr = address + offset;
 		t_buffer = buffer + offset;
 
-		/* TODO: Test with read_from_buf(&value, t_buffer, size) */
-		switch (size) {
-			case 1:
-				value = t_buffer[0];
-				break;
-			case 2:
-				value = t_buffer[0]
-					| ((uint32_t) t_buffer[1] << 8);
-				break;
-			case 4:
-				value = t_buffer[0]
-					| ((uint32_t) t_buffer[1] << 8)
-					| ((uint32_t) t_buffer[2] << 16)
-					| ((uint32_t) t_buffer[3] << 24);
-				break;
-			default:
-				LOG_ERROR("unsupported access size: %d", size);
-				return ERROR_FAIL;
-		}
+		value = buf_get_u64(t_buffer, 0, 8 * size);
 		LOG_DEBUG("SAB:autoincrement: expected address: 0x%08x value: 0x%08x"
 				PRIx64, (uint32_t)t_addr, (uint32_t)value);
 		dmi_write(target, DM_SBDATA0, value);
@@ -3508,6 +3662,8 @@ static int write_memory_bus_v1(struct target *target, target_addr_t address,
 				target,
 				32,
 				info->dmi_busy_delay + info->bus_master_write_delay);
+		if (!batch)
+			return ERROR_FAIL;
 
 		for (uint32_t i = (next_address - address) / size; i < count; i++) {
 			const uint8_t *p = buffer + i * size;
@@ -3607,12 +3763,6 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 {
 	RISCV013_INFO(info);
 
-	if (riscv_xlen(target) < size * 8) {
-		LOG_ERROR("XLEN (%d) is too short for %d-bit memory write.",
-				riscv_xlen(target), size * 8);
-		return ERROR_FAIL;
-	}
-
 	LOG_DEBUG("writing %d words of %d bytes to 0x%08lx", count, size, (long)address);
 
 	select_dmi(target);
@@ -3679,6 +3829,8 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 				target,
 				32,
 				info->dmi_busy_delay + info->ac_busy_delay);
+		if (!batch)
+			goto error;
 
 		/* To write another word, we put it in S1 and execute the program. */
 		unsigned start = (cur_addr - address) / size;
@@ -3686,7 +3838,7 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 			unsigned offset = size*i;
 			const uint8_t *t_buffer = buffer + offset;
 
-			uint64_t value = read_from_buf(t_buffer, size);
+			uint64_t value = buf_get_u64(t_buffer, 0, 8 * size);
 
 			log_memory_access(address + offset, value, size, false);
 			cur_addr += size;
@@ -3795,26 +3947,62 @@ error:
 static int write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
-	RISCV013_INFO(info);
-
-	if (has_sufficient_progbuf(target, 3) && !riscv_prefer_sba)
-		return write_memory_progbuf(target, address, size, count, buffer);
-
-	if ((get_field(info->sbcs, DM_SBCS_SBACCESS8) && size == 1) ||
-			(get_field(info->sbcs, DM_SBCS_SBACCESS16) && size == 2) ||
-			(get_field(info->sbcs, DM_SBCS_SBACCESS32) && size == 4) ||
-			(get_field(info->sbcs, DM_SBCS_SBACCESS64) && size == 8) ||
-			(get_field(info->sbcs, DM_SBCS_SBACCESS128) && size == 16)) {
-		if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 0)
-			return write_memory_bus_v0(target, address, size, count, buffer);
-		else if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 1)
-			return write_memory_bus_v1(target, address, size, count, buffer);
+	if (size != 1 && size != 2 && size != 4 && size != 8 && size != 16) {
+		LOG_ERROR("BUG: Unsupported size for memory write: %d", size);
+		return ERROR_FAIL;
 	}
 
-	if (has_sufficient_progbuf(target, 3))
-		return write_memory_progbuf(target, address, size, count, buffer);
+	int ret = ERROR_FAIL;
+	RISCV_INFO(r);
+	RISCV013_INFO(info);
 
-	return write_memory_abstract(target, address, size, count, buffer);
+	char *progbuf_result = "disabled";
+	char *sysbus_result = "disabled";
+	char *abstract_result = "disabled";
+
+	for (unsigned i = 0; i < RISCV_NUM_MEM_ACCESS_METHODS; i++) {
+		int method = r->mem_access_methods[i];
+
+		if (method == RISCV_MEM_ACCESS_PROGBUF) {
+			if (mem_should_skip_progbuf(target, address, size, false, &progbuf_result))
+				continue;
+
+			ret = write_memory_progbuf(target, address, size, count, buffer);
+
+			if (ret != ERROR_OK)
+				progbuf_result = "failed";
+		} else if (method == RISCV_MEM_ACCESS_SYSBUS) {
+			if (mem_should_skip_sysbus(target, address, size, 0, false, &sysbus_result))
+				continue;
+
+			if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 0)
+				ret = write_memory_bus_v0(target, address, size, count, buffer);
+			else if (get_field(info->sbcs, DM_SBCS_SBVERSION) == 1)
+				ret = write_memory_bus_v1(target, address, size, count, buffer);
+
+			if (ret != ERROR_OK)
+				sysbus_result = "failed";
+		} else if (method == RISCV_MEM_ACCESS_ABSTRACT) {
+			if (mem_should_skip_abstract(target, address, size, 0, false, &abstract_result))
+				continue;
+
+			ret = write_memory_abstract(target, address, size, count, buffer);
+
+			if (ret != ERROR_OK)
+				abstract_result = "failed";
+		} else if (method == RISCV_MEM_ACCESS_UNSPECIFIED)
+			/* No further mem access method to try. */
+			break;
+
+		log_mem_access_result(target, ret == ERROR_OK, method, false);
+
+		if (ret == ERROR_OK)
+			return ret;
+	}
+
+	LOG_ERROR("Target %s: Failed to write memory (addr=0x%" PRIx64 ")", target_name(target), address);
+	LOG_ERROR("  progbuf=%s, sysbus=%s, abstract=%s", progbuf_result, sysbus_result, abstract_result);
+	return ret;
 }
 
 static int arch_state(struct target *target)
@@ -3906,6 +4094,8 @@ static int riscv013_select_current_hart(struct target *target)
 	RISCV_INFO(r);
 
 	dm013_info_t *dm = get_dm(target);
+	if (!dm)
+		return ERROR_FAIL;
 	if (r->current_hartid == dm->current_hartid)
 		return ERROR_OK;
 
@@ -3924,6 +4114,8 @@ static int riscv013_select_current_hart(struct target *target)
 static int select_prepped_harts(struct target *target, bool *use_hasel)
 {
 	dm013_info_t *dm = get_dm(target);
+	if (!dm)
+		return ERROR_FAIL;
 	if (!dm->hasel_supported) {
 		RISCV_INFO(r);
 		r->prepped = false;
@@ -4016,6 +4208,8 @@ static int riscv013_halt_go(struct target *target)
 	if (use_hasel) {
 		target_list_t *entry;
 		dm013_info_t *dm = get_dm(target);
+		if (!dm)
+			return ERROR_FAIL;
 		list_for_each_entry(entry, &dm->target_list, list) {
 			struct target *t = entry->target;
 			t->state = TARGET_HALTED;
@@ -4121,12 +4315,14 @@ static enum riscv_halt_reason riscv013_halt_reason(struct target *target)
 int riscv013_write_debug_buffer(struct target *target, unsigned index, riscv_insn_t data)
 {
 	dm013_info_t *dm = get_dm(target);
+	if (!dm)
+		return ERROR_FAIL;
 	if (dm->progbuf_cache[index] != data) {
 		if (dmi_write(target, DM_PROGBUF0 + index, data) != ERROR_OK)
 			return ERROR_FAIL;
 		dm->progbuf_cache[index] = data;
 	} else {
-		LOG_DEBUG("cache hit for 0x%x @%d", data, index);
+		LOG_DEBUG("cache hit for 0x%" PRIx32 " @%d", data, index);
 	}
 	return ERROR_OK;
 }
@@ -4245,6 +4441,7 @@ static int riscv013_test_sba_config_reg(struct target *target,
 	}
 
 	uint32_t num_sbdata_regs = get_num_sbdata_regs(target);
+	assert(num_sbdata_regs);
 
 	uint32_t rd_buf[num_sbdata_regs];
 

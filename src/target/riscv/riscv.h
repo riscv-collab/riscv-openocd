@@ -26,6 +26,8 @@ struct riscv_program;
 
 # define PG_MAX_LEVEL 4
 
+#define RISCV_NUM_MEM_ACCESS_METHODS  3
+
 extern struct target_type riscv011_target;
 extern struct target_type riscv013_target;
 
@@ -35,6 +37,13 @@ extern struct target_type riscv013_target;
 typedef uint64_t riscv_reg_t;
 typedef uint32_t riscv_insn_t;
 typedef uint64_t riscv_addr_t;
+
+enum riscv_mem_access_method {
+	RISCV_MEM_ACCESS_UNSPECIFIED,
+	RISCV_MEM_ACCESS_PROGBUF,
+	RISCV_MEM_ACCESS_SYSBUS,
+	RISCV_MEM_ACCESS_ABSTRACT
+};
 
 enum riscv_halt_reason {
 	RISCV_HALT_INTERRUPT,
@@ -66,6 +75,12 @@ typedef struct {
 		uint32_t size_bytes;
 	} bucket[16];
 } riscv_sample_config_t;
+
+typedef struct {
+	struct list_head list;
+	uint16_t low, high;
+	char *name;
+} range_list_t;
 
 typedef struct {
 	unsigned dtm_version;
@@ -200,6 +215,23 @@ typedef struct {
 	/* Set when trigger registers are changed by the user. This indicates we eed
 	 * to beware that we may hit a trigger that we didn't realize had been set. */
 	bool manual_hwbp_set;
+
+	/* Memory access methods to use, ordered by priority, highest to lowest. */
+	int mem_access_methods[RISCV_NUM_MEM_ACCESS_METHODS];
+
+	/* Different memory regions may need different methods but single configuration is applied
+	 * for all. Following flags are used to warn only once about failing memory access method. */
+	bool mem_access_progbuf_warn;
+	bool mem_access_sysbus_warn;
+	bool mem_access_abstract_warn;
+
+	/* In addition to the ones in the standard spec, we'll also expose additional
+	 * CSRs in this list. */
+	struct list_head expose_csr;
+	/* Same, but for custom registers.
+	 * Custom registers are for non-standard extensions and use abstract register numbers
+	 * from range 0xc000 ... 0xffff. */
+	struct list_head expose_custom;
 } riscv_info_t;
 
 typedef struct {
@@ -226,8 +258,6 @@ extern int riscv_command_timeout_sec;
 /* Wall-clock timeout after reset. Settable via RISC-V Target commands.*/
 extern int riscv_reset_timeout_sec;
 
-extern bool riscv_prefer_sba;
-
 extern bool riscv_enable_virtual;
 extern bool riscv_ebreakm;
 extern bool riscv_ebreaks;
@@ -237,7 +267,10 @@ extern bool riscv_ebreaku;
  * that provides that. */
 static inline riscv_info_t *riscv_info(const struct target *target) __attribute__((unused));
 static inline riscv_info_t *riscv_info(const struct target *target)
-{ return target->arch_info; }
+{
+	assert(target->arch_info);
+	return target->arch_info;
+}
 #define RISCV_INFO(R) riscv_info_t *R = riscv_info(target);
 
 extern uint8_t ir_dtmcontrol[4];
@@ -250,8 +283,6 @@ extern struct scan_field select_idcode;
 extern struct scan_field select_user4;
 extern struct scan_field *bscan_tunneled_select_dmi;
 extern uint32_t bscan_tunneled_select_dmi_num_fields;
-extern uint8_t bscan_zero[4];
-extern uint8_t bscan_one[4];
 typedef enum { BSCAN_TUNNEL_NESTED_TAP, BSCAN_TUNNEL_DATA_REGISTER } bscan_tunnel_type_t;
 extern int bscan_tunnel_ir_width;
 extern bscan_tunnel_type_t bscan_tunnel_type;

@@ -9641,9 +9641,11 @@ OpenOCD exposes each hart as a separate core.
 
 @subsection RISC-V Debug Configuration Commands
 
-@deffn Command {riscv expose_csrs} n0[-m0][,n1[-m1]]...
-Configure a list of inclusive ranges for CSRs to expose in addition to the
-standard ones. This must be executed before `init`.
+@deffn Command {riscv expose_csrs} n[-m|=name] [...]
+Configure which CSRs to expose in addition to the standard ones. The CSRs to expose
+can be specified as individual register numbers or register ranges (inclusive). For the
+individually listed CSRs, a human-readable name can optionally be set.
+This command must be executed before `init`.
 
 By default OpenOCD attempts to expose only CSRs that are mentioned in a spec,
 and then only if the corresponding extension appears to be implemented. This
@@ -9651,11 +9653,12 @@ command can be used if OpenOCD gets this wrong, or a target implements custom
 CSRs.
 @end deffn
 
-@deffn Command {riscv expose_custom} n0[-m0][,n1[-m1]]...
+@deffn Command {riscv expose_custom} n[-m|=name] [...]
 The RISC-V Debug Specification allows targets to expose custom registers
 through abstract commands. (See Section 3.5.1.1 in that document.) This command
-configures a list of inclusive ranges of those registers to expose. Number 0
-indicates the first custom register, whose abstract command number is 0xc000.
+configures individual registers or register ranges (inclusive) that shall be exposed.
+Number 0 indicates the first custom register, whose abstract command number is 0xc000.
+For individually listed registers, a human-readable name can be optionally provided.
 This command must be executed before `init`.
 @end deffn
 
@@ -9681,8 +9684,17 @@ This is used to access 64-bit floating point registers on 32-bit targets.
 @end deffn
 
 @deffn Command {riscv set_prefer_sba} on|off
+@emph{DEPRECATED -- avoid using this.
+Use the command @command{riscv set_mem_access} instead.}
+
 When on, prefer to use System Bus Access to access memory.  When off (default),
 prefer to use the Program Buffer to access memory.
+Abstract Memory Access will be used with the lowest priority.
+@end deffn
+
+@deffn Command {riscv set_mem_access} method1 [method2] [method3]
+Specify which memory access methods shall be used, and in which order of priority.
+Method can be one of: 'progbuf', 'sysbus' or 'abstract'. Default: all methods enabled, and in this order.
 @end deffn
 
 @deffn Command {riscv set_enable_virtual} on|off
@@ -9720,8 +9732,23 @@ and DBUS registers, respectively.
 @end deffn
 
 @deffn Command {riscv use_bscan_tunnel} value
-Enable or disable use of a BSCAN tunnel to reach DM.  Supply the width of
-the DM transport TAP's instruction register to enable.  Supply a value of 0 to disable.
+Enable or disable use of a BSCAN tunnel to reach the Debug Module. Supply the
+width of the DM transport TAP's instruction register to enable. Supply a
+value of 0 to disable.
+
+This BSCAN tunnel interface is specific to SiFive IP. Anybody may implement
+it, but currently there is no good documentation on it. In a nutshell, this
+feature scans USER4 into a Xilinx TAP to select the tunnel device (assuming
+hardware is present and it is hooked up to the Xilinx USER4 IR) and
+encapsulates a tunneled scan directive into a DR scan into the Xilinx TAP. A
+tunneled DR scan consists of:
+@enumerate
+@item 1 bit that selects IR when 0, or DR when 1
+@item 7 bits that encode the width of the desired tunneled scan
+@item A width+1 stream of bits for the tunneled TDI. The plus one is because there is a one-clock skew between TDI of Xilinx chain and TDO from tunneled chain.
+@item 3 bits of zero that the tunnel uses to go back to idle state.
+@end enumerate
+
 @end deffn
 
 @deffn Command {riscv set_ebreakm} on|off

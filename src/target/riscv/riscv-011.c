@@ -228,6 +228,8 @@ static int get_register(struct target *target, riscv_reg_t *value, int hartid,
 static riscv011_info_t *get_info(const struct target *target)
 {
 	riscv_info_t *info = (riscv_info_t *) target->arch_info;
+	assert(info);
+	assert(info->version_specific);
 	return (riscv011_info_t *) info->version_specific;
 }
 
@@ -520,6 +522,8 @@ typedef struct {
 static scans_t *scans_new(struct target *target, unsigned int scan_count)
 {
 	scans_t *scans = malloc(sizeof(scans_t));
+	if (!scans)
+		goto error0;
 	scans->scan_count = scan_count;
 	/* This code also gets called before xlen is detected. */
 	if (riscv_xlen(target))
@@ -528,10 +532,25 @@ static scans_t *scans_new(struct target *target, unsigned int scan_count)
 		scans->scan_size = 2 + 128 / 8;
 	scans->next_scan = 0;
 	scans->in = calloc(scans->scan_size, scans->scan_count);
+	if (!scans->in)
+		goto error1;
 	scans->out = calloc(scans->scan_size, scans->scan_count);
+	if (!scans->out)
+		goto error2;
 	scans->field = calloc(scans->scan_count, sizeof(struct scan_field));
+	if (!scans->field)
+		goto error3;
 	scans->target = target;
 	return scans;
+
+error3:
+	free(scans->out);
+error2:
+	free(scans->in);
+error1:
+	free(scans);
+error0:
+	return NULL;
 }
 
 static scans_t *scans_delete(scans_t *scans)
@@ -845,6 +864,8 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 	LOG_DEBUG("enter");
 	riscv011_info_t *info = get_info(target);
 	scans_t *scans = scans_new(target, info->dramsize + 2);
+	if (!scans)
+		return ERROR_FAIL;
 
 	unsigned int last = info->dramsize;
 	for (unsigned int i = 0; i < info->dramsize; i++) {
@@ -1584,6 +1605,8 @@ static riscv_error_t handle_halt_routine(struct target *target)
 	riscv011_info_t *info = get_info(target);
 
 	scans_t *scans = scans_new(target, 256);
+	if (!scans)
+		return RE_FAIL;
 
 	/* Read all GPRs as fast as we can, because gdb is going to ask for them
 	 * anyway. Reading them one at a time is much slower. */
@@ -1996,6 +2019,8 @@ static int read_memory(struct target *target, target_addr_t address,
 	riscv011_info_t *info = get_info(target);
 	const unsigned max_batch_size = 256;
 	scans_t *scans = scans_new(target, max_batch_size);
+	if (!scans)
+		return ERROR_FAIL;
 
 	uint32_t result_value = 0x777;
 	uint32_t i = 0;
@@ -2152,6 +2177,8 @@ static int write_memory(struct target *target, target_addr_t address,
 
 	const unsigned max_batch_size = 256;
 	scans_t *scans = scans_new(target, max_batch_size);
+	if (!scans)
+		return ERROR_FAIL;
 
 	uint32_t result_value = 0x777;
 	uint32_t i = 0;
@@ -2275,7 +2302,7 @@ static int init_target(struct command_context *cmd_ctx,
 		struct target *target)
 {
 	LOG_DEBUG("init");
-	riscv_info_t *generic_info = (riscv_info_t *)target->arch_info;
+	RISCV_INFO(generic_info);
 	generic_info->get_register = get_register;
 	generic_info->set_register = set_register;
 	generic_info->read_memory = read_memory;
