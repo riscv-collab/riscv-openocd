@@ -3015,7 +3015,7 @@ COMMAND_HANDLER(handle_memory_sample_command)
 
 	if (CMD_ARGC < 2) {
 		LOG_ERROR("Command requires at least bucket and address arguments.");
-		return ERROR_FAIL;
+		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
 	if (riscv_rtos_enabled(target)) {
@@ -3030,24 +3030,30 @@ COMMAND_HANDLER(handle_memory_sample_command)
 		return ERROR_COMMAND_ARGUMENT_INVALID;
 	}
 
-	r->sample_config.bucket[bucket].enabled = true;
-	COMMAND_PARSE_ADDRESS(CMD_ARGV[1], r->sample_config.bucket[bucket].address);
-
-	if (CMD_ARGC > 2) {
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], r->sample_config.bucket[bucket].size_bytes);
-		if (r->sample_config.bucket[bucket].size_bytes != 4 &&
-				r->sample_config.bucket[bucket].size_bytes != 8) {
-			LOG_ERROR("Only 4-byte and 8-byte sizes are supported.");
-			return ERROR_COMMAND_ARGUMENT_INVALID;
-		}
+	if (!strcmp(CMD_ARGV[1], "clear")) {
+		r->sample_config.bucket[bucket].enabled = false;
 	} else {
-		r->sample_config.bucket[bucket].size_bytes = 4;
+		COMMAND_PARSE_ADDRESS(CMD_ARGV[1], r->sample_config.bucket[bucket].address);
+
+		if (CMD_ARGC > 2) {
+			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], r->sample_config.bucket[bucket].size_bytes);
+			if (r->sample_config.bucket[bucket].size_bytes != 4 &&
+					r->sample_config.bucket[bucket].size_bytes != 8) {
+				LOG_ERROR("Only 4-byte and 8-byte sizes are supported.");
+				return ERROR_COMMAND_ARGUMENT_INVALID;
+			}
+		} else {
+			r->sample_config.bucket[bucket].size_bytes = 4;
+		}
+
+		r->sample_config.bucket[bucket].enabled = true;
 	}
 
 	if (!r->sample_buf.buf) {
 		r->sample_buf.size = 1024 * 1024;
 		r->sample_buf.buf = malloc(r->sample_buf.size);
 	}
+
 	/* Clear the buffer when the configuration is changed. */
 	r->sample_buf.used = 0;
 
@@ -3130,8 +3136,8 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "memory_sample",
 		.handler = handle_memory_sample_command,
 		.mode = COMMAND_ANY,
-		.usage = "riscv memory_sample bucket address [size=4]",
-		.help = "Causes OpenOCD to frequently read size bytes at the given address"
+		.usage = "riscv memory_sample bucket address|clear [size=4]",
+		.help = "Causes OpenOCD to frequently read size bytes at the given address."
 	},
 	{
 		.name = "repeat_read",
