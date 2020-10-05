@@ -217,9 +217,6 @@ static enum {
 	RO_REVERSED
 } resume_order;
 
-static riscv_sample_buf_t sample_buf;
-static riscv_sample_config_t sample_config;
-
 virt2phys_info_t sv32 = {
 	.name = "Sv32",
 	.va_bits = 32,
@@ -259,18 +256,19 @@ virt2phys_info_t sv48 = {
 	.pa_ppn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ffff},
 };
 
-static uint32_t sample_buf_last_timestamp;
-void riscv_sample_buf_maybe_add_timestamp(void)
+void riscv_sample_buf_maybe_add_timestamp(struct target *target)
 {
+	RISCV_INFO(r);
 	uint32_t now = timeval_ms() & 0xffffffff;
-	if (sample_buf.used + 5 < sample_buf.size &&
-			(sample_buf.used == 0 || sample_buf_last_timestamp != now))
+	if (r->sample_buf.used + 5 < r->sample_buf.size &&
+			(r->sample_buf.used == 0 || r->sample_buf.last_timestamp != now))
 	{
-		sample_buf.buf[sample_buf.used++] = RISCV_SAMPLE_BUF_TIMESTAMP;
-		sample_buf.buf[sample_buf.used++] = now & 0xff;
-		sample_buf.buf[sample_buf.used++] = (now >> 8) & 0xff;
-		sample_buf.buf[sample_buf.used++] = (now >> 16) & 0xff;
-		sample_buf.buf[sample_buf.used++] = (now >> 24) & 0xff;
+		r->sample_buf.buf[r->sample_buf.used++] = RISCV_SAMPLE_BUF_TIMESTAMP;
+		r->sample_buf.buf[r->sample_buf.used++] = now & 0xff;
+		r->sample_buf.buf[r->sample_buf.used++] = (now >> 8) & 0xff;
+		r->sample_buf.buf[r->sample_buf.used++] = (now >> 16) & 0xff;
+		r->sample_buf.buf[r->sample_buf.used++] = (now >> 24) & 0xff;
+		r->sample_buf.last_timestamp = now;
 	}
 }
 
@@ -2149,16 +2147,16 @@ int sample_memory(struct target *target)
 {
 	RISCV_INFO(r);
 
-	if (!sample_buf.buf || !sample_config.enabled)
+	if (!r->sample_buf.buf || !r->sample_config.enabled)
 		return ERROR_OK;
 
-    LOG_DEBUG("buf used/size: %d/%d", sample_buf.used, sample_buf.size);
+    LOG_DEBUG("buf used/size: %d/%d", r->sample_buf.used, r->sample_buf.size);
 
 	uint64_t start = timeval_ms();
-	riscv_sample_buf_maybe_add_timestamp();
+	riscv_sample_buf_maybe_add_timestamp(target);
 	int result = ERROR_OK;
 	if (r->sample_memory) {
-		result = r->sample_memory(target, &sample_buf, &sample_config,
+		result = r->sample_memory(target, &r->sample_buf, &r->sample_config,
 									  start + TARGET_DEFAULT_POLLING_INTERVAL);
 		if (result != ERROR_NOT_IMPLEMENTED)
 			goto exit;
@@ -2166,18 +2164,17 @@ int sample_memory(struct target *target)
 
 	/* Default slow path. */
 	while (timeval_ms() - start < TARGET_DEFAULT_POLLING_INTERVAL) {
-		for (unsigned i = 0; i < DIM(sample_config.bucket); i++) {
-			if (sample_config.bucket[i].enabled &&
-				sample_buf.used + 1 + sample_config.bucket[i].size_bytes <
-					sample_buf.size) {
+		for (unsigned i = 0; i < DIM(r->sample_config.bucket); i++) {
+			if (r->sample_config.bucket[i].enabled &&
+					r->sample_buf.used + 1 + r->sample_config.bucket[i].size_bytes < r->sample_buf.size) {
 				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP);
-				sample_buf.buf[sample_buf.used] = i;
+				r->sample_buf.buf[r->sample_buf.used] = i;
 				result = riscv_read_phys_memory(
-					target, sample_config.bucket[i].address,
-					sample_config.bucket[i].size_bytes, 1,
-					sample_buf.buf + sample_buf.used + 1);
+					target, r->sample_config.bucket[i].address,
+					r->sample_config.bucket[i].size_bytes, 1,
+					r->sample_buf.buf + r->sample_buf.used + 1);
 				if (result == ERROR_OK)
-					sample_buf.used += 1 + sample_config.bucket[i].size_bytes;
+					r->sample_buf.used += 1 + r->sample_config.bucket[i].size_bytes;
 				else
 					goto exit;
 			}
@@ -2187,7 +2184,7 @@ int sample_memory(struct target *target)
 exit:
 	if (result != ERROR_OK) {
 		LOG_INFO("Turning off memory sampling because it failed.");
-		sample_config.enabled = false;
+		r->sample_config.enabled = false;
 	}
 	return result;
 }
@@ -3000,13 +2997,15 @@ COMMAND_HANDLER(handle_repeat_read)
 COMMAND_HANDLER(handle_memory_sample_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
 
 	if (CMD_ARGC == 0) {
-		for (unsigned i = 0; i < DIM(sample_config.bucket); i++) {
-			if (sample_config.bucket[i].enabled) {
+		command_print(CMD, "Memory sample configuration for %s:", target_name(target));
+		for (unsigned i = 0; i < DIM(r->sample_config.bucket); i++) {
+			if (r->sample_config.bucket[i].enabled) {
 				command_print(CMD, "bucket %d; address=0x%" TARGET_PRIxADDR "; size=%d", i,
-							  sample_config.bucket[i].address,
-							  sample_config.bucket[i].size_bytes);
+							  r->sample_config.bucket[i].address,
+							  r->sample_config.bucket[i].size_bytes);
 			} else {
 				command_print(CMD, "bucket %d; disabled", i);
 			}
@@ -3026,39 +3025,42 @@ COMMAND_HANDLER(handle_memory_sample_command)
 
 	uint32_t bucket;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], bucket);
-	if (bucket > DIM(sample_config.bucket)) {
-		LOG_ERROR("Max bucket number is %d.", (unsigned) DIM(sample_config.bucket));
+	if (bucket > DIM(r->sample_config.bucket)) {
+		LOG_ERROR("Max bucket number is %d.", (unsigned) DIM(r->sample_config.bucket));
 		return ERROR_COMMAND_ARGUMENT_INVALID;
 	}
 
-	sample_config.bucket[bucket].enabled = true;
-	COMMAND_PARSE_ADDRESS(CMD_ARGV[1], sample_config.bucket[bucket].address);
+	r->sample_config.bucket[bucket].enabled = true;
+	COMMAND_PARSE_ADDRESS(CMD_ARGV[1], r->sample_config.bucket[bucket].address);
 
 	if (CMD_ARGC > 2) {
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], sample_config.bucket[bucket].size_bytes);
-		if (sample_config.bucket[bucket].size_bytes != 4 &&
-				sample_config.bucket[bucket].size_bytes != 8) {
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], r->sample_config.bucket[bucket].size_bytes);
+		if (r->sample_config.bucket[bucket].size_bytes != 4 &&
+				r->sample_config.bucket[bucket].size_bytes != 8) {
 			LOG_ERROR("Only 4-byte and 8-byte sizes are supported.");
 			return ERROR_COMMAND_ARGUMENT_INVALID;
 		}
 	} else {
-		sample_config.bucket[bucket].size_bytes = 4;
+		r->sample_config.bucket[bucket].size_bytes = 4;
 	}
 
-	if (!sample_buf.buf) {
-		sample_buf.size = 1024 * 1024;
-		sample_buf.buf = malloc(sample_buf.size);
+	if (!r->sample_buf.buf) {
+		r->sample_buf.size = 1024 * 1024;
+		r->sample_buf.buf = malloc(r->sample_buf.size);
 	}
 	/* Clear the buffer when the configuration is changed. */
-	sample_buf.used = 0;
+	r->sample_buf.used = 0;
 
-	sample_config.enabled = true;
+	r->sample_config.enabled = true;
 
 	return ERROR_OK;
 }
 
 COMMAND_HANDLER(handle_dump_sample_buf_command)
 {
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
 	if (CMD_ARGC > 1) {
 		LOG_ERROR("Command takes at most 1 arguments.");
 		return ERROR_COMMAND_SYNTAX_ERROR;
@@ -3074,8 +3076,8 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 	}
 
 	if (base64) {
-		unsigned char *encoded = base64_encode(sample_buf.buf,
-									  sample_buf.used, NULL);
+		unsigned char *encoded = base64_encode(r->sample_buf.buf,
+									  r->sample_buf.used, NULL);
 		if (!encoded) {
 			LOG_ERROR("Failed base64 encode!");
 			return ERROR_FAIL;
@@ -3084,26 +3086,26 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 		free(encoded);
 	} else {
 		unsigned i = 0;
-		while (i < sample_buf.used) {
-			uint8_t command = sample_buf.buf[i++];
+		while (i < r->sample_buf.used) {
+			uint8_t command = r->sample_buf.buf[i++];
 			if (command == RISCV_SAMPLE_BUF_TIMESTAMP) {
-				uint32_t timestamp = buf_get_u32(sample_buf.buf + i, 0, 32);
+				uint32_t timestamp = buf_get_u32(r->sample_buf.buf + i, 0, 32);
 				i += 4;
 				command_print(CMD, "timestamp: %u", timestamp);
-			} else if (command < DIM(sample_config.bucket)) {
+			} else if (command < DIM(r->sample_config.bucket)) {
 				command_print_sameline(CMD, "0x%" TARGET_PRIxADDR ": ",
-									   sample_config.bucket[command].address);
-				if (sample_config.bucket[command].size_bytes == 4) {
-					uint32_t value = buf_get_u32(sample_buf.buf + i, 0, 32);
+									   r->sample_config.bucket[command].address);
+				if (r->sample_config.bucket[command].size_bytes == 4) {
+					uint32_t value = buf_get_u32(r->sample_buf.buf + i, 0, 32);
 					i += 4;
 					command_print(CMD, "0x%08x", value);
-				} else if (sample_config.bucket[command].size_bytes == 8) {
-					uint64_t value = buf_get_u64(sample_buf.buf + i, 0, 64);
+				} else if (r->sample_config.bucket[command].size_bytes == 8) {
+					uint64_t value = buf_get_u64(r->sample_buf.buf + i, 0, 64);
 					i += 8;
 					command_print(CMD, "0x%016lx", value);
 				} else {
 					LOG_ERROR("Found invalid size in bucket %d: %d", command,
-							  sample_config.bucket[command].size_bytes);
+							  r->sample_config.bucket[command].size_bytes);
 					return ERROR_FAIL;
 				}
 			} else {

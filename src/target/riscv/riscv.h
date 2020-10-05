@@ -65,6 +65,7 @@ typedef struct {
 	uint8_t *buf;
 	unsigned used;
 	unsigned size;
+	uint32_t last_timestamp;
 } riscv_sample_buf_t;
 
 typedef struct {
@@ -232,6 +233,9 @@ typedef struct {
 	 * Custom registers are for non-standard extensions and use abstract register numbers
 	 * from range 0xc000 ... 0xffff. */
 	struct list_head expose_custom;
+
+	riscv_sample_config_t sample_config;
+	riscv_sample_buf_t sample_buf;
 } riscv_info_t;
 
 typedef struct {
