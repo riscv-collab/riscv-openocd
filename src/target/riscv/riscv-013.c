@@ -2126,10 +2126,10 @@ static int sample_memory_bus_v1(struct target *target,
 	}
 
 	while (timeval_ms() < until_ms) {
-		/* 
+		/*
 		 * batch_run() adds to the batch, so we can't simply reuse the same
 		 * batch over and over. So we create a new one every time through the
-		 * loop. *
+		 * loop.
 		 */
 		struct riscv_batch *batch = riscv_batch_alloc(
 			target, 1 + enabled_count * 5 * repeat,
@@ -2276,7 +2276,7 @@ static int init_target(struct command_context *cmd_ctx,
 	generic_info->version_specific = calloc(1, sizeof(riscv013_info_t));
 	if (!generic_info->version_specific)
 		return ERROR_FAIL;
-    generic_info->sample_memory = sample_memory;
+	generic_info->sample_memory = sample_memory;
 	riscv013_info_t *info = get_info(target);
 
 	info->progbufsize = -1;

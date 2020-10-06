@@ -261,8 +261,7 @@ void riscv_sample_buf_maybe_add_timestamp(struct target *target)
 	RISCV_INFO(r);
 	uint32_t now = timeval_ms() & 0xffffffff;
 	if (r->sample_buf.used + 5 < r->sample_buf.size &&
-			(r->sample_buf.used == 0 || r->sample_buf.last_timestamp != now))
-	{
+			(r->sample_buf.used == 0 || r->sample_buf.last_timestamp != now)) {
 		r->sample_buf.buf[r->sample_buf.used++] = RISCV_SAMPLE_BUF_TIMESTAMP;
 		r->sample_buf.buf[r->sample_buf.used++] = now & 0xff;
 		r->sample_buf.buf[r->sample_buf.used++] = (now >> 8) & 0xff;
@@ -2150,7 +2149,7 @@ int sample_memory(struct target *target)
 	if (!r->sample_buf.buf || !r->sample_config.enabled)
 		return ERROR_OK;
 
-    LOG_DEBUG("buf used/size: %d/%d", r->sample_buf.used, r->sample_buf.size);
+	LOG_DEBUG("buf used/size: %d/%d", r->sample_buf.used, r->sample_buf.size);
 
 	uint64_t start = timeval_ms();
 	riscv_sample_buf_maybe_add_timestamp(target);
