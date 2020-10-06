@@ -3080,12 +3080,14 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 		}
 	}
 
+	int result = ERROR_OK;
 	if (base64) {
 		unsigned char *encoded = base64_encode(r->sample_buf.buf,
 									  r->sample_buf.used, NULL);
 		if (!encoded) {
 			LOG_ERROR("Failed base64 encode!");
-			return ERROR_FAIL;
+			result = ERROR_FAIL;
+			goto error;
 		}
 		command_print(CMD, "%s", encoded);
 		free(encoded);
@@ -3111,16 +3113,22 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 				} else {
 					LOG_ERROR("Found invalid size in bucket %d: %d", command,
 							  r->sample_config.bucket[command].size_bytes);
-					return ERROR_FAIL;
+					result = ERROR_FAIL;
+					goto error;
 				}
 			} else {
 				LOG_ERROR("Found invalid command byte in sample buf: 0x%2x at offset 0x%x",
 					command, i - 1);
-				return ERROR_FAIL;
+				result = ERROR_FAIL;
+				goto error;
 			}
 		}
 	}
-	return ERROR_OK;
+
+error:
+	/* Clear the sample buffer even when there was an error. */
+	r->sample_buf.used = 0;
+	return result;
 }
 
 static const struct command_registration riscv_exec_command_handlers[] = {
