@@ -3105,11 +3105,11 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 				if (r->sample_config.bucket[command].size_bytes == 4) {
 					uint32_t value = buf_get_u32(r->sample_buf.buf + i, 0, 32);
 					i += 4;
-					command_print(CMD, "0x%08x", value);
+					command_print(CMD, "0x%08" PRIx32, value);
 				} else if (r->sample_config.bucket[command].size_bytes == 8) {
 					uint64_t value = buf_get_u64(r->sample_buf.buf + i, 0, 64);
 					i += 8;
-					command_print(CMD, "0x%016lx", value);
+					command_print(CMD, "0x%016" PRIx64, value);
 				} else {
 					LOG_ERROR("Found invalid size in bucket %d: %d", command,
 							  r->sample_config.bucket[command].size_bytes);
