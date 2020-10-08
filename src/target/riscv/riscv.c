@@ -3629,7 +3629,7 @@ int riscv_enumerate_triggers(struct target *target)
 		if (result != ERROR_OK) {
 			LOG_DEBUG("Cannot access tselect register on hart %d. "
 					"Assuming that triggers are not implemented.", hartid);
-			return ERROR_OK;
+			continue;
 		}
 
 		for (unsigned t = 0; t < RISCV_MAX_TRIGGERS; ++t) {
