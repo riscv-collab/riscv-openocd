@@ -3626,8 +3626,11 @@ int riscv_enumerate_triggers(struct target *target)
 		/* If tselect is not readable, the trigger module is likely not
 		 * implemented. There are no triggers to enumerate then and no error
 		 * should be thrown. */
-		if (result != ERROR_OK)
+		if (result != ERROR_OK) {
+			LOG_DEBUG("Cannot access tselect register on hart %d. "
+					"Assuming that triggers are not implemented.", hartid);
 			return ERROR_OK;
+		}
 
 		for (unsigned t = 0; t < RISCV_MAX_TRIGGERS; ++t) {
 			r->trigger_count[hartid] = t;
