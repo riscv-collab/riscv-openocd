@@ -778,7 +778,7 @@ static int read_by_given_size(struct target *target, target_addr_t address,
  * Write one memory item using any memory access size that will work.
  * Utilize read-modify-write, if needed.
  * */
-static int write_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer)
+int write_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer)
 {
 	assert(size == 1 || size == 2 ||  size == 4 || size == 8);
 
@@ -810,7 +810,7 @@ static int write_by_any_size(struct target *target, target_addr_t address, uint3
  * Read one memory item using any memory access size that will work.
  * Read larger section of memory and pick out the required portion, if needed.
  * */
-static int read_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer)
+int read_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer)
 {
 	assert(size == 1 || size == 2 ||  size == 4 || size == 8);
 
