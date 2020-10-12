@@ -90,7 +90,7 @@ semihosting_result_t riscv_semihosting(struct target *target, int *retval)
 	/* Read three uncompressed instructions: The previous, the current one (pointed to by PC) and the next one */
 	for (int i = 0; i < 3; i++) {
 		/* Instruction memories may not support arbitrary read size. Use any size that will work. */
-		*retval = read_by_any_size(target, (pc - 4) + 4 * i, 4, tmp_buf + 4 * i);
+		*retval = riscv_read_by_any_size(target, (pc - 4) + 4 * i, 4, tmp_buf + 4 * i);
 		if (*retval != ERROR_OK)
 			return SEMI_ERROR;
 	}
