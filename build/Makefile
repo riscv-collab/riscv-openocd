@@ -36,8 +36,12 @@ $(SYSROOT)/bin/libusb-1.0.dll: libusb-1.0.23.tar.bz2
 # libusb-compat Download & Build
 $(SYSROOT)/bin/libusb-0-1-4.dll: libusb-compat-0.1.7.tar.bz2
 	tar jxvf libusb-compat-0.1.7.tar.bz2
-	cd libusb-compat-0.1.7 && ./configure --host=x86_64-w64-mingw32 --prefix=$(SYSROOT)
-	cd libusb-compat-0.1.7 && make -j4 && make install
+	cd libusb-compat-0.1.7 && \
+		PKG_CONFIG=x86_64-w64-mingw32-pkg-config PKG_CONFIG_PATH=$(SYSROOT)/lib/pkgconfig PKG_CONFIG_LIBDIR=$(SYSROOT)/lib/pkgconfig \
+		./configure --host=x86_64-w64-mingw32 --prefix=$(SYSROOT)
+	cd libusb-compat-0.1.7 && \
+		PKG_CONFIG=x86_64-w64-mingw32-pkg-config PKG_CONFIG_PATH=$(SYSROOT)/lib/pkgconfig PKG_CONFIG_LIBDIR=$(SYSROOT)/lib/pkgconfig \
+		make -j4 && make install
 
 # libftdi Download & Build
 $(SYSROOT)/bin/libftdi1.dll: libftdi1-1.4.tar.bz2
@@ -62,7 +66,7 @@ $(SYSROOT)/bin/jimsh.exe: openocd-0.10.0.zip
 	cd openocd-0.10.0/jimtcl && make -j4 && make install
 
 # Build openocd
-$(SYSROOT)/bin/openocd.exe:	
+$(SYSROOT)/bin/openocd.exe:	$(SYSROOT)/bin/libusb-1.0.dll $(SYSROOT)/bin/libusb-0-1-4.dll $(SYSROOT)/bin/libftdi1.dll $(SYSROOT)/bin/libhidapi-0.dll $(SYSROOT)/bin/jimsh.exe
 	cd .. && SKIP_SUBMODULE=1 ./bootstrap
 	mkdir -p build
 	cd build && \
@@ -81,5 +85,5 @@ $(SYSROOT)/bin/openocd.exe:
 	  PKG_CONFIG=x86_64-w64-mingw32-pkg-config PKG_CONFIG_PATH=$(SYSROOT)/lib/pkgconfig PKG_CONFIG_LIBDIR=$(SYSROOT)/lib/pkgconfig \
 	  make -j4 && make install
 
-$(SYSROOT)/openocd.zip: $(SYSROOT)/bin/libusb-1.0.dll $(SYSROOT)/bin/libusb-0-1-4.dll $(SYSROOT)/bin/libftdi1.dll $(SYSROOT)/bin/jimsh.exe $(SYSROOT)/bin/openocd.exe
+$(SYSROOT)/openocd.zip: $(SYSROOT)/bin/openocd.exe
 	cd $(SYSROOT) && zip -r openocd.zip bin/lib* bin/openocd.exe share/info share/man share/openocd
