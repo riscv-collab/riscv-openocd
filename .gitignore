@@ -99,3 +99,6 @@ TAGS
 
 # ctags tag files
 tags
+
+build/*
+!build/Makefile
