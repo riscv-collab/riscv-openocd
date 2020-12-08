@@ -3134,6 +3134,24 @@ error:
 	return result;
 }
 
+COMMAND_HANDLER(handle_info)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	/* This output format is valid YAML, and I intend to keep it that way. */
+
+	command_print(CMD, "Hart:");
+	command_print(CMD, "  XLEN: %d", riscv_xlen(target));
+	riscv_enumerate_triggers(target);
+	command_print(CMD, "  trigger count: %d",
+				  r->trigger_count[target->coreid]);
+	if (r->print_info)
+		return CALL_COMMAND_HANDLER(r->print_info, target);
+
+	return 0;
+}
+
 static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "dump_sample_buf",
@@ -3141,6 +3159,13 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.mode = COMMAND_ANY,
 		.usage = "riscv dump_sample_buf [base64]",
 		.help = "Print the contents of the sample buffer, and clear the buffer."
+	},
+	{
+		.name = "info",
+		.handler = handle_info,
+		.mode = COMMAND_ANY,
+		.usage = "riscv info",
+		.help = "Displays some information OpenOCD detected about the target."
 	},
 	{
 		.name = "memory_sample",

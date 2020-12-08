@@ -10,6 +10,7 @@ struct riscv_program;
 #include "gdb_regs.h"
 #include "jtag/jtag.h"
 #include "target/register.h"
+#include "command.h"
 
 /* The register cache is statically allocated. */
 #define RISCV_MAX_HARTS 1024
@@ -197,6 +198,8 @@ typedef struct {
 	/* How many harts are attached to the DM that this target is attached to? */
 	int (*hart_count)(struct target *target);
 	unsigned (*data_bits)(struct target *target);
+
+	COMMAND_HELPER((*print_info), struct target *target);
 
 	/* Storage for vector register types. */
 	struct reg_data_type_vector vector_uint8;
