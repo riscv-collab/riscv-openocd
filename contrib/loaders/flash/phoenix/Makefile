@@ -1,7 +1,5 @@
 BIN2C = ../../../../src/helper/bin2char.sh
-#RM = rm -fr
-#BIN2C = ..\..\..\..\src\helper\bin2char.sh
-RM = del
+RM = rm -fr
 
 CROSS_COMPILE ?= riscv-none-embed-
 GCC     = $(CROSS_COMPILE)gcc
@@ -13,18 +11,12 @@ CFLAGS = -march=rv32emac -mabi=ilp32e
 CFLAGS += -ffunction-sections -fdata-sections 
 CFLAGS += -msmall-data-limit=8
 CFLAGS += -Wall
-CFLAGS += -fno-builtin  -nostdlib
-#CFLAGS +=  -g -gdwarf-3 -gstrict-dwarf -fno-strict-aliasing --asm 
-#CFLAGS += -ffreestanding
-#CFLAGS += -fPIE -pie
+CFLAGS += -O2 -fno-builtin  -nostdlib
 
 
 all: write.inc
 
 write.elf: entry.o write.o 
-	$(GCC) $(CFLAGS) -o $@ $^ -Wl,-T"ram.lds"
-
-a.elf: entry.o algorithm.o 
 	$(GCC) $(CFLAGS) -o $@ $^ -Wl,-T"ram.lds"
 
 %.o: %.c

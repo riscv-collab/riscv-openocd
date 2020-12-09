@@ -31,6 +31,7 @@
 #define EEPROM_BASE (0x10180000UL)	/*!< ( EEPROM  ) Base Address */
 #define PAGEBUF_BASE (0x101C0000UL) /*!< ( PAGEBUF ) Base Address */
 #define EFC_BASE (0x40000000UL)
+#define MODEL_CHK (0x40001020UL)
 
 #define EFC_CR (EFC_BASE + 0x00)
 #define EFC_Tnvs (EFC_BASE + 0x04)
@@ -60,27 +61,47 @@ struct phnx_info
 static int phnx_probe(struct flash_bank *bank)
 {
 	struct phnx_info *chip = (struct phnx_info *)bank->driver_priv;
+	struct target *target = chip->target;
 	int flash_kb, ram_kb;
+	int res;
+	unsigned int model;
 	if (chip->probed == true)
 		return ERROR_OK;
 
+
 	// TODO: add a real probe for phoenix chip
-	if (bank->base == FLASH_BASE)
-	{
-		flash_kb = 128, ram_kb = 10;
-		chip->sector_size = chip->page_size = 512;
+	res = target_write_u32(target, MODEL_CHK, 0x05);
+	if (res != ERROR_OK) {
+		LOG_ERROR("Couldn't write MODEL_CHK register");
+		return res;
 	}
-	else if (bank->base == NVR_BASE)
-	{
-		flash_kb = 4, ram_kb = 10;
-		chip->sector_size = chip->page_size = 512;
-	}
-	else if (bank->base == EEPROM_BASE)
-	{
-		flash_kb = 1, ram_kb = 10;
-		chip->sector_size = chip->page_size = 4;
+	res = target_read_u32(target, MODEL_CHK, &model);
+	if (res != ERROR_OK) {
+		LOG_ERROR("Couldn't read MODEL_CHK register");
+		return res;
 	}
 
+	if (bank->base != FLASH_BASE)
+	{
+		LOG_ERROR("bank->base shall be 0x%08x.", (unsigned int) FLASH_BASE );
+		return ERROR_FAIL;
+	}
+
+	if (model == 0x05) 
+	{
+		flash_kb = 128, ram_kb = 10;
+	} 
+	else if(model == 0x00)
+	{
+		flash_kb = 32, ram_kb = 4;
+	}
+	else
+	{
+		LOG_ERROR("phoenix model probe failed.");
+		return ERROR_FAIL;
+	}
+
+	chip->sector_size = chip->page_size = 512;
 	chip->num_pages = flash_kb * 1024 / chip->sector_size;
 	bank->size = flash_kb * 1024;
 	bank->num_sectors = chip->num_pages;

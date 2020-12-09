@@ -11,7 +11,8 @@ entry:
 .option norelax
 	la gp, __global_pointer$
 .option pop
-	la sp, _estack
+	la sp, stack
+    addi sp, sp, 0x20
 
     call start
     j halt

@@ -7,13 +7,12 @@ ENTRY( entry )
 MEMORY
 {
 	/* Application is stored in and executes from SRAM */
-	RAM (RWX) : ORIGIN = 0x20000000, LENGTH = 10K
+	RAM (RWX) : ORIGIN = 0x20000000, LENGTH = 4K
 }
 
 /* Section allocation in memory */
 SECTIONS
 {
-	__stack_size = 0x100;
 	.text :
 	{
 		_text = .;
@@ -40,10 +39,6 @@ SECTIONS
 		__bss_end__ = .;
 	} > RAM
 
-	.stack ORIGIN(RAM) + LENGTH(RAM) - __stack_size : 
-	{
-		PROVIDE( _stack = . );
-		. = __stack_size;
-		PROVIDE( _estack = . );
-	} > RAM
+	 /* 将输入文件的comment段丢弃 */
+	 /DISCARD/ : {*(.comment)} 
 }
