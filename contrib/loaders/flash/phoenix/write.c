@@ -7,9 +7,8 @@
 #define REG32(addr) (*((volatile unsigned int *)(addr)))
 
 int stack[32] = {
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
-};
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 int start(int offset, int buffer, int len)
 {
@@ -39,33 +38,33 @@ int start(int offset, int buffer, int len)
             REG32(EFC_OPR) = 0x91;
             REG32(EFC_OPR) = 0xC1;
             REG32(EFC_STS) = 0xFF;
-            REG32(FLASH_BASE + offset) = 1; 
+            REG32(FLASH_BASE + offset) = 1;
             if (REG32(EFC_STS) != 1)
                 break;
-            // 行编程, 第二个256字节    
+            // 行编程, 第二个256字节
             REG32(EFC_OPR) = 0x01;
             REG32(EFC_OPR) = 0x71;
             REG32(EFC_OPR) = 0x91;
             REG32(EFC_OPR) = 0xC1;
             REG32(EFC_STS) = 0xFF;
-            REG32(FLASH_BASE + offset + 256) = 1;             
+            REG32(FLASH_BASE + offset + 256) = 1;
             if (REG32(EFC_STS) != 1)
                 break;
-        } 
+        }
         else if (model == 0x00) // S302
         {
             // 关闭编程保护
-            REG32(EFC_OPR) = 0x00;            
-            REG32(EFC_OPR) = 0x70;     
-            REG32(EFC_OPR) = 0x90;     
+            REG32(EFC_OPR) = 0x00;
+            REG32(EFC_OPR) = 0x70;
+            REG32(EFC_OPR) = 0x90;
             REG32(EFC_OPR) = 0xC0;
             for (int i = 0; i < 512 && i < len; i += 4)
             {
                 // 单字编程
-                REG32(EFC_STS) = 0xFF;            
+                REG32(EFC_STS) = 0xFF;
                 REG32(FLASH_BASE + offset + i) = REG32(buffer + i);
-                for(int j=0;j<10000;j++)
-                {   
+                for (int j = 0; j < 10000; j++)
+                {
                     if (REG32(EFC_STS) == 1)
                         break;
                 }
@@ -79,7 +78,7 @@ int start(int offset, int buffer, int len)
         {
             return 0;
         }
-        
+
         offset += 512;
         buffer += 512;
         len -= 512;

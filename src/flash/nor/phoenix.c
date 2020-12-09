@@ -55,8 +55,6 @@ struct phnx_info
 	struct target *target;
 };
 
-
-
 /**************************** OOCD FLASH ACTIONS *********************************/
 static int phnx_probe(struct flash_bank *bank)
 {
@@ -68,30 +66,31 @@ static int phnx_probe(struct flash_bank *bank)
 	if (chip->probed == true)
 		return ERROR_OK;
 
-
 	// TODO: add a real probe for phoenix chip
 	res = target_write_u32(target, MODEL_CHK, 0x05);
-	if (res != ERROR_OK) {
+	if (res != ERROR_OK)
+	{
 		LOG_ERROR("Couldn't write MODEL_CHK register");
 		return res;
 	}
 	res = target_read_u32(target, MODEL_CHK, &model);
-	if (res != ERROR_OK) {
+	if (res != ERROR_OK)
+	{
 		LOG_ERROR("Couldn't read MODEL_CHK register");
 		return res;
 	}
 
 	if (bank->base != FLASH_BASE)
 	{
-		LOG_ERROR("bank->base shall be 0x%08x.", (unsigned int) FLASH_BASE );
+		LOG_ERROR("bank->base shall be 0x%08x.", (unsigned int)FLASH_BASE);
 		return ERROR_FAIL;
 	}
 
-	if (model == 0x05) 
+	if (model == 0x05)
 	{
 		flash_kb = 128, ram_kb = 10;
-	} 
-	else if(model == 0x00)
+	}
+	else if (model == 0x00)
 	{
 		flash_kb = 32, ram_kb = 4;
 	}
@@ -122,20 +121,19 @@ static int phnx_probe(struct flash_bank *bank)
 
 static int phnx_protect(struct flash_bank *bank, int set, unsigned int first_prot_bl, unsigned int last_prot_bl)
 {
-	LOG_INFO("phnx_protect involked. set=%d, first=%d, last=%d.", set, (int) first_prot_bl, (int) last_prot_bl);
+	LOG_INFO("phnx_protect involked. set=%d, first=%d, last=%d.", set, (int)first_prot_bl, (int)last_prot_bl);
 	// TODO:
 	return ERROR_OK;
 }
 
 static int phnx_erase(struct flash_bank *bank, unsigned int first_sect, unsigned int last_sect)
 {
-	LOG_INFO("phnx_erase involked. first=%d, last=%d.", (int) first_sect, (int) last_sect);
+	LOG_INFO("phnx_erase involked. first=%d, last=%d.", (int)first_sect, (int)last_sect);
 	return ERROR_OK;
 }
 
-
 static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
-		uint32_t offset, uint32_t count)
+							uint32_t offset, uint32_t count)
 {
 	struct phnx_info *chip = (struct phnx_info *)bank->driver_priv;
 	struct target *target = bank->target;
@@ -168,23 +166,27 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 
 	/* flash write code */
 	if (target_alloc_working_area(target, sizeof(flash_write_code),
-			&write_algorithm) != ERROR_OK) {
+								  &write_algorithm) != ERROR_OK)
+	{
 		LOG_WARNING("no working area available, can't do block memory writes");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	retval = target_write_buffer(target, write_algorithm->address,
-			sizeof(flash_write_code), flash_write_code);
-	if (retval != ERROR_OK) {
+								 sizeof(flash_write_code), flash_write_code);
+	if (retval != ERROR_OK)
+	{
 		target_free_working_area(target, write_algorithm);
 		return retval;
 	}
 
 	/* memory buffer */
-	while (target_alloc_working_area_try(target, buffer_size, &source) != ERROR_OK) {
+	while (target_alloc_working_area_try(target, buffer_size, &source) != ERROR_OK)
+	{
 		buffer_size /= 2;
 		buffer_size &= ~3UL; /* Make sure it's 4 byte aligned */
-		if (buffer_size <= 256) {
+		if (buffer_size <= 256)
+		{
 			/* we already allocated the writing code, but failed to get a
 			 * buffer, free the algorithm */
 			target_free_working_area(target, write_algorithm);
@@ -194,14 +196,15 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 		}
 	}
 
-	init_reg_param(&reg_params[0], "a0", 32, PARAM_IN_OUT);	/* flash offset */
+	init_reg_param(&reg_params[0], "a0", 32, PARAM_IN_OUT); /* flash offset */
 	init_reg_param(&reg_params[1], "a1", 32, PARAM_OUT);	/* buffer address */
 	init_reg_param(&reg_params[2], "a2", 32, PARAM_OUT);	/* byte count */
 
 	// LOG_INFO("buffer_size = %d", buffer_size);
 	int total = count;
-	while (count > 0) {
-		uint32_t run_bytes = count > buffer_size? buffer_size: count;
+	while (count > 0)
+	{
+		uint32_t run_bytes = count > buffer_size ? buffer_size : count;
 
 		/* Write data to fifo */
 		retval = target_write_buffer(target, source->address, run_bytes, buffer);
@@ -213,21 +216,25 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 		buf_set_u32(reg_params[2].value, 0, 32, run_bytes);
 
 		retval = target_run_algorithm(target, 0, NULL, 3, reg_params,
-				write_algorithm->address, write_algorithm->address+2,
-				100000, NULL);
+									  write_algorithm->address, write_algorithm->address + 2,
+									  100000, NULL);
 
-		if (retval != ERROR_OK) {
+		if (retval != ERROR_OK)
+		{
 			LOG_ERROR("Failed to execute algorithm at 0x%" TARGET_PRIxADDR ": %d",
-					write_algorithm->address, retval);
+					  write_algorithm->address, retval);
 			break;
 		}
 
-		retval = buf_get_u32(reg_params[0].value,0,32);
-		if (retval != 1) {
-			LOG_ERROR("flash write failed, retval=%x",(uint32_t) retval);
+		retval = buf_get_u32(reg_params[0].value, 0, 32);
+		if (retval != 1)
+		{
+			LOG_ERROR("flash write failed, retval=%x", (uint32_t)retval);
 			retval = ERROR_FLASH_OPERATION_FAILED;
 			break;
-		} else {
+		}
+		else
+		{
 			retval = ERROR_OK;
 		}
 
@@ -235,11 +242,12 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 		buffer += run_bytes;
 		offset += run_bytes;
 		count -= run_bytes;
-		int percentage = ( total - count) * 100 / total;
+		int percentage = (total - count) * 100 / total;
 		LOG_INFO(" ... %d%%", percentage);
 	}
 
-	if (retval == ERROR_OK ) LOG_INFO(" done ...");
+	if (retval == ERROR_OK)
+		LOG_INFO(" done ...");
 	target_free_working_area(target, source);
 	target_free_working_area(target, write_algorithm);
 
@@ -249,7 +257,6 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 
 	return retval;
 }
-
 
 FLASH_BANK_COMMAND_HANDLER(phnx_flash_bank_command)
 {
@@ -291,9 +298,9 @@ COMMAND_HANDLER(phnx_handle_info_command)
 		return retval;
 
 	struct phnx_info *chip = (struct phnx_info *)bank->driver_priv;
-	command_print(CMD, "bank %d [%s]: " TARGET_ADDR_FMT PRIx32 ", size=%u, pagesize=%u, npages=%d, %s", 
-		bankid, bank->name, bank->base, bank->size, 
-		chip->page_size, chip->num_pages, chip->probed? "probed": "notprobed");
+	command_print(CMD, "bank %d [%s]: " TARGET_ADDR_FMT PRIx32 ", size=%u, pagesize=%u, npages=%d, %s",
+				  bankid, bank->name, bank->base, bank->size,
+				  chip->page_size, chip->num_pages, chip->probed ? "probed" : "notprobed");
 	return ERROR_OK;
 }
 
