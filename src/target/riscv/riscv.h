@@ -241,6 +241,8 @@ typedef struct {
 	riscv_sample_buf_t sample_buf;
 } riscv_info_t;
 
+extern const char *riscv_print_info_fmt;
+
 typedef struct {
 	uint8_t tunneled_dr_width;
 	struct scan_field tunneled_dr[4];

@@ -3134,18 +3134,20 @@ error:
 	return result;
 }
 
+const char *riscv_print_info_fmt = "%5s.%-15s%3d";
+
 COMMAND_HANDLER(handle_info)
 {
 	struct target *target = get_current_target(CMD_CTX);
 	RISCV_INFO(r);
 
-	/* This output format is valid YAML, and I intend to keep it that way. */
+	/* This output format can be fed directly into TCL's "array set". */
 
-	command_print(CMD, "Hart:");
-	command_print(CMD, "  XLEN: %d", riscv_xlen(target));
+	const char *fmt = riscv_print_info_fmt;
+	command_print(CMD, fmt, "hart", "xlen", riscv_xlen(target));
 	riscv_enumerate_triggers(target);
-	command_print(CMD, "  trigger count: %d",
-				  r->trigger_count[target->coreid]);
+	command_print(CMD, fmt, "hart", "trigger_count", r->trigger_count[target->coreid]);
+
 	if (r->print_info)
 		return CALL_COMMAND_HANDLER(r->print_info, target);
 

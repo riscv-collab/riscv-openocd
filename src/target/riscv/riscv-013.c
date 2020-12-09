@@ -1879,16 +1879,16 @@ static unsigned riscv013_data_bits(struct target *target)
 COMMAND_HELPER(riscv013_print_info, struct target *target)
 {
 	RISCV013_INFO(info);
-	command_print(CMD, "Debug Module:");
-	command_print(CMD, "  abits: %d", info->abits);
-	command_print(CMD, "  progbufsize: %d", info->progbufsize);
-	command_print(CMD, "  sbversion: %d", get_field(info->sbcs, DM_SBCS_SBVERSION));
-	command_print(CMD, "  sbasize: %d", get_field(info->sbcs, DM_SBCS_SBASIZE));
-	command_print(CMD, "  sbaccess128: %d", get_field(info->sbcs, DM_SBCS_SBACCESS128));
-	command_print(CMD, "  sbaccess64: %d", get_field(info->sbcs, DM_SBCS_SBACCESS64));
-	command_print(CMD, "  sbaccess32: %d", get_field(info->sbcs, DM_SBCS_SBACCESS32));
-	command_print(CMD, "  sbaccess16: %d", get_field(info->sbcs, DM_SBCS_SBACCESS16));
-	command_print(CMD, "  sbaccess8: %d", get_field(info->sbcs, DM_SBCS_SBACCESS8));
+	const char *fmt = riscv_print_info_fmt;
+	command_print(CMD, fmt, "dm", "abits", info->abits);
+	command_print(CMD, fmt, "dm", "progbufsize", info->progbufsize);
+	command_print(CMD, fmt, "dm", "sbversion", get_field(info->sbcs, DM_SBCS_SBVERSION));
+	command_print(CMD, fmt, "dm", "sbasize", get_field(info->sbcs, DM_SBCS_SBASIZE));
+	command_print(CMD, fmt, "dm", "sbaccess128", get_field(info->sbcs, DM_SBCS_SBACCESS128));
+	command_print(CMD, fmt, "dm", "sbaccess64", get_field(info->sbcs, DM_SBCS_SBACCESS64));
+	command_print(CMD, fmt, "dm", "sbaccess32", get_field(info->sbcs, DM_SBCS_SBACCESS32));
+	command_print(CMD, fmt, "dm", "sbaccess16", get_field(info->sbcs, DM_SBCS_SBACCESS16));
+	command_print(CMD, fmt, "dm", "sbaccess8", get_field(info->sbcs, DM_SBCS_SBACCESS8));
 
 	return 0;
 }
