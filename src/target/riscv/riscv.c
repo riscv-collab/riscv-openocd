@@ -3134,7 +3134,14 @@ error:
 	return result;
 }
 
-const char *riscv_print_info_fmt = "%5s.%-15s%3d";
+COMMAND_HELPER(riscv_print_info_line, const char *section, const char *key,
+			   unsigned value)
+{
+	char full_key[80];
+	snprintf(full_key, sizeof(full_key), "%s.%s", section, key);
+	command_print(CMD, "%-21s %3d", full_key, value);
+	return 0;
+}
 
 COMMAND_HANDLER(handle_info)
 {
@@ -3143,10 +3150,10 @@ COMMAND_HANDLER(handle_info)
 
 	/* This output format can be fed directly into TCL's "array set". */
 
-	const char *fmt = riscv_print_info_fmt;
-	command_print(CMD, fmt, "hart", "xlen", riscv_xlen(target));
+	riscv_print_info_line(CMD, "hart", "xlen", riscv_xlen(target));
 	riscv_enumerate_triggers(target);
-	command_print(CMD, fmt, "hart", "trigger_count", r->trigger_count[target->coreid]);
+	riscv_print_info_line(CMD, "hart", "trigger_count",
+						  r->trigger_count[target->coreid]);
 
 	if (r->print_info)
 		return CALL_COMMAND_HANDLER(r->print_info, target);
