@@ -3397,7 +3397,7 @@ restore_s0:
 restore_mstatus:
 	if (mstatus != mstatus_old)
 		if (register_write_direct(target, GDB_REGNO_MSTATUS, mstatus_old))
-			return ERROR_FAIL;
+			result = ERROR_FAIL;
 
 	return result;
 }
