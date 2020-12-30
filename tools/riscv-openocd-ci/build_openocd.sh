@@ -1,6 +1,6 @@
 #!/bin/bash
 
-INSTALL_DIR=`pwd`/riscv-openocd-ci/work/install
+INSTALL_DIR=`pwd`/tools/riscv-openocd-ci/work/install
 
 # Fail on first error.
 set -e
