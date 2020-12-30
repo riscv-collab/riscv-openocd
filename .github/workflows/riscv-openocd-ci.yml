@@ -32,7 +32,9 @@ jobs:
 
       - name: Checkout & run riscv-tests
         id: run_tests
-        run: bash tools/riscv-openocd-ci/run_tests.sh
+        run: |
+          bash tools/riscv-openocd-ci/run_tests.sh
+          echo ::set-output name=exit_code::$?
 
       - name: Process test results
         run: |
@@ -54,6 +56,7 @@ jobs:
         run: |
           lcov --capture --directory . --output-file tools/riscv-openocd-ci/work/openocd-coverage.info
           genhtml tools/riscv-openocd-ci/work/openocd-coverage.info --output-directory tools/riscv-openocd-ci/work/results/openocd-coverage
+          echo ::set-output name=exit_code::$?
 
       - name: Store OpenOCD code coverage
         # Run if coverage was collected.
