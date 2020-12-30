@@ -1,7 +1,7 @@
 #!/bin/bash
 
-CHECKOUT_DIR=`pwd`/riscv-openocd-ci/work/riscv-isa-sim
-INSTALL_DIR=`pwd`/riscv-openocd-ci/work/install
+CHECKOUT_DIR=`pwd`/tools/riscv-openocd-ci/work/riscv-isa-sim
+INSTALL_DIR=`pwd`/tools/riscv-openocd-ci/work/install
 
 # Fail on first error.
 set -e
