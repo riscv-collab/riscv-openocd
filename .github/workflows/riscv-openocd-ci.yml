@@ -25,42 +25,38 @@ jobs:
         run: bash tools/riscv-openocd-ci/download_toolchain.sh
 
       - name: Update env. variables
-        # Change RISCV and PATH env variables for subsequent steps.
+        # Change RISCV and PATH env variables. Needed for the next step.
         run: |
           echo "`pwd`/tools/riscv-openocd-ci/work/install/bin" >> $GITHUB_PATH
           echo "RISCV=`pwd`/tools/riscv-openocd-ci/work/install" >> $GITHUB_ENV
 
       - name: Checkout & run riscv-tests
-        id: run_tests
-        run: |
-          bash tools/riscv-openocd-ci/run_tests.sh
-          echo ::set-output name=exit_code::$?
+        run: bash tools/riscv-openocd-ci/run_tests.sh
 
       - name: Process test results
+        # If at least one test failed (or ended with an exception), this step fails: non-zero exit code.
         run: |
           cd tools/riscv-openocd-ci
           python3 process_test_results.py --log-dir work/riscv-tests/debug/logs --output-dir work/results/logs
 
       - name: Store test results
-        # Run if tests were executed.
-        if: steps.run_tests.outputs.exit_code == 0
+        # Run even if there was a failed test
+        if: succeeded() || failed()
         uses: actions/upload-artifact@v2
         with:
           name: test-results
           path: tools/riscv-openocd-ci/work/results/logs
 
       - name: Collect OpenOCD code coverage
-        id: collect_cov
-        # Run if tests were executed.
-        if: steps.run_tests.outputs.exit_code == 0
+        # Run even if there was a failed test
+        if: succeeded() || failed()
         run: |
           lcov --capture --directory . --output-file tools/riscv-openocd-ci/work/openocd-coverage.info
           genhtml tools/riscv-openocd-ci/work/openocd-coverage.info --output-directory tools/riscv-openocd-ci/work/results/openocd-coverage
-          echo ::set-output name=exit_code::$?
 
       - name: Store OpenOCD code coverage
-        # Run if coverage was collected.
-        if: steps.collect_cov.outputs.exit_code == 0
+        # Run even if there was a failed test
+        if: succeeded() || failed()
         uses: actions/upload-artifact@v2
         with:
           name: openocd-coverage
