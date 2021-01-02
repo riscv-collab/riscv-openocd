@@ -109,13 +109,13 @@ typedef struct {
 	char *reg_names;
 
 	/* It's possible that each core has a different supported ISA set. */
-	int xlen[RISCV_MAX_HARTS];
-	riscv_reg_t misa[RISCV_MAX_HARTS];
+	int xlen;
+	riscv_reg_t misa;
 	/* Cached value of vlenb. 0 if vlenb is not readable for some reason. */
-	unsigned vlenb[RISCV_MAX_HARTS];
+	unsigned vlenb;
 
 	/* The number of triggers per hart. */
-	unsigned trigger_count[RISCV_MAX_HARTS];
+	unsigned trigger_count;
 
 	/* For each physical trigger, contains -1 if the hwbp is available, or the
 	 * unique_id of the breakpoint/watchpoint that is using it.
@@ -124,7 +124,7 @@ typedef struct {
 	int trigger_unique_id[RISCV_MAX_HWBPS];
 
 	/* The number of entries in the debug buffer. */
-	int debug_buffer_size[RISCV_MAX_HARTS];
+	int debug_buffer_size;
 
 	/* This avoids invalidating the register cache too often. */
 	bool registers_initialized;
@@ -184,8 +184,6 @@ typedef struct {
 
 	int (*test_sba_config_reg)(struct target *target, target_addr_t legal_address,
 			uint32_t num_words, target_addr_t illegal_address, bool run_sbbusyerror_test);
-
-	int (*test_compliance)(struct target *target);
 
 	int (*sample_memory)(struct target *target,
 						 riscv_sample_buf_t *buf,
@@ -333,13 +331,11 @@ void riscv_info_init(struct target *target, riscv_info_t *r);
  * then the only hart. */
 int riscv_step_rtos_hart(struct target *target);
 
-bool riscv_supports_extension(struct target *target, int hartid, char letter);
+bool riscv_supports_extension(struct target *target, char letter);
 
 /* Returns XLEN for the given (or current) hart. */
 unsigned riscv_xlen(const struct target *target);
 int riscv_xlen_of_hart(const struct target *target, int hartid);
-
-bool riscv_rtos_enabled(const struct target *target);
 
 /* Sets the current hart, which is the hart that will actually be used when
  * issuing debug commands. */
