@@ -1384,10 +1384,8 @@ static int get_register(struct target *target, riscv_reg_t *value, int hartid,
 	return ERROR_OK;
 }
 
-static int set_register(struct target *target, int hartid, int regid,
-		uint64_t value)
+static int set_register(struct target *target, int regid, uint64_t value)
 {
-	assert(hartid == 0);
 	return register_write(target, regid, value);
 }
 

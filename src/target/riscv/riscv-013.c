@@ -40,7 +40,7 @@ static void riscv013_clear_abstract_error(struct target *target);
 /* Implementations of the functions in riscv_info_t. */
 static int riscv013_get_register(struct target *target,
 		riscv_reg_t *value, int hid, int rid);
-static int riscv013_set_register(struct target *target, int hartid, int regid, uint64_t value);
+static int riscv013_set_register(struct target *target, int regid, uint64_t value);
 static int riscv013_select_current_hart(struct target *target);
 static int riscv013_halt_prep(struct target *target);
 static int riscv013_halt_go(struct target *target);
@@ -4065,12 +4065,11 @@ static int riscv013_get_register(struct target *target,
 	return result;
 }
 
-static int riscv013_set_register(struct target *target, int hid, int rid, uint64_t value)
+static int riscv013_set_register(struct target *target, int rid, uint64_t value)
 {
-	LOG_DEBUG("[%d] writing 0x%" PRIx64 " to register %s on hart %d",
-			target->coreid, value, gdb_regno_name(rid), hid);
-
-	riscv_set_current_hartid(target, hid);
+	riscv013_select_current_hart(target);
+	LOG_DEBUG("[%d] writing 0x%" PRIx64 " to register %s",
+			target->coreid, value, gdb_regno_name(rid));
 
 	if (rid <= GDB_REGNO_XPR31) {
 		return register_write_direct(target, rid, value);

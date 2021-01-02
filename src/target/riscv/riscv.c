@@ -3470,19 +3470,6 @@ int riscv_current_hartid(const struct target *target)
 	return r->current_hartid;
 }
 
-void riscv_set_all_rtos_harts(struct target *target)
-{
-	RISCV_INFO(r);
-	r->rtos_hartid = -1;
-}
-
-void riscv_set_rtos_hartid(struct target *target, int hartid)
-{
-	LOG_DEBUG("setting RTOS hartid %d", hartid);
-	RISCV_INFO(r);
-	r->rtos_hartid = hartid;
-}
-
 int riscv_count_harts(struct target *target)
 {
 	if (target == NULL)
@@ -3571,7 +3558,7 @@ int riscv_set_register_on_hart(struct target *target, int hartid,
 	struct reg *reg = &target->reg_cache->reg_list[regid];
 	buf_set_u64(reg->value, 0, reg->size, value);
 
-	int result = r->set_register(target, hartid, regid, value);
+	int result = r->set_register(target, regid, value);
 	if (result == ERROR_OK)
 		reg->valid = gdb_regno_cacheable(regid, true);
 	else
