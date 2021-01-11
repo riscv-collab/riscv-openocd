@@ -2323,15 +2323,12 @@ static int assert_reset(struct target *target)
 
 		/* Set haltreq for each hart. */
 		uint32_t control = control_base;
-		for (int i = 0; i < riscv_count_harts(target); ++i) {
-			if (!riscv_hart_enabled(target, i))
-				continue;
 
-			control = set_hartsel(control_base, i);
-			control = set_field(control, DM_DMCONTROL_HALTREQ,
-					target->reset_halt ? 1 : 0);
-			dmi_write(target, DM_DMCONTROL, control);
-		}
+		control = set_hartsel(control_base, target->coreid);
+		control = set_field(control, DM_DMCONTROL_HALTREQ,
+				target->reset_halt ? 1 : 0);
+		dmi_write(target, DM_DMCONTROL, control);
+
 		/* Assert ndmreset */
 		control = set_field(control, DM_DMCONTROL_NDMRESET, 1);
 		dmi_write(target, DM_DMCONTROL, control);
@@ -2433,8 +2430,6 @@ static int deassert_reset(struct target *target)
 
 static int execute_fence(struct target *target)
 {
-	int old_hartid = riscv_current_hartid(target);
-
 	/* FIXME: For non-coherent systems we need to flush the caches right
 	 * here, but there's no ISA-defined way of doing that. */
 	{
@@ -2446,27 +2441,6 @@ static int execute_fence(struct target *target)
 		if (result != ERROR_OK)
 			LOG_DEBUG("Unable to execute pre-fence");
 	}
-
-	for (int i = 0; i < riscv_count_harts(target); ++i) {
-		if (!riscv_hart_enabled(target, i))
-			continue;
-
-		if (i == old_hartid)
-			/* Fence already executed for this hart */
-			continue;
-
-		riscv_set_current_hartid(target, i);
-
-		struct riscv_program program;
-		riscv_program_init(&program, target);
-		riscv_program_fence_i(&program);
-		riscv_program_fence(&program);
-		int result = riscv_program_exec(&program, target);
-		if (result != ERROR_OK)
-			LOG_DEBUG("Unable to execute fence on hart %d", i);
-	}
-
-	riscv_set_current_hartid(target, old_hartid);
 
 	return ERROR_OK;
 }

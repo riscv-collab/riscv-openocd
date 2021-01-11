@@ -1102,44 +1102,42 @@ static int old_or_new_riscv_poll(struct target *target)
 		return riscv_openocd_poll(target);
 }
 
+static int riscv_select_current_hart(struct target *target)
+{
+	return riscv_set_current_hartid(target, target->coreid);
+}
+
 int halt_prep(struct target *target)
 {
 	RISCV_INFO(r);
-	for (int i = 0; i < riscv_count_harts(target); ++i) {
-		if (!riscv_hart_enabled(target, i))
-			continue;
 
-		LOG_DEBUG("[%s] prep hart, debug_reason=%d", target_name(target),
-				  target->debug_reason);
-		if (riscv_set_current_hartid(target, i) != ERROR_OK)
+	LOG_DEBUG("[%s] prep hart, debug_reason=%d", target_name(target),
+				target->debug_reason);
+	if (riscv_select_current_hart(target) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_is_halted(target)) {
+		LOG_DEBUG("[%s] Hart is already halted (reason=%d).",
+				target_name(target), target->debug_reason);
+	} else {
+		if (r->halt_prep(target) != ERROR_OK)
 			return ERROR_FAIL;
-		if (riscv_is_halted(target)) {
-			LOG_DEBUG("Hart %d is already halted (reason=%d).", i,
-					  target->debug_reason);
-		} else {
-			if (r->halt_prep(target) != ERROR_OK)
-				return ERROR_FAIL;
-			r->prepped = true;
-		}
+		r->prepped = true;
 	}
+
 	return ERROR_OK;
 }
 
 int riscv_halt_go_all_harts(struct target *target)
 {
 	RISCV_INFO(r);
-	for (int i = 0; i < riscv_count_harts(target); ++i) {
-		if (!riscv_hart_enabled(target, i))
-			continue;
 
-		if (riscv_set_current_hartid(target, i) != ERROR_OK)
+	if (riscv_select_current_hart(target) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_is_halted(target)) {
+		LOG_DEBUG("[%s] Hart is already halted.", target_name(target));
+	} else {
+		if (r->halt_go(target) != ERROR_OK)
 			return ERROR_FAIL;
-		if (riscv_is_halted(target)) {
-			LOG_DEBUG("Hart %d is already halted.", i);
-		} else {
-			if (r->halt_go(target) != ERROR_OK)
-				return ERROR_FAIL;
-		}
 	}
 
 	riscv_invalidate_register_cache(target);
@@ -1233,22 +1231,19 @@ static int riscv_deassert_reset(struct target *target)
 int riscv_resume_prep_all_harts(struct target *target)
 {
 	RISCV_INFO(r);
-	for (int i = 0; i < riscv_count_harts(target); ++i) {
-		if (!riscv_hart_enabled(target, i))
-			continue;
 
-		LOG_DEBUG("prep hart %d", i);
-		if (riscv_set_current_hartid(target, i) != ERROR_OK)
+	LOG_DEBUG("[%s] prep hart", target_name(target));
+	if (riscv_select_current_hart(target) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_is_halted(target)) {
+		if (r->resume_prep(target) != ERROR_OK)
 			return ERROR_FAIL;
-		if (riscv_is_halted(target)) {
-			if (r->resume_prep(target) != ERROR_OK)
-				return ERROR_FAIL;
-		} else {
-			LOG_DEBUG("  hart %d requested resume, but was already resumed", i);
-		}
+	} else {
+		LOG_DEBUG("[%s] hart requested resume, but was already resumed",
+				target_name(target));
 	}
 
-	LOG_DEBUG("[%d] mark as prepped", target->coreid);
+	LOG_DEBUG("[%s] mark as prepped", target_name(target));
 	r->prepped = true;
 
 	return ERROR_OK;
@@ -1464,11 +1459,6 @@ static int riscv_target_resume(struct target *target, int current, target_addr_t
 {
 	return riscv_resume(target, current, address, handle_breakpoints,
 			debug_execution, false);
-}
-
-static int riscv_select_current_hart(struct target *target)
-{
-	return riscv_set_current_hartid(target, target->coreid);
 }
 
 static int riscv_mmu(struct target *target, int *enabled)
@@ -1769,7 +1759,6 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 		target_addr_t exit_point, int timeout_ms, void *arch_info)
 {
 	RISCV_INFO(info);
-	int hartid = riscv_current_hartid(target);
 
 	if (num_mem_params > 0) {
 		LOG_ERROR("Memory parameters are not supported for RISC-V algorithms.");
@@ -1880,7 +1869,7 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 	}
 
 	/* The current hart id might have been changed in poll(). */
-	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
+	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
 
 	if (reg_pc->type->get(reg_pc) != ERROR_OK)
@@ -3352,38 +3341,15 @@ static int riscv_resume_go_all_harts(struct target *target)
 {
 	RISCV_INFO(r);
 
-	/* Dummy variables to make mingw32-gcc happy. */
-	int first = 0;
-	int last = 1;
-	int step = 1;
-	switch (resume_order) {
-		case RO_NORMAL:
-			first = 0;
-			last = riscv_count_harts(target) - 1;
-			step = 1;
-			break;
-		case RO_REVERSED:
-			first = riscv_count_harts(target) - 1;
-			last = 0;
-			step = -1;
-			break;
-		default:
-			assert(0);
-	}
-
-	for (int i = first; i != last + step; i += step) {
-		if (!riscv_hart_enabled(target, i))
-			continue;
-
-		LOG_DEBUG("resuming hart %d", i);
-		if (riscv_set_current_hartid(target, i) != ERROR_OK)
+	LOG_DEBUG("[%s] resuming hart", target_name(target));
+	if (riscv_select_current_hart(target) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_is_halted(target)) {
+		if (r->resume_go(target) != ERROR_OK)
 			return ERROR_FAIL;
-		if (riscv_is_halted(target)) {
-			if (r->resume_go(target) != ERROR_OK)
-				return ERROR_FAIL;
-		} else {
-			LOG_DEBUG("  hart %d requested resume, but was already resumed", i);
-		}
+	} else {
+		LOG_DEBUG("[%s] hart requested resume, but was already resumed",
+				target_name(target));
 	}
 
 	riscv_invalidate_register_cache(target);
@@ -3442,7 +3408,6 @@ int riscv_set_current_hartid(struct target *target, int hartid)
 
 	int previous_hartid = riscv_current_hartid(target);
 	r->current_hartid = hartid;
-	assert(riscv_hart_enabled(target, hartid));
 	LOG_DEBUG("setting hartid to %d, was %d", hartid, previous_hartid);
 	if (r->select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
@@ -3702,8 +3667,7 @@ int riscv_enumerate_triggers(struct target *target)
 	int hartid = riscv_current_hartid(target);
 
 	riscv_reg_t tselect;
-	int result = riscv_get_register_on_hart(target, &tselect, hartid,
-			GDB_REGNO_TSELECT);
+	int result = riscv_get_register(target, &tselect, GDB_REGNO_TSELECT);
 	/* If tselect is not readable, the trigger module is likely not
 		* implemented. There are no triggers to enumerate then and no error
 		* should be thrown. */
