@@ -90,9 +90,6 @@ typedef struct {
 	struct command_context *cmd_ctx;
 	void *version_specific;
 
-	/* The hart that the RTOS thinks is currently being debugged. */
-	int rtos_hartid;
-
 	/* The hart that is currently being debugged.  Note that this is
 	 * different than the hartid that the RTOS is expected to use.  This
 	 * one will change all the time, it's more of a global argument to
@@ -348,9 +345,6 @@ int riscv_current_hartid(const struct target *target);
  * consecutive and start with mhartid=0. */
 int riscv_count_harts(struct target *target);
 
-/* Returns TRUE if the target has the given register on the given hart.  */
-bool riscv_has_register(struct target *target, int hartid, int regid);
-
 /** Set register, updating the cache. */
 int riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
 /** Get register, from the cache if it's in there. */
@@ -377,9 +371,6 @@ int riscv_dmi_write_u64_bits(struct target *target);
 
 /* Invalidates the register cache. */
 void riscv_invalidate_register_cache(struct target *target);
-
-/* Returns TRUE when a hart is enabled in this target. */
-bool riscv_hart_enabled(struct target *target, int hartid);
 
 int riscv_enumerate_triggers(struct target *target);
 

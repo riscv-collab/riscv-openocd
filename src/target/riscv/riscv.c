@@ -1683,8 +1683,8 @@ static int riscv_get_gdb_reg_list_internal(struct target *target,
 		enum target_register_class reg_class, bool read)
 {
 	RISCV_INFO(r);
-	LOG_DEBUG("rtos_hartid=%d, current_hartid=%d, reg_class=%d, read=%d",
-			r->rtos_hartid, r->current_hartid, reg_class, read);
+	LOG_DEBUG("current_hartid=%d, reg_class=%d, read=%d",
+			r->current_hartid, reg_class, read);
 
 	if (!target->reg_cache) {
 		LOG_ERROR("Target not initialized. Return ERROR_FAIL.");
@@ -3355,10 +3355,9 @@ static int riscv_resume_go_all_harts(struct target *target)
 int riscv_step_rtos_hart(struct target *target)
 {
 	RISCV_INFO(r);
-	int hartid = r->current_hartid;
-	if (riscv_set_current_hartid(target, hartid) != ERROR_OK)
+	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
-	LOG_DEBUG("stepping hart %d", hartid);
+	LOG_DEBUG("[%s] stepping", target_name(target));
 
 	if (!riscv_is_halted(target)) {
 		LOG_ERROR("Hart isn't halted before single step!");
@@ -3439,11 +3438,6 @@ int riscv_count_harts(struct target *target)
 	if (r == NULL || r->hart_count == NULL)
 		return 1;
 	return r->hart_count(target);
-}
-
-bool riscv_has_register(struct target *target, int hartid, int regid)
-{
-	return 1;
 }
 
 /**
@@ -3625,11 +3619,6 @@ int riscv_dmi_write_u64_bits(struct target *target)
 {
 	RISCV_INFO(r);
 	return r->dmi_write_u64_bits(target);
-}
-
-bool riscv_hart_enabled(struct target *target, int hartid)
-{
-	return hartid == target->coreid;
 }
 
 /**

@@ -2376,7 +2376,7 @@ static int deassert_reset(struct target *target)
 	for (int i = 0; i < riscv_count_harts(target); ++i) {
 		int index = i;
 		if (target->rtos) {
-			if (!riscv_hart_enabled(target, index))
+			if (index != target->coreid)
 				continue;
 			dmi_write(target, DM_DMCONTROL,
 					set_hartsel(control, index));
