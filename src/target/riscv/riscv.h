@@ -353,14 +353,9 @@ bool riscv_has_register(struct target *target, int hartid, int regid);
 
 /** Set register, updating the cache. */
 int riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
-/** Set register, updating the cache. */
-int riscv_set_register_on_hart(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
 /** Get register, from the cache if it's in there. */
 int riscv_get_register(struct target *target, riscv_reg_t *value,
 		enum gdb_regno r);
-/** Get register, from the cache if it's in there. */
-int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
-		int hartid, enum gdb_regno regid);
 
 /* Checks the state of the current hart -- "is_halted" checks the actual
  * on-device register. */

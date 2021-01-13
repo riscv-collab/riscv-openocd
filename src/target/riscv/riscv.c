@@ -556,11 +556,10 @@ static int maybe_add_trigger_t1(struct target *target, unsigned hartid,
 	tdata1 = set_field(tdata1, bpcontrol_bpmatch, 0); /* exact match */
 	tdata1 = set_field(tdata1, bpcontrol_bpaction, 0); /* cause bp exception */
 
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, tdata1);
+	riscv_set_register(target, GDB_REGNO_TDATA1, tdata1);
 
 	riscv_reg_t tdata1_rb;
-	if (riscv_get_register_on_hart(target, &tdata1_rb, hartid,
-				GDB_REGNO_TDATA1) != ERROR_OK)
+	if (riscv_get_register(target, &tdata1_rb, GDB_REGNO_TDATA1) != ERROR_OK)
 		return ERROR_FAIL;
 	LOG_DEBUG("tdata1=0x%" PRIx64, tdata1_rb);
 
@@ -568,11 +567,11 @@ static int maybe_add_trigger_t1(struct target *target, unsigned hartid,
 		LOG_DEBUG("Trigger doesn't support what we need; After writing 0x%"
 				PRIx64 " to tdata1 it contains 0x%" PRIx64,
 				tdata1, tdata1_rb);
-		riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, 0);
+		riscv_set_register(target, GDB_REGNO_TDATA1, 0);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA2, trigger->address);
+	riscv_set_register(target, GDB_REGNO_TDATA2, trigger->address);
 
 	return ERROR_OK;
 }
@@ -608,10 +607,10 @@ static int maybe_add_trigger_t2(struct target *target, unsigned hartid,
 	if (trigger->write)
 		tdata1 |= MCONTROL_STORE;
 
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, tdata1);
+	riscv_set_register(target, GDB_REGNO_TDATA1, tdata1);
 
 	uint64_t tdata1_rb;
-	int result = riscv_get_register_on_hart(target, &tdata1_rb, hartid, GDB_REGNO_TDATA1);
+	int result = riscv_get_register(target, &tdata1_rb, GDB_REGNO_TDATA1);
 	if (result != ERROR_OK)
 		return result;
 	LOG_DEBUG("tdata1=0x%" PRIx64, tdata1_rb);
@@ -620,11 +619,11 @@ static int maybe_add_trigger_t2(struct target *target, unsigned hartid,
 		LOG_DEBUG("Trigger doesn't support what we need; After writing 0x%"
 				PRIx64 " to tdata1 it contains 0x%" PRIx64,
 				tdata1, tdata1_rb);
-		riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, 0);
+		riscv_set_register(target, GDB_REGNO_TDATA1, 0);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA2, trigger->address);
+	riscv_set_register(target, GDB_REGNO_TDATA2, trigger->address);
 
 	return ERROR_OK;
 }
@@ -646,11 +645,10 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 		if (r->trigger_unique_id[i] != -1)
 			continue;
 
-		riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, i);
+		riscv_set_register(target, GDB_REGNO_TSELECT, i);
 
 		uint64_t tdata1;
-		int result = riscv_get_register_on_hart(target, &tdata1, hartid,
-				GDB_REGNO_TDATA1);
+		int result = riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1);
 		if (result != ERROR_OK)
 			return result;
 		int type = get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
@@ -873,14 +871,13 @@ static int remove_trigger(struct target *target, struct trigger *trigger)
 	LOG_DEBUG("[%d] Stop using resource %d for bp %d", target->coreid, i,
 			trigger->unique_id);
 
-	int hartid = riscv_current_hartid(target);
 	riscv_reg_t tselect;
-	int result = riscv_get_register_on_hart(target, &tselect, hartid, GDB_REGNO_TSELECT);
+	int result = riscv_get_register(target, &tselect, GDB_REGNO_TSELECT);
 	if (result != ERROR_OK)
 		return result;
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, i);
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, 0);
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, tselect);
+	riscv_set_register(target, GDB_REGNO_TSELECT, i);
+	riscv_set_register(target, GDB_REGNO_TDATA1, 0);
+	riscv_set_register(target, GDB_REGNO_TSELECT, tselect);
 	r->trigger_unique_id[i] = -1;
 
 	return ERROR_OK;
@@ -3503,16 +3500,10 @@ static bool gdb_regno_cacheable(enum gdb_regno regno, bool write)
  * This function is called when the debug user wants to change the value of a
  * register. The new value may be cached, and may not be written until the hart
  * is resumed. */
-int riscv_set_register(struct target *target, enum gdb_regno r, riscv_reg_t v)
-{
-	return riscv_set_register_on_hart(target, riscv_current_hartid(target), r, v);
-}
-
-int riscv_set_register_on_hart(struct target *target, int hartid,
-		enum gdb_regno regid, uint64_t value)
+int riscv_set_register(struct target *target, enum gdb_regno regid, riscv_reg_t value)
 {
 	RISCV_INFO(r);
-	LOG_DEBUG("{%d} %s <- %" PRIx64, hartid, gdb_regno_name(regid), value);
+	LOG_DEBUG("[%s] %s <- %" PRIx64, target_name(target), gdb_regno_name(regid), value);
 	assert(r->set_register);
 
 	/* TODO: Hack to deal with gdb that thinks these registers still exist. */
@@ -3528,33 +3519,26 @@ int riscv_set_register_on_hart(struct target *target, int hartid,
 		reg->valid = gdb_regno_cacheable(regid, true);
 	else
 		reg->valid = false;
-	LOG_DEBUG("[%s]{%d} wrote 0x%" PRIx64 " to %s valid=%d",
-			  target_name(target), hartid, value, reg->name, reg->valid);
+	LOG_DEBUG("[%s] wrote 0x%" PRIx64 " to %s valid=%d",
+			  target_name(target), value, reg->name, reg->valid);
 	return result;
 }
 
 int riscv_get_register(struct target *target, riscv_reg_t *value,
-		enum gdb_regno r)
-{
-	return riscv_get_register_on_hart(target, value,
-			riscv_current_hartid(target), r);
-}
-
-int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
-		int hartid, enum gdb_regno regid)
+		enum gdb_regno regid)
 {
 	RISCV_INFO(r);
 
 	struct reg *reg = &target->reg_cache->reg_list[regid];
 	if (!reg->exist) {
-		LOG_DEBUG("[%s]{%d} %s does not exist.",
-				  target_name(target), hartid, gdb_regno_name(regid));
+		LOG_DEBUG("[%s] %s does not exist.",
+				  target_name(target), gdb_regno_name(regid));
 		return ERROR_FAIL;
 	}
 
-	if (reg && reg->valid && hartid == riscv_current_hartid(target)) {
+	if (reg && reg->valid) {
 		*value = buf_get_u64(reg->value, 0, reg->size);
-		LOG_DEBUG("{%d} %s: %" PRIx64 " (cached)", hartid,
+		LOG_DEBUG("[%s] %s: %" PRIx64 " (cached)", target_name(target),
 				  gdb_regno_name(regid), *value);
 		return ERROR_OK;
 	}
@@ -3566,12 +3550,14 @@ int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
 		return ERROR_OK;
 	}
 
-	int result = r->get_register(target, value, hartid, regid);
+	int result = r->get_register(target, value, riscv_current_hartid(target),
+			regid);
 
 	if (result == ERROR_OK)
 		reg->valid = gdb_regno_cacheable(regid, false);
 
-	LOG_DEBUG("{%d} %s: %" PRIx64, hartid, gdb_regno_name(regid), *value);
+	LOG_DEBUG("[%s] %s: %" PRIx64, target_name(target),
+			gdb_regno_name(regid), *value);
 	return result;
 }
 
@@ -3682,11 +3668,10 @@ int riscv_enumerate_triggers(struct target *target)
 		r->trigger_count = t;
 
 		/* If we can't write tselect, then this hart does not support triggers. */
-		if (riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, t) != ERROR_OK)
+		if (riscv_set_register(target, GDB_REGNO_TSELECT, t) != ERROR_OK)
 			break;
 		uint64_t tselect_rb;
-		result = riscv_get_register_on_hart(target, &tselect_rb, hartid,
-				GDB_REGNO_TSELECT);
+		result = riscv_get_register(target, &tselect_rb, GDB_REGNO_TSELECT);
 		if (result != ERROR_OK)
 			return result;
 		/* Mask off the top bit, which is used as tdrmode in old
@@ -3695,8 +3680,7 @@ int riscv_enumerate_triggers(struct target *target)
 		if (tselect_rb != t)
 			break;
 		uint64_t tdata1;
-		result = riscv_get_register_on_hart(target, &tdata1, hartid,
-				GDB_REGNO_TDATA1);
+		result = riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1);
 		if (result != ERROR_OK)
 			return result;
 
@@ -3707,16 +3691,16 @@ int riscv_enumerate_triggers(struct target *target)
 			case 1:
 				/* On these older cores we don't support software using
 					* triggers. */
-				riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, 0);
+				riscv_set_register(target, GDB_REGNO_TDATA1, 0);
 				break;
 			case 2:
 				if (tdata1 & MCONTROL_DMODE(riscv_xlen(target)))
-					riscv_set_register_on_hart(target, hartid, GDB_REGNO_TDATA1, 0);
+					riscv_set_register(target, GDB_REGNO_TDATA1, 0);
 				break;
 		}
 	}
 
-	riscv_set_register_on_hart(target, hartid, GDB_REGNO_TSELECT, tselect);
+	riscv_set_register(target, GDB_REGNO_TSELECT, tselect);
 
 	LOG_INFO("[%d] Found %d triggers", hartid, r->trigger_count);
 
