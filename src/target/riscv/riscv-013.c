@@ -39,7 +39,7 @@ static void riscv013_clear_abstract_error(struct target *target);
 
 /* Implementations of the functions in riscv_info_t. */
 static int riscv013_get_register(struct target *target,
-		riscv_reg_t *value, int hid, int rid);
+		riscv_reg_t *value, int rid);
 static int riscv013_set_register(struct target *target, int regid, uint64_t value);
 static int riscv013_select_current_hart(struct target *target);
 static int riscv013_halt_prep(struct target *target);
@@ -4013,12 +4013,12 @@ struct target_type riscv013_target = {
 
 /*** 0.13-specific implementations of various RISC-V helper functions. ***/
 static int riscv013_get_register(struct target *target,
-		riscv_reg_t *value, int hid, int rid)
+		riscv_reg_t *value, int rid)
 {
-	LOG_DEBUG("[%d] reading register %s on hart %d", target->coreid,
-			gdb_regno_name(rid), hid);
+	LOG_DEBUG("[%s] reading register %s", target_name(target),
+			gdb_regno_name(rid));
 
-	riscv_set_current_hartid(target, hid);
+	riscv_select_current_hart(target);
 
 	int result = ERROR_OK;
 	if (rid == GDB_REGNO_PC) {

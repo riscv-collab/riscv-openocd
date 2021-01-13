@@ -1099,7 +1099,7 @@ static int old_or_new_riscv_poll(struct target *target)
 		return riscv_openocd_poll(target);
 }
 
-static int riscv_select_current_hart(struct target *target)
+int riscv_select_current_hart(struct target *target)
 {
 	return riscv_set_current_hartid(target, target->coreid);
 }
@@ -3550,8 +3550,7 @@ int riscv_get_register(struct target *target, riscv_reg_t *value,
 		return ERROR_OK;
 	}
 
-	int result = r->get_register(target, value, riscv_current_hartid(target),
-			regid);
+	int result = r->get_register(target, value, regid);
 
 	if (result == ERROR_OK)
 		reg->valid = gdb_regno_cacheable(regid, false);

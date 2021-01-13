@@ -218,8 +218,7 @@ typedef struct {
 
 static int poll_target(struct target *target, bool announce);
 static int riscv011_poll(struct target *target);
-static int get_register(struct target *target, riscv_reg_t *value, int hartid,
-		int regid);
+static int get_register(struct target *target, riscv_reg_t *value, int regid);
 
 /*** Utility functions. ***/
 
@@ -1234,7 +1233,7 @@ static int update_mstatus_actual(struct target *target)
 	/* Force reading the register. In that process mstatus_actual will be
 	 * updated. */
 	riscv_reg_t mstatus;
-	return get_register(target, &mstatus, 0, GDB_REGNO_MSTATUS);
+	return get_register(target, &mstatus, GDB_REGNO_MSTATUS);
 }
 
 /*** OpenOCD target functions. ***/
@@ -1338,10 +1337,8 @@ static int register_write(struct target *target, unsigned int number,
 	return ERROR_OK;
 }
 
-static int get_register(struct target *target, riscv_reg_t *value, int hartid,
-		int regid)
+static int get_register(struct target *target, riscv_reg_t *value, int regid)
 {
-	assert(hartid == 0);
 	riscv011_info_t *info = get_info(target);
 
 	maybe_write_tselect(target);

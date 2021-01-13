@@ -145,8 +145,7 @@ typedef struct {
 
 	/* Helper functions that target the various RISC-V debug spec
 	 * implementations. */
-	int (*get_register)(struct target *target,
-		riscv_reg_t *value, int hid, int rid);
+	int (*get_register)(struct target *target, riscv_reg_t *value, int regid);
 	int (*set_register)(struct target *target, int regid, uint64_t value);
 	int (*get_register_buf)(struct target *target, uint8_t *buf, int regno);
 	int (*set_register_buf)(struct target *target, int regno,
@@ -339,6 +338,7 @@ int riscv_xlen_of_hart(const struct target *target);
 /* Sets the current hart, which is the hart that will actually be used when
  * issuing debug commands. */
 int riscv_set_current_hartid(struct target *target, int hartid);
+int riscv_select_current_hart(struct target *target);
 int riscv_current_hartid(const struct target *target);
 
 /*** Support functions for the RISC-V 'RTOS', which provides multihart support
