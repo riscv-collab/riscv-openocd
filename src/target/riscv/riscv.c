@@ -523,7 +523,7 @@ static void trigger_from_breakpoint(struct trigger *trigger,
 	trigger->unique_id = breakpoint->unique_id;
 }
 
-static int maybe_add_trigger_t1(struct target *target, unsigned hartid,
+static int maybe_add_trigger_t1(struct target *target,
 		struct trigger *trigger, uint64_t tdata1)
 {
 	RISCV_INFO(r);
@@ -576,7 +576,7 @@ static int maybe_add_trigger_t1(struct target *target, unsigned hartid,
 	return ERROR_OK;
 }
 
-static int maybe_add_trigger_t2(struct target *target, unsigned hartid,
+static int maybe_add_trigger_t2(struct target *target,
 		struct trigger *trigger, uint64_t tdata1)
 {
 	RISCV_INFO(r);
@@ -640,7 +640,6 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 		return ERROR_FAIL;
 
 	unsigned int i;
-	int hartid = riscv_current_hartid(target);
 	for (i = 0; i < r->trigger_count; i++) {
 		if (r->trigger_unique_id[i] != -1)
 			continue;
@@ -656,10 +655,10 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 		result = ERROR_OK;
 		switch (type) {
 			case 1:
-				result = maybe_add_trigger_t1(target, hartid, trigger, tdata1);
+				result = maybe_add_trigger_t1(target, trigger, tdata1);
 				break;
 			case 2:
-				result = maybe_add_trigger_t2(target, hartid, trigger, tdata1);
+				result = maybe_add_trigger_t2(target, trigger, tdata1);
 				break;
 			default:
 				LOG_DEBUG("trigger %d has unknown type %d", i, type);
@@ -3649,16 +3648,14 @@ int riscv_enumerate_triggers(struct target *target)
 
 	r->triggers_enumerated = true;	/* At the very least we tried. */
 
-	int hartid = riscv_current_hartid(target);
-
 	riscv_reg_t tselect;
 	int result = riscv_get_register(target, &tselect, GDB_REGNO_TSELECT);
 	/* If tselect is not readable, the trigger module is likely not
 		* implemented. There are no triggers to enumerate then and no error
 		* should be thrown. */
 	if (result != ERROR_OK) {
-		LOG_DEBUG("Cannot access tselect register on hart %d. "
-				"Assuming that triggers are not implemented.", hartid);
+		LOG_DEBUG("[%s] Cannot access tselect register. "
+				"Assuming that triggers are not implemented.", target_name(target));
 		r->trigger_count = 0;
 		return ERROR_OK;
 	}
@@ -3701,7 +3698,7 @@ int riscv_enumerate_triggers(struct target *target)
 
 	riscv_set_register(target, GDB_REGNO_TSELECT, tselect);
 
-	LOG_INFO("[%d] Found %d triggers", hartid, r->trigger_count);
+	LOG_INFO("[%s] Found %d triggers", target_name(target), r->trigger_count);
 
 	return ERROR_OK;
 }
@@ -3912,8 +3909,8 @@ static int register_get(struct reg *reg)
 	}
 	reg->valid = gdb_regno_cacheable(reg->number, false);
 	char *str = buf_to_hex_str(reg->value, reg->size);
-	LOG_DEBUG("[%d]{%d} read 0x%s from %s (valid=%d)", target->coreid,
-			riscv_current_hartid(target), str, reg->name, reg->valid);
+	LOG_DEBUG("[%s] read 0x%s from %s (valid=%d)", target_name(target),
+			str, reg->name, reg->valid);
 	free(str);
 	return ERROR_OK;
 }
@@ -3925,8 +3922,8 @@ static int register_set(struct reg *reg, uint8_t *buf)
 	RISCV_INFO(r);
 
 	char *str = buf_to_hex_str(buf, reg->size);
-	LOG_DEBUG("[%d]{%d} write 0x%s to %s (valid=%d)", target->coreid,
-			riscv_current_hartid(target), str, reg->name, reg->valid);
+	LOG_DEBUG("[%s] write 0x%s to %s (valid=%d)", target_name(target),
+			str, reg->name, reg->valid);
 	free(str);
 
 	memcpy(reg->value, buf, DIV_ROUND_UP(reg->size, 8));
