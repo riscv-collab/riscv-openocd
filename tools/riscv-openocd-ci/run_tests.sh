@@ -14,7 +14,7 @@ cd "$CHECKOUT_DIR"
 git clone --depth=1 --recursive https://github.com/riscv/riscv-tests .
 
 # Show revision info
-git --no-pager log --no-walk --pretty=reference
+git --no-pager log --no-walk --pretty=short
 
 # Run the debug tests.
 # Do not stop even on a failed test.
