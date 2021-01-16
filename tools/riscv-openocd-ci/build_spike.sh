@@ -12,7 +12,10 @@ set -o xtrace
 # Checkout Spike.
 mkdir -p "$CHECKOUT_DIR"
 cd "$CHECKOUT_DIR"
-git clone --recursive https://github.com/riscv/riscv-isa-sim.git .
+git clone --depth=1 --recursive https://github.com/riscv/riscv-isa-sim.git .
+
+# Show revision info
+git log --no-walk --pretty=format:'%C(auto)%h%d (%cd) %cn <%ce> %s'
 
 # Build Spike
 mkdir build
