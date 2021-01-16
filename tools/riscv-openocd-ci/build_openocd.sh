@@ -11,7 +11,7 @@ set -o xtrace
 # Assuming OpenOCD source is already checked-out in the current workdir.
 
 # Show revision info
-git --no-pager log --no-walk --pretty=reference
+git --no-pager log --no-walk --pretty=short
 
 ./bootstrap
 

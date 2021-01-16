@@ -15,7 +15,7 @@ cd "$CHECKOUT_DIR"
 git clone --depth=1 --recursive https://github.com/riscv/riscv-isa-sim.git .
 
 # Show revision info
-git --no-pager log --no-walk --pretty=reference
+git --no-pager log --no-walk --pretty=short
 
 # Build Spike
 mkdir build
