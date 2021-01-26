@@ -3456,7 +3456,7 @@ static bool gdb_regno_cacheable(enum gdb_regno regno, bool write)
 			(regno >= GDB_REGNO_V0 && regno <= GDB_REGNO_V31))
 		return true;
 
-	/* Most CSRs won't change value on us, but we can't assume it about rbitrary
+	/* Most CSRs won't change value on us, but we can't assume it about arbitrary
 	 * CSRs. */
 	switch (regno) {
 		case GDB_REGNO_DPC:
