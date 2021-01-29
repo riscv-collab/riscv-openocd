@@ -3700,25 +3700,31 @@ static int write_memory_bus_v1(struct target *target, target_addr_t address,
 		if (result != ERROR_OK)
 			return result;
 
-		/* Deal with DMI busy state that could have arisen during the batch execution.
-		 * In the process, the following is handled:
-		 * - clear DMI busy sticky error, if it occurred
-		 * - increment of dmi_busy_delay (slow down)
-		 */
-		bool dmi_busy_encountered = false;
-		if (dmi_op(target, NULL, &dmi_busy_encountered, DMI_OP_NOP, 0, 0, false, true) != ERROR_OK)
+		/* Read sbcs value.
+		 * At the same time, detect if DMI busy has occurred during the batch write. */
+		bool dmi_busy_encountered;
+		if (dmi_op(target, &sbcs, &dmi_busy_encountered, DMI_OP_READ,
+				DM_SBCS, 0, false, true) != ERROR_OK)
 			return ERROR_FAIL;
 		if (dmi_busy_encountered)
-			LOG_DEBUG("DMI busy encountered during system bus write. Will retry.");
+			LOG_DEBUG("DMI busy encountered during system bus write.");
 
-		/* Wait until SBBUSY goes low */
-		if (read_sbcs_nonbusy(target, &sbcs) != ERROR_OK)
-			return ERROR_FAIL;
+		/* Wait until sbbusy goes low */
+		time_t start = time(NULL);
+		while (get_field(sbcs, DM_SBCS_SBBUSY)) {
+			if (time(NULL) - start > riscv_command_timeout_sec) {
+				LOG_ERROR("Timed out after %ds waiting for sbbusy to go low (sbcs=0x%x). "
+						  "Increase the timeout with riscv set_command_timeout_sec.",
+						  riscv_command_timeout_sec, sbcs);
+				return ERROR_FAIL;
+			}
+			if (dmi_read(target, &sbcs, DM_SBCS) != ERROR_OK)
+				return ERROR_FAIL;
+		}
 
 		if (get_field(sbcs, DM_SBCS_SBBUSYERROR)) {
 			/* We wrote while the target was busy. */
-			LOG_DEBUG("Sbbusyerror encountered during system bus write. "
-					  "Retrying with slower rate.");
+			LOG_DEBUG("Sbbusyerror encountered during system bus write.");
 			/* Clear the sticky error flag. */
 			dmi_write(target, DM_SBCS, sbcs | DM_SBCS_SBBUSYERROR);
 			/* Slow down before trying again. */
