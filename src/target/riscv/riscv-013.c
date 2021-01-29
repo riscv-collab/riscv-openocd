@@ -3694,54 +3694,70 @@ static int write_memory_bus_v1(struct target *target, target_addr_t address,
 			next_address += size;
 		}
 
+		/* Execute the batch of writes */
 		result = batch_run(target, batch);
 		riscv_batch_free(batch);
 		if (result != ERROR_OK)
 			return result;
 
-		bool dmi_busy_encountered;
-		if (dmi_op(target, &sbcs, &dmi_busy_encountered, DMI_OP_READ,
-				DM_SBCS, 0, false, false) != ERROR_OK)
+		/* Deal with DMI busy state that could have arisen during the batch execution.
+		 * In the process, the following is handled:
+		 * - clear DMI busy sticky error, if it occurred
+		 * - increment of dmi_busy_delay (slow down)
+		 */
+		bool dmi_busy_encountered = false;
+		if (dmi_op(target, NULL, &dmi_busy_encountered, DMI_OP_NOP, 0, 0, false, true) != ERROR_OK)
+			return ERROR_FAIL;
+		if (dmi_busy_encountered)
+			LOG_DEBUG("DMI busy encountered during system bus write. Will retry.");
+
+		/* Wait until SBBUSY goes low */
+		if (read_sbcs_nonbusy(target, &sbcs) != ERROR_OK)
 			return ERROR_FAIL;
 
-		time_t start = time(NULL);
-		bool dmi_busy = dmi_busy_encountered;
-		while (get_field(sbcs, DM_SBCS_SBBUSY) || dmi_busy) {
-			if (time(NULL) - start > riscv_command_timeout_sec) {
-				LOG_ERROR("Timed out after %ds waiting for sbbusy to go low (sbcs=0x%x). "
-					  "Increase the timeout with riscv set_command_timeout_sec.",
-					  riscv_command_timeout_sec, sbcs);
-				return ERROR_FAIL;
-			}
-
-			if (dmi_op(target, &sbcs, &dmi_busy, DMI_OP_READ,
-						DM_SBCS, 0, false, true) != ERROR_OK)
-				return ERROR_FAIL;
-		}
-
 		if (get_field(sbcs, DM_SBCS_SBBUSYERROR)) {
-			/* We wrote while the target was busy. Slow down and try again. */
+			/* We wrote while the target was busy. */
+			LOG_DEBUG("Sbbusyerror encountered during system bus write. "
+					  "Retrying with slower rate.");
+			/* Clear the sticky error flag. */
 			dmi_write(target, DM_SBCS, sbcs | DM_SBCS_SBBUSYERROR);
+			/* Slow down before trying again. */
 			info->bus_master_write_delay += info->bus_master_write_delay / 10 + 1;
 		}
 
 		if (get_field(sbcs, DM_SBCS_SBBUSYERROR) || dmi_busy_encountered) {
+			/* Recover from the case when the write commands were issued too fast.
+			 * Determine the address from which to resume writing. */
 			next_address = sb_read_address(target);
 			if (next_address < address) {
 				/* This should never happen, probably buggy hardware. */
-				LOG_DEBUG("unexpected system bus address 0x%" TARGET_PRIxADDR,
-					  next_address);
+				LOG_DEBUG("unexpected sbaddress=0x%" TARGET_PRIxADDR
+						  " - buggy sbautoincrement in hw?", next_address);
+				/* Fail the whole operation. */
 				return ERROR_FAIL;
 			}
-
+			/* Try again - resume writing. */
 			continue;
 		}
 
-		unsigned error = get_field(sbcs, DM_SBCS_SBERROR);
-		if (error != 0) {
-			/* Some error indicating the bus access failed, but not because of
-			 * something we did wrong. */
+		unsigned sberror = get_field(sbcs, DM_SBCS_SBERROR);
+		if (sberror != 0) {
+			/* Sberror indicates the bus access failed, but not because we issued the writes
+			 * too fast. Cannot recover. Sbaddress holds the address where the error occurred
+			 * (unless sbautoincrement in the HW is buggy).
+			 */
+			target_addr_t sbaddress = sb_read_address(target);
+			LOG_DEBUG("System bus access failed with sberror=%u (sbaddress=0x%" TARGET_PRIxADDR ")",
+					  sberror, sbaddress);
+			if (sbaddress < address) {
+				/* This should never happen, probably buggy hardware.
+				 * Make a note to the user not to trust the sbaddress value. */
+				LOG_DEBUG("unexpected sbaddress=0x%" TARGET_PRIxADDR
+						  " - buggy sbautoincrement in hw?", next_address);
+			}
+			/* Clear the sticky error flag */
 			dmi_write(target, DM_SBCS, DM_SBCS_SBERROR);
+			/* Fail the whole operation */
 			return ERROR_FAIL;
 		}
 	}
