@@ -3701,7 +3701,7 @@ static int write_memory_bus_v1(struct target *target, target_addr_t address,
 
 		bool dmi_busy_encountered;
 		if (dmi_op(target, &sbcs, &dmi_busy_encountered, DMI_OP_READ,
-				DM_SBCS, 0, false, false) != ERROR_OK)
+				DM_SBCS, 0, false, true) != ERROR_OK)
 			return ERROR_FAIL;
 
 		time_t start = time(NULL);
