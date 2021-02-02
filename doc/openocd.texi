@@ -10001,7 +10001,10 @@ The RISC-V Debug Specification allows targets to expose custom registers
 through abstract commands. (See Section 3.5.1.1 in that document.) This command
 configures individual registers or register ranges (inclusive) that shall be exposed.
 Number 0 indicates the first custom register, whose abstract command number is 0xc000.
-For individually listed registers, a human-readable name can be optionally provided.
+For individually listed registers, a human-readable name can be optionally provided,
+which will get custom_ prepended to it. If no name is provided, the register will
+be named custom<n>.
+
 This command must be executed before `init`.
 @end deffn
 
