@@ -100,6 +100,20 @@ static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	&rtos_standard_Cortex_M4F_stacking,
 	&rtos_standard_Cortex_M4F_FPU_stacking,
 	},
+	{
+	"riscv",			/* target_name */
+	4,						/* thread_count_width; */
+	4,						/* pointer_width; */
+	16,						/* list_next_offset; */
+	20,						/* list_width; */
+	8,						/* list_elem_next_offset; */
+	12,						/* list_elem_content_offset */
+	0,						/* thread_stack_offset; */
+	52,						/* thread_name_offset; */
+	NULL,	/* stacking_info */
+	NULL,
+	NULL,
+	},
 };
 
 #define FREERTOS_NUM_PARAMS ((int)(sizeof(FreeRTOS_params_list)/sizeof(struct FreeRTOS_params)))
@@ -107,7 +121,7 @@ static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 static bool FreeRTOS_detect_rtos(struct target *target);
 static int FreeRTOS_create(struct target *target);
 static int FreeRTOS_update_threads(struct rtos *rtos);
-static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, int64_t thread_id,
+static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
 		struct rtos_reg **reg_list, int *num_regs);
 static int FreeRTOS_get_symbol_list_to_lookup(symbol_table_elem_t *symbol_list[]);
 
@@ -245,19 +259,23 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 	}
 
 	/* Find out how many lists are needed to be read from pxReadyTasksLists, */
-	if (rtos->symbols[FreeRTOS_VAL_uxTopUsedPriority].address == 0) {
-		LOG_ERROR("FreeRTOS: uxTopUsedPriority is not defined, consult the OpenOCD manual for a work-around");
-		return ERROR_FAIL;
-	}
 	uint32_t top_used_priority = 0;
-	retval = target_read_u32(rtos->target,
-			rtos->symbols[FreeRTOS_VAL_uxTopUsedPriority].address,
-			&top_used_priority);
-	if (retval != ERROR_OK)
-		return retval;
-	LOG_DEBUG("FreeRTOS: Read uxTopUsedPriority at 0x%" PRIx64 ", value %" PRIu32,
-										rtos->symbols[FreeRTOS_VAL_uxTopUsedPriority].address,
-										top_used_priority);
+	if (rtos->symbols[FreeRTOS_VAL_uxTopUsedPriority].address == 0) {
+		LOG_WARNING("FreeRTOS: uxTopUsedPriority is not defined, consult the OpenOCD manual for a work-around");
+		// This is a hack specific to the binary I'm debugging.
+		// Ideally we get https://github.com/FreeRTOS/FreeRTOS-Kernel/issues/33
+		// into our FreeRTOS source.
+		top_used_priority = 6;
+	} else {
+		retval = target_read_u32(rtos->target,
+								 rtos->symbols[FreeRTOS_VAL_uxTopUsedPriority].address,
+								 &top_used_priority);
+		if (retval != ERROR_OK)
+			return retval;
+		LOG_DEBUG("FreeRTOS: Read uxTopUsedPriority at 0x%" PRIx64 ", value %" PRIu32,
+				  rtos->symbols[FreeRTOS_VAL_uxTopUsedPriority].address,
+				  top_used_priority);
+	}
 	if (top_used_priority > FREERTOS_MAX_PRIORITIES) {
 		LOG_ERROR("FreeRTOS top used priority is unreasonably big, not proceeding: %" PRIu32,
 			top_used_priority);
@@ -402,7 +420,7 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 	return 0;
 }
 
-static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, int64_t thread_id,
+static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
 		struct rtos_reg **reg_list, int *num_regs)
 {
 	int retval;
@@ -426,7 +444,7 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, int64_t thread_id,
 			thread_id + param->thread_stack_offset,
 			&pointer_casts_are_bad);
 	if (retval != ERROR_OK) {
-		LOG_ERROR("Error reading stack frame from FreeRTOS thread");
+		LOG_ERROR("Error reading stack frame from FreeRTOS thread %" PRIx64, thread_id);
 		return retval;
 	}
 	stack_ptr = pointer_casts_are_bad;

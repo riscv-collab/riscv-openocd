@@ -68,7 +68,9 @@ int rtos_smp_init(struct target *target)
 	return ERROR_TARGET_INIT_FAILED;
 }
 
-static int rtos_target_for_threadid(struct connection *connection, int64_t threadid, struct target **t)
+static int rtos_target_for_threadid(struct connection *connection,
+									threadid_t threadid,
+									struct target **t)
 {
 	struct target *curr = get_target_from_connection(connection);
 	if (t)
@@ -475,7 +477,7 @@ static int rtos_put_gdb_reg_list(struct connection *connection,
 int rtos_get_gdb_reg(struct connection *connection, int reg_num)
 {
 	struct target *target = get_target_from_connection(connection);
-	int64_t current_threadid = target->rtos->current_threadid;
+	threadid_t current_threadid = target->rtos->current_threadid;
 	if ((target->rtos != NULL) && (current_threadid != -1) &&
 			(current_threadid != 0) &&
 			((current_threadid != target->rtos->current_thread) ||

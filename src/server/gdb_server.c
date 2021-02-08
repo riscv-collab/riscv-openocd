@@ -2635,6 +2635,7 @@ static int gdb_query_packet(struct connection *connection,
 			cmd = malloc((packet_size - 6) / 2 + 1);
 			size_t len = unhexify((uint8_t *)cmd, packet + 6, (packet_size - 6) / 2);
 			cmd[len] = 0;
+			LOG_DEBUG("qRcmd: %s", cmd);
 
 			/* We want to print all debug output to GDB connection */
 			log_add_callback(gdb_log_callback, connection);

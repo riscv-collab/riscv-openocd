@@ -58,7 +58,7 @@ struct rtos {
 	int thread_count;
 	int (*gdb_thread_packet)(struct connection *connection, char const *packet, int packet_size);
 	int (*gdb_v_packet)(struct connection *connection, char const *packet, int packet_size);
-	int (*gdb_target_for_threadid)(struct connection *connection, int64_t thread_id, struct target **p_target);
+	int (*gdb_target_for_threadid)(struct connection *connection, threadid_t thread_id, struct target **p_target);
 	void *rtos_specific_params;
 };
 
@@ -75,9 +75,9 @@ struct rtos_type {
 	int (*smp_init)(struct target *target);
 	int (*update_threads)(struct rtos *rtos);
 	/** Return a list of general registers, with their values filled out. */
-	int (*get_thread_reg_list)(struct rtos *rtos, int64_t thread_id,
+	int (*get_thread_reg_list)(struct rtos *rtos, threadid_t thread_id,
 			struct rtos_reg **reg_list, int *num_regs);
-	int (*get_thread_reg)(struct rtos *rtos, int64_t thread_id,
+	int (*get_thread_reg)(struct rtos *rtos, threadid_t thread_id,
 			uint32_t reg_num, struct rtos_reg *reg);
 	int (*get_symbol_list_to_lookup)(symbol_table_elem_t *symbol_list[]);
 	int (*clean)(struct target *target);
@@ -89,7 +89,7 @@ struct rtos_type {
 	 * the thread current. This is an assumption that cannot hold for a real
 	 * target running a multi-threading OS. If an RTOS can do this, override
 	 * needs_fake_step(). */
-	bool (*needs_fake_step)(struct target *target, int64_t thread_id);
+	bool (*needs_fake_step)(struct target *target, threadid_t thread_id);
 	/* Implement these if different threads in the RTOS can see memory
 	 * differently (for instance because address translation might be different
 	 * for each thread). */
@@ -142,7 +142,7 @@ void rtos_free_threadlist(struct rtos *rtos);
 int rtos_smp_init(struct target *target);
 /*  function for handling symbol access */
 int rtos_qsymbol(struct connection *connection, char const *packet, int packet_size);
-bool rtos_needs_fake_step(struct target *target, int64_t thread_id);
+bool rtos_needs_fake_step(struct target *target, threadid_t thread_id);
 int rtos_read_buffer(struct target *target, target_addr_t address,
 		uint32_t size, uint8_t *buffer);
 int rtos_write_buffer(struct target *target, target_addr_t address,
