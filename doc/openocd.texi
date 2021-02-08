@@ -9987,7 +9987,10 @@ external tools can gather the data efficiently.
 @deffn Command {riscv expose_csrs} n[-m|=name] [...]
 Configure which CSRs to expose in addition to the standard ones. The CSRs to expose
 can be specified as individual register numbers or register ranges (inclusive). For the
-individually listed CSRs, a human-readable name can optionally be set.
+individually listed CSRs, a human-readable name can optionally be set, which
+will get csr_ prepended to it. If no name is provided, the register will be
+named csr<n>.
+
 This command must be executed before `init`.
 
 By default OpenOCD attempts to expose only CSRs that are mentioned in a spec,
