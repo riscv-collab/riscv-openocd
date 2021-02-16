@@ -57,6 +57,19 @@ struct FreeRTOS_params {
 	const struct rtos_register_stacking *stacking_info_cm4f_fpu;
 };
 
+struct FreeRTOS_thread_entry {
+	struct list_head list;
+	threadid_t threadid;
+	target_addr_t tcb;
+};
+
+struct FreeRTOS {
+	const struct FreeRTOS_params *param;
+	unsigned thread_count;
+	struct list_head thread_list;
+	threadid_t next_threadid;
+};
+
 static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	{
 	"cortex_m",			/* target_name */
@@ -178,21 +191,21 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 {
 	int retval;
 	unsigned int tasks_found = 0;
-	const struct FreeRTOS_params *param;
 
 	if (rtos->rtos_specific_params == NULL)
-		return -1;
+		return ERROR_FAIL;
 
-	param = (const struct FreeRTOS_params *) rtos->rtos_specific_params;
+	struct FreeRTOS *freertos = (struct FreeRTOS *) rtos->rtos_specific_params;
+	const struct FreeRTOS_params *param = freertos->param;
 
 	if (rtos->symbols == NULL) {
 		LOG_ERROR("No symbols for FreeRTOS");
-		return -3;
+		return ERROR_FAIL;
 	}
 
 	if (rtos->symbols[FreeRTOS_VAL_uxCurrentNumberOfTasks].address == 0) {
 		LOG_ERROR("Don't have the number of threads in FreeRTOS");
-		return -2;
+		return ERROR_FAIL;
 	}
 
 	uint32_t thread_list_size = 0;
@@ -312,6 +325,7 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 			continue;
 
 		/* Read the number of threads in this list */
+		// TODO: on RV64 read 64 bits
 		uint32_t list_thread_count = 0;
 		retval = target_read_u32(rtos->target,
 				list_of_lists[i],
@@ -329,6 +343,7 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 
 		/* Read the location of first list item */
 		uint32_t prev_list_elem_ptr = -1;
+		// TODO: RV64
 		uint32_t list_elem_ptr = 0;
 		retval = target_read_u32(rtos->target,
 				list_of_lists[i] + param->list_next_offset,
@@ -354,10 +369,18 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 				free(list_of_lists);
 				return retval;
 			}
-			rtos->thread_details[tasks_found].threadid = pointer_casts_are_bad;
-			LOG_DEBUG("FreeRTOS: Read Thread ID at 0x%" PRIx32 ", value 0x%" PRIx64,
-										list_elem_ptr + param->list_elem_content_offset,
-										rtos->thread_details[tasks_found].threadid);
+			// TODO: Check if this TCB is already in the list, and if so reuse the threadid.
+			struct FreeRTOS_thread_entry *entry = calloc(1, sizeof(struct FreeRTOS_thread_entry));
+			entry->tcb = pointer_casts_are_bad;
+			entry->threadid = freertos->next_threadid++;
+			rtos->thread_details[tasks_found].threadid = entry->threadid;
+
+			list_add(&entry->list, &freertos->thread_list);
+
+			LOG_DEBUG("FreeRTOS: Thread %" PRId64 " has TCB 0x%" TARGET_PRIxADDR
+					  "; read from 0x%" PRIx32,
+					  entry->threadid, entry->tcb,
+					  list_elem_ptr + param->list_elem_content_offset);
 
 			/* get thread name */
 
@@ -366,7 +389,7 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 
 			/* Read the thread name */
 			retval = target_read_buffer(rtos->target,
-					rtos->thread_details[tasks_found].threadid + param->thread_name_offset,
+					entry->tcb + param->thread_name_offset,
 					FREERTOS_THREAD_NAME_STR_SIZE,
 					(uint8_t *)&tmp_str);
 			if (retval != ERROR_OK) {
@@ -424,7 +447,6 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
 		struct rtos_reg **reg_list, int *num_regs)
 {
 	int retval;
-	const struct FreeRTOS_params *param;
 	int64_t stack_ptr = 0;
 
 	if (rtos == NULL)
@@ -436,7 +458,8 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
 	if (rtos->rtos_specific_params == NULL)
 		return -1;
 
-	param = (const struct FreeRTOS_params *) rtos->rtos_specific_params;
+	struct FreeRTOS *freertos = (struct FreeRTOS *) rtos->rtos_specific_params;
+	const struct FreeRTOS_params *param = freertos->param;
 
 	/* Read the stack pointer */
 	uint32_t pointer_casts_are_bad;
@@ -572,9 +595,17 @@ static int FreeRTOS_create(struct target *target)
 	}
 	if (i >= FREERTOS_NUM_PARAMS) {
 		LOG_ERROR("Could not find target in FreeRTOS compatibility list");
-		return -1;
+		return ERROR_FAIL;
 	}
 
-	target->rtos->rtos_specific_params = (void *) &FreeRTOS_params_list[i];
+	target->rtos->rtos_specific_params = calloc(1, sizeof(struct FreeRTOS));
+	if (target->rtos->rtos_specific_params == NULL) {
+		LOG_ERROR("calloc failed");
+		return ERROR_FAIL;
+	}
+
+	struct FreeRTOS *freertos = (struct FreeRTOS *) target->rtos->rtos_specific_params;
+	freertos->param = &FreeRTOS_params_list[i];
+
 	return 0;
 }
