@@ -32,6 +32,7 @@
 
 #include "jtag.h"
 #include "interface.h"
+#include <string.h>
 
 /**
  * @see tap_set_state() and tap_get_state() accessors.

@@ -27,6 +27,7 @@
 #include <jtag/interface.h>
 #include <transport/transport.h>
 #include <helper/time_support.h>
+#include <string.h>
 
 static int jim_newtap_expected_id(Jim_Nvp *n, Jim_GetOptInfo *goi,
 				  struct jtag_tap *pTap)

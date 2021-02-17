@@ -30,16 +30,13 @@
 #include "config.h"
 #endif
 
+#include <string.h>
 #include "jtag.h"
 #include "minidriver.h"
 #include "interface.h"
 #include "interfaces.h"
 #include <transport/transport.h>
 #include <jtag/drivers/jtag_usb_common.h>
-
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
 
 /**
  * @file

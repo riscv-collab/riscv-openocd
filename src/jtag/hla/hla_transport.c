@@ -32,6 +32,7 @@
 #include <jtag/hla/hla_tcl.h>
 #include <jtag/hla/hla_transport.h>
 #include <jtag/hla/hla_interface.h>
+#include <string.h>
 
 COMMAND_HANDLER(hl_transport_jtag_command)
 {

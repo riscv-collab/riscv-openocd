@@ -25,6 +25,7 @@
 #include <jtag/commands.h>
 #include <jtag/tcl.h>
 #include <libusb.h>
+#include <string.h>
 
 /* XDS110 USB serial number length */
 #define XDS110_SERIAL_LEN 8

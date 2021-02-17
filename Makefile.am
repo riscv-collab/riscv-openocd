@@ -15,7 +15,7 @@ nobase_dist_pkgdata_DATA = \
 	contrib/libdcc/README \
 	contrib/60-openocd.rules
 
-SUBDIRS =
+SUBDIRS = lib
 DIST_SUBDIRS =
 bin_PROGRAMS =
 noinst_LTLIBRARIES =
@@ -27,6 +27,8 @@ if INTERNAL_JIMTCL
 SUBDIRS += jimtcl
 DIST_SUBDIRS += jimtcl
 endif
+
+ACLOCAL_AMFLAGS = -I m4
 
 # common flags used in openocd build
 AM_CFLAGS = $(GCC_WARNINGS)
@@ -54,7 +56,8 @@ EXTRA_DIST += \
 	tools/logger.pl \
 	tools/rlink_make_speed_table \
 	tools/st7_dtc_as \
-	contrib
+	contrib \
+	m4/gnulib-cache.m4
 
 libtool: $(LIBTOOL_DEPS)
 	$(SHELL) ./config.status --recheck

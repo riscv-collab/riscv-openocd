@@ -37,6 +37,7 @@
 
 #include <hidapi.h>
 #include <helper/log.h>
+#include <string.h>
 
 #include "cmsis_dap.h"
 

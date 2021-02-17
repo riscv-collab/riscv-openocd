@@ -35,6 +35,7 @@
 #include "minidriver.h"
 #include "interface.h"
 #include "interfaces.h"
+#include <string.h>
 #include "tcl.h"
 
 #ifdef HAVE_STRINGS_H

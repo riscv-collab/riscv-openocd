@@ -32,7 +32,10 @@
 #define OPENOCD_TARGET_TARGET_H
 
 #include <helper/list.h>
+#include "helper/replacements.h"
+#include "helper/system.h"
 #include <jim.h>
+#include <string.h>
 
 struct reg;
 struct trace;

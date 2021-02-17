@@ -32,6 +32,7 @@
 #include <jtag/hla/hla_layout.h>
 #include <jtag/hla/hla_transport.h>
 #include <jtag/hla/hla_interface.h>
+#include <string.h>
 
 #include <target/target.h>
 

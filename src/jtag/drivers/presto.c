@@ -29,6 +29,7 @@
 #include "windows.h"
 #endif
 
+#include <string.h>
 #include <jtag/interface.h>
 #include <helper/time_support.h>
 #include "bitq.h"
