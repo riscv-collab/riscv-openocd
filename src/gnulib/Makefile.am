@@ -24,15 +24,15 @@
 # Reproduce by:
 # gnulib-tool --import \
 #  --lib=libgnu \
-#  --source-base=lib \
-#  --m4-base=m4 \
+#  --source-base=src/gnulib \
+#  --m4-base=src/m4 \
 #  --doc-base=doc \
 #  --tests-base=tests \
 #  --aux-dir=. \
 #  --no-conditional-dependencies \
 #  --no-libtool \
 #  --macro-prefix=gl \
-#  rbtreehash-list
+#  linkedhash-map
 
 AUTOMAKE_OPTIONS = 1.11 gnits
 
@@ -104,29 +104,17 @@ EXTRA_DIST += limits.in.h
 
 ## end   gnulib module limits-h
 
-## begin gnulib module list
+## begin gnulib module linkedhash-map
 
-libgnu_a_SOURCES += gl_list.h gl_list.c
+libgnu_a_SOURCES += gl_linkedhash_map.h gl_linkedhash_map.c gl_anyhash1.h gl_anyhash2.h gl_anyhash_primes.h
 
-## end   gnulib module list
+## end   gnulib module linkedhash-map
 
-## begin gnulib module oset
+## begin gnulib module map
 
-libgnu_a_SOURCES += gl_oset.h gl_oset.c
+libgnu_a_SOURCES += gl_map.h gl_map.c
 
-## end   gnulib module oset
-
-## begin gnulib module rbtree-oset
-
-libgnu_a_SOURCES += gl_rbtree_oset.h gl_rbtree_oset.c gl_rbtree_ordered.h gl_anytree_oset.h
-
-## end   gnulib module rbtree-oset
-
-## begin gnulib module rbtreehash-list
-
-libgnu_a_SOURCES += gl_rbtreehash_list.h gl_rbtreehash_list.c gl_anyhash1.h gl_anyhash2.h gl_anyhash_primes.h gl_anyrbtree_list1.h gl_anyrbtree_list2.h gl_anytree_list1.h gl_anytree_list2.h gl_anytreehash_list1.h gl_anytreehash_list2.h
-
-## end   gnulib module rbtreehash-list
+## end   gnulib module map
 
 ## begin gnulib module size_max
 

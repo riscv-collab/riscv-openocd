@@ -15,7 +15,7 @@ nobase_dist_pkgdata_DATA = \
 	contrib/libdcc/README \
 	contrib/60-openocd.rules
 
-SUBDIRS = lib
+SUBDIRS =
 DIST_SUBDIRS =
 bin_PROGRAMS =
 noinst_LTLIBRARIES =
@@ -56,8 +56,7 @@ EXTRA_DIST += \
 	tools/logger.pl \
 	tools/rlink_make_speed_table \
 	tools/st7_dtc_as \
-	contrib \
-	m4/gnulib-cache.m4
+	contrib
 
 libtool: $(LIBTOOL_DEPS)
 	$(SHELL) ./config.status --recheck

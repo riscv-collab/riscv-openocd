@@ -1,6 +1,6 @@
-/* Ordered set data type implemented by a binary tree.
+/* Map data type implemented by a hash table with a linked list.
    Copyright (C) 2006, 2009-2021 Free Software Foundation, Inc.
-   Written by Bruno Haible <bruno@clisp.org>, 2006.
+   Written by Bruno Haible <bruno@clisp.org>, 2018.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -15,20 +15,20 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
-#ifndef _GL_RBTREE_OSET_H
-#define _GL_RBTREE_OSET_H
+#ifndef _GL_LINKEDHASH_MAP_H
+#define _GL_LINKEDHASH_MAP_H
 
-#include "gl_oset.h"
+#include "gl_map.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern const struct gl_oset_implementation gl_rbtree_oset_implementation;
-#define GL_RBTREE_OSET &gl_rbtree_oset_implementation
+extern const struct gl_map_implementation gl_linkedhash_map_implementation;
+#define GL_LINKEDHASH_MAP &gl_linkedhash_map_implementation
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* _GL_RBTREE_OSET_H */
+#endif /* _GL_LINKEDHASH_MAP_H */

@@ -29,24 +29,24 @@
 # Specification in the form of a command-line invocation:
 # gnulib-tool --import \
 #  --lib=libgnu \
-#  --source-base=lib \
-#  --m4-base=m4 \
+#  --source-base=src/gnulib \
+#  --m4-base=src/m4 \
 #  --doc-base=doc \
 #  --tests-base=tests \
 #  --aux-dir=. \
 #  --no-conditional-dependencies \
 #  --no-libtool \
 #  --macro-prefix=gl \
-#  rbtreehash-list
+#  linkedhash-map
 
 # Specification in the form of a few gnulib-tool.m4 macro invocations:
 gl_LOCAL_DIR([])
 gl_MODULES([
-  rbtreehash-list
+  linkedhash-map
 ])
 gl_AVOID([])
-gl_SOURCE_BASE([lib])
-gl_M4_BASE([m4])
+gl_SOURCE_BASE([src/gnulib])
+gl_M4_BASE([src/m4])
 gl_PO_BASE([])
 gl_DOC_BASE([doc])
 gl_TESTS_BASE([tests])

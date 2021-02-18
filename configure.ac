@@ -855,7 +855,7 @@ AS_IF([test "x$gcc_warnings" = "xyes"], [
 
 AC_CONFIG_FILES([
   Makefile
-  lib/Makefile
+  src/gnulib/Makefile
 ])
 AC_OUTPUT
 

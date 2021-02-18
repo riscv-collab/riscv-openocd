@@ -43,17 +43,16 @@ AC_DEFUN([gl_EARLY],
 
   # Code from module absolute-header:
   # Code from module attribute:
-  # Code from module builtin-expect:
+  # Code from module c99:
   # Code from module extern-inline:
   # Code from module include_next:
   # Code from module limits-h:
-  # Code from module list:
+  # Code from module linkedhash-map:
+  # Code from module map:
   # Code from module multiarch:
-  # Code from module oset:
-  # Code from module rbtree-oset:
-  # Code from module rbtreehash-list:
   # Code from module size_max:
   # Code from module ssize_t:
+  # Code from module std-gnu11:
   # Code from module stdbool:
   # Code from module stdint:
   # Code from module sys_types:
@@ -68,19 +67,17 @@ AC_DEFUN([gl_INIT],
   gl_cond_libtool=false
   gl_libdeps=
   gl_ltlibdeps=
-  gl_m4_base='m4'
+  gl_m4_base='src/m4'
   m4_pushdef([AC_LIBOBJ], m4_defn([gl_LIBOBJ]))
   m4_pushdef([AC_REPLACE_FUNCS], m4_defn([gl_REPLACE_FUNCS]))
   m4_pushdef([AC_LIBSOURCES], m4_defn([gl_LIBSOURCES]))
   m4_pushdef([gl_LIBSOURCES_LIST], [])
   m4_pushdef([gl_LIBSOURCES_DIR], [])
   gl_COMMON
-  gl_source_base='lib'
-  gl___BUILTIN_EXPECT
+  gl_source_base='src/gnulib'
   AC_REQUIRE([gl_EXTERN_INLINE])
   gl_LIMITS_H
   gl_MULTIARCH
-  AC_REQUIRE([AC_C_INLINE])
   gl_SIZE_MAX
   gt_TYPE_SSIZE_T
   AM_STDBOOL_H
@@ -192,7 +189,7 @@ AC_DEFUN([gl_REPLACE_FUNCS], [
 AC_DEFUN([gl_LIBSOURCES], [
   m4_foreach([_gl_NAME], [$1], [
     m4_if(_gl_NAME, [alloca.c], [], [
-      m4_define([gl_LIBSOURCES_DIR], [lib])
+      m4_define([gl_LIBSOURCES_DIR], [src/gnulib])
       m4_append([gl_LIBSOURCES_LIST], _gl_NAME, [ ])
     ])
   ])
@@ -232,22 +229,10 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/gl_anyhash1.h
   lib/gl_anyhash2.h
   lib/gl_anyhash_primes.h
-  lib/gl_anyrbtree_list1.h
-  lib/gl_anyrbtree_list2.h
-  lib/gl_anytree_list1.h
-  lib/gl_anytree_list2.h
-  lib/gl_anytree_oset.h
-  lib/gl_anytreehash_list1.h
-  lib/gl_anytreehash_list2.h
-  lib/gl_list.c
-  lib/gl_list.h
-  lib/gl_oset.c
-  lib/gl_oset.h
-  lib/gl_rbtree_ordered.h
-  lib/gl_rbtree_oset.c
-  lib/gl_rbtree_oset.h
-  lib/gl_rbtreehash_list.c
-  lib/gl_rbtreehash_list.h
+  lib/gl_linkedhash_map.c
+  lib/gl_linkedhash_map.h
+  lib/gl_map.c
+  lib/gl_map.h
   lib/limits.in.h
   lib/size_max.h
   lib/stdbool.in.h
@@ -257,7 +242,6 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/xsize.h
   m4/00gnulib.m4
   m4/absolute-header.m4
-  m4/builtin-expect.m4
   m4/extern-inline.m4
   m4/gnulib-common.m4
   m4/include_next.m4
@@ -267,6 +251,7 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/pid_t.m4
   m4/size_max.m4
   m4/ssize_t.m4
+  m4/std-gnu11.m4
   m4/stdbool.m4
   m4/stdint.m4
   m4/sys_types_h.m4
