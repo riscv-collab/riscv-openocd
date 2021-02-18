@@ -63,10 +63,12 @@ struct FreeRTOS_thread_entry {
 
 struct FreeRTOS {
 	const struct FreeRTOS_params *param;
-	unsigned thread_count;
-	/* Map from tcb to FreeRTOS_thread_entry. */
-	gl_map_t thread_map;
 	threadid_t next_threadid;
+	/* Map from threadid to FreeRTOS_thread_entry. This map owns the value and
+	 * is responsible for free()ing it. */
+	gl_map_t entry_by_threadid;
+	/* Map from tcb to FreeRTOS_thread_entry. */
+	gl_map_t entry_by_tcb;
 };
 
 static const struct FreeRTOS_params FreeRTOS_params_list[] = {
@@ -368,17 +370,27 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 				free(list_of_lists);
 				return retval;
 			}
-			// TODO: Check if this TCB is already in the list, and if so reuse the threadid.
-			target_addr_t *key = calloc(1, sizeof(target_addr_t));
-			struct FreeRTOS_thread_entry *value = calloc(1, sizeof(struct FreeRTOS_thread_entry));
-			value->tcb = pointer_casts_are_bad;
-			value->threadid = freertos->next_threadid++;
-			rtos->thread_details[tasks_found].threadid = value->threadid;
 
-			if (gl_map_nx_put(freertos->thread_map, key, value) == -1) {
-				LOG_ERROR("gl_map_nx_put failed");
-				return ERROR_FAIL;
+			const struct FreeRTOS_thread_entry *value =
+					gl_map_get(freertos->entry_by_tcb, &pointer_casts_are_bad);
+
+			if (value == NULL) {
+				struct FreeRTOS_thread_entry *new_value = calloc(1, sizeof(struct FreeRTOS_thread_entry));
+				new_value->tcb = pointer_casts_are_bad;
+				new_value->threadid = freertos->next_threadid++;
+
+				if (gl_map_nx_put(freertos->entry_by_tcb, &new_value->tcb, new_value) == -1) {
+					LOG_ERROR("gl_map_nx_put failed");
+					return ERROR_FAIL;
+				}
+				if (gl_map_nx_put(freertos->entry_by_threadid, &new_value->threadid, new_value) == -1) {
+					LOG_ERROR("gl_map_nx_put failed");
+					return ERROR_FAIL;
+				}
+				value = new_value;
 			}
+
+			rtos->thread_details[tasks_found].threadid = value->threadid;
 
 			LOG_DEBUG("FreeRTOS: Thread %" PRId64 " has TCB 0x%" TARGET_PRIxADDR
 					  "; read from 0x%" PRIx32,
@@ -464,10 +476,17 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
 	struct FreeRTOS *freertos = (struct FreeRTOS *) rtos->rtos_specific_params;
 	const struct FreeRTOS_params *param = freertos->param;
 
+	const struct FreeRTOS_thread_entry *entry =
+			gl_map_get(freertos->entry_by_threadid, &thread_id);
+	if (entry == NULL) {
+		LOG_ERROR("Unknown thread id: %" PRId64, thread_id);
+		return ERROR_FAIL;
+	}
+
 	/* Read the stack pointer */
 	uint32_t pointer_casts_are_bad;
 	retval = target_read_u32(rtos->target,
-			thread_id + param->thread_stack_offset,
+			entry->tcb + param->thread_stack_offset,
 			&pointer_casts_are_bad);
 	if (retval != ERROR_OK) {
 		LOG_ERROR("Error reading stack frame from FreeRTOS thread %" PRIx64, thread_id);
@@ -475,7 +494,7 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
 	}
 	stack_ptr = pointer_casts_are_bad;
 	LOG_DEBUG("FreeRTOS: Read stack pointer at 0x%" PRIx64 ", value 0x%" PRIx64,
-										thread_id + param->thread_stack_offset,
+										entry->tcb + param->thread_stack_offset,
 										stack_ptr);
 
 	/* Check for armv7m with *enabled* FPU, i.e. a Cortex-M4F */
@@ -627,9 +646,15 @@ static int FreeRTOS_create(struct target *target)
 	}
 
 	struct FreeRTOS *freertos = (struct FreeRTOS *) target->rtos->rtos_specific_params;
-	freertos->thread_map = gl_map_nx_create_empty(
-		GL_LINKEDHASH_MAP, target_addr_equals, target_addr_hash, free_const, free_const);
-	if (freertos->thread_map == NULL) {
+	freertos->entry_by_threadid = gl_map_nx_create_empty(
+		GL_LINKEDHASH_MAP, target_addr_equals, target_addr_hash, NULL, free_const);
+	if (freertos->entry_by_threadid == NULL) {
+		LOG_ERROR("gl_map_nx_create_empty failed");
+		return ERROR_FAIL;
+	}
+	freertos->entry_by_tcb = gl_map_nx_create_empty(
+		GL_LINKEDHASH_MAP, target_addr_equals, target_addr_hash, NULL, NULL);
+	if (freertos->entry_by_tcb == NULL) {
 		LOG_ERROR("gl_map_nx_create_empty failed");
 		return ERROR_FAIL;
 	}
