@@ -124,7 +124,7 @@ static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	12,						/* list_elem_content_offset */
 	0,						/* thread_stack_offset; */
 	52,						/* thread_name_offset; */
-	NULL,	/* stacking_info */
+	&rtos_standard_RV32_stacking,	/* stacking_info */
 	NULL,
 	NULL,
 	},
@@ -371,12 +371,13 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 				return retval;
 			}
 
+			target_addr_t tcb = pointer_casts_are_bad;
 			const struct FreeRTOS_thread_entry *value =
-					gl_map_get(freertos->entry_by_tcb, &pointer_casts_are_bad);
+					gl_map_get(freertos->entry_by_tcb, &tcb);
 
 			if (value == NULL) {
 				struct FreeRTOS_thread_entry *new_value = calloc(1, sizeof(struct FreeRTOS_thread_entry));
-				new_value->tcb = pointer_casts_are_bad;
+				new_value->tcb = tcb;
 				new_value->threadid = freertos->next_threadid++;
 
 				if (gl_map_nx_put(freertos->entry_by_tcb, &new_value->tcb, new_value) == -1) {
@@ -414,7 +415,7 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 			}
 			tmp_str[FREERTOS_THREAD_NAME_STR_SIZE-1] = '\x00';
 			LOG_DEBUG("FreeRTOS: Read Thread Name at 0x%" PRIx64 ", value '%s'",
-										rtos->thread_details[tasks_found].threadid + param->thread_name_offset,
+										value->tcb + param->thread_name_offset,
 										tmp_str);
 
 			if (tmp_str[0] == '\x00')
