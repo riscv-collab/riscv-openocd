@@ -575,7 +575,7 @@ int rtos_set_reg(struct connection *connection, int reg_num,
 
 int rtos_generic_stack_read(struct target *target,
 	const struct rtos_register_stacking *stacking,
-	int64_t stack_ptr,
+	target_addr_t stack_ptr,
 	struct rtos_reg **reg_list,
 	int *num_regs)
 {
@@ -587,7 +587,7 @@ int rtos_generic_stack_read(struct target *target,
 	}
 	/* Read the stack */
 	uint8_t *stack_data = malloc(stacking->stack_registers_size);
-	uint32_t address = stack_ptr;
+	target_addr_t address = stack_ptr;
 
 	if (stacking->stack_growth_direction == 1)
 		address -= stacking->stack_registers_size;
@@ -597,7 +597,7 @@ int rtos_generic_stack_read(struct target *target,
 		LOG_ERROR("Error reading stack frame from thread");
 		return retval;
 	}
-	LOG_DEBUG("RTOS: Read stack frame at 0x%" PRIx32, address);
+	LOG_DEBUG("RTOS: Read stack frame at " TARGET_ADDR_FMT, address);
 
 #if 0
 		LOG_OUTPUT("Stack Data :");
@@ -627,6 +627,9 @@ int rtos_generic_stack_read(struct target *target,
 			buf_cpy(&new_stack_ptr, (*reg_list)[i].value, (*reg_list)[i].size);
 		else if (offset != -1)
 			buf_cpy(stack_data + offset, (*reg_list)[i].value, (*reg_list)[i].size);
+
+		LOG_DEBUG("register %d has value 0x%" PRIx64, (*reg_list)[i].number,
+				  buf_get_u64((*reg_list)[i].value, 0, 64));
 	}
 
 	free(stack_data);

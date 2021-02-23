@@ -131,7 +131,7 @@ int rtos_set_reg(struct connection *connection, int reg_num,
 		uint8_t *reg_value);
 int rtos_generic_stack_read(struct target *target,
 		const struct rtos_register_stacking *stacking,
-		int64_t stack_ptr,
+		target_addr_t stack_ptr,
 		struct rtos_reg **reg_list,
 		int *num_regs);
 int gdb_thread_packet(struct connection *connection, char const *packet, int packet_size);

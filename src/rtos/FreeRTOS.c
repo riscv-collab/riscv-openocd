@@ -63,7 +63,7 @@ struct FreeRTOS_thread_entry {
 
 struct FreeRTOS {
 	const struct FreeRTOS_params *param;
-	threadid_t next_threadid;
+	threadid_t last_threadid;
 	/* Map from threadid to FreeRTOS_thread_entry. This map owns the value and
 	 * is responsible for free()ing it. */
 	gl_map_t entry_by_threadid;
@@ -213,7 +213,8 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 	retval = target_read_u32(rtos->target,
 			rtos->symbols[FreeRTOS_VAL_uxCurrentNumberOfTasks].address,
 			&thread_list_size);
-	LOG_DEBUG("FreeRTOS: Read uxCurrentNumberOfTasks at 0x%" PRIx64 ", value %" PRIu32,
+	// DEBUG
+	LOG_INFO("FreeRTOS: Read uxCurrentNumberOfTasks at 0x%" PRIx64 ", value %" PRIu32,
 										rtos->symbols[FreeRTOS_VAL_uxCurrentNumberOfTasks].address,
 										thread_list_size);
 
@@ -235,11 +236,12 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 		return retval;
 	}
 	rtos->current_thread = pointer_casts_are_bad;
-	LOG_DEBUG("FreeRTOS: Read pxCurrentTCB at 0x%" PRIx64 ", value 0x%" PRIx64,
+	// DEBUG
+	LOG_INFO("FreeRTOS: Read pxCurrentTCB at 0x%" PRIx64 ", value 0x%" PRIx64,
 										rtos->symbols[FreeRTOS_VAL_pxCurrentTCB].address,
 										rtos->current_thread);
 
-	if ((thread_list_size  == 0) || (rtos->current_thread == 0)) {
+	if ((thread_list_size == 0) || (rtos->current_thread == 0)) {
 		/* Either : No RTOS threads - there is always at least the current execution though */
 		/* OR     : No current thread - all threads suspended - show the current execution
 		 * of idling */
@@ -378,7 +380,8 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 			if (value == NULL) {
 				struct FreeRTOS_thread_entry *new_value = calloc(1, sizeof(struct FreeRTOS_thread_entry));
 				new_value->tcb = tcb;
-				new_value->threadid = freertos->next_threadid++;
+				/* threadid can't be 0. */
+				new_value->threadid = ++freertos->last_threadid;
 
 				if (gl_map_nx_put(freertos->entry_by_tcb, &new_value->tcb, new_value) == -1) {
 					LOG_ERROR("gl_map_nx_put failed");
@@ -393,7 +396,8 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 
 			rtos->thread_details[tasks_found].threadid = value->threadid;
 
-			LOG_DEBUG("FreeRTOS: Thread %" PRId64 " has TCB 0x%" TARGET_PRIxADDR
+			// TODO: LOG_DEBUG
+			LOG_INFO("FreeRTOS: Thread %" PRId64 " has TCB 0x%" TARGET_PRIxADDR
 					  "; read from 0x%" PRIx32,
 					  value->threadid, value->tcb,
 					  list_elem_ptr + param->list_elem_content_offset);
@@ -494,9 +498,8 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
 		return retval;
 	}
 	stack_ptr = pointer_casts_are_bad;
-	LOG_DEBUG("FreeRTOS: Read stack pointer at 0x%" PRIx64 ", value 0x%" PRIx64,
-										entry->tcb + param->thread_stack_offset,
-										stack_ptr);
+	LOG_DEBUG("[%" PRId64 "] FreeRTOS: Read stack pointer at 0x%" PRIx64 ", value 0x%" PRIx64,
+			  thread_id, entry->tcb + param->thread_stack_offset, stack_ptr);
 
 	/* Check for armv7m with *enabled* FPU, i.e. a Cortex-M4F */
 	int cm4_fpu_enabled = 0;

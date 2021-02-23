@@ -1318,7 +1318,7 @@ static int gdb_get_register_packet(struct connection *connection,
 
 	if (reg_list_size <= reg_num) {
 		LOG_ERROR("gdb requested a non-existing register");
-		return ERROR_SERVER_REMOTE_CLOSED;
+		return gdb_error(connection, retval);
 	}
 
 	if (!reg_list[reg_num]->valid) {
