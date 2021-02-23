@@ -213,8 +213,7 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 	retval = target_read_u32(rtos->target,
 			rtos->symbols[FreeRTOS_VAL_uxCurrentNumberOfTasks].address,
 			&thread_list_size);
-	// DEBUG
-	LOG_INFO("FreeRTOS: Read uxCurrentNumberOfTasks at 0x%" PRIx64 ", value %" PRIu32,
+	LOG_DEBUG("FreeRTOS: Read uxCurrentNumberOfTasks at 0x%" PRIx64 ", value %" PRIu32,
 										rtos->symbols[FreeRTOS_VAL_uxCurrentNumberOfTasks].address,
 										thread_list_size);
 
@@ -236,8 +235,7 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 		return retval;
 	}
 	target_addr_t pxCurrentTCB = pointer_casts_are_bad;
-	// DEBUG
-	LOG_INFO("FreeRTOS: Read pxCurrentTCB at 0x%" PRIx64 ", value 0x%" PRIx64,
+	LOG_DEBUG("FreeRTOS: Read pxCurrentTCB at 0x%" PRIx64 ", value 0x%" PRIx64,
 										rtos->symbols[FreeRTOS_VAL_pxCurrentTCB].address,
 										pxCurrentTCB);
 
@@ -329,7 +327,6 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 			continue;
 
 		/* Read the number of threads in this list */
-		// TODO: on RV64 read 64 bits
 		uint32_t list_thread_count = 0;
 		retval = target_read_u32(rtos->target,
 				list_of_lists[i],
@@ -347,7 +344,6 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 
 		/* Read the location of first list item */
 		uint32_t prev_list_elem_ptr = -1;
-		// TODO: RV64
 		uint32_t list_elem_ptr = 0;
 		retval = target_read_u32(rtos->target,
 				list_of_lists[i] + param->list_next_offset,
@@ -397,8 +393,7 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 
 			rtos->thread_details[tasks_found].threadid = value->threadid;
 
-			// TODO: LOG_DEBUG
-			LOG_INFO("FreeRTOS: Thread %" PRId64 " has TCB 0x%" TARGET_PRIxADDR
+			LOG_DEBUG("FreeRTOS: Thread %" PRId64 " has TCB 0x%" TARGET_PRIxADDR
 					  "; read from 0x%" PRIx32,
 					  value->threadid, value->tcb,
 					  list_elem_ptr + param->list_elem_content_offset);
