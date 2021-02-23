@@ -276,9 +276,9 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 	uint32_t top_used_priority = 0;
 	if (rtos->symbols[FreeRTOS_VAL_uxTopUsedPriority].address == 0) {
 		LOG_WARNING("FreeRTOS: uxTopUsedPriority is not defined, consult the OpenOCD manual for a work-around");
-		// This is a hack specific to the binary I'm debugging.
-		// Ideally we get https://github.com/FreeRTOS/FreeRTOS-Kernel/issues/33
-		// into our FreeRTOS source.
+		/* This is a hack specific to the binary I'm debugging.
+		 * Ideally we get https://github.com/FreeRTOS/FreeRTOS-Kernel/issues/33
+		 * into our FreeRTOS source. */
 		top_used_priority = 6;
 	} else {
 		retval = target_read_u32(rtos->target,
@@ -618,8 +618,8 @@ static bool target_addr_equals(const void *x1, const void *x2)
 
 static size_t target_addr_hash(const void *x)
 {
-  const target_addr_t *a = x;
-  return *a;
+	const target_addr_t *a = x;
+	return *a;
 }
 
 static void free_const(const void *x)
