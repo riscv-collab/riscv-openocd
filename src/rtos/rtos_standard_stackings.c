@@ -153,6 +153,8 @@ static const struct stack_register_offset rtos_standard_NDS32_N1068_stack_offset
 };
 
 static const struct stack_register_offset rtos_standard_RV32_stack_offsets[] = {
+	/* zero isn't on the stack. By making its offset -1 we leave the value at 0
+	 * inside rtos_generic_stack_read(). */
 	{ 0,  -1, 32 },		/* x1 */
 	{ 1,  0x00, 32 },		/* x1 */
 	{ 2,  0x04, 32 },		/* x2 */
@@ -186,7 +188,8 @@ static const struct stack_register_offset rtos_standard_RV32_stack_offsets[] = {
 	{ 30, 0x74, 32 },		/* x30 */
 	{ 31, 0x78, 32 },		/* x31 */
 	{ 32, 0x7c, 32 },		/* pc */
-	{ 65 + 0x300, 0x80, 32 },		/* mstatus */
+	/* mstatus is next on the stack, but it's not a general register so gdb
+	 * doesn't expect it in response to 'g'. */
 };
 
 static int64_t rtos_generic_stack_align(struct target *target,
