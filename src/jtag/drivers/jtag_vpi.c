@@ -34,7 +34,6 @@
 #endif
 
 #include "helper/replacements.h"
-#include <string.h>
 
 #define NO_TAP_SHIFT	0
 #define TAP_SHIFT	1

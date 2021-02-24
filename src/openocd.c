@@ -36,7 +36,6 @@
 #include <flash/nor/core.h>
 #include <flash/nand/core.h>
 #include <pld/pld.h>
-#include <string.h>
 #include <target/arm_cti.h>
 #include <target/arm_adi_v5.h>
 #include <rtt/rtt.h>

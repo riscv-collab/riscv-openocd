@@ -22,7 +22,6 @@
 
 #include <jtag/interface.h>
 #include <jtag/commands.h>
-#include <string.h>
 #include <transport/transport.h>
 #include <target/target.h>
 #include <jtag/aice/aice_transport.h>

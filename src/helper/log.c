@@ -32,7 +32,6 @@
 #include "time_support.h"
 
 #include <stdarg.h>
-#include <string.h>
 
 #ifdef _DEBUG_FREE_SPACE_
 #ifdef HAVE_MALLOC_H

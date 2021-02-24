@@ -28,7 +28,6 @@
 #include <jtag/commands.h>
 #include <jtag/swd.h>
 #include <libusb.h>
-#include <string.h>
 
 #include "versaloon/versaloon_include.h"
 #include "versaloon/versaloon.h"

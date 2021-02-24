@@ -23,7 +23,6 @@
 #include <jtag/interface.h>
 #include <jtag/commands.h>
 #include "helper/system.h"
-#include <string.h>
 #include <usb.h>
 #include "usb_common.h"
 

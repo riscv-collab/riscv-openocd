@@ -24,8 +24,8 @@
 #ifndef OPENOCD_HELPER_BITS_H
 #define OPENOCD_HELPER_BITS_H
 
+#include <helper/replacements.h>
 #include <helper/types.h>
-#include <string.h>
 
 #define BIT(nr)                     (1UL << (nr))
 #define BITS_PER_BYTE               8

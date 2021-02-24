@@ -6,6 +6,7 @@
 #ifndef OPENOCD_JTAG_USB_COMMON_H
 #define OPENOCD_JTAG_USB_COMMON_H
 
+#include <helper/replacements.h>
 #include <helper/types.h>
 
 void jtag_usb_set_location(const char *location);

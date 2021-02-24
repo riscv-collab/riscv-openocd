@@ -153,6 +153,7 @@ static const struct stack_register_offset rtos_standard_NDS32_N1068_stack_offset
 };
 
 static const struct stack_register_offset rtos_standard_RV32_stack_offsets[] = {
+	{ 0,  -1, 32 },		/* x1 */
 	{ 1,  0x00, 32 },		/* x1 */
 	{ 2,  0x04, 32 },		/* x2 */
 	{ 3,  0x08, 32 },		/* x3 */

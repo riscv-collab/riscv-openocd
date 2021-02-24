@@ -37,7 +37,7 @@
 
 #include <libusb.h>
 #include <helper/log.h>
-#include <string.h>
+#include <helper/replacements.h>
 
 #include "cmsis_dap.h"
 

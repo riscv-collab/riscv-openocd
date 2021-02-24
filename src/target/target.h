@@ -35,7 +35,6 @@
 #include "helper/replacements.h"
 #include "helper/system.h"
 #include <jim.h>
-#include <string.h>
 
 struct reg;
 struct trace;

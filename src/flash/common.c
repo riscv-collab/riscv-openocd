@@ -21,7 +21,6 @@
 
 #include "common.h"
 #include <helper/log.h>
-#include <string.h>
 
 unsigned get_flash_name_index(const char *name)
 {

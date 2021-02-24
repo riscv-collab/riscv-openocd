@@ -22,8 +22,8 @@
 
 #include "pld.h"
 #include <helper/log.h>
+#include <helper/replacements.h>
 #include <helper/time_support.h>
-#include <string.h>
 
 
 /* pld drivers

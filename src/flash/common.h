@@ -20,7 +20,6 @@
 
 #include <helper/log.h>
 #include <helper/replacements.h>
-#include <string.h>
 
 /**
  * Parses the optional '.index' portion of a flash bank identifier.

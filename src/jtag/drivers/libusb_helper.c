@@ -23,7 +23,6 @@
 #include <jtag/drivers/jtag_usb_common.h>
 #include "libusb_helper.h"
 #include "log.h"
-#include <string.h>
 
 /*
  * comment from libusb:

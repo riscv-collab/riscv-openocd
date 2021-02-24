@@ -72,7 +72,6 @@
 #include <jtag/drivers/jtag_usb_common.h>
 #include <jtag/interface.h>
 #include <jtag/swd.h>
-#include <string.h>
 #include <transport/transport.h>
 #include <helper/time_support.h>
 #include <helper/log.h>

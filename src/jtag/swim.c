@@ -15,7 +15,6 @@
 #include "interface.h"
 #include "swim.h"
 #include <helper/command.h>
-#include <string.h>
 #include <transport/transport.h>
 
 extern struct adapter_driver *adapter_driver;

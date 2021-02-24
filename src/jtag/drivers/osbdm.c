@@ -24,7 +24,6 @@
 #include <helper/command.h>
 #include <jtag/interface.h>
 #include "libusb_helper.h"
-#include <string.h>
 
 struct sequence {
 	int len;

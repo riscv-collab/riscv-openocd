@@ -25,7 +25,6 @@
 #include <helper/system.h>
 #include <target/target.h>
 #include <jtag/jtag.h>
-#include <string.h>
 #include <target/nds32_insn.h>
 #include <target/nds32_reg.h>
 #include "aice_usb.h"

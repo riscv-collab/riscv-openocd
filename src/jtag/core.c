@@ -36,7 +36,6 @@
 #include <transport/transport.h>
 #include <helper/jep106.h>
 #include "helper/system.h"
-#include <string.h>
 
 #ifdef HAVE_STRINGS_H
 #include <strings.h>

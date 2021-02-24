@@ -41,7 +41,6 @@
 #include <jtag/interface.h>
 #include <jtag/commands.h>
 #include <jtag/tcl.h>
-#include <string.h>
 
 #include "cmsis_dap.h"
 
