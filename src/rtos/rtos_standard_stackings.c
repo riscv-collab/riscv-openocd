@@ -22,6 +22,7 @@
 
 #include "rtos.h"
 #include "target/armv7m.h"
+#include "target/riscv/riscv.h"
 
 static const struct stack_register_offset rtos_standard_Cortex_M3_stack_offsets[ARMV7M_NUM_CORE_REGS] = {
 	{ ARMV7M_R0,   0x20, 32 },		/* r0   */
@@ -155,41 +156,42 @@ static const struct stack_register_offset rtos_standard_NDS32_N1068_stack_offset
 static const struct stack_register_offset rtos_standard_RV32_stack_offsets[] = {
 	/* zero isn't on the stack. By making its offset -1 we leave the value at 0
 	 * inside rtos_generic_stack_read(). */
-	{ 0,  -1, 32 },		/* x1 */
-	{ 1,  0x00, 32 },		/* x1 */
-	{ 2,  0x04, 32 },		/* x2 */
-	{ 3,  0x08, 32 },		/* x3 */
-	{ 4,  0x0c, 32 },		/* x4 */
-	{ 5,  0x10, 32 },		/* x5 */
-	{ 6,  0x14, 32 },		/* x6 */
-	{ 7,  0x18, 32 },		/* x7 */
-	{ 8,  0x1c, 32 },		/* x8 */
-	{ 9,  0x20, 32 },		/* x9 */
-	{ 10, 0x24, 32 },		/* x10 */
-	{ 11, 0x28, 32 },		/* x11 */
-	{ 12, 0x2c, 32 },		/* x12 */
-	{ 13, 0x30, 32 },		/* x13 */
-	{ 14, 0x34, 32 },		/* x14 */
-	{ 15, 0x38, 32 },		/* x15 */
-	{ 16, 0x3c, 32 },		/* x16 */
-	{ 17, 0x40, 32 },		/* x17 */
-	{ 18, 0x44, 32 },		/* x18 */
-	{ 19, 0x48, 32 },		/* x19 */
-	{ 20, 0x4c, 32 },		/* x20 */
-	{ 21, 0x50, 32 },		/* x21 */
-	{ 22, 0x54, 32 },		/* x22 */
-	{ 23, 0x58, 32 },		/* x23 */
-	{ 24, 0x5c, 32 },		/* x24 */
-	{ 25, 0x60, 32 },		/* x25 */
-	{ 26, 0x64, 32 },		/* x26 */
-	{ 27, 0x68, 32 },		/* x27 */
-	{ 28, 0x6c, 32 },		/* x28 */
-	{ 29, 0x70, 32 },		/* x29 */
-	{ 30, 0x74, 32 },		/* x30 */
-	{ 31, 0x78, 32 },		/* x31 */
-	{ 32, 0x7c, 32 },		/* pc */
-	/* mstatus is next on the stack, but it's not a general register so gdb
-	 * doesn't expect it in response to 'g'. */
+	{ GDB_REGNO_ZERO,  -1, 32 },
+	{ GDB_REGNO_RA,  0x00, 32 },
+	{ GDB_REGNO_SP,  0x04, 32 },
+	{ GDB_REGNO_GP,  0x08, 32 },
+	{ GDB_REGNO_TP,  0x0c, 32 },
+	{ GDB_REGNO_T0,  0x10, 32 },
+	{ GDB_REGNO_T1,  0x14, 32 },
+	{ GDB_REGNO_T2,  0x18, 32 },
+	{ GDB_REGNO_FP,  0x1c, 32 },
+	{ GDB_REGNO_S1,  0x20, 32 },
+	{ GDB_REGNO_A0, 0x24, 32 },
+	{ GDB_REGNO_A1, 0x28, 32 },
+	{ GDB_REGNO_A2, 0x2c, 32 },
+	{ GDB_REGNO_A3, 0x30, 32 },
+	{ GDB_REGNO_A4, 0x34, 32 },
+	{ GDB_REGNO_A5, 0x38, 32 },
+	{ GDB_REGNO_A6, 0x3c, 32 },
+	{ GDB_REGNO_A7, 0x40, 32 },
+	{ GDB_REGNO_S2, 0x44, 32 },
+	{ GDB_REGNO_S3, 0x48, 32 },
+	{ GDB_REGNO_S4, 0x4c, 32 },
+	{ GDB_REGNO_S5, 0x50, 32 },
+	{ GDB_REGNO_S6, 0x54, 32 },
+	{ GDB_REGNO_S7, 0x58, 32 },
+	{ GDB_REGNO_S8, 0x5c, 32 },
+	{ GDB_REGNO_S9, 0x60, 32 },
+	{ GDB_REGNO_S10, 0x64, 32 },
+	{ GDB_REGNO_S11, 0x68, 32 },
+	{ GDB_REGNO_T3, 0x6c, 32 },
+	{ GDB_REGNO_T4, 0x70, 32 },
+	{ GDB_REGNO_T5, 0x74, 32 },
+	{ GDB_REGNO_T6, 0x78, 32 },
+	{ GDB_REGNO_PC, 0x7c, 32 },
+	/* Registers below are on the stack, but not what gdb expects to return from
+	 * a 'g' packet so are only accessible through get_reg. */
+	{ GDB_REGNO_MSTATUS, 0x80, 32 },
 };
 
 static int64_t rtos_generic_stack_align(struct target *target,
@@ -289,49 +291,49 @@ static int64_t rtos_standard_Cortex_M4F_FPU_stack_align(struct target *target,
 
 
 const struct rtos_register_stacking rtos_standard_Cortex_M3_stacking = {
-	0x40,					/* stack_registers_size */
-	-1,						/* stack_growth_direction */
-	ARMV7M_NUM_CORE_REGS,	/* num_output_registers */
-	rtos_standard_Cortex_M3_stack_align,	/* stack_alignment */
-	rtos_standard_Cortex_M3_stack_offsets	/* register_offsets */
+	.stack_registers_size = 0x40,
+	.stack_growth_direction = -1,
+	.num_output_registers = ARMV7M_NUM_CORE_REGS,
+	.calculate_process_stack = rtos_standard_Cortex_M3_stack_align,
+	.register_offsets = rtos_standard_Cortex_M3_stack_offsets
 };
 
 const struct rtos_register_stacking rtos_standard_Cortex_M4F_stacking = {
-	0x44,					/* stack_registers_size 4 more for LR*/
-	-1,						/* stack_growth_direction */
-	ARMV7M_NUM_CORE_REGS,	/* num_output_registers */
-	rtos_standard_Cortex_M4F_stack_align,	/* stack_alignment */
-	rtos_standard_Cortex_M4F_stack_offsets	/* register_offsets */
+	.stack_registers_size = 0x44,					/* 4 more for LR*/
+	.stack_growth_direction = -1,
+	.num_output_registers = ARMV7M_NUM_CORE_REGS,
+	.calculate_process_stack = rtos_standard_Cortex_M4F_stack_align,
+	.register_offsets = rtos_standard_Cortex_M4F_stack_offsets
 };
 
 const struct rtos_register_stacking rtos_standard_Cortex_M4F_FPU_stacking = {
-	0xcc,					/* stack_registers_size 4 more for LR + 48 more for FPU S0-S15 register*/
-	-1,						/* stack_growth_direction */
-	ARMV7M_NUM_CORE_REGS,	/* num_output_registers */
-	rtos_standard_Cortex_M4F_FPU_stack_align,	/* stack_alignment */
-	rtos_standard_Cortex_M4F_FPU_stack_offsets	/* register_offsets */
+	.stack_registers_size = 0xcc,	/* 4 more for LR + 48 more for FPU S0-S15 register*/
+	.stack_growth_direction = -1,
+	.num_output_registers = ARMV7M_NUM_CORE_REGS,
+	.calculate_process_stack = rtos_standard_Cortex_M4F_FPU_stack_align,
+	.register_offsets = rtos_standard_Cortex_M4F_FPU_stack_offsets
 };
 
 const struct rtos_register_stacking rtos_standard_Cortex_R4_stacking = {
-	0x48,				/* stack_registers_size */
-	-1,					/* stack_growth_direction */
-	26,					/* num_output_registers */
-	rtos_generic_stack_align8,	/* stack_alignment */
-	rtos_standard_Cortex_R4_stack_offsets	/* register_offsets */
+	.stack_registers_size = 0x48,
+	.stack_growth_direction = -1,
+	.num_output_registers = 26,
+	.calculate_process_stack = rtos_generic_stack_align8,
+	.register_offsets = rtos_standard_Cortex_R4_stack_offsets
 };
 
 const struct rtos_register_stacking rtos_standard_NDS32_N1068_stacking = {
-	0x90,				/* stack_registers_size */
-	-1,					/* stack_growth_direction */
-	32,					/* num_output_registers */
-	rtos_generic_stack_align8,	/* stack_alignment */
-	rtos_standard_NDS32_N1068_stack_offsets	/* register_offsets */
+	.stack_registers_size = 0x90,
+	.stack_growth_direction = -1,
+	.num_output_registers = 32,
+	.calculate_process_stack = rtos_generic_stack_align8,
+	.register_offsets = rtos_standard_NDS32_N1068_stack_offsets
 };
 
 const struct rtos_register_stacking rtos_standard_RV32_stacking = {
-	(32 + 2) * 4,		/* stack_registers_size */
-	-1,					/* stack_growth_direction */
-	ARRAY_SIZE(rtos_standard_RV32_stack_offsets),					/* num_output_registers */
-	rtos_generic_stack_align8,	/* stack_alignment */
-	rtos_standard_RV32_stack_offsets	/* register_offsets */
+	.stack_registers_size = (32 + 2) * 4,
+	.stack_growth_direction = -1,
+	.num_output_registers = 33,
+	.calculate_process_stack = rtos_generic_stack_align8,
+	.register_offsets = rtos_standard_RV32_stack_offsets
 };

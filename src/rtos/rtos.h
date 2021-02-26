@@ -110,6 +110,7 @@ struct stack_register_offset {
 struct rtos_register_stacking {
 	unsigned char stack_registers_size;
 	signed char stack_growth_direction;
+	/* The number of gdb general registers, in order. */
 	unsigned char num_output_registers;
 	/* Some targets require evaluating the stack to determine the
 	 * actual stack pointer for a process.  If this field is NULL,
@@ -121,6 +122,10 @@ struct rtos_register_stacking {
 		const struct rtos_register_stacking *stacking,
 		int64_t stack_ptr);
 	const struct stack_register_offset *register_offsets;
+	/* Total number of registers on the stack, including the general ones. This
+	 * may be 0 if there are no additional registers on the stack beyond the
+	 * general ones. */
+	unsigned total_register_count;
 };
 
 #define GDB_THREAD_PACKET_NOT_CONSUMED (-40)
