@@ -514,20 +514,14 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 	return 0;
 }
 
-static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
-		struct rtos_reg **reg_list, int *num_regs)
+static int FreeRTOS_get_stacking_info(struct rtos *rtos, threadid_t thread_id,
+									  const struct rtos_register_stacking **stacking_info,
+									  target_addr_t *stack_ptr)
 {
-	int retval;
-	int64_t stack_ptr = 0;
-
-	if (rtos == NULL)
-		return -1;
-
-	if (thread_id == 0)
-		return -2;
-
-	if (rtos->rtos_specific_params == NULL)
-		return -1;
+	if (rtos->rtos_specific_params == NULL) {
+		LOG_ERROR("rtos_specific_params is NULL!");
+		return ERROR_FAIL;
+	}
 
 	struct FreeRTOS *freertos = (struct FreeRTOS *) rtos->rtos_specific_params;
 	const struct FreeRTOS_params *param = freertos->param;
@@ -541,22 +535,36 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
 
 	/* Read the stack pointer */
 	uint32_t pointer_casts_are_bad;
-	retval = target_read_u32(rtos->target,
+	int retval = target_read_u32(rtos->target,
 			entry->tcb + param->thread_stack_offset,
 			&pointer_casts_are_bad);
 	if (retval != ERROR_OK) {
 		LOG_ERROR("Error reading stack frame from FreeRTOS thread %" PRIx64, thread_id);
 		return retval;
 	}
-	stack_ptr = pointer_casts_are_bad;
+	*stack_ptr = pointer_casts_are_bad;
 	LOG_DEBUG("[%" PRId64 "] FreeRTOS: Read stack pointer at 0x%" PRIx64 ", value 0x%" PRIx64,
-			  thread_id, entry->tcb + param->thread_stack_offset, stack_ptr);
+			  thread_id, entry->tcb + param->thread_stack_offset, *stack_ptr);
 
-	const struct rtos_register_stacking *stacking_info;
-	if (param->stacking(rtos, &stacking_info, stack_ptr) != ERROR_OK) {
+	if (param->stacking(rtos, stacking_info, *stack_ptr) != ERROR_OK) {
 		LOG_ERROR("No stacking info found for %s!", param->target_name);
 		return ERROR_FAIL;
 	}
+
+	return ERROR_OK;
+}
+
+static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
+		struct rtos_reg **reg_list, int *num_regs)
+{
+	/* Let the caller read registers directly for the current thread. */
+	if (thread_id == 0)
+		return ERROR_FAIL;
+
+	const struct rtos_register_stacking *stacking_info;
+	target_addr_t stack_ptr;
+	if (FreeRTOS_get_stacking_info(rtos, thread_id, &stacking_info, &stack_ptr) != ERROR_OK)
+		return ERROR_FAIL;
 
 	return rtos_generic_stack_read(rtos->target, stacking_info, stack_ptr, reg_list, num_regs);
 }
@@ -564,8 +572,17 @@ static int FreeRTOS_get_thread_reg_list(struct rtos *rtos, threadid_t thread_id,
 static int FreeRTOS_get_thread_reg(struct rtos *rtos, threadid_t thread_id,
 		uint32_t reg_num, struct rtos_reg *reg)
 {
-	//const struct rtos_register_stacking *stacking_info = param->stacking_info_cm3;
-	return ERROR_FAIL;
+	LOG_DEBUG("reg_num=%d", reg_num);
+	/* Let the caller read registers directly for the current thread. */
+	if (thread_id == 0)
+		return ERROR_FAIL;
+
+	const struct rtos_register_stacking *stacking_info;
+	target_addr_t stack_ptr;
+	if (FreeRTOS_get_stacking_info(rtos, thread_id, &stacking_info, &stack_ptr) != ERROR_OK)
+		return ERROR_FAIL;
+
+	return rtos_generic_stack_read_reg(rtos->target, stacking_info, stack_ptr, reg_num, reg);
 }
 
 static int FreeRTOS_get_symbol_list_to_lookup(symbol_table_elem_t *symbol_list[])

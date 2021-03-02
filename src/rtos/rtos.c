@@ -494,6 +494,7 @@ int rtos_get_gdb_reg(struct connection *connection, int reg_num)
 		int retval;
 		if (target->rtos->type->get_thread_reg) {
 			reg_list = calloc(1, sizeof(*reg_list));
+			reg_list[0].number = reg_num;
 			num_regs = 1;
 			retval = target->rtos->type->get_thread_reg(target->rtos,
 					current_threadid, reg_num, &reg_list[0]);
@@ -634,6 +635,48 @@ int rtos_generic_stack_read(struct target *target,
 
 	free(stack_data);
 /*	LOG_OUTPUT("Output register string: %s\r\n", *hex_reg_list); */
+	return ERROR_OK;
+}
+
+/* Read an individual register from the RTOS stack. */
+int rtos_generic_stack_read_reg(struct target *target,
+								const struct rtos_register_stacking *stacking,
+								target_addr_t stack_ptr,
+								uint32_t reg_num, struct rtos_reg *reg)
+{
+	LOG_DEBUG("stack_ptr=" TARGET_ADDR_FMT ", reg_num=%d", stack_ptr, reg_num);
+	unsigned total_count = MAX(stacking->total_register_count, stacking->num_output_registers);
+	unsigned i;
+	for (i = 0; i < total_count; i++) {
+		if (stacking->register_offsets[i].number == reg_num)
+			break;
+	}
+	if (i >= total_count) {
+		/* This register is not on the stack. Return error so a caller somewhere
+		 * will just read the register directly fromt he target. */
+		return ERROR_FAIL;
+	}
+
+	const struct stack_register_offset *offsets = &stacking->register_offsets[i];
+	reg->size = offsets->width_bits;
+
+	unsigned width_bytes = DIV_ROUND_UP(offsets->width_bits, 8);
+	if (offsets->offset >= 0) {
+		target_addr_t address = stack_ptr;
+
+		if (stacking->stack_growth_direction == 1)
+			address -= stacking->stack_registers_size;
+
+		if (target_read_buffer(
+				target, address + offsets->offset,
+				width_bytes, reg->value) != ERROR_OK)
+			return ERROR_FAIL;
+		LOG_DEBUG("register %d has value 0x%" PRIx64, reg->number,
+				  buf_get_u64(reg->value, 0, 64));
+	} else {
+		memset(reg->value, 0, width_bytes);
+	}
+
 	return ERROR_OK;
 }
 
