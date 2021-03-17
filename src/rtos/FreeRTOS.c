@@ -126,7 +126,12 @@ static int nds32_stacking(struct rtos *rtos, const struct rtos_register_stacking
 static int riscv_stacking(struct rtos *rtos, const struct rtos_register_stacking **stacking,
 							 target_addr_t stack_ptr)
 {
+	/* Use the next line to debug programs compiled from
+	 * https://github.com/FreeRTOS/FreeRTOS-Kernel */
 	*stacking = &rtos_standard_RV32_stacking;
+	/* Use the next line to debug programs compiled from
+	 * https://github.com/sifive/FreeRTOS-metal */
+	/* *stacking = &rtos_metal_RV32_stacking; */
 	return ERROR_OK;
 }
 

@@ -153,7 +153,7 @@ static const struct stack_register_offset rtos_standard_NDS32_N1068_stack_offset
 	{ 35, 0x10, 32 },		/* IFC_LP */
 };
 
-static const struct stack_register_offset rtos_standard_RV32_stack_offsets[] = {
+static const struct stack_register_offset rtos_metal_RV32_stack_offsets[] = {
 	/* zero isn't on the stack. By making its offset -1 we leave the value at 0
 	 * inside rtos_generic_stack_read(). */
 	{ GDB_REGNO_ZERO,  -1, 32 },
@@ -192,6 +192,47 @@ static const struct stack_register_offset rtos_standard_RV32_stack_offsets[] = {
 	/* Registers below are on the stack, but not what gdb expects to return from
 	 * a 'g' packet so are only accessible through get_reg. */
 	{ GDB_REGNO_MSTATUS, 0x84, 32 },
+};
+
+static const struct stack_register_offset rtos_standard_RV32_stack_offsets[] = {
+	/* zero isn't on the stack. By making its offset -1 we leave the value at 0
+	 * inside rtos_generic_stack_read(). */
+	{ GDB_REGNO_ZERO,  -1, 32 },
+	{ GDB_REGNO_RA,  0x04, 32 },
+	{ GDB_REGNO_SP,  -2, 32 },
+	{ GDB_REGNO_GP,  -2, 32 },
+	{ GDB_REGNO_TP,  -2, 32 },
+	{ GDB_REGNO_T0,  0x08, 32 },
+	{ GDB_REGNO_T1,  0x0c, 32 },
+	{ GDB_REGNO_T2,  0x10, 32 },
+	{ GDB_REGNO_FP,  0x14, 32 },
+	{ GDB_REGNO_S1,  0x18, 32 },
+	{ GDB_REGNO_A0, 0x1c, 32 },
+	{ GDB_REGNO_A1, 0x20, 32 },
+	{ GDB_REGNO_A2, 0x24, 32 },
+	{ GDB_REGNO_A3, 0x28, 32 },
+	{ GDB_REGNO_A4, 0x2c, 32 },
+	{ GDB_REGNO_A5, 0x30, 32 },
+	{ GDB_REGNO_A6, 0x34, 32 },
+	{ GDB_REGNO_A7, 0x38, 32 },
+	{ GDB_REGNO_S2, 0x3c, 32 },
+	{ GDB_REGNO_S3, 0x40, 32 },
+	{ GDB_REGNO_S4, 0x44, 32 },
+	{ GDB_REGNO_S5, 0x48, 32 },
+	{ GDB_REGNO_S6, 0x4c, 32 },
+	{ GDB_REGNO_S7, 0x50, 32 },
+	{ GDB_REGNO_S8, 0x54, 32 },
+	{ GDB_REGNO_S9, 0x58, 32 },
+	{ GDB_REGNO_S10, 0x5c, 32 },
+	{ GDB_REGNO_S11, 0x60, 32 },
+	{ GDB_REGNO_T3, 0x64, 32 },
+	{ GDB_REGNO_T4, 0x68, 32 },
+	{ GDB_REGNO_T5, 0x6c, 32 },
+	{ GDB_REGNO_T6, 0x70, 32 },
+	{ GDB_REGNO_PC, 0, 32 },
+	/* Registers below are on the stack, but not what gdb expects to return from
+	 * a 'g' packet so are only accessible through get_reg. */
+	{ GDB_REGNO_MSTATUS, 29 * 4, 32 },
 };
 
 static int64_t rtos_generic_stack_align(struct target *target,
@@ -328,6 +369,15 @@ const struct rtos_register_stacking rtos_standard_NDS32_N1068_stacking = {
 	.num_output_registers = 32,
 	.calculate_process_stack = rtos_generic_stack_align8,
 	.register_offsets = rtos_standard_NDS32_N1068_stack_offsets
+};
+
+const struct rtos_register_stacking rtos_metal_RV32_stacking = {
+	.stack_registers_size = (32 + 2) * 4,
+	.stack_growth_direction = -1,
+	.num_output_registers = 33,
+	.calculate_process_stack = rtos_generic_stack_align8,
+	.register_offsets = rtos_metal_RV32_stack_offsets,
+	.total_register_count = ARRAY_SIZE(rtos_metal_RV32_stack_offsets)
 };
 
 const struct rtos_register_stacking rtos_standard_RV32_stacking = {
