@@ -53,6 +53,7 @@ struct FreeRTOS_params {
 	const unsigned char thread_name_offset;
 	int (*stacking)(struct rtos *rtos, const struct rtos_register_stacking **stacking,
 					target_addr_t stack_ptr);
+	const struct command_registration *commands;
 };
 
 struct FreeRTOS_thread_entry {
@@ -123,66 +124,106 @@ static int nds32_stacking(struct rtos *rtos, const struct rtos_register_stacking
 	return ERROR_OK;
 }
 
+static enum {
+	STACKING_MAINLINE,
+	STACKING_METAL
+} riscv_freertos_stacking;
+COMMAND_HANDLER(handle_riscv_freertos_stacking)
+{
+	if (CMD_ARGC != 1) {
+		LOG_ERROR("Command takes exactly 1 parameter");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+	if (!strcmp(CMD_ARGV[0], "mainline")) {
+		riscv_freertos_stacking = STACKING_MAINLINE;
+	} else if (!strcmp(CMD_ARGV[0], "metal")) {
+		riscv_freertos_stacking = STACKING_METAL;
+	} else {
+		LOG_ERROR("Only two arguments are supported: mainline and metal");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+	return ERROR_OK;
+}
+
+static const struct command_registration riscv_commands[] = {
+	{
+		.name = "riscv_freertos_stacking",
+		.handler = handle_riscv_freertos_stacking,
+		.mode = COMMAND_ANY,
+		.usage = "mainline|metal",
+		.help = "Select which FreeRTOS branch is being used. OpenOCD needs to "
+		"know because different branches save thread registers on the stack "
+		"in different orders. It is likely that this order on both branches will "
+		"change in the future, so make sure to seek out the very latest OpenOCD if "
+		"debugging is not working right."
+	},
+	COMMAND_REGISTRATION_DONE
+};
+
 static int riscv_stacking(struct rtos *rtos, const struct rtos_register_stacking **stacking,
 							 target_addr_t stack_ptr)
 {
-	/* Use the next line to debug programs compiled from
-	 * https://github.com/FreeRTOS/FreeRTOS-Kernel */
-	*stacking = &rtos_standard_RV32_stacking;
-	/* Use the next line to debug programs compiled from
-	 * https://github.com/sifive/FreeRTOS-metal */
-	/* *stacking = &rtos_metal_RV32_stacking; */
+	LOG_DEBUG("riscv_freertos_stacking=%d", riscv_freertos_stacking);
+	switch (riscv_freertos_stacking) {
+		case STACKING_MAINLINE:
+			*stacking = &rtos_standard_RV32_stacking;
+			break;
+		case STACKING_METAL:
+			*stacking = &rtos_metal_RV32_stacking;
+			break;
+	}
 	return ERROR_OK;
 }
 
 static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	{
-	"cortex_m",			/* target_name */
-	4,						/* thread_count_width; */
-	4,						/* pointer_width; */
-	16,						/* list_next_offset; */
-	20,						/* list_width; */
-	8,						/* list_elem_next_offset; */
-	12,						/* list_elem_content_offset */
-	0,						/* thread_stack_offset; */
-	52,						/* thread_name_offset; */
-	cortex_m_stacking,
+	.target_name = "cortex_m",
+	.thread_count_width = 4,
+	.pointer_width = 4,
+	.list_next_offset = 16,
+	.list_width = 20,
+	.list_elem_next_offset = 8,
+	.list_elem_content_offset = 12,
+	.thread_stack_offset = 0,
+	.thread_name_offset = 52,
+	.stacking = cortex_m_stacking
 	},
 	{
-	"hla_target",			/* target_name */
-	4,						/* thread_count_width; */
-	4,						/* pointer_width; */
-	16,						/* list_next_offset; */
-	20,						/* list_width; */
-	8,						/* list_elem_next_offset; */
-	12,						/* list_elem_content_offset */
-	0,						/* thread_stack_offset; */
-	52,						/* thread_name_offset; */
-	cortex_m_stacking,
+	.target_name = "hla_target",
+	.thread_count_width = 4,
+	.pointer_width = 4,
+	.list_next_offset = 16,
+	.list_width = 20,
+	.list_elem_next_offset = 8,
+	.list_elem_content_offset = 12,
+	.thread_stack_offset = 0,
+	.thread_name_offset = 52,
+	.stacking = cortex_m_stacking
 	},
 	{
-	"nds32_v3",			/* target_name */
-	4,						/* thread_count_width; */
-	4,						/* pointer_width; */
-	16,						/* list_next_offset; */
-	20,						/* list_width; */
-	8,						/* list_elem_next_offset; */
-	12,						/* list_elem_content_offset */
-	0,						/* thread_stack_offset; */
-	52,						/* thread_name_offset; */
-	nds32_stacking,
+	.target_name = "nds32_v3",
+	.thread_count_width = 4,
+	.pointer_width = 4,
+	.list_next_offset = 16,
+	.list_width = 20,
+	.list_elem_next_offset = 8,
+	.list_elem_content_offset = 12,
+	.thread_stack_offset = 0,
+	.thread_name_offset = 52,
+	.stacking = nds32_stacking,
 	},
 	{
-	"riscv",			/* target_name */
-	4,						/* thread_count_width; */
-	4,						/* pointer_width; */
-	16,						/* list_next_offset; */
-	20,						/* list_width; */
-	8,						/* list_elem_next_offset; */
-	12,						/* list_elem_content_offset */
-	0,						/* thread_stack_offset; */
-	52,						/* thread_name_offset; */
-	riscv_stacking,
+	.target_name = "riscv",
+	.thread_count_width = 4,
+	.pointer_width = 4,
+	.list_next_offset = 16,
+	.list_width = 20,
+	.list_elem_next_offset = 8,
+	.list_elem_content_offset = 12,
+	.thread_stack_offset = 0,
+	.thread_name_offset = 52,
+	.stacking = riscv_stacking,
+	.commands = riscv_commands
 	},
 };
 
@@ -732,6 +773,12 @@ static int FreeRTOS_create(struct target *target)
 		return ERROR_FAIL;
 	}
 	freertos->param = &FreeRTOS_params_list[i];
+
+	if (freertos->param->commands) {
+		if (register_commands(target->rtos->cmd_ctx, NULL,
+							  freertos->param->commands) != ERROR_OK)
+			return ERROR_FAIL;
+	}
 
 	return 0;
 }
