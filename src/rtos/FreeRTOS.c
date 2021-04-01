@@ -33,18 +33,10 @@
 #include "target/cortex_m.h"
 
 #define FREERTOS_MAX_PRIORITIES	63
-
-#define FreeRTOS_STRUCT(int_type, ptr_type, list_prev_offset)
-
-/* FIXME: none of the _width parameters are actually observed properly!
- * you WILL need to edit more if you actually attempt to target a 8/16/64
- * bit target!
- */
+#define FREERTOS_THREAD_NAME_STR_SIZE 200
 
 struct FreeRTOS_params {
 	const char *target_name;
-	const unsigned char thread_stack_offset;
-	const unsigned char thread_name_offset;
 	int (*stacking)(struct rtos *rtos, const struct rtos_register_stacking **stacking,
 					target_addr_t stack_ptr);
 	const struct command_registration *commands;
@@ -68,6 +60,7 @@ struct FreeRTOS {
 	/* sizeof(void *) */
 	unsigned pointer_size;
 	unsigned list_width;
+	unsigned list_item_width;
 	unsigned list_elem_next_offset;
 	unsigned list_elem_next_size;
 	unsigned list_elem_content_offset;
@@ -76,6 +69,9 @@ struct FreeRTOS {
 	unsigned list_uxNumberOfItems_size;
 	unsigned list_next_offset;
 	unsigned list_next_size;
+	unsigned thread_stack_offset;
+	unsigned thread_stack_size;
+	unsigned thread_name_offset;
 };
 
 static int cortex_m_stacking(struct rtos *rtos, const struct rtos_register_stacking **stacking,
@@ -185,26 +181,18 @@ static int riscv_stacking(struct rtos *rtos, const struct rtos_register_stacking
 static const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	{
 	.target_name = "cortex_m",
-	.thread_stack_offset = 0,
-	.thread_name_offset = 52,
 	.stacking = cortex_m_stacking
 	},
 	{
 	.target_name = "hla_target",
-	.thread_stack_offset = 0,
-	.thread_name_offset = 52,
 	.stacking = cortex_m_stacking
 	},
 	{
 	.target_name = "nds32_v3",
-	.thread_stack_offset = 0,
-	.thread_name_offset = 52,
 	.stacking = nds32_stacking,
 	},
 	{
 	.target_name = "riscv",
-	.thread_stack_offset = 0,
-	.thread_name_offset = 52,
 	.stacking = riscv_stacking,
 	.commands = riscv_commands,
 	},
@@ -284,10 +272,13 @@ static int FreeRTOS_read_struct_value(
 }
 
 typedef struct {
-	enum {
+	enum
+	{
 		TYPE_POINTER,
 		TYPE_UBASE,
-		TYPE_TICKTYPE
+		TYPE_TICKTYPE,
+		TYPE_LIST_ITEM,
+		TYPE_CHAR_ARRAY
 	} type;
 	unsigned offset;
 	unsigned size;
@@ -299,27 +290,43 @@ static unsigned populate_offset_size(struct FreeRTOS *freertos,
 	unsigned offset = 0;
 	unsigned largest = 0;
 	for (unsigned i = 0; i < count; i++) {
+		unsigned align = 0;
 		switch (info[i].type) {
 			case TYPE_UBASE:
 				info[i].size = freertos->ubasetype_size;
+				align = freertos->ubasetype_size;
 				break;
 			case TYPE_POINTER:
 				info[i].size = freertos->pointer_size;
+				align = freertos->pointer_size;
 				break;
 			case TYPE_TICKTYPE:
 				/* Could be either 16 or 32 bits, depending on configUSE_16_BIT_TICKS. */
 				info[i].size = 4;
+				align = 4;
+				break;
+			case TYPE_LIST_ITEM:
+				info[i].size = freertos->list_item_width;
+				align = MAX(freertos->ubasetype_size, freertos->pointer_size);
+				break;
+			case TYPE_CHAR_ARRAY:
+				/* size is set by the caller. */
+				align = 1;
 				break;
 		}
 
-		largest = MAX(largest, info[i].size);
+		assert(info[i].size > 0);
+		assert(align > 0);
 
-		if (offset & (info[i].size - 1)) {
-			offset = offset & ~(info[i].size - 1);
-			offset += info[i].size;
+		largest = MAX(largest, align);
+
+		if (offset & (align - 1))
+		{
+			offset = offset & ~(align - 1);
+			offset += align;
 		}
-		info[i].offset = offset;
 
+		info[i].offset = offset;
 		offset += info[i].size;
 
 		LOG_DEBUG(">>> %d %d %d", i, info[i].offset, info[i].size);
@@ -345,7 +352,6 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 		return ERROR_FAIL;
 
 	struct FreeRTOS *freertos = (struct FreeRTOS *) rtos->rtos_specific_params;
-	const struct FreeRTOS_params *param = freertos->param;
 
 	if (rtos->symbols == NULL) {
 		LOG_ERROR("No symbols for FreeRTOS");
@@ -559,12 +565,11 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 
 			/* get thread name */
 
-			#define FREERTOS_THREAD_NAME_STR_SIZE (200)
 			char tmp_str[FREERTOS_THREAD_NAME_STR_SIZE];
 
 			/* Read the thread name */
 			retval = target_read_buffer(rtos->target,
-					value->tcb + param->thread_name_offset,
+					value->tcb + freertos->thread_name_offset,
 					FREERTOS_THREAD_NAME_STR_SIZE,
 					(uint8_t *)&tmp_str);
 			if (retval != ERROR_OK) {
@@ -574,7 +579,7 @@ static int FreeRTOS_update_threads(struct rtos *rtos)
 			}
 			tmp_str[FREERTOS_THREAD_NAME_STR_SIZE-1] = '\x00';
 			LOG_DEBUG("FreeRTOS: Read Thread Name at 0x%" PRIx64 ", value '%s'",
-										value->tcb + param->thread_name_offset,
+										value->tcb + freertos->thread_name_offset,
 										tmp_str);
 
 			if (tmp_str[0] == '\x00')
@@ -642,17 +647,17 @@ static int FreeRTOS_get_stacking_info(struct rtos *rtos, threadid_t thread_id,
 	}
 
 	/* Read the stack pointer */
-	uint32_t pointer_casts_are_bad;
-	int retval = target_read_u32(rtos->target,
-			entry->tcb + param->thread_stack_offset,
-			&pointer_casts_are_bad);
+	int retval = FreeRTOS_read_struct_value(rtos->target,
+											entry->tcb,
+											freertos->thread_stack_offset,
+											freertos->thread_stack_size,
+											stack_ptr);
 	if (retval != ERROR_OK) {
 		LOG_ERROR("Error reading stack frame from FreeRTOS thread %" PRIx64, thread_id);
 		return retval;
 	}
-	*stack_ptr = pointer_casts_are_bad;
 	LOG_DEBUG("[%" PRId64 "] FreeRTOS: Read stack pointer at 0x%" PRIx64 ", value 0x%" PRIx64,
-			  thread_id, entry->tcb + param->thread_stack_offset, *stack_ptr);
+			  thread_id, entry->tcb + freertos->thread_stack_offset, *stack_ptr);
 
 	if (param->stacking(rtos, stacking_info, *stack_ptr) != ERROR_OK) {
 		LOG_ERROR("No stacking info found for %s!", param->target_name);
@@ -886,17 +891,47 @@ static int FreeRTOS_create(struct target *target)
 		{TYPE_POINTER, 0, 0},	/* List_t *pvContainer */
 	};
 
-	freertos->list_width = populate_offset_size(freertos, struct_list_info, ARRAY_SIZE(struct_list_info));
-	populate_offset_size(freertos, struct_list_info, ARRAY_SIZE(struct_list_item_info));
+	type_offset_size_t task_control_block_info[] = {
+		{TYPE_POINTER, 0, 0},		/* StackType_t *pxTopOfStack */
+		{TYPE_LIST_ITEM, 0, 0},		/* ListItem_t xStateListItem */
+		{TYPE_LIST_ITEM, 0, 0},		/* ListItem_t xEventListItem */
+		{TYPE_UBASE, 0, 0},			/* uxPriority */
+		{TYPE_POINTER, 0, 0},		/* StackType_t *pxStack */
+		/* configMAX_TASK_NAME_LEN varies a lot between targets, but luckily the
+		 * name is NULL_terminated and we don't need to read anything else in
+		 * the TCB. */
+		{TYPE_CHAR_ARRAY, 0, FREERTOS_THREAD_NAME_STR_SIZE},	/* char pcTaskName[configMAX_TASK_NAME_LEN] */
+		/* Lots of more optional stuff, but is is irrelevant to us. */
+	};
 
+	freertos->list_width = populate_offset_size(freertos, struct_list_info, ARRAY_SIZE(struct_list_info));
 	freertos->list_uxNumberOfItems_offset = struct_list_info[0].offset;
 	freertos->list_uxNumberOfItems_size = struct_list_info[0].size;
 	freertos->list_next_offset = struct_list_info[3].offset;
 	freertos->list_next_size = struct_list_info[3].size;
+
+	freertos->list_item_width = populate_offset_size(freertos, struct_list_item_info, ARRAY_SIZE(struct_list_item_info));
 	freertos->list_elem_next_offset = struct_list_item_info[1].offset;
 	freertos->list_elem_next_size = struct_list_item_info[1].size;
 	freertos->list_elem_content_offset = struct_list_item_info[3].offset;
 	freertos->list_elem_content_size = struct_list_item_info[3].size;
+
+	populate_offset_size(freertos, task_control_block_info, ARRAY_SIZE(task_control_block_info));
+	freertos->thread_stack_offset = task_control_block_info[0].offset;
+	freertos->thread_stack_size = task_control_block_info[0].size;
+	freertos->thread_name_offset = task_control_block_info[5].offset;
+
+	LOG_DEBUG("list_uxNumberOfItems_offset = %d", freertos->list_uxNumberOfItems_offset);
+	LOG_DEBUG("list_uxNumberOfItems_size = %d", freertos->list_uxNumberOfItems_size);
+	LOG_DEBUG("list_next_offset = %d", freertos->list_next_offset);
+	LOG_DEBUG("list_next_size = %d", freertos->list_next_size);
+	LOG_DEBUG("list_elem_next_offset = %d", freertos->list_elem_next_offset);
+	LOG_DEBUG("list_elem_next_size = %d", freertos->list_elem_next_size);
+	LOG_DEBUG("list_elem_content_offset = %d", freertos->list_elem_content_offset);
+	LOG_DEBUG("list_elem_content_size = %d", freertos->list_elem_content_size);
+	LOG_DEBUG("thread_stack_offset = %d", freertos->thread_stack_offset);
+	LOG_DEBUG("thread_stack_size = %d", freertos->thread_stack_size);
+	LOG_DEBUG("thread_name_offset = %d", freertos->thread_name_offset);
 
 	return 0;
 }
