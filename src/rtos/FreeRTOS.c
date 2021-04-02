@@ -279,8 +279,7 @@ static int FreeRTOS_read_struct_value(
 }
 
 typedef struct {
-	enum
-	{
+	enum {
 		TYPE_POINTER,
 		TYPE_UBASE,
 		TYPE_TICKTYPE,
@@ -327,8 +326,7 @@ static unsigned populate_offset_size(struct FreeRTOS *freertos,
 
 		largest = MAX(largest, align);
 
-		if (offset & (align - 1))
-		{
+		if (offset & (align - 1)) {
 			offset = offset & ~(align - 1);
 			offset += align;
 		}
@@ -853,32 +851,11 @@ static int FreeRTOS_create(struct target *target)
 	freertos->ubasetype_size = DIV_ROUND_UP(target_data_bits(target), 8);
 
 	/*
-	 * Simplified, from FreeRTOS source:
-	 * struct xLIST_ITEM
-	 * {
-	 *     TickType_t xItemValue; // 16 or 32 bits depending on configUSE_16_BIT_TICKS
-	 *     struct xLIST_ITEM *pxNext;
-	 *     struct xLIST_ITEM *pxPrevious;
-	 *     void *pvOwner;
-	 *     struct xLIST *pxContainer;
-	 * };
-	 * struct xMINI_LIST_ITEM
-	 * {
-	 *     TickType_t xItemValue; // 16 or 32 bits depending on configUSE_16_BIT_TICKS
-	 *     struct xLIST_ITEM *pxNext;
-	 *     struct xLIST_ITEM *pxPrevious;
-	 * };
-	 * typedef struct xLIST
-	 * {
-	 *     UBaseType_t uxNumberOfItems;
-	 *     struct xMINI_LIST_ITEM *pxIndex;
-	 *     MiniListItem_t xListEnd;
-	 * } List_t;
-	 * 
 	 * FreeRTOS can be compiled with configUSE_LIST_DATA_INTEGRITY_CHECK_BYTES
 	 * in which case extra data is inserted and OpenOCD won't work right.
 	 */
 
+	/* struct xLIST */
 	type_offset_size_t struct_list_info[] = {
 		{TYPE_UBASE, 0, 0},		/* uxNumberOfItems */
 		{TYPE_POINTER, 0, 0},	/* ListItem_t *pxIndex */
@@ -887,6 +864,7 @@ static int FreeRTOS_create(struct target *target)
 		{TYPE_POINTER, 0, 0},	/* ListItem_t *pxPrevious */
 	};
 
+	/* struct xLIST_ITEM */
 	type_offset_size_t struct_list_item_info[] = {
 		{TYPE_TICKTYPE, 0, 0},	/* xItemValue */
 		{TYPE_POINTER, 0, 0},	/* ListItem_t *pxNext */
@@ -895,6 +873,7 @@ static int FreeRTOS_create(struct target *target)
 		{TYPE_POINTER, 0, 0},	/* List_t *pvContainer */
 	};
 
+	/* struct tskTaskControlBlock */
 	type_offset_size_t task_control_block_info[] = {
 		{TYPE_POINTER, 0, 0},		/* StackType_t *pxTopOfStack */
 		{TYPE_LIST_ITEM, 0, 0},		/* ListItem_t xStateListItem */
