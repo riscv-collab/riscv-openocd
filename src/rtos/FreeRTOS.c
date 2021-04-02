@@ -887,19 +887,22 @@ static int FreeRTOS_create(struct target *target)
 		/* Lots of more optional stuff, but is is irrelevant to us. */
 	};
 
-	freertos->list_width = populate_offset_size(freertos, struct_list_info, ARRAY_SIZE(struct_list_info));
+	freertos->list_width = populate_offset_size(
+		freertos, struct_list_info, ARRAY_SIZE(struct_list_info));
 	freertos->list_uxNumberOfItems_offset = struct_list_info[0].offset;
 	freertos->list_uxNumberOfItems_size = struct_list_info[0].size;
 	freertos->list_next_offset = struct_list_info[3].offset;
 	freertos->list_next_size = struct_list_info[3].size;
 
-	freertos->list_item_width = populate_offset_size(freertos, struct_list_item_info, ARRAY_SIZE(struct_list_item_info));
+	freertos->list_item_width = populate_offset_size(
+		freertos, struct_list_item_info, ARRAY_SIZE(struct_list_item_info));
 	freertos->list_elem_next_offset = struct_list_item_info[1].offset;
 	freertos->list_elem_next_size = struct_list_item_info[1].size;
 	freertos->list_elem_content_offset = struct_list_item_info[3].offset;
 	freertos->list_elem_content_size = struct_list_item_info[3].size;
 
-	populate_offset_size(freertos, task_control_block_info, ARRAY_SIZE(task_control_block_info));
+	populate_offset_size(
+		freertos, task_control_block_info, ARRAY_SIZE(task_control_block_info));
 	freertos->thread_stack_offset = task_control_block_info[0].offset;
 	freertos->thread_stack_size = task_control_block_info[0].size;
 	freertos->thread_name_offset = task_control_block_info[5].offset;
