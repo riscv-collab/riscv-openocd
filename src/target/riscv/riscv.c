@@ -1356,7 +1356,39 @@ static int resume_prep(struct target *target, int current,
 
 		if (enable_triggers(target, trigger_state) != ERROR_OK)
 			return ERROR_FAIL;
+
+	} else if (target->debug_reason == DBG_REASON_BREAKPOINT) {
+
+		riscv_reg_t dpc;
+		riscv_get_register(target, &dpc, GDB_REGNO_DPC);
+		const uint8_t length = 4;
+		LOG_DEBUG("dpc is 0x%" PRIx64, dpc);
+
+		/* fetch the instruction at dpc */
+		uint8_t buffer[length];
+		if (target_read_buffer(target, dpc, length, buffer) != ERROR_OK) {
+			LOG_ERROR("Failed to read instruction at dpc 0x%" PRIx64, dpc);
+			return ERROR_FAIL;
+		}
+
+		uint32_t instruction = 0;
+
+		for (int i = 0; i < length; i++) {
+			LOG_DEBUG("Next byte is %x", buffer[i]);
+			instruction += (buffer[i] << 8 * i);
+		}
+		LOG_DEBUG("Full instruction is %x", instruction);
+
+		if (instruction == MATCH_EBREAK)
+			dpc = dpc + 4;
+		else if ((instruction & MASK_C_EBREAK) == MATCH_C_EBREAK)
+			dpc = dpc + 2;
+
+
+		riscv_set_register(target, GDB_REGNO_DPC, dpc);
+
 	}
+
 
 	if (r->is_halted) {
 		if (riscv_resume_prep_all_harts(target) != ERROR_OK)
