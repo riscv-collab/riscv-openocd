@@ -88,6 +88,7 @@ extern const struct flash_driver xcf_flash;
 extern const struct flash_driver xmc1xxx_flash;
 extern const struct flash_driver xmc4xxx_flash;
 extern const struct flash_driver phoenix_flash;
+extern const struct flash_driver phoenix05_flash;
 
 /**
  * The list of built-in flash drivers.
@@ -151,6 +152,7 @@ static const struct flash_driver * const flash_drivers[] = {
 	&stm32h7x_flash,
 	&gd32vf103_flash,
 	&phoenix_flash,
+	&phoenix05_flash,
 	&stmsmi_flash,
 	&str7x_flash,
 	&str9x_flash,
