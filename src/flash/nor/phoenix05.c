@@ -26,21 +26,21 @@
 #include "target/target_type.h"
 #include "jtag/jtag.h"
 
-#define FLASH_BASE (0x00002000UL)	/*!< ( FLASH   ) Base Address */
-#define NVR_BASE (0x00006000UL)		/*!< ( NVR     ) Base Address */
-#define EEPROM_BASE (0x00007000UL)	/*!< ( EEPROM  ) Base Address */
-#define EFC_BASE (0x0000C000UL)
-#define MODEL_CHK (0x0000C3FCUL)
+#define FLASH_BASE  (0x00002000UL)	  /*!< ( FLASH   ) Base Address */
+#define NVR_BASE    (0x00006000UL)		/*!< ( NVR     ) Base Address */
+#define EEPROM_BASE (0x00007000UL)	  /*!< ( EEPROM  ) Base Address */
+#define EFC_BASE    (0x0000C000UL)
+#define MODEL_CHK   (0x0000C3FCUL)
 
-#define EFC_CR (EFC_BASE + 0x00)
-#define EFC_Tnvs (EFC_BASE + 0x04)
-#define EFC_Tprog (EFC_BASE + 0x08)
-#define EFC_Tpgs (EFC_BASE + 0x0C)
-#define EFC_Trcv (EFC_BASE + 0x10)
-#define EFC_Terase (EFC_BASE + 0x14)
-#define EFC_WPT (EFC_BASE + 0x18)
-#define EFC_OPR (EFC_BASE + 0x1C)
-#define EFC_STS (EFC_BASE + 0x24)
+#define EFC_CR      (EFC_BASE + 0x00)
+#define EFC_Tnvs    (EFC_BASE + 0x04)
+#define EFC_Tprog   (EFC_BASE + 0x08)
+#define EFC_Tpgs    (EFC_BASE + 0x0C)
+#define EFC_Trcv    (EFC_BASE + 0x10)
+#define EFC_Terase  (EFC_BASE + 0x14)
+#define EFC_WPT     (EFC_BASE + 0x18)
+#define EFC_OPR     (EFC_BASE + 0x1C)
+#define EFC_STS     (EFC_BASE + 0x24)
 
 struct phnx_info
 {
@@ -245,7 +245,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 	return retval;
 }
 
-FLASH_BANK_COMMAND_HANDLER(phnx_flash_bank_command)
+FLASH_BANK_COMMAND_HANDLER(phnx05_flash_bank_command)
 {
 
 	if (bank->base != FLASH_BASE && bank->base != NVR_BASE && bank->base != EEPROM_BASE)
@@ -272,10 +272,10 @@ FLASH_BANK_COMMAND_HANDLER(phnx_flash_bank_command)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(phnx_handle_info_command)
+COMMAND_HANDLER(phnx05_handle_info_command)
 {
 	struct flash_bank *bank;
-	LOG_INFO("phnx_handle_info_command involked.");
+	LOG_INFO("phnx05_handle_info_command involked.");
 	if (CMD_ARGC < 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	int bankid = atoi(CMD_ARGV[0]);
@@ -291,30 +291,30 @@ COMMAND_HANDLER(phnx_handle_info_command)
 	return ERROR_OK;
 }
 
-static const struct command_registration phoenix_exec_command_handlers[] = {
+static const struct command_registration phoenix05_exec_command_handlers[] = {
 	{
 		.name = "info",
-		.handler = phnx_handle_info_command,
+		.handler = phnx05_handle_info_command,
 		.mode = COMMAND_EXEC,
 		.help = "Print information about the current bank",
 		.usage = "",
 	},
 	COMMAND_REGISTRATION_DONE};
 
-static const struct command_registration phoenix_command_handlers[] = {
+static const struct command_registration phoenix05_command_handlers[] = {
 	{
 		.name = "phoenix05",
 		.mode = COMMAND_ANY,
-		.help = "phoenix flash command group",
+		.help = "phoenix05 flash command group",
 		.usage = "",
-		.chain = phoenix_exec_command_handlers,
+		.chain = phoenix05_exec_command_handlers,
 	},
 	COMMAND_REGISTRATION_DONE};
 
 struct flash_driver phoenix05_flash = {
 	.name = "phoenix05",
-	.commands = phoenix_command_handlers,
-	.flash_bank_command = phnx_flash_bank_command,
+	.commands = phoenix05_command_handlers,
+	.flash_bank_command = phnx05_flash_bank_command,
 	.erase = phnx_erase,
 	.protect = phnx_protect,
 	.write = phnx_batch_write,
