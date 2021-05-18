@@ -23,7 +23,7 @@ SECTIONS
 
 	.data :
 	{	_data = .;
-		PROVIDE( __global_pointer$ = . + 0x200 );
+		PROVIDE( __global_pointer$ = . + 0x100 );
 		*(.rodata*)
 		*(.data*)
 		_edata = .;

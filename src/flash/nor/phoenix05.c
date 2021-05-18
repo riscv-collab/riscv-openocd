@@ -172,7 +172,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 	{
 		buffer_size /= 2;
 		buffer_size &= ~3UL; /* Make sure it's 4 byte aligned */
-		if (buffer_size <= 256)
+		if (buffer_size <= 128)
 		{
 			/* we already allocated the writing code, but failed to get a
 			 * buffer, free the algorithm */
@@ -213,7 +213,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 			break;
 		}
 
-		retval = buf_get_u32(reg_params[0].value, 0, 32);
+		retval = buf_get_u32(reg_params[0].value, 0, 16);
 		if (retval != 1)
 		{
 			LOG_ERROR("flash write failed, retval=%x", (uint32_t)retval);
