@@ -1,7 +1,7 @@
 #define FLASH_BASE (0x00002000UL)   /*!< ( FLASH   ) Base Address */
-#define MODEL_CHK (0x0000C3FCUL)
-#define EFC_OPR (0x0000C01CUL)
-#define EFC_STS (0x0000C024UL)
+#define MODEL_CHK  (0x0000C3FCUL)
+#define EFC_OPR    (0x0000C01CUL)
+#define EFC_STS    (0x0000C024UL)
 
 #define REG32(addr) (*((volatile unsigned int *)(addr)))
 
