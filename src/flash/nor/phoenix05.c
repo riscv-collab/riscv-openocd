@@ -26,13 +26,11 @@
 #include "target/target_type.h"
 #include "jtag/jtag.h"
 
-//TODO：周一到公司再把调试通过的phoenix05代码放到此处进行替换，目前是增加两套代码更好维护20210515
-#define FLASH_BASE (0x10100000UL)	/*!< ( FLASH   ) Base Address */
-#define NVR_BASE (0x10140000UL)		/*!< ( NVR     ) Base Address */
-#define EEPROM_BASE (0x10180000UL)	/*!< ( EEPROM  ) Base Address */
-#define PAGEBUF_BASE (0x101C0000UL) /*!< ( PAGEBUF ) Base Address */
-#define EFC_BASE (0x40000000UL)
-#define MODEL_CHK (0x40001020UL)
+#define FLASH_BASE (0x00002000UL)	/*!< ( FLASH   ) Base Address */
+#define NVR_BASE (0x00006000UL)		/*!< ( NVR     ) Base Address */
+#define EEPROM_BASE (0x00007000UL)	/*!< ( EEPROM  ) Base Address */
+#define EFC_BASE (0x0000C000UL)
+#define MODEL_CHK (0x0000C3FCUL)
 
 #define EFC_CR (EFC_BASE + 0x00)
 #define EFC_Tnvs (EFC_BASE + 0x04)
@@ -42,7 +40,6 @@
 #define EFC_Terase (EFC_BASE + 0x14)
 #define EFC_WPT (EFC_BASE + 0x18)
 #define EFC_OPR (EFC_BASE + 0x1C)
-#define EFC_PVEV (EFC_BASE + 0x20)
 #define EFC_STS (EFC_BASE + 0x24)
 
 struct phnx_info
@@ -67,13 +64,6 @@ static int phnx_probe(struct flash_bank *bank)
 	if (chip->probed == true)
 		return ERROR_OK;
 
-	// TODO: add a real probe for phoenix chip
-	res = target_write_u32(target, MODEL_CHK, 0x05);
-	if (res != ERROR_OK)
-	{
-		LOG_ERROR("Couldn't write MODEL_CHK register");
-		return res;
-	}
 	res = target_read_u32(target, MODEL_CHK, &model);
 	if (res != ERROR_OK)
 	{
@@ -87,13 +77,9 @@ static int phnx_probe(struct flash_bank *bank)
 		return ERROR_FAIL;
 	}
 
-	if (model == 0x05)
+	if (model == 0xF05)
 	{
-		flash_kb = 128, ram_kb = 10;
-	}
-	else if (model == 0x00)
-	{
-		flash_kb = 32, ram_kb = 4;
+		flash_kb = 16, ram_kb = 2;
 	}
 	else
 	{
@@ -101,7 +87,7 @@ static int phnx_probe(struct flash_bank *bank)
 		return ERROR_FAIL;
 	}
 
-	chip->sector_size = chip->page_size = 512;
+	chip->sector_size = chip->page_size = 128;
 	chip->num_pages = flash_kb * 1024 / chip->sector_size;
 	bank->size = flash_kb * 1024;
 	bank->num_sectors = chip->num_pages;
@@ -138,7 +124,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 {
 	struct phnx_info *chip = (struct phnx_info *)bank->driver_priv;
 	struct target *target = bank->target;
-	uint32_t buffer_size = 8192;
+	uint32_t buffer_size = 1024;
 	struct working_area *write_algorithm;
 	struct working_area *source;
 	struct reg_param reg_params[3];
@@ -162,7 +148,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 	}
 
 	static const uint8_t flash_write_code[] = {
-#include "../../../contrib/loaders/flash/phoenix/write.inc"
+#include "../../../contrib/loaders/flash/phoenix05/phoenix05_write.inc"
 	};
 
 	/* flash write code */
@@ -317,7 +303,7 @@ static const struct command_registration phoenix_exec_command_handlers[] = {
 
 static const struct command_registration phoenix_command_handlers[] = {
 	{
-		.name = "phoenix",
+		.name = "phoenix05",
 		.mode = COMMAND_ANY,
 		.help = "phoenix flash command group",
 		.usage = "",
@@ -325,8 +311,8 @@ static const struct command_registration phoenix_command_handlers[] = {
 	},
 	COMMAND_REGISTRATION_DONE};
 
-struct flash_driver phoenix_flash = {
-	.name = "phoenix",
+struct flash_driver phoenix05_flash = {
+	.name = "phoenix05",
 	.commands = phoenix_command_handlers,
 	.flash_bank_command = phnx_flash_bank_command,
 	.erase = phnx_erase,
