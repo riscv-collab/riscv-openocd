@@ -67,7 +67,7 @@ static int phnx_probe(struct flash_bank *bank)
 	int flash_kb, ram_kb;
 	int res;
 	unsigned int model;
-	unsigned int status = 0;
+	unsigned int status;
 	if (chip->probed == true)
 		return ERROR_OK;
 
@@ -94,7 +94,7 @@ static int phnx_probe(struct flash_bank *bank)
 	if (model == 0x05)
 	{
         flash_kb = 128, ram_kb = 10;
-        /* disable wdt clock */
+        /* disable wdt */
         target_write_u32(target, PMU_WPT, 0xC3);
         target_write_u32(target, PMU_WPT, 0x3C);
         res = target_read_u32(target, PMU_CR, &status);
@@ -117,7 +117,7 @@ static int phnx_probe(struct flash_bank *bank)
 	else if (model == 0x00)
 	{
         flash_kb = 32, ram_kb = 4;
-        /* disable wdt clock */
+        /* disable wdt */
         target_write_u32(target, PMU_WPT, 0xC3);
         target_write_u32(target, PMU_WPT, 0x3C);
         res = target_read_u32(target, PMU_CR, &status);

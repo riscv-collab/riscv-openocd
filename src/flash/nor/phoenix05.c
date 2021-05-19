@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2020 by Jiazhi Zhang                                    *
- *   Jiazhi Zhang <jiazhi.zhang@fhsjdz.com>                                *
+ *   Copyright (C) 2021 by David Lin                                       *
+ *   David Lin <peng.lin@fhsjdz.com>                                       *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -65,7 +65,7 @@ static int phnx_probe(struct flash_bank *bank)
 	int flash_kb, ram_kb;
 	int res;
 	unsigned int model;
-	unsigned int status = 0;
+	unsigned int status;
 	if (chip->probed == true)
 		return ERROR_OK;
 
@@ -86,7 +86,7 @@ static int phnx_probe(struct flash_bank *bank)
 	{
 		flash_kb = 16, ram_kb = 2;
 
-        /* disable wdt clock */
+        /* disable wdt */
         target_write_u32(target, SYSC_WRPROCFG, 0x5a);
         target_write_u32(target, SYSC_WRPROCFG, 0xa5);
         res = target_read_u32(target, SYSC_CLKCTRCFG, &status);
@@ -238,7 +238,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 			break;
 		}
 
-		retval = buf_get_u32(reg_params[0].value, 0, 16);
+		retval = buf_get_u32(reg_params[0].value, 0, 32);
 		if (retval != 1)
 		{
 			LOG_ERROR("flash write failed, retval=%x", (uint32_t)retval);
