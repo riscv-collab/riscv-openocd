@@ -26,21 +26,25 @@
 #include "target/target_type.h"
 #include "jtag/jtag.h"
 
-#define FLASH_BASE  (0x00002000UL)	  /*!< ( FLASH   ) Base Address */
-#define NVR_BASE    (0x00006000UL)		/*!< ( NVR     ) Base Address */
-#define EEPROM_BASE (0x00007000UL)	  /*!< ( EEPROM  ) Base Address */
-#define EFC_BASE    (0x0000C000UL)
-#define MODEL_CHK   (0x0000C3FCUL)
+#define FLASH_BASE      (0x00002000UL)	  /*!< ( FLASH   ) Base Address */
+#define NVR_BASE        (0x00006000UL)	  /*!< ( NVR     ) Base Address */
+#define EEPROM_BASE     (0x00007000UL)	  /*!< ( EEPROM  ) Base Address */
+#define EFC_BASE        (0x0000C000UL)
+#define SYSC_BASE       (0x0000C400UL)
+#define MODEL_CHK       (0x0000C3FCUL)
 
-#define EFC_CR      (EFC_BASE + 0x00)
-#define EFC_Tnvs    (EFC_BASE + 0x04)
-#define EFC_Tprog   (EFC_BASE + 0x08)
-#define EFC_Tpgs    (EFC_BASE + 0x0C)
-#define EFC_Trcv    (EFC_BASE + 0x10)
-#define EFC_Terase  (EFC_BASE + 0x14)
-#define EFC_WPT     (EFC_BASE + 0x18)
-#define EFC_OPR     (EFC_BASE + 0x1C)
-#define EFC_STS     (EFC_BASE + 0x24)
+#define EFC_CR          (EFC_BASE  + 0x00)
+#define EFC_Tnvs        (EFC_BASE  + 0x04)
+#define EFC_Tprog       (EFC_BASE  + 0x08)
+#define EFC_Tpgs        (EFC_BASE  + 0x0C)
+#define EFC_Trcv        (EFC_BASE  + 0x10)
+#define EFC_Terase      (EFC_BASE  + 0x14)
+#define EFC_WPT         (EFC_BASE  + 0x18)
+#define EFC_OPR         (EFC_BASE  + 0x1C)
+#define EFC_STS         (EFC_BASE  + 0x24)
+
+#define SYSC_CLKCTRCFG  (SYSC_BASE + 0x00)
+#define SYSC_WRPROCFG   (SYSC_BASE + 0x04)
 
 struct phnx_info
 {
@@ -61,6 +65,7 @@ static int phnx_probe(struct flash_bank *bank)
 	int flash_kb, ram_kb;
 	int res;
 	unsigned int model;
+	unsigned int status = 0;
 	if (chip->probed == true)
 		return ERROR_OK;
 
@@ -80,6 +85,26 @@ static int phnx_probe(struct flash_bank *bank)
 	if (model == 0xF05)
 	{
 		flash_kb = 16, ram_kb = 2;
+
+        /* disable wdt clock */
+        target_write_u32(target, SYSC_WRPROCFG, 0x5a);
+        target_write_u32(target, SYSC_WRPROCFG, 0xa5);
+        res = target_read_u32(target, SYSC_CLKCTRCFG, &status);
+        if (res != ERROR_OK)
+        {
+            LOG_ERROR("Couldn't read SYSC_CLKCTRCFG register");
+            return res;
+        }
+
+        status &=~(0x01 << 2);
+        target_write_u32(target, SYSC_WRPROCFG, 0x5a);
+        target_write_u32(target, SYSC_WRPROCFG, 0xa5);
+        res = target_write_u32(target, SYSC_CLKCTRCFG, status);
+        if (res != ERROR_OK)
+        {
+            LOG_ERROR("Couldn't write SYSC_CLKCTRCFG register");
+            return res;
+        }
 	}
 	else
 	{

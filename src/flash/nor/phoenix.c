@@ -26,23 +26,27 @@
 #include "target/target_type.h"
 #include "jtag/jtag.h"
 
-#define FLASH_BASE (0x10100000UL)	/*!< ( FLASH   ) Base Address */
-#define NVR_BASE (0x10140000UL)		/*!< ( NVR     ) Base Address */
-#define EEPROM_BASE (0x10180000UL)	/*!< ( EEPROM  ) Base Address */
-#define PAGEBUF_BASE (0x101C0000UL) /*!< ( PAGEBUF ) Base Address */
-#define EFC_BASE (0x40000000UL)
-#define MODEL_CHK (0x40001020UL)
+#define FLASH_BASE         (0x10100000UL)	/*!< ( FLASH   ) Base Address */
+#define NVR_BASE           (0x10140000UL)	/*!< ( NVR     ) Base Address */
+#define EEPROM_BASE        (0x10180000UL)	/*!< ( EEPROM  ) Base Address */
+#define PAGEBUF_BASE       (0x101C0000UL)       /*!< ( PAGEBUF ) Base Address */
+#define EFC_BASE           (0x40000000UL)
+#define PMU_BASE           (0x40012C00UL)
+#define MODEL_CHK          (0x40001020UL)
 
-#define EFC_CR (EFC_BASE + 0x00)
-#define EFC_Tnvs (EFC_BASE + 0x04)
-#define EFC_Tprog (EFC_BASE + 0x08)
-#define EFC_Tpgs (EFC_BASE + 0x0C)
-#define EFC_Trcv (EFC_BASE + 0x10)
-#define EFC_Terase (EFC_BASE + 0x14)
-#define EFC_WPT (EFC_BASE + 0x18)
-#define EFC_OPR (EFC_BASE + 0x1C)
-#define EFC_PVEV (EFC_BASE + 0x20)
-#define EFC_STS (EFC_BASE + 0x24)
+#define EFC_CR             (EFC_BASE + 0x00)
+#define EFC_Tnvs           (EFC_BASE + 0x04)
+#define EFC_Tprog          (EFC_BASE + 0x08)
+#define EFC_Tpgs           (EFC_BASE + 0x0C)
+#define EFC_Trcv           (EFC_BASE + 0x10)
+#define EFC_Terase         (EFC_BASE + 0x14)
+#define EFC_WPT            (EFC_BASE + 0x18)
+#define EFC_OPR            (EFC_BASE + 0x1C)
+#define EFC_PVEV           (EFC_BASE + 0x20)
+#define EFC_STS            (EFC_BASE + 0x24)
+
+#define PMU_CR             (PMU_BASE + 0x00)
+#define PMU_WPT            (PMU_BASE + 0x18)
 
 struct phnx_info
 {
@@ -63,6 +67,7 @@ static int phnx_probe(struct flash_bank *bank)
 	int flash_kb, ram_kb;
 	int res;
 	unsigned int model;
+	unsigned int status = 0;
 	if (chip->probed == true)
 		return ERROR_OK;
 
@@ -88,17 +93,55 @@ static int phnx_probe(struct flash_bank *bank)
 
 	if (model == 0x05)
 	{
-		flash_kb = 128, ram_kb = 10;
+        flash_kb = 128, ram_kb = 10;
+        /* disable wdt clock */
+        target_write_u32(target, PMU_WPT, 0xC3);
+        target_write_u32(target, PMU_WPT, 0x3C);
+        res = target_read_u32(target, PMU_CR, &status);
+        if (res != ERROR_OK)
+        {
+            LOG_ERROR("Couldn't read PMU_CR register");
+            return res;
+        }
+
+        status &=~(0x01 << 7);
+        target_write_u32(target, PMU_WPT, 0xC3);
+        target_write_u32(target, PMU_WPT, 0x3C);
+        res = target_write_u32(target, PMU_CR, status);
+        if (res != ERROR_OK)
+        {
+            LOG_ERROR("Couldn't write PMU_CR register");
+            return res;
+        }
 	}
 	else if (model == 0x00)
 	{
-		flash_kb = 32, ram_kb = 4;
-	}
-	else
-	{
-		LOG_ERROR("phoenix model probe failed.");
-		return ERROR_FAIL;
-	}
+        flash_kb = 32, ram_kb = 4;
+        /* disable wdt clock */
+        target_write_u32(target, PMU_WPT, 0xC3);
+        target_write_u32(target, PMU_WPT, 0x3C);
+        res = target_read_u32(target, PMU_CR, &status);
+        if (res != ERROR_OK)
+        {
+            LOG_ERROR("Couldn't read PMU_CR register");
+            return res;
+        }
+
+        status &=~(0x01 << 7);
+        target_write_u32(target, PMU_WPT, 0xC3);
+        target_write_u32(target, PMU_WPT, 0x3C);
+        res = target_write_u32(target, PMU_CR, status);
+        if (res != ERROR_OK)
+        {
+            LOG_ERROR("Couldn't write PMU_CR register");
+            return res;
+        }
+    }
+    else
+    {
+        LOG_ERROR("phoenix model probe failed.");
+        return ERROR_FAIL;
+    }
 
 	chip->sector_size = chip->page_size = 512;
 	chip->num_pages = flash_kb * 1024 / chip->sector_size;
