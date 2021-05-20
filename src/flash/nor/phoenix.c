@@ -71,6 +71,24 @@ static int phnx_probe(struct flash_bank *bank)
 	if (chip->probed == true)
 		return ERROR_OK;
 
+	/* disable wdt */
+	res = target_read_u32(target, PMU_CR, &status);
+	if (res != ERROR_OK)
+	{
+		LOG_ERROR("Couldn't read PMU_CR register");
+		return res;
+	}
+
+	status &= ~(0x01 << 7);
+	target_write_u32(target, PMU_WPT, 0xC3);
+	target_write_u32(target, PMU_WPT, 0x3C);
+	res = target_write_u32(target, PMU_CR, status);
+	if (res != ERROR_OK)
+	{
+		LOG_ERROR("Couldn't write PMU_CR register");
+		return res;
+	}
+
 	// TODO: add a real probe for phoenix chip
 	res = target_write_u32(target, MODEL_CHK, 0x05);
 	if (res != ERROR_OK)
@@ -94,48 +112,10 @@ static int phnx_probe(struct flash_bank *bank)
 	if (model == 0x05)
 	{
         flash_kb = 128, ram_kb = 10;
-        /* disable wdt */
-        target_write_u32(target, PMU_WPT, 0xC3);
-        target_write_u32(target, PMU_WPT, 0x3C);
-        res = target_read_u32(target, PMU_CR, &status);
-        if (res != ERROR_OK)
-        {
-            LOG_ERROR("Couldn't read PMU_CR register");
-            return res;
-        }
-
-        status &=~(0x01 << 7);
-        target_write_u32(target, PMU_WPT, 0xC3);
-        target_write_u32(target, PMU_WPT, 0x3C);
-        res = target_write_u32(target, PMU_CR, status);
-        if (res != ERROR_OK)
-        {
-            LOG_ERROR("Couldn't write PMU_CR register");
-            return res;
-        }
 	}
 	else if (model == 0x00)
 	{
         flash_kb = 32, ram_kb = 4;
-        /* disable wdt */
-        target_write_u32(target, PMU_WPT, 0xC3);
-        target_write_u32(target, PMU_WPT, 0x3C);
-        res = target_read_u32(target, PMU_CR, &status);
-        if (res != ERROR_OK)
-        {
-            LOG_ERROR("Couldn't read PMU_CR register");
-            return res;
-        }
-
-        status &=~(0x01 << 7);
-        target_write_u32(target, PMU_WPT, 0xC3);
-        target_write_u32(target, PMU_WPT, 0x3C);
-        res = target_write_u32(target, PMU_CR, status);
-        if (res != ERROR_OK)
-        {
-            LOG_ERROR("Couldn't write PMU_CR register");
-            return res;
-        }
     }
     else
     {

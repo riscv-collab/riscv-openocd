@@ -69,6 +69,24 @@ static int phnx_probe(struct flash_bank *bank)
 	if (chip->probed == true)
 		return ERROR_OK;
 
+	/* disable wdt */
+	res = target_read_u32(target, SYSC_CLKCTRCFG, &status);
+	if (res != ERROR_OK)
+	{
+		LOG_ERROR("Couldn't read SYSC_CLKCTRCFG register");
+		return res;
+	}
+
+	status &= ~(0x01 << 2);
+	target_write_u32(target, SYSC_WRPROCFG, 0x5a);
+	target_write_u32(target, SYSC_WRPROCFG, 0xa5);
+	res = target_write_u32(target, SYSC_CLKCTRCFG, status);
+	if (res != ERROR_OK)
+	{
+		LOG_ERROR("Couldn't write SYSC_CLKCTRCFG register");
+		return res;
+	}
+
 	res = target_read_u32(target, MODEL_CHK, &model);
 	if (res != ERROR_OK)
 	{
@@ -85,26 +103,6 @@ static int phnx_probe(struct flash_bank *bank)
 	if (model == 0xF05)
 	{
 		flash_kb = 16, ram_kb = 2;
-
-        /* disable wdt */
-        target_write_u32(target, SYSC_WRPROCFG, 0x5a);
-        target_write_u32(target, SYSC_WRPROCFG, 0xa5);
-        res = target_read_u32(target, SYSC_CLKCTRCFG, &status);
-        if (res != ERROR_OK)
-        {
-            LOG_ERROR("Couldn't read SYSC_CLKCTRCFG register");
-            return res;
-        }
-
-        status &=~(0x01 << 2);
-        target_write_u32(target, SYSC_WRPROCFG, 0x5a);
-        target_write_u32(target, SYSC_WRPROCFG, 0xa5);
-        res = target_write_u32(target, SYSC_CLKCTRCFG, status);
-        if (res != ERROR_OK)
-        {
-            LOG_ERROR("Couldn't write SYSC_CLKCTRCFG register");
-            return res;
-        }
 	}
 	else
 	{
