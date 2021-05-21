@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2020 by Jiazhi Zhang                                    *
- *   Jiazhi Zhang <jiazhi.zhang@fhsjdz.com>                                *
+ *   Copyright (C) 2021 by David Lin                                       *
+ *   David Lin <peng.lin@fhsjdz.com>                                       *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -26,27 +26,25 @@
 #include "target/target_type.h"
 #include "jtag/jtag.h"
 
-#define FLASH_BASE         (0x10100000UL)	/*!< ( FLASH   ) Base Address */
-#define NVR_BASE           (0x10140000UL)	/*!< ( NVR     ) Base Address */
-#define EEPROM_BASE        (0x10180000UL)	/*!< ( EEPROM  ) Base Address */
-#define PAGEBUF_BASE       (0x101C0000UL)       /*!< ( PAGEBUF ) Base Address */
-#define EFC_BASE           (0x40000000UL)
-#define PMU_BASE           (0x40012C00UL)
-#define MODEL_CHK          (0x40001020UL)
+#define FLASH_BASE      (0x00002000UL)	  /*!< ( FLASH   ) Base Address */
+#define NVR_BASE        (0x00006000UL)	  /*!< ( NVR     ) Base Address */
+#define EEPROM_BASE     (0x00007000UL)	  /*!< ( EEPROM  ) Base Address */
+#define EFC_BASE        (0x0000C000UL)
+#define SYSC_BASE       (0x0000C400UL)
+#define MODEL_CHK       (0x0000C3FCUL)
 
-#define EFC_CR             (EFC_BASE + 0x00)
-#define EFC_Tnvs           (EFC_BASE + 0x04)
-#define EFC_Tprog          (EFC_BASE + 0x08)
-#define EFC_Tpgs           (EFC_BASE + 0x0C)
-#define EFC_Trcv           (EFC_BASE + 0x10)
-#define EFC_Terase         (EFC_BASE + 0x14)
-#define EFC_WPT            (EFC_BASE + 0x18)
-#define EFC_OPR            (EFC_BASE + 0x1C)
-#define EFC_PVEV           (EFC_BASE + 0x20)
-#define EFC_STS            (EFC_BASE + 0x24)
+#define EFC_CR          (EFC_BASE  + 0x00)
+#define EFC_Tnvs        (EFC_BASE  + 0x04)
+#define EFC_Tprog       (EFC_BASE  + 0x08)
+#define EFC_Tpgs        (EFC_BASE  + 0x0C)
+#define EFC_Trcv        (EFC_BASE  + 0x10)
+#define EFC_Terase      (EFC_BASE  + 0x14)
+#define EFC_WPT         (EFC_BASE  + 0x18)
+#define EFC_OPR         (EFC_BASE  + 0x1C)
+#define EFC_STS         (EFC_BASE  + 0x24)
 
-#define PMU_CR             (PMU_BASE + 0x00)
-#define PMU_WPT            (PMU_BASE + 0x18)
+#define SYSC_CLKCTRCFG  (SYSC_BASE + 0x00)
+#define SYSC_WRPROCFG   (SYSC_BASE + 0x04)
 
 struct phnx_info
 {
@@ -72,30 +70,23 @@ static int phnx_probe(struct flash_bank *bank)
 		return ERROR_OK;
 
 	/* disable wdt */
-	res = target_read_u32(target, PMU_CR, &status);
+	res = target_read_u32(target, SYSC_CLKCTRCFG, &status);
 	if (res != ERROR_OK)
 	{
-		LOG_ERROR("Couldn't read PMU_CR register");
+		LOG_ERROR("Couldn't read SYSC_CLKCTRCFG register");
 		return res;
 	}
 
-	status &= ~(0x01 << 7);
-	target_write_u32(target, PMU_WPT, 0xC3);
-	target_write_u32(target, PMU_WPT, 0x3C);
-	res = target_write_u32(target, PMU_CR, status);
+	status &= ~(0x01 << 2);
+	target_write_u32(target, SYSC_WRPROCFG, 0x5a);
+	target_write_u32(target, SYSC_WRPROCFG, 0xa5);
+	res = target_write_u32(target, SYSC_CLKCTRCFG, status);
 	if (res != ERROR_OK)
 	{
-		LOG_ERROR("Couldn't write PMU_CR register");
+		LOG_ERROR("Couldn't write SYSC_CLKCTRCFG register");
 		return res;
 	}
 
-	// TODO: add a real probe for phoenix chip
-	res = target_write_u32(target, MODEL_CHK, 0x05);
-	if (res != ERROR_OK)
-	{
-		LOG_ERROR("Couldn't write MODEL_CHK register");
-		return res;
-	}
 	res = target_read_u32(target, MODEL_CHK, &model);
 	if (res != ERROR_OK)
 	{
@@ -109,21 +100,17 @@ static int phnx_probe(struct flash_bank *bank)
 		return ERROR_FAIL;
 	}
 
-	if (model == 0x05)
+	if (model == 0xF05)
 	{
-        flash_kb = 128, ram_kb = 10;
+		flash_kb = 16, ram_kb = 2;
 	}
-	else if (model == 0x00)
+	else
 	{
-        flash_kb = 32, ram_kb = 4;
-    }
-    else
-    {
-        LOG_ERROR("phoenix model probe failed.");
-        return ERROR_FAIL;
-    }
+		LOG_ERROR("phoenix model probe failed.");
+		return ERROR_FAIL;
+	}
 
-	chip->sector_size = chip->page_size = 512;
+	chip->sector_size = chip->page_size = 128;
 	chip->num_pages = flash_kb * 1024 / chip->sector_size;
 	bank->size = flash_kb * 1024;
 	bank->num_sectors = chip->num_pages;
@@ -160,7 +147,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 {
 	struct phnx_info *chip = (struct phnx_info *)bank->driver_priv;
 	struct target *target = bank->target;
-	uint32_t buffer_size = 8192;
+	uint32_t buffer_size = 1024;
 	struct working_area *write_algorithm;
 	struct working_area *source;
 	struct reg_param reg_params[3];
@@ -184,7 +171,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 	}
 
 	static const uint8_t flash_write_code[] = {
-#include "../../../contrib/loaders/flash/phoenix/write.inc"
+#include "../../../contrib/loaders/flash/phoenix05/phoenix05_write.inc"
 	};
 
 	/* flash write code */
@@ -208,7 +195,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 	{
 		buffer_size /= 2;
 		buffer_size &= ~3UL; /* Make sure it's 4 byte aligned */
-		if (buffer_size <= 256)
+		if (buffer_size <= 128)
 		{
 			/* we already allocated the writing code, but failed to get a
 			 * buffer, free the algorithm */
@@ -281,7 +268,7 @@ static int phnx_batch_write(struct flash_bank *bank, const uint8_t *buffer,
 	return retval;
 }
 
-FLASH_BANK_COMMAND_HANDLER(phnx_flash_bank_command)
+FLASH_BANK_COMMAND_HANDLER(phnx05_flash_bank_command)
 {
 
 	if (bank->base != FLASH_BASE && bank->base != NVR_BASE && bank->base != EEPROM_BASE)
@@ -308,10 +295,10 @@ FLASH_BANK_COMMAND_HANDLER(phnx_flash_bank_command)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(phnx_handle_info_command)
+COMMAND_HANDLER(phnx05_handle_info_command)
 {
 	struct flash_bank *bank;
-	LOG_INFO("phnx_handle_info_command involked.");
+	LOG_INFO("phnx05_handle_info_command involked.");
 	if (CMD_ARGC < 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	int bankid = atoi(CMD_ARGV[0]);
@@ -327,30 +314,30 @@ COMMAND_HANDLER(phnx_handle_info_command)
 	return ERROR_OK;
 }
 
-static const struct command_registration phoenix_exec_command_handlers[] = {
+static const struct command_registration phoenix05_exec_command_handlers[] = {
 	{
 		.name = "info",
-		.handler = phnx_handle_info_command,
+		.handler = phnx05_handle_info_command,
 		.mode = COMMAND_EXEC,
 		.help = "Print information about the current bank",
 		.usage = "",
 	},
 	COMMAND_REGISTRATION_DONE};
 
-static const struct command_registration phoenix_command_handlers[] = {
+static const struct command_registration phoenix05_command_handlers[] = {
 	{
-		.name = "phoenix",
+		.name = "phoenix05",
 		.mode = COMMAND_ANY,
-		.help = "phoenix flash command group",
+		.help = "phoenix05 flash command group",
 		.usage = "",
-		.chain = phoenix_exec_command_handlers,
+		.chain = phoenix05_exec_command_handlers,
 	},
 	COMMAND_REGISTRATION_DONE};
 
-struct flash_driver phoenix_flash = {
-	.name = "phoenix",
-	.commands = phoenix_command_handlers,
-	.flash_bank_command = phnx_flash_bank_command,
+struct flash_driver phoenix05_flash = {
+	.name = "phoenix05",
+	.commands = phoenix05_command_handlers,
+	.flash_bank_command = phnx05_flash_bank_command,
 	.erase = phnx_erase,
 	.protect = phnx_protect,
 	.write = phnx_batch_write,
