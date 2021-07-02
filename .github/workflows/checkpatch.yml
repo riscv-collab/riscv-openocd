@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v2
         with:
             fetch-depth: 30
-      - run: sudo apt-get install filterdiff
+      - run: sudo apt-get install patchutils
       - name: Run checkpatch
         run: |
             git diff -U20 HEAD~40 | \
