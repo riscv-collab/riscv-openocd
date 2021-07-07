@@ -15,8 +15,14 @@ jobs:
       - run: sudo apt-get install clang
       - run: ./bootstrap
       - run: ./configure --enable-remote-bitbang --enable-jtag_vpi --disable-target64
+      - name: Save config.log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v2
+        with:
+          path: config.log
       - run: make
       - run: file src/openocd
+
 
   # 64-bit, gcc
   build64:
