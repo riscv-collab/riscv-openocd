@@ -12,13 +12,14 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v2
-      - run: sudo apt-get install clang
+      - run: sudo apt-get install clang gcc-multilib
       - run: ./bootstrap
       - run: ./configure --enable-remote-bitbang --enable-jtag_vpi --disable-target64
       - name: Save config.log
         if: ${{ always() }}
         uses: actions/upload-artifact@v2
         with:
+          name: config32.log
           path: config.log
       - run: make
       - run: file src/openocd
