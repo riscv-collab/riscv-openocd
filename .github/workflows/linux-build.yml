@@ -7,7 +7,7 @@ jobs:
   build32:
     runs-on: ubuntu-latest
     env:
-      - CFLAGS: -m32
+      - CFLAGS: "-m32"
       - CC: clang
     steps:
       - name: Checkout Code
@@ -21,7 +21,7 @@ jobs:
   build64:
     runs-on: ubuntu-latest
     env:
-      - CFLAGS: -m64
+      - CFLAGS: "-m64"
       - CC: gcc
     steps:
       - name: Checkout Code
