@@ -22,7 +22,7 @@ jobs:
           name: config32.log
           path: config.log
       - run: make
-      - run: file src/openocd
+      - run: file src/openocd | grep 32-bit
 
 
   # 64-bit, gcc
@@ -37,4 +37,4 @@ jobs:
       - run: ./bootstrap
       - run: ./configure --enable-remote-bitbang --enable-jtag_vpi
       - run: make
-      - run: file src/openocd
+      - run: file src/openocd | grep 32-bit
