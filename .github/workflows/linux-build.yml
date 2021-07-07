@@ -1,0 +1,13 @@
+on: push
+
+name: Linux Build
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+      - run: ./bootstrap
+      - run: ./configure --enable-remote-bitbang --enable-jtag_vpi $CONFIGURE_ARGS
+      - run: make
