@@ -90,10 +90,9 @@ static int remote_bitbang_fill_buf(block_bool_t block)
 		if (remote_bitbang_flush() != ERROR_OK)
 			return ERROR_FAIL;
 		socket_block(remote_bitbang_fd);
-	} else {
-		socket_nonblock(remote_bitbang_fd);
 	}
 
+	bool first = true;
 	while (!remote_bitbang_buf_full()) {
 		unsigned int contiguous_available_space;
 		if (remote_bitbang_recv_buf_end >= remote_bitbang_recv_buf_start) {
@@ -108,11 +107,13 @@ static int remote_bitbang_fill_buf(block_bool_t block)
 		ssize_t count = read_socket(remote_bitbang_fd,
 				remote_bitbang_recv_buf + remote_bitbang_recv_buf_end,
 				contiguous_available_space);
+		if (first && block == BLOCK)
+			socket_nonblock(remote_bitbang_fd);
+		first = false;
 		if (count > 0) {
 			remote_bitbang_recv_buf_end += count;
 			if (remote_bitbang_recv_buf_end == sizeof(remote_bitbang_recv_buf))
 				remote_bitbang_recv_buf_end = 0;
-			socket_nonblock(remote_bitbang_fd);
 		} else if (count == 0) {
 			return ERROR_OK;
 		} else if (count < 0) {
@@ -311,6 +312,8 @@ static int remote_bitbang_init(void)
 
 	if (remote_bitbang_fd < 0)
 		return remote_bitbang_fd;
+
+	socket_nonblock(remote_bitbang_fd);
 
 	LOG_INFO("remote_bitbang driver initialized");
 	return ERROR_OK;
