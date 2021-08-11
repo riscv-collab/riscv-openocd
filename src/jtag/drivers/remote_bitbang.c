@@ -40,7 +40,7 @@ static uint8_t remote_bitbang_send_buf[512];
 static unsigned int remote_bitbang_send_buf_used;
 
 /* Circular buffer. When start == end, the buffer is empty. */
-static char remote_bitbang_recv_buf[64];
+static char remote_bitbang_recv_buf[256];
 static unsigned int remote_bitbang_recv_buf_start;
 static unsigned int remote_bitbang_recv_buf_end;
 
@@ -49,47 +49,6 @@ static bool remote_bitbang_buf_full(void)
 	return remote_bitbang_recv_buf_end ==
 		((remote_bitbang_recv_buf_start + sizeof(remote_bitbang_recv_buf) - 1) %
 		 sizeof(remote_bitbang_recv_buf));
-}
-
-/* Read any incoming data, placing it into the buffer. */
-static int remote_bitbang_fill_buf(void)
-{
-	socket_nonblock(remote_bitbang_fd);
-	while (!remote_bitbang_buf_full()) {
-		unsigned int contiguous_available_space;
-		if (remote_bitbang_recv_buf_end >= remote_bitbang_recv_buf_start) {
-			contiguous_available_space = sizeof(remote_bitbang_recv_buf) -
-				remote_bitbang_recv_buf_end;
-			if (remote_bitbang_recv_buf_start == 0)
-				contiguous_available_space -= 1;
-		} else {
-			contiguous_available_space = remote_bitbang_recv_buf_start -
-				remote_bitbang_recv_buf_end - 1;
-		}
-		ssize_t count = read_socket(remote_bitbang_fd,
-				remote_bitbang_recv_buf + remote_bitbang_recv_buf_end,
-				contiguous_available_space);
-		if (count > 0) {
-			remote_bitbang_recv_buf_end += count;
-			if (remote_bitbang_recv_buf_end == sizeof(remote_bitbang_recv_buf))
-				remote_bitbang_recv_buf_end = 0;
-		} else if (count == 0) {
-			return ERROR_OK;
-		} else if (count < 0) {
-#ifdef _WIN32
-			if (WSAGetLastError() == WSAEWOULDBLOCK) {
-#else
-			if (errno == EAGAIN) {
-#endif
-				return ERROR_OK;
-			} else {
-				log_socket_error("remote_bitbang_fill_buf");
-				return ERROR_FAIL;
-			}
-		}
-	}
-
-	return ERROR_OK;
 }
 
 static int remote_bitbang_flush(void)
@@ -109,6 +68,67 @@ static int remote_bitbang_flush(void)
 		offset += written;
 	}
 	remote_bitbang_send_buf_used = 0;
+	return ERROR_OK;
+}
+
+typedef enum {
+	NO_BLOCK,
+	BLOCK
+} block_bool_t;
+
+/* Read any incoming data, placing it into the buffer. */
+static int remote_bitbang_fill_buf(block_bool_t block)
+{
+	if (remote_bitbang_recv_buf_start == remote_bitbang_recv_buf_end) {
+		/* If the buffer is empty, reset it to 0 so we get more
+		 * contiguous space. */
+		remote_bitbang_recv_buf_start = 0;
+		remote_bitbang_recv_buf_end = 0;
+	}
+
+	if (block == BLOCK) {
+		if (remote_bitbang_flush() != ERROR_OK)
+			return ERROR_FAIL;
+		socket_block(remote_bitbang_fd);
+	} else {
+		socket_nonblock(remote_bitbang_fd);
+	}
+
+	while (!remote_bitbang_buf_full()) {
+		unsigned int contiguous_available_space;
+		if (remote_bitbang_recv_buf_end >= remote_bitbang_recv_buf_start) {
+			contiguous_available_space = sizeof(remote_bitbang_recv_buf) -
+				remote_bitbang_recv_buf_end;
+			if (remote_bitbang_recv_buf_start == 0)
+				contiguous_available_space -= 1;
+		} else {
+			contiguous_available_space = remote_bitbang_recv_buf_start -
+				remote_bitbang_recv_buf_end - 1;
+		}
+		ssize_t count = read_socket(remote_bitbang_fd,
+				remote_bitbang_recv_buf + remote_bitbang_recv_buf_end,
+				contiguous_available_space);
+		if (count > 0) {
+			remote_bitbang_recv_buf_end += count;
+			if (remote_bitbang_recv_buf_end == sizeof(remote_bitbang_recv_buf))
+				remote_bitbang_recv_buf_end = 0;
+			socket_nonblock(remote_bitbang_fd);
+		} else if (count == 0) {
+			return ERROR_OK;
+		} else if (count < 0) {
+#ifdef _WIN32
+			if (WSAGetLastError() == WSAEWOULDBLOCK) {
+#else
+			if (errno == EAGAIN) {
+#endif
+				return ERROR_OK;
+			} else {
+				log_socket_error("remote_bitbang_fill_buf");
+				return ERROR_FAIL;
+			}
+		}
+	}
+
 	return ERROR_OK;
 }
 
@@ -157,29 +177,9 @@ static bb_value_t char_to_int(int c)
 	}
 }
 
-/* Get the next read response. */
-static bb_value_t remote_bitbang_rread(void)
-{
-	if (remote_bitbang_flush() != ERROR_OK)
-		return ERROR_FAIL;
-
-	/* Enable blocking access. */
-	socket_block(remote_bitbang_fd);
-	char c;
-	ssize_t count = read_socket(remote_bitbang_fd, &c, 1);
-	if (count == 1) {
-		return char_to_int(c);
-	} else {
-		remote_bitbang_quit();
-		LOG_ERROR("read_socket: count=%d", (int) count);
-		log_socket_error("read_socket");
-		return BB_ERROR;
-	}
-}
-
 static int remote_bitbang_sample(void)
 {
-	if (remote_bitbang_fill_buf() != ERROR_OK)
+	if (remote_bitbang_fill_buf(NO_BLOCK) != ERROR_OK)
 		return ERROR_FAIL;
 	assert(!remote_bitbang_buf_full());
 	return remote_bitbang_queue('R', NO_FLUSH);
@@ -188,16 +188,14 @@ static int remote_bitbang_sample(void)
 static bb_value_t remote_bitbang_read_sample(void)
 {
 	if (remote_bitbang_recv_buf_start == remote_bitbang_recv_buf_end) {
-		if (remote_bitbang_fill_buf() != ERROR_OK)
-			return ERROR_FAIL;
+		if (remote_bitbang_fill_buf(BLOCK) != ERROR_OK)
+			return BB_ERROR;
 	}
-	if (remote_bitbang_recv_buf_start != remote_bitbang_recv_buf_end) {
-		int c = remote_bitbang_recv_buf[remote_bitbang_recv_buf_start];
-		remote_bitbang_recv_buf_start =
-			(remote_bitbang_recv_buf_start + 1) % sizeof(remote_bitbang_recv_buf);
-		return char_to_int(c);
-	}
-	return remote_bitbang_rread();
+	assert(remote_bitbang_recv_buf_start != remote_bitbang_recv_buf_end);
+	int c = remote_bitbang_recv_buf[remote_bitbang_recv_buf_start];
+	remote_bitbang_recv_buf_start =
+		(remote_bitbang_recv_buf_start + 1) % sizeof(remote_bitbang_recv_buf);
+	return char_to_int(c);
 }
 
 static int remote_bitbang_write(int tck, int tms, int tdi)
