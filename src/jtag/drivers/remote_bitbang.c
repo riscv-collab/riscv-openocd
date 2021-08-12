@@ -56,6 +56,20 @@ static bool remote_bitbang_recv_buf_empty(void)
 	return remote_bitbang_recv_buf_start == remote_bitbang_recv_buf_end;
 }
 
+static unsigned int remote_bitbang_recv_buf_contiguous_available_space(void)
+{
+	if (remote_bitbang_recv_buf_end >= remote_bitbang_recv_buf_start) {
+		unsigned int space = sizeof(remote_bitbang_recv_buf) -
+				     remote_bitbang_recv_buf_end;
+		if (remote_bitbang_recv_buf_start == 0)
+			space -= 1;
+		return space;
+	} else {
+		return remote_bitbang_recv_buf_start -
+		       remote_bitbang_recv_buf_end - 1;
+	}
+}
+
 static int remote_bitbang_flush(void)
 {
 	if (remote_bitbang_send_buf_used <= 0)
@@ -99,16 +113,8 @@ static int remote_bitbang_fill_buf(block_bool_t block)
 
 	bool first = true;
 	while (!remote_bitbang_recv_buf_full()) {
-		unsigned int contiguous_available_space;
-		if (remote_bitbang_recv_buf_end >= remote_bitbang_recv_buf_start) {
-			contiguous_available_space = sizeof(remote_bitbang_recv_buf) -
-				remote_bitbang_recv_buf_end;
-			if (remote_bitbang_recv_buf_start == 0)
-				contiguous_available_space -= 1;
-		} else {
-			contiguous_available_space = remote_bitbang_recv_buf_start -
-				remote_bitbang_recv_buf_end - 1;
-		}
+		unsigned int contiguous_available_space =
+				remote_bitbang_recv_buf_contiguous_available_space();
 		ssize_t count = read_socket(remote_bitbang_fd,
 				remote_bitbang_recv_buf + remote_bitbang_recv_buf_end,
 				contiguous_available_space);
