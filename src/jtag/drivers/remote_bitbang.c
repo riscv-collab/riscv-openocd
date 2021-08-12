@@ -44,11 +44,16 @@ static char remote_bitbang_recv_buf[256];
 static unsigned int remote_bitbang_recv_buf_start;
 static unsigned int remote_bitbang_recv_buf_end;
 
-static bool remote_bitbang_buf_full(void)
+static bool remote_bitbang_recv_buf_full(void)
 {
 	return remote_bitbang_recv_buf_end ==
 		((remote_bitbang_recv_buf_start + sizeof(remote_bitbang_recv_buf) - 1) %
 		 sizeof(remote_bitbang_recv_buf));
+}
+
+static bool remote_bitbang_recv_buf_empty(void)
+{
+	return remote_bitbang_recv_buf_start == remote_bitbang_recv_buf_end;
 }
 
 static int remote_bitbang_flush(void)
@@ -79,7 +84,7 @@ typedef enum {
 /* Read any incoming data, placing it into the buffer. */
 static int remote_bitbang_fill_buf(block_bool_t block)
 {
-	if (remote_bitbang_recv_buf_start == remote_bitbang_recv_buf_end) {
+	if (remote_bitbang_recv_buf_empty()) {
 		/* If the buffer is empty, reset it to 0 so we get more
 		 * contiguous space. */
 		remote_bitbang_recv_buf_start = 0;
@@ -93,7 +98,7 @@ static int remote_bitbang_fill_buf(block_bool_t block)
 	}
 
 	bool first = true;
-	while (!remote_bitbang_buf_full()) {
+	while (!remote_bitbang_recv_buf_full()) {
 		unsigned int contiguous_available_space;
 		if (remote_bitbang_recv_buf_end >= remote_bitbang_recv_buf_start) {
 			contiguous_available_space = sizeof(remote_bitbang_recv_buf) -
@@ -182,17 +187,17 @@ static int remote_bitbang_sample(void)
 {
 	if (remote_bitbang_fill_buf(NO_BLOCK) != ERROR_OK)
 		return ERROR_FAIL;
-	assert(!remote_bitbang_buf_full());
+	assert(!remote_bitbang_recv_buf_full());
 	return remote_bitbang_queue('R', NO_FLUSH);
 }
 
 static bb_value_t remote_bitbang_read_sample(void)
 {
-	if (remote_bitbang_recv_buf_start == remote_bitbang_recv_buf_end) {
+	if (remote_bitbang_recv_buf_empty()) {
 		if (remote_bitbang_fill_buf(BLOCK) != ERROR_OK)
 			return BB_ERROR;
 	}
-	assert(remote_bitbang_recv_buf_start != remote_bitbang_recv_buf_end);
+	assert(!remote_bitbang_recv_buf_empty());
 	int c = remote_bitbang_recv_buf[remote_bitbang_recv_buf_start];
 	remote_bitbang_recv_buf_start =
 		(remote_bitbang_recv_buf_start + 1) % sizeof(remote_bitbang_recv_buf);
