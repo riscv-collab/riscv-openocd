@@ -276,7 +276,8 @@ static int remote_bitbang_init_tcp(void)
 	 * we write something we want to get it to the other end of the
 	 * connection as fast as possible. */
 	int one = 1;
-	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+	/* On Windows optval has to be a const char *. */
+	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char *) &one, sizeof(one));
 
 	freeaddrinfo(result); /* No longer needed */
 
