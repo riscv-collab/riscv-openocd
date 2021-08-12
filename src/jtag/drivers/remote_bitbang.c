@@ -23,6 +23,7 @@
 #ifndef _WIN32
 #include <sys/un.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
 #endif
 #include "helper/system.h"
 #include "helper/replacements.h"
@@ -270,6 +271,12 @@ static int remote_bitbang_init_tcp(void)
 
 		close(fd);
 	}
+
+	/* We work hard to collapse the writes into the minimum number, so when
+	 * we write something we want to get it to the other end of the
+	 * connection as fast as possible. */
+	int one = 1;
+	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
 
 	freeaddrinfo(result); /* No longer needed */
 
