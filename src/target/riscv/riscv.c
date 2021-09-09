@@ -1307,7 +1307,6 @@ int riscv_resume_prep_all_harts(struct target *target)
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
 	if (riscv_is_halted(target)) {
-		riscv_flush_registers(target);
 		if (r->resume_prep(target) != ERROR_OK)
 			return ERROR_FAIL;
 	} else {
@@ -1418,6 +1417,8 @@ static int resume_prep(struct target *target, int current,
 
 	if (!current)
 		riscv_set_register(target, GDB_REGNO_PC, address);
+
+	riscv_flush_registers(target);
 
 	if (target->debug_reason == DBG_REASON_WATCHPOINT) {
 		/* To be able to run off a trigger, disable all the triggers, step, and
@@ -3459,6 +3460,9 @@ int riscv_step_rtos_hart(struct target *target)
 		return ERROR_FAIL;
 	LOG_DEBUG("[%s] stepping", target_name(target));
 
+	if (riscv_flush_registers(target) != ERROR_OK)
+		return ERROR_FAIL;
+
 	if (!riscv_is_halted(target)) {
 		LOG_ERROR("Hart isn't halted before single step!");
 		return ERROR_FAIL;
@@ -3609,14 +3613,17 @@ int riscv_set_register(struct target *target, enum gdb_regno regid, riscv_reg_t 
 	struct reg *reg = &target->reg_cache->reg_list[regid];
 	buf_set_u64(reg->value, 0, reg->size, value);
 
-	int result = r->set_register(target, regid, value);
-	if (result == ERROR_OK)
-		reg->valid = gdb_regno_cacheable(regid, true);
-	else
-		reg->valid = false;
+	if (gdb_regno_cacheable(regid, true)) {
+		reg->valid = true;
+		reg->dirty = true;
+	} else {
+		if (r->set_register(target, regid, value) != ERROR_OK)
+			return ERROR_FAIL;
+	}
+
 	LOG_DEBUG("[%s] wrote 0x%" PRIx64 " to %s valid=%d",
 			  target_name(target), value, reg->name, reg->valid);
-	return result;
+	return ERROR_OK;
 }
 
 int riscv_get_register(struct target *target, riscv_reg_t *value,
@@ -3647,8 +3654,12 @@ int riscv_get_register(struct target *target, riscv_reg_t *value,
 
 	int result = r->get_register(target, value, regid);
 
-	if (result == ERROR_OK)
+	if (result == ERROR_OK) {
+		/* Update the cache in case we're called from
+		 * riscv_save_register(). */
+		buf_set_u64(reg->value, 0, reg->size, *value);
 		reg->valid = gdb_regno_cacheable(regid, false);
+	}
 
 	LOG_DEBUG("[%s] %s: %" PRIx64, target_name(target),
 			gdb_regno_name(regid), *value);
@@ -3659,7 +3670,7 @@ int riscv_save_register(struct target *target, enum gdb_regno regid)
 {
 	riscv_reg_t value;
 	if (!target->reg_cache) {
-		LOG_ERROR("TODO: Handle this case properly");
+		LOG_ERROR("TODO: Properly save %s", gdb_regno_name(regid));
 		return ERROR_OK;
 	}
 
@@ -3670,6 +3681,9 @@ int riscv_save_register(struct target *target, enum gdb_regno regid)
 
 	if (!reg->valid)
 		return ERROR_FAIL;
+	/* Mark the register dirty. We assume that this function is called
+	 * because the caller is about to mess with the underlying value of the
+	 * register. */
 	reg->dirty = true;
 	return ERROR_OK;
 }
