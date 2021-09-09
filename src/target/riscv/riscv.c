@@ -1155,6 +1155,29 @@ int riscv_select_current_hart(struct target *target)
 	return riscv_set_current_hartid(target, target->coreid);
 }
 
+static int riscv_flush_registers(struct target *target)
+{
+	RISCV_INFO(r);
+
+	if (!target->reg_cache)
+		return ERROR_OK;
+
+	for (uint32_t number = 0; number < target->reg_cache->num_regs; number++) {
+		struct reg *reg = &target->reg_cache->reg_list[number];
+		if (reg->valid && reg->dirty) {
+			uint64_t value = buf_get_u64(reg->value, 0, reg->size);
+			LOG_DEBUG("[%s] %s is dirty; write back 0x%" PRIx64,
+				  target_name(target), reg->name, value);
+			int result = r->set_register(target, number, value);
+			if (result != ERROR_OK)
+				return ERROR_FAIL;
+			reg->dirty = false;
+		}
+	}
+
+	return ERROR_OK;
+}
+
 int halt_prep(struct target *target)
 {
 	RISCV_INFO(r);
@@ -1284,6 +1307,7 @@ int riscv_resume_prep_all_harts(struct target *target)
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
 	if (riscv_is_halted(target)) {
+		riscv_flush_registers(target);
 		if (r->resume_prep(target) != ERROR_OK)
 			return ERROR_FAIL;
 	} else {
@@ -3600,8 +3624,6 @@ int riscv_get_register(struct target *target, riscv_reg_t *value,
 {
 	RISCV_INFO(r);
 
-	keep_alive();
-
 	struct reg *reg = &target->reg_cache->reg_list[regid];
 	if (!reg->exist) {
 		LOG_DEBUG("[%s] %s does not exist.",
@@ -3631,6 +3653,25 @@ int riscv_get_register(struct target *target, riscv_reg_t *value,
 	LOG_DEBUG("[%s] %s: %" PRIx64, target_name(target),
 			gdb_regno_name(regid), *value);
 	return result;
+}
+
+int riscv_save_register(struct target *target, enum gdb_regno regid)
+{
+	riscv_reg_t value;
+	if (!target->reg_cache) {
+		LOG_ERROR("TODO: Handle this case properly");
+		return ERROR_OK;
+	}
+
+	struct reg *reg = &target->reg_cache->reg_list[regid];
+	LOG_DEBUG("[%s] save %s", target_name(target), reg->name);
+	if (riscv_get_register(target, &value, regid) != ERROR_OK)
+		return ERROR_FAIL;
+
+	if (!reg->valid)
+		return ERROR_FAIL;
+	reg->dirty = true;
+	return ERROR_OK;
 }
 
 bool riscv_is_halted(struct target *target)

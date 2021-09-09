@@ -1429,8 +1429,7 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 		scratch_mem_t scratch;
 		bool use_scratch = false;
 
-		riscv_reg_t s0;
-		if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+		if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
 			return ERROR_FAIL;
 
 		/* Write program to move data into s0. */
@@ -1484,10 +1483,6 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 		}
 
 		if (cleanup_after_register_access(target, mstatus, number) != ERROR_OK)
-			return ERROR_FAIL;
-
-		/* Restore S0. */
-		if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
 			return ERROR_FAIL;
 	}
 
@@ -1960,8 +1955,7 @@ static int riscv013_get_register_buf(struct target *target,
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
 
-	riscv_reg_t s0;
-	if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	uint64_t mstatus;
@@ -2005,8 +1999,6 @@ static int riscv013_get_register_buf(struct target *target,
 
 	if (cleanup_after_register_access(target, mstatus, regno) != ERROR_OK)
 		return ERROR_FAIL;
-	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
-		return ERROR_FAIL;
 
 	return result;
 }
@@ -2019,8 +2011,7 @@ static int riscv013_set_register_buf(struct target *target,
 	if (riscv_select_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
 
-	riscv_reg_t s0;
-	if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	uint64_t mstatus;
@@ -2052,8 +2043,6 @@ static int riscv013_set_register_buf(struct target *target,
 		return ERROR_FAIL;
 
 	if (cleanup_after_register_access(target, mstatus, regno) != ERROR_OK)
-		return ERROR_FAIL;
-	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	return result;
@@ -3349,10 +3338,9 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 	if (modify_privilege(target, &mstatus, &mstatus_old) != ERROR_OK)
 		return ERROR_FAIL;
 
-	uint64_t s0;
 	int result = ERROR_FAIL;
 
-	if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
 		goto restore_mstatus;
 
 	/* Write the program (load, increment) */
@@ -3392,18 +3380,14 @@ static int read_memory_progbuf_one(struct target *target, target_addr_t address,
 			riscv_xlen(target), AC_ACCESS_REGISTER_WRITE |
 			AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
 	if (execute_abstract_command(target, command) != ERROR_OK)
-		goto restore_s0;
+		goto restore_mstatus;
 
 	uint64_t value;
 	if (register_read(target, &value, GDB_REGNO_S0) != ERROR_OK)
-		goto restore_s0;
+		goto restore_mstatus;
 	buf_set_u64(buffer, 0, 8 * size, value);
 	log_memory_access(address, value, size, true);
 	result = ERROR_OK;
-
-restore_s0:
-	if (riscv_set_register(target, GDB_REGNO_S0, s0) != ERROR_OK)
-		result = ERROR_FAIL;
 
 restore_mstatus:
 	if (mstatus != mstatus_old)
@@ -3449,12 +3433,11 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 	 * s1 holds the next data value read
 	 * s2 is a counter in case increment is 0
 	 */
-	uint64_t s0, s1, s2;
-	if (register_read(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
-	if (register_read(target, &s1, GDB_REGNO_S1) != ERROR_OK)
+	if (riscv_save_register(target, GDB_REGNO_S1) != ERROR_OK)
 		return ERROR_FAIL;
-	if (increment == 0 && register_read(target, &s2, GDB_REGNO_S2) != ERROR_OK)
+	if (increment == 0 && riscv_save_register(target, GDB_REGNO_S2) != ERROR_OK)
 		return ERROR_FAIL;
 
 	/* Write the program (load, increment) */
@@ -3518,11 +3501,6 @@ static int read_memory_progbuf(struct target *target, target_addr_t address,
 		}
 		result = ERROR_OK;
 	}
-
-	riscv_set_register(target, GDB_REGNO_S0, s0);
-	riscv_set_register(target, GDB_REGNO_S1, s1);
-	if (increment == 0)
-		riscv_set_register(target, GDB_REGNO_S2, s2);
 
 	/* Restore MSTATUS */
 	if (mstatus != mstatus_old)
