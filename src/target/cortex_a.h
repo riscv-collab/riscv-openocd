@@ -64,11 +64,18 @@ enum cortex_a_dacrfixup_mode {
 };
 
 struct cortex_a_brp {
-	int used;
+	bool used;
 	int type;
 	uint32_t value;
 	uint32_t control;
-	uint8_t BRPn;
+	uint8_t brpn;
+};
+
+struct cortex_a_wrp {
+	bool used;
+	uint32_t value;
+	uint32_t control;
+	uint8_t wrpn;
 };
 
 struct cortex_a_common {
@@ -92,6 +99,9 @@ struct cortex_a_common {
 	int brp_num;
 	int brp_num_available;
 	struct cortex_a_brp *brp_list;
+	int wrp_num;
+	int wrp_num_available;
+	struct cortex_a_wrp *wrp_list;
 
 	uint32_t cpuid;
 	uint32_t didr;

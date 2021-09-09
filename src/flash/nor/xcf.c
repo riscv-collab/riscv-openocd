@@ -45,7 +45,7 @@
 #define ID_XCF32P                       0x05059093
 #define ID_MEANINGFUL_MASK              0x0FFFFFFF
 
-const char *xcf_name_list[] = {
+static const char * const xcf_name_list[] = {
 	"XCF08P",
 	"XCF16P",
 	"XCF32P",
@@ -68,25 +68,25 @@ struct xcf_status {
  * GLOBAL VARIABLES
  ******************************************************************************
  */
-static const uint8_t CMD_BYPASS[2]              = {0xFF, 0xFF};
+static const uint8_t cmd_bypass[2]              = {0xFF, 0xFF};
 
-static const uint8_t CMD_ISC_ADDRESS_SHIFT[2]   = {0xEB, 0x00};
-static const uint8_t CMD_ISC_DATA_SHIFT[2]      = {0xED, 0x00};
-static const uint8_t CMD_ISC_DISABLE[2]         = {0xF0, 0x00};
-static const uint8_t CMD_ISC_ENABLE[2]          = {0xE8, 0x00};
-static const uint8_t CMD_ISC_ERASE[2]           = {0xEC, 0x00};
-static const uint8_t CMD_ISC_PROGRAM[2]         = {0xEA, 0x00};
+static const uint8_t cmd_isc_address_shift[2]   = {0xEB, 0x00};
+static const uint8_t cmd_isc_data_shift[2]      = {0xED, 0x00};
+static const uint8_t cmd_isc_disable[2]         = {0xF0, 0x00};
+static const uint8_t cmd_isc_enable[2]          = {0xE8, 0x00};
+static const uint8_t cmd_isc_erase[2]           = {0xEC, 0x00};
+static const uint8_t cmd_isc_program[2]         = {0xEA, 0x00};
 
-static const uint8_t CMD_XSC_BLANK_CHECK[2]     = {0x0D, 0x00};
-static const uint8_t CMD_XSC_CONFIG[2]          = {0xEE, 0x00};
-static const uint8_t CMD_XSC_DATA_BTC[2]        = {0xF2, 0x00};
-static const uint8_t CMD_XSC_DATA_CCB[2]        = {0x0C, 0x00};
-static const uint8_t CMD_XSC_DATA_DONE[2]       = {0x09, 0x00};
-static const uint8_t CMD_XSC_DATA_SUCR[2]       = {0x0E, 0x00};
-static const uint8_t CMD_XSC_DATA_WRPT[2]       = {0xF7, 0x00};
-static const uint8_t CMD_XSC_OP_STATUS[2]       = {0xE3, 0x00};
-static const uint8_t CMD_XSC_READ[2]            = {0xEF, 0x00};
-static const uint8_t CMD_XSC_UNLOCK[2]          = {0x55, 0xAA};
+static const uint8_t cmd_xsc_blank_check[2]     = {0x0D, 0x00};
+static const uint8_t cmd_xsc_config[2]          = {0xEE, 0x00};
+static const uint8_t cmd_xsc_data_btc[2]        = {0xF2, 0x00};
+static const uint8_t cmd_xsc_data_ccb[2]        = {0x0C, 0x00};
+static const uint8_t cmd_xsc_data_done[2]       = {0x09, 0x00};
+static const uint8_t cmd_xsc_data_sucr[2]       = {0x0E, 0x00};
+static const uint8_t cmd_xsc_data_wrpt[2]       = {0xF7, 0x00};
+static const uint8_t cmd_xsc_op_status[2]       = {0xE3, 0x00};
+static const uint8_t cmd_xsc_read[2]            = {0xEF, 0x00};
+static const uint8_t cmd_xsc_unlock[2]          = {0x55, 0xAA};
 
 /*
  ******************************************************************************
@@ -135,7 +135,7 @@ static struct xcf_status read_status(struct flash_bank *bank)
 	scan.check_mask = NULL;
 	scan.check_value = NULL;
 	scan.num_bits = 16;
-	scan.out_value = CMD_BYPASS;
+	scan.out_value = cmd_bypass;
 	scan.in_value = irdata;
 
 	jtag_add_ir_scan(bank->target->tap, &scan, TAP_IDLE);
@@ -162,14 +162,14 @@ static int isc_enter(struct flash_bank *bank)
 		scan.check_mask = NULL;
 		scan.check_value = NULL;
 		scan.num_bits = 16;
-		scan.out_value = CMD_ISC_ENABLE;
+		scan.out_value = cmd_isc_enable;
 		scan.in_value = NULL;
 
 		jtag_add_ir_scan(bank->target->tap, &scan, TAP_IDLE);
 		jtag_execute_queue();
 
 		status = read_status(bank);
-		if (false == status.isc_mode) {
+		if (!status.isc_mode) {
 			LOG_ERROR("*** XCF: FAILED to enter ISC mode");
 			return ERROR_FLASH_OPERATION_FAILED;
 		}
@@ -183,7 +183,7 @@ static int isc_leave(struct flash_bank *bank)
 
 	struct xcf_status status = read_status(bank);
 
-	if (false == status.isc_mode)
+	if (!status.isc_mode)
 		return ERROR_OK;
 	else {
 		struct scan_field scan;
@@ -191,7 +191,7 @@ static int isc_leave(struct flash_bank *bank)
 		scan.check_mask = NULL;
 		scan.check_value = NULL;
 		scan.num_bits = 16;
-		scan.out_value = CMD_ISC_DISABLE;
+		scan.out_value = cmd_isc_disable;
 		scan.in_value = NULL;
 
 		jtag_add_ir_scan(bank->target->tap, &scan, TAP_IDLE);
@@ -199,7 +199,7 @@ static int isc_leave(struct flash_bank *bank)
 		alive_sleep(1);	/* device needs 50 uS to leave ISC mode */
 
 		status = read_status(bank);
-		if (true == status.isc_mode) {
+		if (status.isc_mode) {
 			LOG_ERROR("*** XCF: FAILED to leave ISC mode");
 			return ERROR_FLASH_OPERATION_FAILED;
 		}
@@ -252,7 +252,7 @@ static int isc_wait_erase_program(struct flash_bank *bank, int64_t timeout_ms)
 	int64_t dt;
 
 	do {
-		isc_read_register(bank, CMD_XSC_OP_STATUS, &isc_default, 8);
+		isc_read_register(bank, cmd_xsc_op_status, &isc_default, 8);
 		if (((isc_default >> 2) & 1) == 1)
 			return ERROR_OK;
 		dt = timeval_ms() - t0;
@@ -280,7 +280,7 @@ static int isc_set_register(struct flash_bank *bank, const uint8_t *cmd,
 	scan.in_value = NULL;
 	jtag_add_dr_scan(bank->target->tap, 1, &scan, TAP_IDLE);
 
-	if (0 == timeout_ms)
+	if (timeout_ms == 0)
 		return jtag_execute_queue();
 	else
 		return isc_wait_erase_program(bank, timeout_ms);
@@ -307,11 +307,11 @@ static int isc_program_register(struct flash_bank *bank, const uint8_t *cmd,
 	jtag_add_dr_scan(bank->target->tap, 1, &scan, TAP_IRSHIFT);
 
 	scan.num_bits = 16;
-	scan.out_value = CMD_ISC_PROGRAM;
+	scan.out_value = cmd_isc_program;
 	scan.in_value = NULL;
 	jtag_add_ir_scan(bank->target->tap, &scan, TAP_IDLE);
 
-	if (0 == timeout_ms)
+	if (timeout_ms == 0)
 		return jtag_execute_queue();
 	else
 		return isc_wait_erase_program(bank, timeout_ms);
@@ -322,7 +322,7 @@ static int isc_clear_protect(struct flash_bank *bank, unsigned int first,
 {
 	uint8_t select_block[3] = {0x0, 0x0, 0x0};
 	select_block[0] = fill_select_block(first, last);
-	return isc_set_register(bank, CMD_XSC_UNLOCK, select_block, 24, 0);
+	return isc_set_register(bank, cmd_xsc_unlock, select_block, 24, 0);
 }
 
 static int isc_set_protect(struct flash_bank *bank, unsigned int first,
@@ -332,7 +332,7 @@ static int isc_set_protect(struct flash_bank *bank, unsigned int first,
 	for (unsigned int i = first; i <= last; i++)
 		wrpt[0] &= ~(1 << i);
 
-	return isc_program_register(bank, CMD_XSC_DATA_WRPT, wrpt, 16, 0);
+	return isc_program_register(bank, cmd_xsc_data_wrpt, wrpt, 16, 0);
 }
 
 static int isc_erase_sectors(struct flash_bank *bank, unsigned int first,
@@ -341,19 +341,19 @@ static int isc_erase_sectors(struct flash_bank *bank, unsigned int first,
 	uint8_t select_block[3] = {0, 0, 0};
 	select_block[0] = fill_select_block(first, last);
 	int64_t timeout = SECTOR_ERASE_TIMEOUT_MS * (last - first + 1);
-	return isc_set_register(bank, CMD_ISC_ERASE, select_block, 24, timeout);
+	return isc_set_register(bank, cmd_isc_erase, select_block, 24, timeout);
 }
 
 static int isc_adr_shift(struct flash_bank *bank, int adr)
 {
 	uint8_t adr_buf[3];
 	h_u24_to_le(adr_buf, adr);
-	return isc_set_register(bank, CMD_ISC_ADDRESS_SHIFT, adr_buf, 24, 0);
+	return isc_set_register(bank, cmd_isc_address_shift, adr_buf, 24, 0);
 }
 
 static int isc_program_data_page(struct flash_bank *bank, const uint8_t *page_buf)
 {
-	return isc_program_register(bank, CMD_ISC_DATA_SHIFT, page_buf, 8 * XCF_PAGE_SIZE, 100);
+	return isc_program_register(bank, cmd_isc_data_shift, page_buf, 8 * XCF_PAGE_SIZE, 100);
 }
 
 static void isc_data_read_out(struct flash_bank *bank, uint8_t *buffer, uint32_t count)
@@ -366,7 +366,7 @@ static void isc_data_read_out(struct flash_bank *bank, uint8_t *buffer, uint32_t
 	scan.check_mask = NULL;
 	scan.check_value = NULL;
 	scan.num_bits = 16;
-	scan.out_value = CMD_XSC_READ;
+	scan.out_value = cmd_xsc_read;
 	scan.in_value = NULL;
 	jtag_add_ir_scan(bank->target->tap, &scan, TAP_IDLE);
 
@@ -382,7 +382,7 @@ static int isc_set_data_done(struct flash_bank *bank, int sector)
 {
 	uint8_t done = 0xFF;
 	done &= ~(1 << sector);
-	return isc_program_register(bank, CMD_XSC_DATA_DONE, &done, 8, 100);
+	return isc_program_register(bank, cmd_xsc_data_done, &done, 8, 100);
 }
 
 static void flip_u8(uint8_t *out, const uint8_t *in, int len)
@@ -399,7 +399,7 @@ static void flip_u8(uint8_t *out, const uint8_t *in, int len)
  * Function presumes need of bit reversing if it can not exactly detects
  * the opposite.
  */
-bool need_bit_reverse(const uint8_t *buffer)
+static bool need_bit_reverse(const uint8_t *buffer)
 {
 	const size_t L = 20;
 	uint8_t reference[L];
@@ -409,7 +409,7 @@ bool need_bit_reverse(const uint8_t *buffer)
 	reference[18] = 0xAA;
 	reference[19] = 0x66;
 
-	if (0 == memcmp(reference, buffer, L))
+	if (memcmp(reference, buffer, L) == 0)
 		return false;
 	else
 		return true;
@@ -444,7 +444,7 @@ static int read_write_data(struct flash_bank *bank, const uint8_t *w_buffer,
 		goto EXIT;
 	}
 
-	if ((write_flag) && (0 == offset) && (count >= XCF_PAGE_SIZE))
+	if ((write_flag) && (offset == 0) && (count >= XCF_PAGE_SIZE))
 		revbit = need_bit_reverse(w_buffer);
 
 	while (count > 0) {
@@ -475,7 +475,7 @@ static int read_write_data(struct flash_bank *bank, const uint8_t *w_buffer,
 				w_buffer += len;
 				sector_bytes -= len;
 				ret = isc_program_data_page(bank, page_buf);
-				if (ERROR_OK != ret)
+				if (ret != ERROR_OK)
 					goto EXIT;
 				else {
 					LOG_DEBUG("written %d bytes from %d", dbg_written, dbg_count);
@@ -494,7 +494,7 @@ static int read_write_data(struct flash_bank *bank, const uint8_t *w_buffer,
 	if (write_flag) {
 		for (unsigned int i = 0; i < bank->num_sectors; i++) {
 			ret = isc_set_data_done(bank, i);
-			if (ERROR_OK != ret)
+			if (ret != ERROR_OK)
 				goto EXIT;
 		}
 	}
@@ -508,7 +508,7 @@ EXIT:
 static uint16_t isc_read_ccb(struct flash_bank *bank)
 {
 	uint8_t ccb[2];
-	isc_read_register(bank, CMD_XSC_DATA_CCB, ccb, 16);
+	isc_read_register(bank, cmd_xsc_data_ccb, ccb, 16);
 	return le_to_h_u16(ccb);
 }
 
@@ -526,13 +526,13 @@ static int isc_program_ccb(struct flash_bank *bank, uint16_t ccb)
 {
 	uint8_t buf[2];
 	h_u16_to_le(buf, ccb);
-	return isc_program_register(bank, CMD_XSC_DATA_CCB, buf, 16, 100);
+	return isc_program_register(bank, cmd_xsc_data_ccb, buf, 16, 100);
 }
 
 static int isc_program_singe_revision_sucr(struct flash_bank *bank)
 {
 	uint8_t sucr[2] = {0xFC, 0xFF};
-	return isc_program_register(bank, CMD_XSC_DATA_SUCR, sucr, 16, 100);
+	return isc_program_register(bank, cmd_xsc_data_sucr, sucr, 16, 100);
 }
 
 static int isc_program_single_revision_btc(struct flash_bank *bank)
@@ -543,7 +543,7 @@ static int isc_program_single_revision_btc(struct flash_bank *bank)
 	btc |= ((bank->num_sectors - 1) << 2);
 	btc &= ~(1 << 4);
 	h_u32_to_le(buf, btc);
-	return isc_program_register(bank, CMD_XSC_DATA_BTC, buf, 32, 100);
+	return isc_program_register(bank, cmd_xsc_data_btc, buf, 32, 100);
 }
 
 static int fpga_configure(struct flash_bank *bank)
@@ -553,7 +553,7 @@ static int fpga_configure(struct flash_bank *bank)
 	scan.check_mask = NULL;
 	scan.check_value = NULL;
 	scan.num_bits = 16;
-	scan.out_value = CMD_XSC_CONFIG;
+	scan.out_value = cmd_xsc_config;
 	scan.in_value = NULL;
 	jtag_add_ir_scan(bank->target->tap, &scan, TAP_IDLE);
 	jtag_execute_queue();
@@ -572,7 +572,7 @@ FLASH_BANK_COMMAND_HANDLER(xcf_flash_bank_command)
 	struct xcf_priv *priv;
 
 	priv = malloc(sizeof(struct xcf_priv));
-	if (priv == NULL) {
+	if (!priv) {
 		LOG_ERROR("no memory for flash bank info");
 		return ERROR_FAIL;
 	}
@@ -581,15 +581,15 @@ FLASH_BANK_COMMAND_HANDLER(xcf_flash_bank_command)
 	return ERROR_OK;
 }
 
-static int xcf_info(struct flash_bank *bank, char *buf, int buf_size)
+static int xcf_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	const struct xcf_priv *priv = bank->driver_priv;
 
-	if (false == priv->probed) {
-		snprintf(buf, buf_size, "\nXCF flash bank not probed yet\n");
+	if (!priv->probed) {
+		command_print_sameline(cmd, "\nXCF flash bank not probed yet\n");
 		return ERROR_OK;
 	}
-	snprintf(buf, buf_size, "%s", product_name(bank));
+	command_print_sameline(cmd, "%s", product_name(bank));
 	return ERROR_OK;
 }
 
@@ -598,11 +598,11 @@ static int xcf_probe(struct flash_bank *bank)
 	struct xcf_priv *priv = bank->driver_priv;
 	uint32_t id;
 
-	if (true == priv->probed)
+	if (priv->probed)
 		free(bank->sectors);
 	priv->probed = false;
 
-	if (bank->target->tap == NULL) {
+	if (!bank->target->tap) {
 		LOG_ERROR("Target has no JTAG tap");
 		return ERROR_FAIL;
 	}
@@ -629,7 +629,7 @@ static int xcf_probe(struct flash_bank *bank)
 	}
 
 	bank->sectors = malloc(bank->num_sectors * sizeof(struct flash_sector));
-	if (NULL == bank->sectors) {
+	if (!bank->sectors) {
 		LOG_ERROR("No memory for sector table");
 		return ERROR_FAIL;
 	}
@@ -652,7 +652,7 @@ static int xcf_auto_probe(struct flash_bank *bank)
 {
 	struct xcf_priv *priv = bank->driver_priv;
 
-	if (true == priv->probed)
+	if (priv->probed)
 		return ERROR_OK;
 	else
 		return xcf_probe(bank);
@@ -663,7 +663,7 @@ static int xcf_protect_check(struct flash_bank *bank)
 	uint8_t wrpt[2];
 
 	isc_enter(bank);
-	isc_read_register(bank, CMD_XSC_DATA_WRPT, wrpt, 16);
+	isc_read_register(bank, cmd_xsc_data_wrpt, wrpt, 16);
 	isc_leave(bank);
 
 	for (unsigned int i = 0; i < bank->num_sectors; i++)
@@ -684,7 +684,7 @@ static int xcf_erase_check(struct flash_bank *bank)
 	scan.check_mask = NULL;
 	scan.check_value = NULL;
 	scan.num_bits = 16;
-	scan.out_value = CMD_XSC_BLANK_CHECK;
+	scan.out_value = cmd_xsc_blank_check;
 	scan.in_value = NULL;
 	jtag_add_ir_scan(bank->target->tap, &scan, TAP_IDLE);
 	jtag_execute_queue();
@@ -755,7 +755,7 @@ COMMAND_HANDLER(xcf_handle_ccb_command) {
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	uint16_t ccb = 0xFFFF;
@@ -800,29 +800,29 @@ COMMAND_HANDLER(xcf_handle_ccb_command) {
 		sector = gucr_num(bank);
 		isc_clear_protect(bank, sector, sector);
 		int ret = isc_erase_sectors(bank, sector, sector);
-		if (ERROR_OK != ret)
+		if (ret != ERROR_OK)
 			goto EXIT;
 		ret = isc_program_ccb(bank, ccb);
-		if (ERROR_OK != ret)
+		if (ret != ERROR_OK)
 			goto EXIT;
 		ret = isc_program_single_revision_btc(bank);
-		if (ERROR_OK != ret)
+		if (ret != ERROR_OK)
 			goto EXIT;
 		ret = isc_set_data_done(bank, sector);
-		if (ERROR_OK != ret)
+		if (ret != ERROR_OK)
 			goto EXIT;
 
 		/* SUCR sector */
 		sector = sucr_num(bank);
 		isc_clear_protect(bank, sector, sector);
 		ret = isc_erase_sectors(bank, sector, sector);
-		if (ERROR_OK != ret)
+		if (ret != ERROR_OK)
 			goto EXIT;
 		ret = isc_program_singe_revision_sucr(bank);
-		if (ERROR_OK != ret)
+		if (ret != ERROR_OK)
 			goto EXIT;
 		ret = isc_set_data_done(bank, sector);
-		if (ERROR_OK != ret)
+		if (ret != ERROR_OK)
 			goto EXIT;
 
 EXIT:
@@ -838,7 +838,7 @@ COMMAND_HANDLER(xcf_handle_configure_command) {
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	return fpga_configure(bank);

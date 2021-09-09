@@ -23,20 +23,8 @@
 
 /**
  * @file
- * Holds the interface to TPIU, ITM and DWT configuration functions.
+ * Holds the interface to ITM and DWT configuration functions.
  */
-
-enum trace_config_type {
-	TRACE_CONFIG_TYPE_DISABLED,	/**< tracing is disabled */
-	TRACE_CONFIG_TYPE_EXTERNAL,	/**< trace output is captured externally */
-	TRACE_CONFIG_TYPE_INTERNAL	/**< trace output is handled by OpenOCD adapter driver */
-};
-
-enum tpiu_pin_protocol {
-	TPIU_PIN_PROTOCOL_SYNC,			/**< synchronous trace output */
-	TPIU_PIN_PROTOCOL_ASYNC_MANCHESTER,	/**< asynchronous output with Manchester coding */
-	TPIU_PIN_PROTOCOL_ASYNC_UART		/**< asynchronous output with NRZ coding */
-};
 
 enum itm_ts_prescaler {
 	ITM_TS_PRESCALE1,	/**< no prescaling for the timestamp counter */
@@ -46,16 +34,6 @@ enum itm_ts_prescaler {
 };
 
 struct armv7m_trace_config {
-	/** Currently active trace capture mode */
-	enum trace_config_type config_type;
-
-	/** Currently active trace output mode */
-	enum tpiu_pin_protocol pin_protocol;
-	/** TPIU formatter enable/disable (in async mode) */
-	bool formatter;
-	/** Synchronous output port width */
-	uint32_t port_size;
-
 	/** Bitmask of currently enabled ITM stimuli */
 	uint32_t itm_ter[8];
 	/** Identifier for multi-source trace stream formatting */
@@ -68,21 +46,12 @@ struct armv7m_trace_config {
 	bool itm_async_timestamps;
 	/** Enable synchronisation packet transmission (for sync port only) */
 	bool itm_synchro_packets;
-
-	/** Current frequency of TRACECLKIN (usually matches HCLK) */
-	unsigned int traceclkin_freq;
-	/** Current frequency of trace port */
-	unsigned int trace_freq;
-	/** Handle to output trace data in INTERNAL capture mode */
-	FILE *trace_file;
+	/** Config ITM after target examine */
+	bool itm_deferred_config;
 };
 
 extern const struct command_registration armv7m_trace_command_handlers[];
 
-/**
- * Configure hardware accordingly to the current TPIU target settings
- */
-int armv7m_trace_tpiu_config(struct target *target);
 /**
  * Configure hardware accordingly to the current ITM target settings
  */

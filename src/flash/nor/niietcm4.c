@@ -1206,8 +1206,6 @@ static int niietcm4_erase(struct flash_bank *bank, unsigned int first,
 		retval = niietcm4_opstatus_check(bank);
 		if (retval != ERROR_OK)
 			return retval;
-
-		bank->sectors[i].is_erased = 1;
 	}
 
 	return retval;
@@ -1394,7 +1392,7 @@ static int niietcm4_write(struct flash_bank *bank, const uint8_t *buffer,
 	int rem = count % 16;
 	if (rem) {
 		new_buffer = malloc(count + 16 - rem);
-		if (new_buffer == NULL) {
+		if (!new_buffer) {
 			LOG_ERROR("Odd number of words to write and no memory for padding buffer");
 			return ERROR_FAIL;
 		}
@@ -1719,12 +1717,11 @@ static int niietcm4_auto_probe(struct flash_bank *bank)
 	return niietcm4_probe(bank);
 }
 
-static int get_niietcm4_info(struct flash_bank *bank, char *buf, int buf_size)
+static int get_niietcm4_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct niietcm4_flash_bank *niietcm4_info = bank->driver_priv;
-	LOG_INFO("\nNIIET Cortex-M4F %s\n%s", niietcm4_info->chip_name, niietcm4_info->chip_brief);
-	snprintf(buf, buf_size, " ");
-
+	command_print_sameline(cmd, "\nNIIET Cortex-M4F %s\n%s",
+			niietcm4_info->chip_name, niietcm4_info->chip_brief);
 	return ERROR_OK;
 }
 

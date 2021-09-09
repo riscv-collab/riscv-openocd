@@ -53,7 +53,8 @@ endif
 	%D%/target/libtarget.la \
 	%D%/server/libserver.la \
 	%D%/rtos/librtos.la \
-	%D%/helper/libhelper.la
+	%D%/helper/libhelper.la \
+	%D%/rtt/librtt.la
 
 BIN2C = $(srcdir)/%D%/helper/bin2char.sh
 
@@ -64,6 +65,7 @@ BUILT_SOURCES += %D%/startup_tcl.inc
 
 # Convert .tcl to c-array
 %D%/startup_tcl.inc: $(STARTUP_TCL_SRCS)
+	mkdir -p %D%
 	cat $^ | $(BIN2C) > $@ || { rm -f $@; false; }
 
 # add generated files to make clean list
@@ -83,3 +85,4 @@ include %D%/rtos/Makefile.am
 include %D%/server/Makefile.am
 include %D%/flash/Makefile.am
 include %D%/pld/Makefile.am
+include %D%/rtt/Makefile.am

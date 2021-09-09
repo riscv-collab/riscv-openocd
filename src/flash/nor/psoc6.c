@@ -151,12 +151,6 @@ static int sromalgo_prepare(struct target *target)
 	if (hr != ERROR_OK)
 		return hr;
 
-	/* Restore THUMB bit in xPSR register */
-	const struct armv7m_common *cm = target_to_armv7m(target);
-	hr = cm->store_core_reg_u32(target, ARMV7M_xPSR, 0x01000000);
-	if (hr != ERROR_OK)
-		return hr;
-
 	/* Allocate Working Area for Stack and Flash algorithm */
 	hr = target_alloc_working_area(target, RAM_STACK_WA_SIZE, &g_stack_area);
 	if (hr != ERROR_OK)
@@ -501,7 +495,7 @@ static const char *protection_to_str(uint8_t protection)
  * @param buf_size size of the buffer
  * @return ERROR_OK in case of success, ERROR_XXX code otherwise
  *************************************************************************************************/
-static int psoc6_get_info(struct flash_bank *bank, char *buf, int buf_size)
+static int psoc6_get_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct psoc6_target_info *psoc6_info = bank->driver_priv;
 
@@ -512,7 +506,7 @@ static int psoc6_get_info(struct flash_bank *bank, char *buf, int buf_size)
 	if (hr != ERROR_OK)
 		return hr;
 
-	snprintf(buf, buf_size,
+	command_print_sameline(cmd,
 		"PSoC6 Silicon ID: 0x%08" PRIX32 "\n"
 		"Protection: %s\n"
 		"Main Flash size: %" PRIu32 " kB\n"
@@ -750,9 +744,6 @@ static int psoc6_erase(struct flash_bank *bank, unsigned int first,
 			if (hr != ERROR_OK)
 				goto exit_free_wa;
 
-			for (unsigned int i = first; i < first + rows_in_sector; i++)
-				bank->sectors[i].is_erased = 1;
-
 			first += rows_in_sector;
 		} else {
 			/* Perform Row Erase otherwise */
@@ -760,7 +751,6 @@ static int psoc6_erase(struct flash_bank *bank, unsigned int first,
 			if (hr != ERROR_OK)
 				goto exit_free_wa;
 
-			bank->sectors[first].is_erased = 1;
 			first += 1;
 		}
 	}
@@ -879,7 +869,6 @@ exit:
 
 /** ***********************************************************************************************
  * @brief Performs Mass Erase operation
- * @param bank flash bank index to erase
  * @return ERROR_OK in case of success, ERROR_XXX code otherwise
  *************************************************************************************************/
 COMMAND_HANDLER(psoc6_handle_mass_erase_command)
@@ -908,7 +897,7 @@ COMMAND_HANDLER(psoc6_handle_mass_erase_command)
  * @param target current target
  * @return ERROR_OK in case of success, ERROR_XXX code otherwise
  *************************************************************************************************/
-int handle_reset_halt(struct target *target)
+static int handle_reset_halt(struct target *target)
 {
 	int hr;
 	uint32_t reset_addr;

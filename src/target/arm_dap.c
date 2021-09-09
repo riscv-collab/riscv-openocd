@@ -57,6 +57,7 @@ static void dap_instance_init(struct adiv5_dap *dap)
 		dap->ap[i].tar_autoincr_block = (1<<10);
 		/* default CSW value */
 		dap->ap[i].csw_default = CSW_AHB_DEFAULT;
+		dap->ap[i].cfg_reg = MEM_AP_REG_CFG_INVALID; /* mem_ap configuration reg (large physical addr, etc.) */
 	}
 	INIT_LIST_HEAD(&dap->cmd_journal);
 	INIT_LIST_HEAD(&dap->cmd_pool);
@@ -156,35 +157,35 @@ enum dap_cfg_param {
 	CFG_IGNORE_SYSPWRUPACK,
 };
 
-static const Jim_Nvp nvp_config_opts[] = {
+static const struct jim_nvp nvp_config_opts[] = {
 	{ .name = "-chain-position",   .value = CFG_CHAIN_POSITION },
 	{ .name = "-ignore-syspwrupack", .value = CFG_IGNORE_SYSPWRUPACK },
 	{ .name = NULL, .value = -1 }
 };
 
-static int dap_configure(Jim_GetOptInfo *goi, struct arm_dap_object *dap)
+static int dap_configure(struct jim_getopt_info *goi, struct arm_dap_object *dap)
 {
 	struct jtag_tap *tap = NULL;
-	Jim_Nvp *n;
+	struct jim_nvp *n;
 	int e;
 
 	/* parse config or cget options ... */
 	while (goi->argc > 0) {
 		Jim_SetEmptyResult(goi->interp);
 
-		e = Jim_GetOpt_Nvp(goi, nvp_config_opts, &n);
+		e = jim_getopt_nvp(goi, nvp_config_opts, &n);
 		if (e != JIM_OK) {
-			Jim_GetOpt_NvpUnknown(goi, nvp_config_opts, 0);
+			jim_getopt_nvp_unknown(goi, nvp_config_opts, 0);
 			return e;
 		}
 		switch (n->value) {
 		case CFG_CHAIN_POSITION: {
 			Jim_Obj *o_t;
-			e = Jim_GetOpt_Obj(goi, &o_t);
+			e = jim_getopt_obj(goi, &o_t);
 			if (e != JIM_OK)
 				return e;
 			tap = jtag_tap_by_jim_obj(goi->interp, o_t);
-			if (tap == NULL) {
+			if (!tap) {
 				Jim_SetResultString(goi->interp, "-chain-position is invalid", -1);
 				return JIM_ERR;
 			}
@@ -199,7 +200,7 @@ static int dap_configure(Jim_GetOptInfo *goi, struct arm_dap_object *dap)
 		}
 	}
 
-	if (tap == NULL) {
+	if (!tap) {
 		Jim_SetResultString(goi->interp, "-chain-position required when creating DAP", -1);
 		return JIM_ERR;
 	}
@@ -210,7 +211,7 @@ static int dap_configure(Jim_GetOptInfo *goi, struct arm_dap_object *dap)
 	return JIM_OK;
 }
 
-static int dap_create(Jim_GetOptInfo *goi)
+static int dap_create(struct jim_getopt_info *goi)
 {
 	struct command_context *cmd_ctx;
 	static struct arm_dap_object *dap;
@@ -220,14 +221,14 @@ static int dap_create(Jim_GetOptInfo *goi)
 	int e;
 
 	cmd_ctx = current_command_context(goi->interp);
-	assert(cmd_ctx != NULL);
+	assert(cmd_ctx);
 
 	if (goi->argc < 3) {
 		Jim_WrongNumArgs(goi->interp, 1, goi->argv, "?name? ..options...");
 		return JIM_ERR;
 	}
 	/* COMMAND */
-	Jim_GetOpt_Obj(goi, &new_cmd);
+	jim_getopt_obj(goi, &new_cmd);
 	/* does this command exist? */
 	cmd = Jim_GetCommand(goi->interp, new_cmd, JIM_ERRMSG);
 	if (cmd) {
@@ -238,7 +239,7 @@ static int dap_create(Jim_GetOptInfo *goi)
 
 	/* Create it */
 	dap = calloc(1, sizeof(struct arm_dap_object));
-	if (dap == NULL)
+	if (!dap)
 		return JIM_ERR;
 
 	e = dap_configure(goi, dap);
@@ -265,23 +266,19 @@ static int dap_create(Jim_GetOptInfo *goi)
 	if (transport_is_hla())
 		dap_commands[0].chain = NULL;
 
-	e = register_commands(cmd_ctx, NULL, dap_commands);
-	if (ERROR_OK != e)
+	e = register_commands_with_data(cmd_ctx, NULL, dap_commands, dap);
+	if (e != ERROR_OK)
 		return JIM_ERR;
-
-	struct command *c = command_find_in_context(cmd_ctx, cp);
-	assert(c);
-	command_set_handler_data(c, dap);
 
 	list_add_tail(&dap->lh, &all_dap);
 
-	return (ERROR_OK == e) ? JIM_OK : JIM_ERR;
+	return JIM_OK;
 }
 
 static int jim_dap_create(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 {
-	Jim_GetOptInfo goi;
-	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
+	struct jim_getopt_info goi;
+	jim_getopt_setup(&goi, interp, argc - 1, argv + 1);
 	if (goi.argc < 2) {
 		Jim_WrongNumArgs(goi.interp, goi.argc, goi.argv,
 			"<name> [<dap_options> ...]");
@@ -318,7 +315,7 @@ COMMAND_HANDLER(handle_dap_info_command)
 	struct adiv5_dap *dap = arm->dap;
 	uint32_t apsel;
 
-	if (dap == NULL) {
+	if (!dap) {
 		LOG_ERROR("DAP instance not available. Probably a HLA target...");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}

@@ -19,6 +19,8 @@
 #include "config.h"
 #endif
 
+#include <helper/system.h>
+
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -27,6 +29,7 @@
 
 #include <helper/log.h>
 #include <helper/time_support.h>
+#include <helper/system.h>
 #include "aice_port.h"
 #include "aice_pipe.h"
 
@@ -35,8 +38,8 @@
 #ifdef _WIN32
 PROCESS_INFORMATION proc_info;
 
-HANDLE aice_pipe_output[2];
-HANDLE aice_pipe_input[2];
+static HANDLE aice_pipe_output[2];
+static HANDLE aice_pipe_input[2];
 
 static int aice_pipe_write(const void *buffer, int count)
 {
@@ -158,8 +161,8 @@ static int aice_pipe_open(struct aice_port_param_s *param)
 
 #else
 
-int aice_pipe_output[2];
-int aice_pipe_input[2];
+static int aice_pipe_output[2];
+static int aice_pipe_input[2];
 
 static int aice_pipe_write(const void *buffer, int count)
 {

@@ -31,6 +31,7 @@
 
 #include <limits.h>
 #include <stdlib.h>
+#include <string.h>
 #if IS_DARWIN
 #include <libproc.h>
 #endif
@@ -54,7 +55,6 @@ static const struct option long_options[] = {
 	{"search",		required_argument,		0,				's'},
 	{"log_output",	required_argument,		0,				'l'},
 	{"command",		required_argument,		0,				'c'},
-	{"pipe",		no_argument,			0,				'p'},
 	{0, 0, 0, 0}
 };
 
@@ -75,7 +75,7 @@ static char *find_exe_path(void)
 	do {
 #if IS_WIN32 && !IS_CYGWIN
 		exepath = malloc(MAX_PATH);
-		if (exepath == NULL)
+		if (!exepath)
 			break;
 		GetModuleFileName(NULL, exepath, MAX_PATH);
 
@@ -87,7 +87,7 @@ static char *find_exe_path(void)
 
 #elif IS_DARWIN
 		exepath = malloc(PROC_PIDPATHINFO_MAXSIZE);
-		if (exepath == NULL)
+		if (!exepath)
 			break;
 		if (proc_pidpath(getpid(), exepath, PROC_PIDPATHINFO_MAXSIZE) <= 0) {
 			free(exepath);
@@ -99,7 +99,7 @@ static char *find_exe_path(void)
 #define PATH_MAX 1024
 #endif
 		char *path = malloc(PATH_MAX);
-		if (path == NULL)
+		if (!path)
 			break;
 		int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
 		size_t size = PATH_MAX;
@@ -117,14 +117,14 @@ static char *find_exe_path(void)
 #elif defined(HAVE_REALPATH) /* Assume POSIX.1-2008 */
 		/* Try Unices in order of likelihood. */
 		exepath = realpath("/proc/self/exe", NULL); /* Linux/Cygwin */
-		if (exepath == NULL)
+		if (!exepath)
 			exepath = realpath("/proc/self/path/a.out", NULL); /* Solaris */
-		if (exepath == NULL)
+		if (!exepath)
 			exepath = realpath("/proc/curproc/file", NULL); /* FreeBSD (Should be covered above) */
 #endif
 	} while (0);
 
-	if (exepath != NULL) {
+	if (exepath) {
 		/* Strip executable file name, leaving path */
 		*strrchr(exepath, '/') = '\0';
 	} else {
@@ -163,7 +163,7 @@ static char *find_relative_path(const char *from, const char *to)
 		if (from[0] != '/')
 			i++;
 		char *next = strchr(from, '/');
-		if (next == NULL)
+		if (!next)
 			break;
 		from = next + 1;
 	}
@@ -281,7 +281,7 @@ int parse_cmdline_args(struct command_context *cmd_ctx, int argc, char *argv[])
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long(argc, argv, "hvd::l:f:s:c:p", long_options, &option_index);
+		c = getopt_long(argc, argv, "hvd::l:f:s:c:", long_options, &option_index);
 
 		/* Detect the end of the options. */
 		if (c == -1)
@@ -320,13 +320,6 @@ int parse_cmdline_args(struct command_context *cmd_ctx, int argc, char *argv[])
 			case 'c':		/* --command | -c */
 				if (optarg)
 				    add_config_command(optarg);
-				break;
-			case 'p':
-				/* to replicate the old syntax this needs to be synchronous
-				 * otherwise the gdb stdin will overflow with the warning message */
-				command_run_line(cmd_ctx, "gdb_port pipe; log_output openocd.log");
-				LOG_WARNING("deprecated option: -p/--pipe. Use '-c \"gdb_port pipe; "
-						"log_output openocd.log\"' instead.");
 				break;
 			default:  /* '?' */
 				/* getopt will emit an error message, all we have to do is bail. */

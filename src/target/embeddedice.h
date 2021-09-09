@@ -69,11 +69,11 @@ enum {
 	EICE_W_CTRL_RANGE = 0x80,
 	EICE_W_CTRL_CHAIN = 0x40,
 	EICE_W_CTRL_EXTERN = 0x20,
-	EICE_W_CTRL_nTRANS = 0x10,
-	EICE_W_CTRL_nOPC = 0x8,
+	EICE_W_CTRL_NTRANS = 0x10,
+	EICE_W_CTRL_NOPC = 0x8,
 	EICE_W_CTRL_MAS = 0x6,
 	EICE_W_CTRL_ITBIT = 0x2,
-	EICE_W_CTRL_nRW = 0x1
+	EICE_W_CTRL_NRW = 0x1
 };
 
 enum {
@@ -106,7 +106,7 @@ int embeddedice_send(struct arm_jtag *jtag_info, uint32_t *data, uint32_t size);
 
 int embeddedice_handshake(struct arm_jtag *jtag_info, int hsbit, uint32_t timeout);
 
-/* If many embeddedice_write_reg() follow eachother, then the >1 invocations can be
+/* If many embeddedice_write_reg() follow each other, then the >1 invocations can be
  * this faster version of embeddedice_write_reg
  */
 static inline void embeddedice_write_reg_inner(struct jtag_tap *tap, int reg_addr, uint32_t value)

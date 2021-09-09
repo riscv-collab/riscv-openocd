@@ -29,6 +29,7 @@
 #include "log.h"
 #include "configuration.h"
 #include "fileio.h"
+#include "replacements.h"
 
 struct fileio {
 	char *url;
@@ -197,9 +198,9 @@ int fileio_read_u32(struct fileio *fileio, uint32_t *data)
 
 	retval = fileio_local_read(fileio, sizeof(uint32_t), buf, &size_read);
 
-	if (ERROR_OK == retval && sizeof(uint32_t) != size_read)
+	if (retval == ERROR_OK && sizeof(uint32_t) != size_read)
 		retval = -EIO;
-	if (ERROR_OK == retval)
+	if (retval == ERROR_OK)
 		*data = be_to_h_u32(buf);
 
 	return retval;
@@ -207,7 +208,7 @@ int fileio_read_u32(struct fileio *fileio, uint32_t *data)
 
 static int fileio_local_fgets(struct fileio *fileio, size_t size, void *buffer)
 {
-	if (fgets(buffer, size, fileio->file) == NULL)
+	if (!fgets(buffer, size, fileio->file))
 		return ERROR_FILEIO_OPERATION_FAILED;
 
 	return ERROR_OK;
@@ -251,7 +252,7 @@ int fileio_write_u32(struct fileio *fileio, uint32_t data)
 
 	retval = fileio_write(fileio, 4, buf, &size_written);
 
-	if (ERROR_OK == retval && size_written != sizeof(uint32_t))
+	if (retval == ERROR_OK && size_written != sizeof(uint32_t))
 		retval = -EIO;
 
 	return retval;

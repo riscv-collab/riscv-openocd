@@ -144,7 +144,7 @@ static int opendous_usb_write(struct opendous_jtag *opendous_jtag, int out_lengt
 static int opendous_usb_read(struct opendous_jtag *opendous_jtag);
 
 /* helper functions */
-int opendous_get_version_info(void);
+static int opendous_get_version_info(void);
 
 #ifdef _DEBUG_USB_COMMS_
 static void opendous_debug_buffer(uint8_t *buffer, int length);
@@ -161,7 +161,7 @@ COMMAND_HANDLER(opendous_handle_opendous_type_command)
 		return ERROR_OK;
 
 	/* only if the cable name wasn't overwritten by cmdline */
-	if (opendous_type == NULL) {
+	if (!opendous_type) {
 		/* REVISIT first verify that it's listed in cables[] ... */
 		opendous_type = strdup(CMD_ARGV[0]);
 	}
@@ -256,7 +256,7 @@ static int opendous_execute_queue(void)
 	enum scan_type type;
 	uint8_t *buffer;
 
-	while (cmd != NULL) {
+	while (cmd) {
 		switch (cmd->type) {
 			case JTAG_RUNTEST:
 				LOG_DEBUG_IO("runtest %i cycles, end in %i", cmd->cmd.runtest->num_cycles,
@@ -331,7 +331,7 @@ static int opendous_init(void)
 
 	cur_opendous_probe = opendous_probes;
 
-	if (opendous_type == NULL) {
+	if (!opendous_type) {
 		opendous_type = strdup("opendous");
 		LOG_WARNING("No opendous_type specified, using default 'opendous'");
 	}
@@ -544,7 +544,7 @@ int opendous_get_status(void)
 	return ERROR_OK;
 }
 
-int opendous_get_version_info(void)
+static int opendous_get_version_info(void)
 {
 	return ERROR_OK;
 }

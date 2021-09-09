@@ -21,27 +21,6 @@
 #ifndef OPENOCD_HELPER_SYSTEM_H
 #define OPENOCD_HELPER_SYSTEM_H
 
-/* standard C library header files */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <ctype.h>
-#include <errno.h>
-
-/* +++ AC_HEADER_TIME +++ */
-#ifdef TIME_WITH_SYS_TIME
-# include <sys/time.h>
-# include <time.h>
-#else
-# ifdef HAVE_SYS_TIME_H
-#  include <sys/time.h>
-# else
-#  include <time.h>
-# endif
-#endif
-/* --- AC_HEADER_TIME --- */
-
 /* +++ platform specific headers +++ */
 #ifdef _WIN32
 #include <winsock2.h>
@@ -50,6 +29,19 @@
 #include <sys/stat.h>
 #endif
 /* --- platform specific headers --- */
+
+/* standard C library header files */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <time.h>
+
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
 
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>

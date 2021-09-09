@@ -58,7 +58,7 @@ static bool do_sync;
 static void swd_finish_read(struct adiv5_dap *dap)
 {
 	const struct swd_driver *swd = adiv5_dap_swd_driver(dap);
-	if (dap->last_read != NULL) {
+	if (dap->last_read) {
 		swd->read_reg(swd_cmd(true, false, DP_RDBUFF), dap->last_read, 0);
 		dap->last_read = NULL;
 	}
@@ -74,7 +74,7 @@ static void swd_clear_sticky_errors(struct adiv5_dap *dap)
 	const struct swd_driver *swd = adiv5_dap_swd_driver(dap);
 	assert(swd);
 
-	swd->write_reg(swd_cmd(false,  false, DP_ABORT),
+	swd->write_reg(swd_cmd(false, false, DP_ABORT),
 		STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR, 0);
 }
 
@@ -118,26 +118,69 @@ static int swd_connect(struct adiv5_dap *dap)
 		}
 	}
 
-	/* Note, debugport_init() does setup too */
-	swd->switch_seq(JTAG_TO_SWD);
 
-	/* Clear link state, including the SELECT cache. */
-	dap->do_reconnect = false;
-	dap_invalidate_cache(dap);
+	int64_t timeout = timeval_ms() + 500;
 
-	swd_queue_dp_read(dap, DP_DPIDR, &dpidr);
+	do {
+		/* Note, debugport_init() does setup too */
+		swd->switch_seq(JTAG_TO_SWD);
 
-	/* force clear all sticky faults */
-	swd_clear_sticky_errors(dap);
-
-	status = swd_run_inner(dap);
-
-	if (status == ERROR_OK) {
-		LOG_INFO("SWD DPIDR %#8.8" PRIx32, dpidr);
+		/* Clear link state, including the SELECT cache. */
 		dap->do_reconnect = false;
+		dap_invalidate_cache(dap);
+
+		status = swd_queue_dp_read(dap, DP_DPIDR, &dpidr);
+		if (status == ERROR_OK) {
+			status = swd_run_inner(dap);
+			if (status == ERROR_OK)
+				break;
+		}
+
+		alive_sleep(1);
+
+	} while (timeval_ms() < timeout);
+
+	if (status != ERROR_OK) {
+		LOG_ERROR("Error connecting DP: cannot read IDR");
+		return status;
+	}
+
+	LOG_INFO("SWD DPIDR %#8.8" PRIx32, dpidr);
+
+	do {
+		dap->do_reconnect = false;
+
+		/* force clear all sticky faults */
+		swd_clear_sticky_errors(dap);
+
+		status = swd_run_inner(dap);
+		if (status != ERROR_WAIT)
+			break;
+
+		alive_sleep(10);
+
+	} while (timeval_ms() < timeout);
+
+	/* IHI 0031E B4.3.2:
+	 * "A WAIT response must not be issued to the ...
+	 * ... writes to the ABORT register"
+	 * swd_clear_sticky_errors() writes to the ABORT register only.
+	 *
+	 * Unfortunately at least Microchip SAMD51/E53/E54 returns WAIT
+	 * in a corner case. Just try if ABORT resolves the problem.
+	 */
+	if (status == ERROR_WAIT) {
+		LOG_WARNING("Connecting DP: stalled AP operation, issuing ABORT");
+
+		dap->do_reconnect = false;
+
+		swd->write_reg(swd_cmd(false, false, DP_ABORT),
+			DAPABORT | STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR, 0);
+		status = swd_run_inner(dap);
+	}
+
+	if (status == ERROR_OK)
 		status = dap_dp_init(dap);
-	} else
-		dap->do_reconnect = true;
 
 	return status;
 }
@@ -282,7 +325,7 @@ static int swd_queue_ap_read(struct adiv5_ap *ap, unsigned reg,
 	if (retval != ERROR_OK)
 		return retval;
 
-	swd->read_reg(swd_cmd(true,  true, reg), dap->last_read, ap->memaccess_tck);
+	swd->read_reg(swd_cmd(true, true, reg), dap->last_read, ap->memaccess_tck);
 	dap->last_read = data;
 
 	return check_sync(dap);
@@ -304,7 +347,7 @@ static int swd_queue_ap_write(struct adiv5_ap *ap, unsigned reg,
 	if (retval != ERROR_OK)
 		return retval;
 
-	swd->write_reg(swd_cmd(false,  true, reg), data, ap->memaccess_tck);
+	swd->write_reg(swd_cmd(false, true, reg), data, ap->memaccess_tck);
 
 	return check_sync(dap);
 }

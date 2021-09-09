@@ -69,7 +69,7 @@ struct interface_swd_t {
 struct interface_jtag_raw_t {
 	RESULT(*init)(uint8_t interface_index);
 	RESULT(*fini)(uint8_t interface_index);
-	RESULT(*config)(uint8_t interface_index, uint32_t kHz);
+	RESULT(*config)(uint8_t interface_index, uint32_t khz);
 	RESULT(*execute)(uint8_t interface_index, uint8_t *tdi, uint8_t *tms,
 		uint8_t *tdo, uint32_t bitlen);
 };
@@ -107,6 +107,6 @@ struct versaloon_interface_t {
 };
 
 extern struct versaloon_interface_t versaloon_interface;
-extern libusb_device_handle *versaloon_usb_device_handle;
+extern struct libusb_device_handle *versaloon_usb_device_handle;
 
 #endif /* OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_H */

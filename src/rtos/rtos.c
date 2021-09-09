@@ -27,37 +27,39 @@
 #include "server/gdb_server.h"
 
 /* RTOSs */
-extern struct rtos_type riscv_rtos;
-extern struct rtos_type FreeRTOS_rtos;
-extern struct rtos_type ThreadX_rtos;
-extern struct rtos_type eCos_rtos;
-extern struct rtos_type Linux_os;
+extern struct rtos_type freertos_rtos;
+extern struct rtos_type threadx_rtos;
+extern struct rtos_type ecos_rtos;
+extern struct rtos_type linux_rtos;
 extern struct rtos_type chibios_rtos;
 extern struct rtos_type chromium_ec_rtos;
-extern struct rtos_type embKernel_rtos;
+extern struct rtos_type embkernel_rtos;
 extern struct rtos_type mqx_rtos;
-extern struct rtos_type uCOS_III_rtos;
+extern struct rtos_type ucos_iii_rtos;
 extern struct rtos_type nuttx_rtos;
 extern struct rtos_type hwthread_rtos;
 extern struct rtos_type riot_rtos;
+extern struct rtos_type zephyr_rtos;
 
 static struct rtos_type *rtos_types[] = {
-	&riscv_rtos,
-	&ThreadX_rtos,
-	&FreeRTOS_rtos,
-	&eCos_rtos,
-	&Linux_os,
+	&threadx_rtos,
+	&freertos_rtos,
+	&ecos_rtos,
+	&linux_rtos,
 	&chibios_rtos,
 	&chromium_ec_rtos,
-	&embKernel_rtos,
+	&embkernel_rtos,
 	&mqx_rtos,
-	&uCOS_III_rtos,
+	&ucos_iii_rtos,
 	&nuttx_rtos,
 	&riot_rtos,
+	&zephyr_rtos,
 	/* keep this as last, as it always matches with rtos auto */
 	&hwthread_rtos,
 	NULL
 };
+
+static int rtos_try_next(struct target *target);
 
 int rtos_thread_packet(struct connection *connection, const char *packet, int packet_size);
 
@@ -68,7 +70,9 @@ int rtos_smp_init(struct target *target)
 	return ERROR_TARGET_INIT_FAILED;
 }
 
-static int rtos_target_for_threadid(struct connection *connection, int64_t threadid, struct target **t)
+static int rtos_target_for_threadid(struct connection *connection,
+									threadid_t threadid,
+									struct target **t)
 {
 	struct target *curr = get_target_from_connection(connection);
 	if (t)
@@ -77,7 +81,8 @@ static int rtos_target_for_threadid(struct connection *connection, int64_t threa
 	return ERROR_OK;
 }
 
-static int os_alloc(struct target *target, struct rtos_type *ostype)
+static int os_alloc(struct target *target, struct rtos_type *ostype,
+					struct command_context *cmd_ctx)
 {
 	struct rtos *os = target->rtos = calloc(1, sizeof(struct rtos));
 
@@ -94,6 +99,7 @@ static int os_alloc(struct target *target, struct rtos_type *ostype)
 	os->gdb_thread_packet = rtos_thread_packet;
 	os->gdb_v_packet = NULL;
 	os->gdb_target_for_threadid = rtos_target_for_threadid;
+	os->cmd_ctx = cmd_ctx;
 
 	return JIM_OK;
 }
@@ -108,11 +114,12 @@ static void os_free(struct target *target)
 	target->rtos = NULL;
 }
 
-static int os_alloc_create(struct target *target, struct rtos_type *ostype)
+static int os_alloc_create(struct target *target, struct rtos_type *ostype,
+						   struct command_context *cmd_ctx)
 {
-	int ret = os_alloc(target, ostype);
+	int ret = os_alloc(target, ostype, cmd_ctx);
 
-	if (JIM_OK == ret) {
+	if (ret == JIM_OK) {
 		ret = target->rtos->type->create(target);
 		if (ret != JIM_OK)
 			os_free(target);
@@ -121,7 +128,7 @@ static int os_alloc_create(struct target *target, struct rtos_type *ostype)
 	return ret;
 }
 
-int rtos_create(Jim_GetOptInfo *goi, struct target *target)
+int rtos_create(struct jim_getopt_info *goi, struct target *target)
 {
 	int x;
 	const char *cp;
@@ -133,13 +140,15 @@ int rtos_create(Jim_GetOptInfo *goi, struct target *target)
 		return JIM_ERR;
 	}
 
+	struct command_context *cmd_ctx = current_command_context(goi->interp);
+
 	os_free(target);
 
-	e = Jim_GetOpt_String(goi, &cp, NULL);
+	e = jim_getopt_string(goi, &cp, NULL);
 	if (e != JIM_OK)
 		return e;
 
-	if (0 == strcmp(cp, "auto")) {
+	if (strcmp(cp, "auto") == 0) {
 		/* Auto detect tries to look up all symbols for each RTOS,
 		 * and runs the RTOS driver's _detect() function when GDB
 		 * finds all symbols for any RTOS. See rtos_qsymbol(). */
@@ -147,12 +156,12 @@ int rtos_create(Jim_GetOptInfo *goi, struct target *target)
 
 		/* rtos_qsymbol() will iterate over all RTOSes. Allocate
 		 * target->rtos here, and set it to the first RTOS type. */
-		return os_alloc(target, rtos_types[0]);
+		return os_alloc(target, rtos_types[0], cmd_ctx);
 	}
 
 	for (x = 0; rtos_types[x]; x++)
-		if (0 == strcmp(cp, rtos_types[x]->name))
-			return os_alloc_create(target, rtos_types[x]);
+		if (strcmp(cp, rtos_types[x]->name) == 0)
+			return os_alloc_create(target, rtos_types[x], cmd_ctx);
 
 	Jim_SetResultFormatted(goi->interp, "Unknown RTOS type %s, try one of: ", cp);
 	res = Jim_GetResult(goi->interp);
@@ -171,15 +180,15 @@ void rtos_destroy(struct target *target)
 int gdb_thread_packet(struct connection *connection, char const *packet, int packet_size)
 {
 	struct target *target = get_target_from_connection(connection);
-	if (target->rtos == NULL)
+	if (!target->rtos)
 		return rtos_thread_packet(connection, packet, packet_size);	/* thread not
 										 *found*/
 	return target->rtos->gdb_thread_packet(connection, packet, packet_size);
 }
 
-static symbol_table_elem_t *next_symbol(struct rtos *os, char *cur_symbol, uint64_t cur_addr)
+static struct symbol_table_elem *next_symbol(struct rtos *os, char *cur_symbol, uint64_t cur_addr)
 {
-	symbol_table_elem_t *s;
+	struct symbol_table_elem *s;
 
 	if (!os->symbols)
 		os->type->get_symbol_list_to_lookup(&os->symbols);
@@ -201,7 +210,7 @@ static symbol_table_elem_t *next_symbol(struct rtos *os, char *cur_symbol, uint6
  * if 'symbol' is not declared optional */
 static bool is_symbol_mandatory(const struct rtos *os, const char *symbol)
 {
-	for (symbol_table_elem_t *s = os->symbols; s->symbol_name; ++s) {
+	for (struct symbol_table_elem *s = os->symbols; s->symbol_name; ++s) {
 		if (!strcmp(s->symbol_name, symbol))
 			return !s->optional;
 	}
@@ -233,7 +242,7 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 	uint64_t addr = 0;
 	size_t reply_len;
 	char reply[GDB_BUFFER_SIZE + 1], cur_sym[GDB_BUFFER_SIZE / 2 + 1] = ""; /* Extra byte for null-termination */
-	symbol_table_elem_t *next_sym = NULL;
+	struct symbol_table_elem *next_sym = NULL;
 	struct target *target = get_target_from_connection(connection);
 	struct rtos *os = target->rtos;
 
@@ -265,7 +274,16 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 			cur_sym[0] = '\x00';
 		}
 	}
+
+	LOG_DEBUG("RTOS: Address of symbol '%s' is 0x%" PRIx64, cur_sym, addr);
+
 	next_sym = next_symbol(os, cur_sym, addr);
+
+	/* Should never happen unless the debugger misbehaves */
+	if (next_sym == NULL) {
+		LOG_WARNING("RTOS: Debugger sent us qSymbol with '%s' that we did not ask for", cur_sym);
+		goto done;
+	}
 
 	if (!next_sym->symbol_name) {
 		/* No more symbols need looking up */
@@ -290,6 +308,8 @@ int rtos_qsymbol(struct connection *connection, char const *packet, int packet_s
 		goto done;
 	}
 
+	LOG_DEBUG("RTOS: Requesting symbol lookup of '%s' from the debugger", next_sym->symbol_name);
+
 	reply_len = snprintf(reply, sizeof(reply), "qSymbol:");
 	reply_len += hexify(reply + reply_len,
 		(const uint8_t *)next_sym->symbol_name, strlen(next_sym->symbol_name),
@@ -305,13 +325,13 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 	struct target *target = get_target_from_connection(connection);
 
 	if (strncmp(packet, "qThreadExtraInfo,", 17) == 0) {
-		if ((target->rtos != NULL) && (target->rtos->thread_details != NULL) &&
+		if ((target->rtos) && (target->rtos->thread_details) &&
 				(target->rtos->thread_count != 0)) {
 			threadid_t threadid = 0;
 			int found = -1;
 			sscanf(packet, "qThreadExtraInfo,%" SCNx64, &threadid);
 
-			if ((target->rtos != NULL) && (target->rtos->thread_details != NULL)) {
+			if ((target->rtos) && (target->rtos->thread_details)) {
 				int thread_num;
 				for (thread_num = 0; thread_num < target->rtos->thread_count; thread_num++) {
 					if (target->rtos->thread_details[thread_num].threadid == threadid) {
@@ -328,17 +348,17 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 			struct thread_detail *detail = &target->rtos->thread_details[found];
 
 			int str_size = 0;
-			if (detail->thread_name_str != NULL)
+			if (detail->thread_name_str)
 				str_size += strlen(detail->thread_name_str);
-			if (detail->extra_info_str != NULL)
+			if (detail->extra_info_str)
 				str_size += strlen(detail->extra_info_str);
 
 			char *tmp_str = calloc(str_size + 9, sizeof(char));
 			char *tmp_str_ptr = tmp_str;
 
-			if (detail->thread_name_str != NULL)
+			if (detail->thread_name_str)
 				tmp_str_ptr += sprintf(tmp_str_ptr, "Name: %s", detail->thread_name_str);
-			if (detail->extra_info_str != NULL) {
+			if (detail->extra_info_str) {
 				if (tmp_str_ptr != tmp_str)
 					tmp_str_ptr += sprintf(tmp_str_ptr, ", ");
 				tmp_str_ptr += sprintf(tmp_str_ptr, "%s", detail->extra_info_str);
@@ -370,7 +390,7 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 		return ERROR_OK;
 	} else if (strncmp(packet, "qfThreadInfo", 12) == 0) {
 		int i;
-		if (target->rtos != NULL) {
+		if (target->rtos) {
 			if (target->rtos->thread_count == 0) {
 				gdb_put_packet(connection, "l", 1);
 			} else {
@@ -403,7 +423,7 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 		 * otherwise it gets incorrectly handled */
 		return GDB_THREAD_PACKET_NOT_CONSUMED;
 	} else if (strncmp(packet, "qC", 2) == 0) {
-		if (target->rtos != NULL) {
+		if (target->rtos) {
 			char buffer[19];
 			int size;
 			size = snprintf(buffer, 19, "QC%016" PRIx64, target->rtos->current_thread);
@@ -415,7 +435,7 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 		threadid_t threadid;
 		int found = -1;
 		sscanf(packet, "T%" SCNx64, &threadid);
-		if ((target->rtos != NULL) && (target->rtos->thread_details != NULL)) {
+		if ((target->rtos) && (target->rtos->thread_details)) {
 			int thread_num;
 			for (thread_num = 0; thread_num < target->rtos->thread_count; thread_num++) {
 				if (target->rtos->thread_details[thread_num].threadid == threadid) {
@@ -431,7 +451,7 @@ int rtos_thread_packet(struct connection *connection, char const *packet, int pa
 		return ERROR_OK;
 	} else if (packet[0] == 'H') {	/* Set current thread ( 'c' for step and continue, 'g' for
 					 * all other operations ) */
-		if ((packet[1] == 'g') && (target->rtos != NULL)) {
+		if ((packet[1] == 'g') && (target->rtos)) {
 			threadid_t threadid;
 			sscanf(packet, "Hg%16" SCNx64, &threadid);
 			LOG_DEBUG("RTOS: GDB requested to set current thread to 0x%" PRIx64, threadid);
@@ -475,8 +495,8 @@ static int rtos_put_gdb_reg_list(struct connection *connection,
 int rtos_get_gdb_reg(struct connection *connection, int reg_num)
 {
 	struct target *target = get_target_from_connection(connection);
-	int64_t current_threadid = target->rtos->current_threadid;
-	if ((target->rtos != NULL) && (current_threadid != -1) &&
+	threadid_t current_threadid = target->rtos->current_threadid;
+	if ((target->rtos) && (current_threadid != -1) &&
 			(current_threadid != 0) &&
 			((current_threadid != target->rtos->current_thread) ||
 			(target->smp))) {	/* in smp several current thread are possible */
@@ -492,6 +512,7 @@ int rtos_get_gdb_reg(struct connection *connection, int reg_num)
 		int retval;
 		if (target->rtos->type->get_thread_reg) {
 			reg_list = calloc(1, sizeof(*reg_list));
+			reg_list[0].number = reg_num;
 			num_regs = 1;
 			retval = target->rtos->type->get_thread_reg(target->rtos,
 					current_threadid, reg_num, &reg_list[0]);
@@ -528,7 +549,7 @@ int rtos_get_gdb_reg_list(struct connection *connection)
 {
 	struct target *target = get_target_from_connection(connection);
 	int64_t current_threadid = target->rtos->current_threadid;
-	if ((target->rtos != NULL) && (current_threadid != -1) &&
+	if ((target->rtos) && (current_threadid != -1) &&
 			(current_threadid != 0) &&
 			((current_threadid != target->rtos->current_thread) ||
 			(target->smp))) {	/* in smp several current thread are possible */
@@ -562,8 +583,8 @@ int rtos_set_reg(struct connection *connection, int reg_num,
 {
 	struct target *target = get_target_from_connection(connection);
 	int64_t current_threadid = target->rtos->current_threadid;
-	if ((target->rtos != NULL) &&
-			(target->rtos->type->set_reg != NULL) &&
+	if ((target->rtos) &&
+			(target->rtos->type->set_reg) &&
 			(current_threadid != -1) &&
 			(current_threadid != 0)) {
 		return target->rtos->type->set_reg(target->rtos, reg_num, reg_value);
@@ -573,7 +594,7 @@ int rtos_set_reg(struct connection *connection, int reg_num,
 
 int rtos_generic_stack_read(struct target *target,
 	const struct rtos_register_stacking *stacking,
-	int64_t stack_ptr,
+	target_addr_t stack_ptr,
 	struct rtos_reg **reg_list,
 	int *num_regs)
 {
@@ -585,7 +606,7 @@ int rtos_generic_stack_read(struct target *target,
 	}
 	/* Read the stack */
 	uint8_t *stack_data = malloc(stacking->stack_registers_size);
-	uint32_t address = stack_ptr;
+	target_addr_t address = stack_ptr;
 
 	if (stacking->stack_growth_direction == 1)
 		address -= stacking->stack_registers_size;
@@ -595,7 +616,7 @@ int rtos_generic_stack_read(struct target *target,
 		LOG_ERROR("Error reading stack frame from thread");
 		return retval;
 	}
-	LOG_DEBUG("RTOS: Read stack frame at 0x%" PRIx32, address);
+	LOG_DEBUG("RTOS: Read stack frame at " TARGET_ADDR_FMT, address);
 
 #if 0
 		LOG_OUTPUT("Stack Data :");
@@ -604,8 +625,8 @@ int rtos_generic_stack_read(struct target *target,
 		LOG_OUTPUT("\r\n");
 #endif
 
-	int64_t new_stack_ptr;
-	if (stacking->calculate_process_stack != NULL) {
+	target_addr_t new_stack_ptr;
+	if (stacking->calculate_process_stack) {
 		new_stack_ptr = stacking->calculate_process_stack(target,
 				stack_data, stacking, stack_ptr);
 	} else {
@@ -625,6 +646,9 @@ int rtos_generic_stack_read(struct target *target,
 			buf_cpy(&new_stack_ptr, (*reg_list)[i].value, (*reg_list)[i].size);
 		else if (offset != -1)
 			buf_cpy(stack_data + offset, (*reg_list)[i].value, (*reg_list)[i].size);
+
+		LOG_DEBUG("register %d has value 0x%" PRIx64, (*reg_list)[i].number,
+				  buf_get_u64((*reg_list)[i].value, 0, 64));
 	}
 
 	free(stack_data);
@@ -632,7 +656,101 @@ int rtos_generic_stack_read(struct target *target,
 	return ERROR_OK;
 }
 
-int rtos_try_next(struct target *target)
+/* Read an individual register from the RTOS stack. */
+int rtos_generic_stack_read_reg(struct target *target,
+								const struct rtos_register_stacking *stacking,
+								target_addr_t stack_ptr,
+								uint32_t reg_num, struct rtos_reg *reg)
+{
+	LOG_DEBUG("stack_ptr=" TARGET_ADDR_FMT ", reg_num=%d", stack_ptr, reg_num);
+	unsigned total_count = MAX(stacking->total_register_count, stacking->num_output_registers);
+	unsigned i;
+	for (i = 0; i < total_count; i++) {
+		if (stacking->register_offsets[i].number == reg_num)
+			break;
+	}
+	if (i >= total_count) {
+		/* This register is not on the stack. Return error so a caller somewhere
+		 * will just read the register directly from the target. */
+		return ERROR_FAIL;
+	}
+
+	const struct stack_register_offset *offsets = &stacking->register_offsets[i];
+	reg->size = offsets->width_bits;
+
+	unsigned width_bytes = DIV_ROUND_UP(offsets->width_bits, 8);
+	if (offsets->offset >= 0) {
+		target_addr_t address = stack_ptr;
+
+		if (stacking->stack_growth_direction == 1)
+			address -= stacking->stack_registers_size;
+
+		if (target_read_buffer(
+				target, address + offsets->offset,
+				width_bytes, reg->value) != ERROR_OK)
+			return ERROR_FAIL;
+		LOG_DEBUG("register %d has value 0x%" PRIx64, reg->number,
+				  buf_get_u64(reg->value, 0, 64));
+	} else {
+		memset(reg->value, 0, width_bytes);
+	}
+
+	return ERROR_OK;
+}
+
+int rtos_generic_stack_write_reg(struct target *target,
+								const struct rtos_register_stacking *stacking,
+								target_addr_t stack_ptr,
+								uint32_t reg_num, uint8_t *reg_value)
+{
+	LOG_DEBUG("stack_ptr=" TARGET_ADDR_FMT ", reg_num=%d", stack_ptr, reg_num);
+	unsigned total_count = MAX(stacking->total_register_count, stacking->num_output_registers);
+	unsigned i;
+	for (i = 0; i < total_count; i++) {
+		if (stacking->register_offsets[i].number == reg_num)
+			break;
+	}
+	if (i >= total_count) {
+		/* This register is not on the stack. Return error so a caller somewhere
+		 * will just read the register directly from the target. */
+		return ERROR_FAIL;
+	}
+
+	const struct stack_register_offset *offsets = &stacking->register_offsets[i];
+
+	unsigned width_bytes = DIV_ROUND_UP(offsets->width_bits, 8);
+	if (offsets->offset >= 0) {
+		target_addr_t address = stack_ptr;
+
+		if (stacking->stack_growth_direction == 1)
+			address -= stacking->stack_registers_size;
+
+		LOG_DEBUG("write 0x%" PRIx64 " to register %d",
+				  buf_get_u64(reg_value, 0, offsets->width_bits), reg_num);
+		if (target_write_buffer(
+				target, address + offsets->offset,
+				width_bytes, reg_value) != ERROR_OK)
+			return ERROR_FAIL;
+	} else if (offsets->offset == -1) {
+		/* This register isn't on the stack, but is listed as one of those. We
+		 * read it as 0, and ignore writes. */
+	} else if (offsets->offset == -2) {
+		/* This register requires computation when we "read" it. I'm not sure
+		 * how to handle writes. We can't simply return error here because then
+		 * the higher level code will end up writing the register in the halted
+		 * core, which is definitely not the same as writing it for a thread. */
+		LOG_ERROR("Don't know how to write register %d with offset -2 in a thread.",
+				  reg_num);
+		assert(0);
+	} else {
+		LOG_ERROR("Don't know how to handle offset <2.");
+		assert(0);
+	}
+
+	return ERROR_OK;
+}
+
+static int rtos_try_next(struct target *target)
 {
 	struct rtos *os = target->rtos;
 	struct rtos_type **type = rtos_types;
@@ -656,7 +774,7 @@ int rtos_try_next(struct target *target)
 
 int rtos_update_threads(struct target *target)
 {
-	if ((target->rtos != NULL) && (target->rtos->type != NULL))
+	if ((target->rtos) && (target->rtos->type))
 		target->rtos->type->update_threads(target->rtos);
 	return ERROR_OK;
 }

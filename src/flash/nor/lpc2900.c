@@ -453,8 +453,8 @@ static int lpc2900_write_index_page(struct flash_bank *bank,
 /**
  * Calculate FPTR.TR register value for desired program/erase time.
  *
- * @param clock System clock in Hz
- * @param time Program/erase time in µs
+ * @param clock_var System clock in Hz
+ * @param time_var Program/erase time in µs
  */
 static uint32_t lpc2900_calc_tr(uint32_t clock_var, uint32_t time_var)
 {
@@ -487,7 +487,7 @@ COMMAND_HANDLER(lpc2900_handle_signature_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	if (bank->target->state != TARGET_HALTED) {
@@ -522,7 +522,7 @@ COMMAND_HANDLER(lpc2900_handle_read_custom_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
@@ -584,7 +584,7 @@ COMMAND_HANDLER(lpc2900_handle_password_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
@@ -614,7 +614,7 @@ COMMAND_HANDLER(lpc2900_handle_write_custom_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
@@ -635,9 +635,9 @@ COMMAND_HANDLER(lpc2900_handle_write_custom_command)
 
 	/* The image will always start at offset 0 */
 	struct image image;
-	image.base_address_set = 1;
+	image.base_address_set = true;
 	image.base_address = 0;
-	image.start_address_set = 0;
+	image.start_address_set = false;
 
 	const char *filename = CMD_ARGV[1];
 	const char *type = (CMD_ARGC >= 3) ? CMD_ARGV[2] : NULL;
@@ -713,7 +713,7 @@ COMMAND_HANDLER(lpc2900_handle_secure_sector_command)
 	/* Get the bank descriptor */
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
@@ -794,7 +794,7 @@ COMMAND_HANDLER(lpc2900_handle_secure_jtag_command)
 	/* Get the bank descriptor */
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;

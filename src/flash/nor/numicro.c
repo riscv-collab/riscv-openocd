@@ -151,7 +151,7 @@ struct numicro_cpu_type {
 	{NUMICRO_CONFIG_BASE, 1024} }
 
 
-static const struct numicro_cpu_type NuMicroParts[] = {
+static const struct numicro_cpu_type numicro_parts[] = {
 	/*PART NO*/     /*PART ID*/ /*Banks*/
 	/* NUC100 Version B */
 	{"NUC100LD2BN", 0x10010004, NUMICRO_BANKS_NUC100(64*1024)},
@@ -1132,7 +1132,7 @@ static const struct numicro_cpu_type NuMicroParts[] = {
 /* Private bank information for NuMicro. */
 struct  numicro_flash_bank {
 	struct working_area *write_algorithm;
-	int probed;
+	bool probed;
 	const struct numicro_cpu_type *cpu;
 };
 
@@ -1243,7 +1243,7 @@ static uint32_t numicro_fmc_cmd(struct target *target, uint32_t cmd, uint32_t ad
 		retval = target_read_u32(target, NUMICRO_FLASH_ISPTRG, &status);
 		if (retval != ERROR_OK)
 			return retval;
-			LOG_DEBUG("status: 0x%" PRIx32 "", status);
+		LOG_DEBUG("status: 0x%" PRIx32 "", status);
 		if ((status & (ISPTRG_ISPGO)) == 0)
 			break;
 		if (timeout-- <= 0) {
@@ -1386,7 +1386,7 @@ static int numicro_writeblock(struct flash_bank *bank, const uint8_t *buffer,
 	init_reg_param(&reg_params[2], "r2", 32, PARAM_OUT);    /* number of words to program */
 
 	struct armv7m_common *armv7m = target_to_armv7m(target);
-	if (armv7m == NULL) {
+	if (!armv7m) {
 		/* something is very wrong if armv7m is NULL */
 		LOG_ERROR("unable to get armv7m target");
 		return retval;
@@ -1512,7 +1512,7 @@ static int numicro_erase(struct flash_bank *bank, unsigned int first,
 			retval = target_read_u32(target, NUMICRO_FLASH_ISPTRG, &status);
 			if (retval != ERROR_OK)
 				return retval;
-				LOG_DEBUG("status: 0x%" PRIx32 "", status);
+			LOG_DEBUG("status: 0x%" PRIx32 "", status);
 			if (status == 0)
 				break;
 			if (timeout-- <= 0) {
@@ -1532,8 +1532,6 @@ static int numicro_erase(struct flash_bank *bank, unsigned int first,
 			retval = target_write_u32(target, NUMICRO_FLASH_ISPCON, (status | ISPCON_ISPFF));
 			if (retval != ERROR_OK)
 				return retval;
-		} else {
-			bank->sectors[i].is_erased = 1;
 		}
 	}
 
@@ -1601,7 +1599,7 @@ static int numicro_write(struct flash_bank *bank, const uint8_t *buffer,
 				retval = target_read_u32(target, NUMICRO_FLASH_ISPTRG, &status);
 				if (retval != ERROR_OK)
 					return retval;
-					LOG_DEBUG("status: 0x%" PRIx32 "", status);
+				LOG_DEBUG("status: 0x%" PRIx32 "", status);
 				if (status == 0)
 					break;
 				if (timeout-- <= 0) {
@@ -1648,9 +1646,9 @@ static int numicro_get_cpu_type(struct target *target, const struct numicro_cpu_
 
 	LOG_INFO("Device ID: 0x%08" PRIx32 "", part_id);
 	/* search part numbers */
-	for (size_t i = 0; i < ARRAY_SIZE(NuMicroParts); i++) {
-		if (part_id == NuMicroParts[i].partid) {
-			*cpu = &NuMicroParts[i];
+	for (size_t i = 0; i < ARRAY_SIZE(numicro_parts); i++) {
+		if (part_id == numicro_parts[i].partid) {
+			*cpu = &numicro_parts[i];
 			LOG_INFO("Device Name: %s", (*cpu)->partname);
 			return ERROR_OK;
 		}

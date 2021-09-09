@@ -31,7 +31,7 @@
 #define MAX_USB_PORTS	7
 
 static struct libusb_context *jtag_libusb_context; /**< Libusb context **/
-static libusb_device **devs; /**< The usb device list **/
+static struct libusb_device **devs; /**< The usb device list **/
 
 static int jtag_libusb_error(int err)
 {
@@ -71,7 +71,7 @@ static bool jtag_libusb_match_ids(struct libusb_device_descriptor *dev_desc,
 }
 
 #ifdef HAVE_LIBUSB_GET_PORT_NUMBERS
-static bool jtag_libusb_location_equal(libusb_device *device)
+static bool jtag_libusb_location_equal(struct libusb_device *device)
 {
 	uint8_t port_path[MAX_USB_PORTS];
 	uint8_t dev_bus;
@@ -88,7 +88,7 @@ static bool jtag_libusb_location_equal(libusb_device *device)
 	return jtag_usb_location_equal(dev_bus, port_path, path_len);
 }
 #else /* HAVE_LIBUSB_GET_PORT_NUMBERS */
-static bool jtag_libusb_location_equal(libusb_device *device)
+static bool jtag_libusb_location_equal(struct libusb_device *device)
 {
 	return true;
 }
@@ -96,7 +96,7 @@ static bool jtag_libusb_location_equal(libusb_device *device)
 
 
 /* Returns true if the string descriptor indexed by str_index in device matches string */
-static bool string_descriptor_equal(libusb_device_handle *device, uint8_t str_index,
+static bool string_descriptor_equal(struct libusb_device_handle *device, uint8_t str_index,
 									const char *string)
 {
 	int retval;
@@ -123,7 +123,7 @@ static bool string_descriptor_equal(libusb_device_handle *device, uint8_t str_in
 	return matched;
 }
 
-static bool jtag_libusb_match_serial(libusb_device_handle *device,
+static bool jtag_libusb_match_serial(struct libusb_device_handle *device,
 		struct libusb_device_descriptor *dev_desc, const char *serial,
 		adapter_get_alternate_serial_fn adapter_get_alternate_serial)
 {
@@ -138,7 +138,7 @@ static bool jtag_libusb_match_serial(libusb_device_handle *device,
 	char *alternate_serial = adapter_get_alternate_serial(device, dev_desc);
 
 	/* check possible failures */
-	if (alternate_serial == NULL)
+	if (!alternate_serial)
 		return false;
 
 	/* then compare and free the alternate serial */
@@ -158,7 +158,7 @@ int jtag_libusb_open(const uint16_t vids[], const uint16_t pids[],
 		struct libusb_device_handle **out,
 		adapter_get_alternate_serial_fn adapter_get_alternate_serial)
 {
-	int cnt, idx, errCode;
+	int cnt, idx, err_code;
 	int retval = ERROR_FAIL;
 	bool serial_mismatch = false;
 	struct libusb_device_handle *libusb_handle = NULL;
@@ -180,16 +180,16 @@ int jtag_libusb_open(const uint16_t vids[], const uint16_t pids[],
 		if (jtag_usb_get_location() && !jtag_libusb_location_equal(devs[idx]))
 			continue;
 
-		errCode = libusb_open(devs[idx], &libusb_handle);
+		err_code = libusb_open(devs[idx], &libusb_handle);
 
-		if (errCode) {
+		if (err_code) {
 			LOG_ERROR("libusb_open() failed with %s",
-				  libusb_error_name(errCode));
+				  libusb_error_name(err_code));
 			continue;
 		}
 
 		/* Device must be open to use libusb_get_string_descriptor_ascii. */
-		if (serial != NULL &&
+		if (serial &&
 				!jtag_libusb_match_serial(libusb_handle, &dev_desc, serial, adapter_get_alternate_serial)) {
 			serial_mismatch = true;
 			libusb_close(libusb_handle);
@@ -222,13 +222,13 @@ void jtag_libusb_close(struct libusb_device_handle *dev)
 	libusb_exit(jtag_libusb_context);
 }
 
-int jtag_libusb_control_transfer(struct libusb_device_handle *dev, uint8_t requestType,
-		uint8_t request, uint16_t wValue, uint16_t wIndex, char *bytes,
+int jtag_libusb_control_transfer(struct libusb_device_handle *dev, uint8_t request_type,
+		uint8_t request, uint16_t value, uint16_t index, char *bytes,
 		uint16_t size, unsigned int timeout)
 {
 	int transferred = 0;
 
-	transferred = libusb_control_transfer(dev, requestType, request, wValue, wIndex,
+	transferred = libusb_control_transfer(dev, request_type, request, value, index,
 				(unsigned char *)bytes, size, timeout);
 
 	if (transferred < 0)
@@ -275,28 +275,28 @@ int jtag_libusb_set_configuration(struct libusb_device_handle *devh,
 		int configuration)
 {
 	struct libusb_device *udev = libusb_get_device(devh);
-	int retCode = -99;
+	int retval = -99;
 
 	struct libusb_config_descriptor *config = NULL;
 	int current_config = -1;
 
-	retCode = libusb_get_configuration(devh, &current_config);
-	if (retCode != 0)
-		return retCode;
+	retval = libusb_get_configuration(devh, &current_config);
+	if (retval != 0)
+		return retval;
 
-	retCode = libusb_get_config_descriptor(udev, configuration, &config);
-	if (retCode != 0 || config == NULL)
-		return retCode;
+	retval = libusb_get_config_descriptor(udev, configuration, &config);
+	if (retval != 0 || !config)
+		return retval;
 
 	/* Only change the configuration if it is not already set to the
 	   same one. Otherwise this issues a lightweight reset and hangs
 	   LPC-Link2 with JLink firmware. */
 	if (current_config != config->bConfigurationValue)
-		retCode = libusb_set_configuration(devh, config->bConfigurationValue);
+		retval = libusb_set_configuration(devh, config->bConfigurationValue);
 
 	libusb_free_config_descriptor(config);
 
-	return retCode;
+	return retval;
 }
 
 int jtag_libusb_choose_interface(struct libusb_device_handle *devh,
@@ -362,4 +362,9 @@ int jtag_libusb_get_pid(struct libusb_device *dev, uint16_t *pid)
 	}
 
 	return ERROR_FAIL;
+}
+
+int jtag_libusb_handle_events_completed(int *completed)
+{
+	return libusb_handle_events_completed(jtag_libusb_context, completed);
 }

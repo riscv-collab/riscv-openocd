@@ -39,8 +39,9 @@
 #include "cortex_m.h"
 #include "arm_semihosting.h"
 #include "target_request.h"
+#include <rtt/rtt.h>
 
-#define savedDCRDR  dbgbase  /* FIXME: using target->dbgbase to preserve DCRDR */
+#define SAVED_DCRDR  dbgbase  /* FIXME: using target->dbgbase to preserve DCRDR */
 
 #define ARMV7M_SCS_DCRSR	DCB_DCRSR
 #define ARMV7M_SCS_DCRDR	DCB_DCRDR
@@ -51,184 +52,17 @@ static inline struct hl_interface_s *target_to_adapter(struct target *target)
 }
 
 static int adapter_load_core_reg_u32(struct target *target,
-		uint32_t num, uint32_t *value)
+		uint32_t regsel, uint32_t *value)
 {
-	int retval;
 	struct hl_interface_s *adapter = target_to_adapter(target);
-
-	LOG_DEBUG("%s", __func__);
-
-	/* NOTE:  we "know" here that the register identifiers used
-	 * in the v7m header match the Cortex-M3 Debug Core Register
-	 * Selector values for R0..R15, xPSR, MSP, and PSP.
-	 */
-	switch (num) {
-	case 0 ... 18:
-		/* read a normal core register */
-		retval = adapter->layout->api->read_reg(adapter->handle, num, value);
-
-		if (retval != ERROR_OK) {
-			LOG_ERROR("JTAG failure %i", retval);
-			return ERROR_JTAG_DEVICE_ERROR;
-		}
-		LOG_DEBUG("load from core reg %i  value 0x%" PRIx32 "", (int)num, *value);
-		break;
-
-	case ARMV7M_FPSCR:
-		/* Floating-point Status and Registers */
-		retval = target_write_u32(target, ARMV7M_SCS_DCRSR, 33);
-		if (retval != ERROR_OK)
-			return retval;
-		retval = target_read_u32(target, ARMV7M_SCS_DCRDR, value);
-		if (retval != ERROR_OK)
-			return retval;
-		LOG_DEBUG("load from FPSCR  value 0x%" PRIx32, *value);
-		break;
-
-	case ARMV7M_S0 ... ARMV7M_S31:
-		/* Floating-point Status and Registers */
-		retval = target_write_u32(target, ARMV7M_SCS_DCRSR, num-ARMV7M_S0+64);
-		if (retval != ERROR_OK)
-			return retval;
-		retval = target_read_u32(target, ARMV7M_SCS_DCRDR, value);
-		if (retval != ERROR_OK)
-			return retval;
-		LOG_DEBUG("load from FPU reg S%d  value 0x%" PRIx32,
-			  (int)(num - ARMV7M_S0), *value);
-		break;
-
-	case ARMV7M_PRIMASK:
-	case ARMV7M_BASEPRI:
-	case ARMV7M_FAULTMASK:
-	case ARMV7M_CONTROL:
-		/* Cortex-M3 packages these four registers as bitfields
-		 * in one Debug Core register.  So say r0 and r2 docs;
-		 * it was removed from r1 docs, but still works.
-		 */
-		retval = adapter->layout->api->read_reg(adapter->handle, 20, value);
-		if (retval != ERROR_OK)
-			return retval;
-
-		switch (num) {
-		case ARMV7M_PRIMASK:
-			*value = buf_get_u32((uint8_t *) value, 0, 1);
-			break;
-
-		case ARMV7M_BASEPRI:
-			*value = buf_get_u32((uint8_t *) value, 8, 8);
-			break;
-
-		case ARMV7M_FAULTMASK:
-			*value = buf_get_u32((uint8_t *) value, 16, 1);
-			break;
-
-		case ARMV7M_CONTROL:
-			*value = buf_get_u32((uint8_t *) value, 24, 2);
-			break;
-		}
-
-		LOG_DEBUG("load from special reg %i value 0x%" PRIx32 "",
-			  (int)num, *value);
-		break;
-
-	default:
-		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
-
-	return ERROR_OK;
+	return adapter->layout->api->read_reg(adapter->handle, regsel, value);
 }
 
 static int adapter_store_core_reg_u32(struct target *target,
-		uint32_t num, uint32_t value)
+		uint32_t regsel, uint32_t value)
 {
-	int retval;
-	uint32_t reg;
-	struct armv7m_common *armv7m = target_to_armv7m(target);
 	struct hl_interface_s *adapter = target_to_adapter(target);
-
-	LOG_DEBUG("%s", __func__);
-
-	/* NOTE:  we "know" here that the register identifiers used
-	 * in the v7m header match the Cortex-M3 Debug Core Register
-	 * Selector values for R0..R15, xPSR, MSP, and PSP.
-	 */
-	switch (num) {
-	case 0 ... 18:
-		retval = adapter->layout->api->write_reg(adapter->handle, num, value);
-
-		if (retval != ERROR_OK) {
-			struct reg *r;
-
-			LOG_ERROR("JTAG failure");
-			r = armv7m->arm.core_cache->reg_list + num;
-			r->dirty = r->valid;
-			return ERROR_JTAG_DEVICE_ERROR;
-		}
-		LOG_DEBUG("write core reg %i value 0x%" PRIx32 "", (int)num, value);
-		break;
-
-	case ARMV7M_FPSCR:
-		/* Floating-point Status and Registers */
-		retval = target_write_u32(target, ARMV7M_SCS_DCRDR, value);
-		if (retval != ERROR_OK)
-			return retval;
-		retval = target_write_u32(target, ARMV7M_SCS_DCRSR, 33 | (1<<16));
-		if (retval != ERROR_OK)
-			return retval;
-		LOG_DEBUG("write FPSCR value 0x%" PRIx32, value);
-		break;
-
-	case ARMV7M_S0 ... ARMV7M_S31:
-		/* Floating-point Status and Registers */
-		retval = target_write_u32(target, ARMV7M_SCS_DCRDR, value);
-		if (retval != ERROR_OK)
-			return retval;
-		retval = target_write_u32(target, ARMV7M_SCS_DCRSR, (num-ARMV7M_S0+64) | (1<<16));
-		if (retval != ERROR_OK)
-			return retval;
-		LOG_DEBUG("write FPU reg S%d  value 0x%" PRIx32,
-			  (int)(num - ARMV7M_S0), value);
-		break;
-
-	case ARMV7M_PRIMASK:
-	case ARMV7M_BASEPRI:
-	case ARMV7M_FAULTMASK:
-	case ARMV7M_CONTROL:
-		/* Cortex-M3 packages these four registers as bitfields
-		 * in one Debug Core register.  So say r0 and r2 docs;
-		 * it was removed from r1 docs, but still works.
-		 */
-
-		adapter->layout->api->read_reg(adapter->handle, 20, &reg);
-
-		switch (num) {
-		case ARMV7M_PRIMASK:
-			buf_set_u32((uint8_t *) &reg, 0, 1, value);
-			break;
-
-		case ARMV7M_BASEPRI:
-			buf_set_u32((uint8_t *) &reg, 8, 8, value);
-			break;
-
-		case ARMV7M_FAULTMASK:
-			buf_set_u32((uint8_t *) &reg, 16, 1, value);
-			break;
-
-		case ARMV7M_CONTROL:
-			buf_set_u32((uint8_t *) &reg, 24, 2, value);
-			break;
-		}
-
-		adapter->layout->api->write_reg(adapter->handle, 20, reg);
-
-		LOG_DEBUG("write special reg %i value 0x%" PRIx32 " ", (int)num, value);
-		break;
-
-	default:
-		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
-
-	return ERROR_OK;
+	return adapter->layout->api->write_reg(adapter->handle, regsel, value);
 }
 
 static int adapter_examine_debug_reason(struct target *target)
@@ -345,7 +179,7 @@ static int adapter_init_arch_info(struct target *target,
 	armv7m->store_core_reg_u32 = adapter_store_core_reg_u32;
 
 	armv7m->examine_debug_reason = adapter_examine_debug_reason;
-	armv7m->stlink = true;
+	armv7m->is_hla_target = true;
 
 	target_register_timer_callback(hl_handle_target_request, 1,
 		TARGET_TIMER_TYPE_PERIODIC, target);
@@ -368,13 +202,13 @@ static int adapter_target_create(struct target *target,
 {
 	LOG_DEBUG("%s", __func__);
 	struct adiv5_private_config *pc = target->private_config;
-	if (pc != NULL && pc->ap_num > 0) {
+	if (pc && pc->ap_num > 0) {
 		LOG_ERROR("hla_target: invalid parameter -ap-num (> 0)");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
 	struct cortex_m_common *cortex_m = calloc(1, sizeof(struct cortex_m_common));
-	if (cortex_m == NULL) {
+	if (!cortex_m) {
 		LOG_ERROR("No memory creating target");
 		return ERROR_FAIL;
 	}
@@ -392,7 +226,7 @@ static int adapter_load_context(struct target *target)
 	for (int i = 0; i < num_regs; i++) {
 
 		struct reg *r = &armv7m->arm.core_cache->reg_list[i];
-		if (!r->valid)
+		if (r->exist && !r->valid)
 			armv7m->arm.read_core_reg(target, r, i, ARM_MODE_ANY);
 	}
 
@@ -409,7 +243,7 @@ static int adapter_debug_entry(struct target *target)
 	int retval;
 
 	/* preserve the DCRDR across halts */
-	retval = target_read_u32(target, DCB_DCRDR, &target->savedDCRDR);
+	retval = target_read_u32(target, DCB_DCRDR, &target->SAVED_DCRDR);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -433,7 +267,7 @@ static int adapter_debug_entry(struct target *target)
 		arm->map = armv7m_msp_reg_map;
 	} else {
 		unsigned control = buf_get_u32(arm->core_cache
-				->reg_list[ARMV7M_CONTROL].value, 0, 2);
+				->reg_list[ARMV7M_CONTROL].value, 0, 3);
 
 		/* is this thread privileged? */
 		arm->core_mode = control & 1
@@ -571,7 +405,7 @@ static int hl_deassert_reset(struct target *target)
 	if (jtag_reset_config & RESET_HAS_SRST)
 		adapter_deassert_reset();
 
-	target->savedDCRDR = 0;  /* clear both DCC busy bits on initial resume */
+	target->SAVED_DCRDR = 0;  /* clear both DCC busy bits on initial resume */
 
 	return target->reset_halt ? ERROR_OK : target_resume(target, 1, 0, 0, 0);
 }
@@ -647,8 +481,8 @@ static int adapter_resume(struct target *target, int current,
 
 	armv7m_restore_context(target);
 
-	/* restore savedDCRDR */
-	res = target_write_u32(target, DCB_DCRDR, target->savedDCRDR);
+	/* restore SAVED_DCRDR */
+	res = target_write_u32(target, DCB_DCRDR, target->SAVED_DCRDR);
 	if (res != ERROR_OK)
 		return res;
 
@@ -730,8 +564,8 @@ static int adapter_step(struct target *target, int current,
 
 	armv7m_restore_context(target);
 
-	/* restore savedDCRDR */
-	res = target_write_u32(target, DCB_DCRDR, target->savedDCRDR);
+	/* restore SAVED_DCRDR */
+	res = target_write_u32(target, DCB_DCRDR, target->SAVED_DCRDR);
 	if (res != ERROR_OK)
 		return res;
 
@@ -793,12 +627,19 @@ static const struct command_registration adapter_command_handlers[] = {
 	{
 		.chain = armv7m_trace_command_handlers,
 	},
+	{
+		.chain = rtt_target_command_handlers,
+	},
+	/* START_DEPRECATED_TPIU */
+	{
+		.chain = arm_tpiu_deprecated_command_handlers,
+	},
+	/* END_DEPRECATED_TPIU */
 	COMMAND_REGISTRATION_DONE
 };
 
 struct target_type hla_target = {
 	.name = "hla_target",
-	.deprecated_name = "stm32_stlink",
 
 	.init_target = adapter_init_target,
 	.deinit_target = cortex_m_deinit_target,

@@ -577,8 +577,6 @@ static int xmc4xxx_erase(struct flash_bank *bank, unsigned int first,
 
 		if (res != ERROR_OK)
 			goto clear_status_and_exit;
-
-		bank->sectors[i].is_erased = 1;
 	}
 
 clear_status_and_exit:
@@ -805,7 +803,7 @@ abort_write_and_exit:
 
 }
 
-static int xmc4xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_size)
+static int xmc4xxx_get_info_command(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct xmc4xxx_flash_bank *fb = bank->driver_priv;
 	uint32_t scu_idcode;
@@ -914,9 +912,7 @@ static int xmc4xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_
 		break;
 
 	default:
-		snprintf(buf, buf_size,
-			 "Cannot identify target as an XMC4xxx. SCU_ID: %"PRIx32"\n",
-			 scu_idcode);
+		command_print_sameline(cmd, "Cannot identify target as an XMC4xxx. SCU_ID: %"PRIx32 "\n", scu_idcode);
 		return ERROR_OK;
 	}
 
@@ -943,12 +939,10 @@ static int xmc4xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_
 		}
 	}
 
-	if (rev_str != NULL)
-		snprintf(buf, buf_size, "%s - Rev: %s%s",
-			 dev_str, rev_str, prot_str);
+	if (rev_str)
+		command_print_sameline(cmd, "%s - Rev: %s%s", dev_str, rev_str, prot_str);
 	else
-		snprintf(buf, buf_size, "%s - Rev: unknown (0x%01x)%s",
-			 dev_str, rev_id, prot_str);
+		command_print_sameline(cmd, "%s - Rev: unknown (0x%01x)%s", dev_str, rev_id, prot_str);
 
 	return ERROR_OK;
 }
@@ -1274,12 +1268,12 @@ COMMAND_HANDLER(xmc4xxx_handle_flash_password_command)
 	errno = 0;
 
 	/* We skip over the flash bank */
-	fb->pw1 = strtol(CMD_ARGV[1], NULL, 16);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], fb->pw1);
 
 	if (errno)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	fb->pw2 = strtol(CMD_ARGV[2], NULL, 16);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], fb->pw2);
 
 	if (errno)
 		return ERROR_COMMAND_SYNTAX_ERROR;

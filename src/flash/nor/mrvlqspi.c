@@ -37,7 +37,7 @@
 #define QSPI_W_EN (0x1)
 #define QSPI_SS_DISABLE (0x0)
 #define QSPI_SS_ENABLE (0x1)
-#define WRITE_DISBALE (0x0)
+#define WRITE_DISABLE (0x0)
 #define WRITE_ENABLE (0x1)
 
 #define QSPI_TIMEOUT (1000)
@@ -761,7 +761,7 @@ static int mrvlqspi_flash_write(struct flash_bank *bank, const uint8_t *buffer,
 	return retval;
 }
 
-int mrvlqspi_flash_read(struct flash_bank *bank, uint8_t *buffer,
+static int mrvlqspi_flash_read(struct flash_bank *bank, uint8_t *buffer,
 				uint32_t offset, uint32_t count)
 {
 	struct target *target = bank->target;
@@ -882,7 +882,7 @@ static int mrvlqspi_probe(struct flash_bank *bank)
 	/* create and fill sectors array */
 	bank->num_sectors = mrvlqspi_info->dev->size_in_bytes / sectorsize;
 	sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
-	if (sectors == NULL) {
+	if (!sectors) {
 		LOG_ERROR("not enough memory");
 		return ERROR_FAIL;
 	}
@@ -914,17 +914,16 @@ static int mrvlqspi_flash_erase_check(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
-int mrvlqspi_get_info(struct flash_bank *bank, char *buf, int buf_size)
+static int mrvlqspi_get_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct mrvlqspi_flash_bank *mrvlqspi_info = bank->driver_priv;
 
 	if (!(mrvlqspi_info->probed)) {
-		snprintf(buf, buf_size,
-			"\nQSPI flash bank not probed yet\n");
+		command_print_sameline(cmd, "\nQSPI flash bank not probed yet\n");
 		return ERROR_OK;
 	}
 
-	snprintf(buf, buf_size, "\nQSPI flash information:\n"
+	command_print_sameline(cmd, "\nQSPI flash information:\n"
 		"  Device \'%s\' ID 0x%08" PRIx32 "\n",
 		mrvlqspi_info->dev->name, mrvlqspi_info->dev->device_id);
 
@@ -939,7 +938,7 @@ FLASH_BANK_COMMAND_HANDLER(mrvlqspi_flash_bank_command)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
 	mrvlqspi_info = malloc(sizeof(struct mrvlqspi_flash_bank));
-	if (mrvlqspi_info == NULL) {
+	if (!mrvlqspi_info) {
 		LOG_ERROR("not enough memory");
 		return ERROR_FAIL;
 	}

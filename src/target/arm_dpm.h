@@ -137,8 +137,12 @@ struct arm_dpm {
 	struct dpm_bp *dbp;
 	struct dpm_wp *dwp;
 
-	/** Address of the instruction which triggered a watchpoint. */
-	target_addr_t wp_pc;
+	/**
+	 * Target dependent watchpoint address.
+	 * Either the address of the instruction which triggered a watchpoint
+	 * or the memory address whose access triggered a watchpoint.
+	 */
+	target_addr_t wp_addr;
 
 	/** Recent value of DSCR. */
 	uint32_t dscr;
@@ -237,7 +241,7 @@ void arm_dpm_report_dscr(struct arm_dpm *dpm, uint32_t dcsr);
 /* OSLSR (OS Lock Status Register) bits */
 #define OSLSR_OSLM0                      (1 << 0)
 #define OSLSR_OSLK                       (1 << 1)
-#define OSLSR_nTT                        (1 << 2)
+#define OSLSR_NTT                        (1 << 2)
 #define OSLSR_OSLM1                      (1 << 3)
 #define OSLSR_OSLM                       (OSLSR_OSLM0|OSLSR_OSLM1)
 

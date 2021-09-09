@@ -607,15 +607,15 @@ static int samv_write(struct flash_bank *bank, const uint8_t *buffer,
 	return ERROR_OK;
 }
 
-static int samv_get_info(struct flash_bank *bank, char *buf, int buf_size)
+static int samv_get_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct samv_flash_bank *samv_info = bank->driver_priv;
 	if (!samv_info->probed) {
 		int r = samv_probe(bank);
-		if (ERROR_OK != r)
+		if (r != ERROR_OK)
 			return r;
 	}
-	snprintf(buf, buf_size, "Cortex-M7 detected with %" PRIu32 " kB flash",
+	command_print_sameline(cmd, "Cortex-M7 detected with %" PRIu32 " kB flash\n",
 			bank->size / 1024);
 	return ERROR_OK;
 }
@@ -661,7 +661,7 @@ COMMAND_HANDLER(samv_handle_gpnvm_command)
 			return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	unsigned v;
+	unsigned v = 0;
 	if (!strcmp("show", CMD_ARGV[0])) {
 		if (who == -1) {
 showall:
@@ -676,6 +676,9 @@ showall:
 		}
 		if ((who >= 0) && (((unsigned)who) < SAMV_NUM_GPNVM_BITS)) {
 			r = samv_get_gpnvm(target, who, &v);
+			if (r != ERROR_OK)
+				return r;
+
 			command_print(CMD, "samv-gpnvm%u: %u", who, v);
 			return r;
 		} else {

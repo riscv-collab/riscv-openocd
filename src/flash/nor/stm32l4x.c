@@ -24,9 +24,10 @@
 #endif
 
 #include "imp.h"
+#include <helper/align.h>
 #include <helper/binarybuffer.h>
 #include <target/algorithm.h>
-#include <target/armv7m.h>
+#include <target/cortex_m.h>
 #include "bits.h"
 #include "stm32l4x.h"
 
@@ -79,10 +80,12 @@
  *
  * RM0461 (STM32WLEx)
  * http://www.st.com/resource/en/reference_manual/dm00530369.pdf
+ *
+ * RM0453 (STM32WL5x)
+ * http://www.st.com/resource/en/reference_manual/dm00451556.pdf
  */
 
-/*
- * STM32G0xxx series for reference.
+/* STM32G0xxx series for reference.
  *
  * RM0444 (STM32G0x1)
  * http://www.st.com/resource/en/reference_manual/dm00371828.pdf
@@ -91,10 +94,9 @@
  * http://www.st.com/resource/en/reference_manual/dm00463896.pdf
  */
 
-/*
- * STM32G4xxx series for reference.
+/* STM32G4xxx series for reference.
  *
- * RM0440 (STM32G43x/44x/47x/48x)
+ * RM0440 (STM32G43x/44x/47x/48x/49x/4Ax)
  * http://www.st.com/resource/en/reference_manual/dm00355726.pdf
  *
  * Cat. 2 devices have single bank only, page size is 2kByte.
@@ -104,11 +106,113 @@
  *
  * Bank mode is controlled by bit 22 (DBANK) in option bytes register.
  * Both banks are treated as a single OpenOCD bank.
+ *
+ * Cat. 4 devices have single bank only, page size is 2kByte.
+ */
+
+/* STM32L5xxx series for reference.
+ *
+ * RM0428 (STM32L552xx/STM32L562xx)
+ * http://www.st.com/resource/en/reference_manual/dm00346336.pdf
  */
 
 /* Erase time can be as high as 25ms, 10x this and assume it's toast... */
 
 #define FLASH_ERASE_TIMEOUT 250
+#define FLASH_WRITE_TIMEOUT 50
+
+
+/* relevant STM32L4 flags ****************************************************/
+#define F_NONE              0
+/* this flag indicates if the device flash is with dual bank architecture */
+#define F_HAS_DUAL_BANK     BIT(0)
+/* this flags is used for dual bank devices only, it indicates if the
+ * 4 WRPxx are usable if the device is configured in single-bank mode */
+#define F_USE_ALL_WRPXX     BIT(1)
+/* this flag indicates if the device embeds a TrustZone security feature */
+#define F_HAS_TZ            BIT(2)
+/* this flag indicates if the device has the same flash registers as STM32L5 */
+#define F_HAS_L5_FLASH_REGS BIT(3)
+/* this flag indicates that programming should be done in quad-word
+ * the default programming word size is double-word */
+#define F_QUAD_WORD_PROG    BIT(4)
+/* end of STM32L4 flags ******************************************************/
+
+
+enum stm32l4_flash_reg_index {
+	STM32_FLASH_ACR_INDEX,
+	STM32_FLASH_KEYR_INDEX,
+	STM32_FLASH_OPTKEYR_INDEX,
+	STM32_FLASH_SR_INDEX,
+	STM32_FLASH_CR_INDEX,
+	/* for some devices like STM32WL5x, the CPU2 have a dedicated C2CR register w/o LOCKs,
+	 * so it uses the C2CR for flash operations and CR for checking locks and locking */
+	STM32_FLASH_CR_WLK_INDEX, /* FLASH_CR_WITH_LOCK */
+	STM32_FLASH_OPTR_INDEX,
+	STM32_FLASH_WRP1AR_INDEX,
+	STM32_FLASH_WRP1BR_INDEX,
+	STM32_FLASH_WRP2AR_INDEX,
+	STM32_FLASH_WRP2BR_INDEX,
+	STM32_FLASH_REG_INDEX_NUM,
+};
+
+enum stm32l4_rdp {
+	RDP_LEVEL_0   = 0xAA,
+	RDP_LEVEL_0_5 = 0x55, /* for devices with TrustZone enabled */
+	RDP_LEVEL_1   = 0x00,
+	RDP_LEVEL_2   = 0xCC
+};
+
+static const uint32_t stm32l4_flash_regs[STM32_FLASH_REG_INDEX_NUM] = {
+	[STM32_FLASH_ACR_INDEX]      = 0x000,
+	[STM32_FLASH_KEYR_INDEX]     = 0x008,
+	[STM32_FLASH_OPTKEYR_INDEX]  = 0x00C,
+	[STM32_FLASH_SR_INDEX]       = 0x010,
+	[STM32_FLASH_CR_INDEX]       = 0x014,
+	[STM32_FLASH_OPTR_INDEX]     = 0x020,
+	[STM32_FLASH_WRP1AR_INDEX]   = 0x02C,
+	[STM32_FLASH_WRP1BR_INDEX]   = 0x030,
+	[STM32_FLASH_WRP2AR_INDEX]   = 0x04C,
+	[STM32_FLASH_WRP2BR_INDEX]   = 0x050,
+};
+
+static const uint32_t stm32wl_cpu2_flash_regs[STM32_FLASH_REG_INDEX_NUM] = {
+	[STM32_FLASH_ACR_INDEX]      = 0x000,
+	[STM32_FLASH_KEYR_INDEX]     = 0x008,
+	[STM32_FLASH_OPTKEYR_INDEX]  = 0x010,
+	[STM32_FLASH_SR_INDEX]       = 0x060,
+	[STM32_FLASH_CR_INDEX]       = 0x064,
+	[STM32_FLASH_CR_WLK_INDEX]   = 0x014,
+	[STM32_FLASH_OPTR_INDEX]     = 0x020,
+	[STM32_FLASH_WRP1AR_INDEX]   = 0x02C,
+	[STM32_FLASH_WRP1BR_INDEX]   = 0x030,
+};
+
+static const uint32_t stm32l5_ns_flash_regs[STM32_FLASH_REG_INDEX_NUM] = {
+	[STM32_FLASH_ACR_INDEX]      = 0x000,
+	[STM32_FLASH_KEYR_INDEX]     = 0x008, /* NSKEYR */
+	[STM32_FLASH_OPTKEYR_INDEX]  = 0x010,
+	[STM32_FLASH_SR_INDEX]       = 0x020, /* NSSR */
+	[STM32_FLASH_CR_INDEX]       = 0x028, /* NSCR */
+	[STM32_FLASH_OPTR_INDEX]     = 0x040,
+	[STM32_FLASH_WRP1AR_INDEX]   = 0x058,
+	[STM32_FLASH_WRP1BR_INDEX]   = 0x05C,
+	[STM32_FLASH_WRP2AR_INDEX]   = 0x068,
+	[STM32_FLASH_WRP2BR_INDEX]   = 0x06C,
+};
+
+static const uint32_t stm32l5_s_flash_regs[STM32_FLASH_REG_INDEX_NUM] = {
+	[STM32_FLASH_ACR_INDEX]      = 0x000,
+	[STM32_FLASH_KEYR_INDEX]     = 0x00C, /* SECKEYR */
+	[STM32_FLASH_OPTKEYR_INDEX]  = 0x010,
+	[STM32_FLASH_SR_INDEX]       = 0x024, /* SECSR */
+	[STM32_FLASH_CR_INDEX]       = 0x02C, /* SECCR */
+	[STM32_FLASH_OPTR_INDEX]     = 0x040,
+	[STM32_FLASH_WRP1AR_INDEX]   = 0x058,
+	[STM32_FLASH_WRP1BR_INDEX]   = 0x05C,
+	[STM32_FLASH_WRP2AR_INDEX]   = 0x068,
+	[STM32_FLASH_WRP2BR_INDEX]   = 0x06C,
+};
 
 struct stm32l4_rev {
 	const uint16_t rev;
@@ -121,9 +225,11 @@ struct stm32l4_part_info {
 	const struct stm32l4_rev *revs;
 	const size_t num_revs;
 	const uint16_t max_flash_size_kb;
-	const bool has_dual_bank;
+	const uint32_t flags; /* one bit per feature, see STM32L4 flags: macros F_XXX */
 	const uint32_t flash_regs_base;
 	const uint32_t fsize_addr;
+	const uint32_t otp_base;
+	const uint32_t otp_size;
 };
 
 struct stm32l4_flash_bank {
@@ -133,12 +239,37 @@ struct stm32l4_flash_bank {
 	bool dual_bank_mode;
 	int hole_sectors;
 	uint32_t user_bank_size;
+	uint32_t data_width;
+	uint32_t cr_bker_mask;
+	uint32_t sr_bsy_mask;
 	uint32_t wrpxxr_mask;
 	const struct stm32l4_part_info *part_info;
+	uint32_t flash_regs_base;
+	const uint32_t *flash_regs;
+	bool otp_enabled;
+	bool use_flashloader;
+	enum stm32l4_rdp rdp;
+	bool tzen;
+	uint32_t optr;
 };
 
-/* human readable list of families this drivers supports */
-static const char *device_families = "STM32L4/L4+/WB/WL/G4/G0";
+enum stm32_bank_id {
+	STM32_BANK1,
+	STM32_BANK2,
+	STM32_ALL_BANKS
+};
+
+struct stm32l4_wrp {
+	enum stm32l4_flash_reg_index reg_idx;
+	uint32_t value;
+	bool used;
+	int first;
+	int last;
+	int offset;
+};
+
+/* human readable list of families this drivers supports (sorted alphabetically) */
+static const char *device_families = "STM32G0/G4/L4/L4+/L5/U5/WB/WL";
 
 static const struct stm32l4_rev stm32_415_revs[] = {
 	{ 0x1000, "1" }, { 0x1001, "2" }, { 0x1003, "3" }, { 0x1007, "4" }
@@ -168,6 +299,10 @@ static const struct stm32l4_rev stm32_466_revs[] = {
 	{ 0x1000, "A" }, { 0x1001, "Z" }, { 0x2000, "B" },
 };
 
+static const struct stm32l4_rev stm32_467_revs[] = {
+	{ 0x1000, "A" },
+};
+
 static const struct stm32l4_rev stm32_468_revs[] = {
 	{ 0x1000, "A" }, { 0x2000, "B" }, { 0x2001, "Z" },
 };
@@ -182,6 +317,18 @@ static const struct stm32l4_rev stm32_470_revs[] = {
 
 static const struct stm32l4_rev stm32_471_revs[] = {
 	{ 0x1001, "Z" },
+};
+
+static const struct stm32l4_rev stm32_472_revs[] = {
+	{ 0x1000, "A" }, { 0x2000, "B" },
+};
+
+static const struct stm32l4_rev stm32_479_revs[] = {
+	{ 0x1000, "A" },
+};
+
+static const struct stm32l4_rev stm32_482_revs[] = {
+	{ 0x1000, "A" }, { 0x1001, "Z" }, { 0x1003, "Y" }, { 0x2000, "B" },
 };
 
 static const struct stm32l4_rev stm32_495_revs[] = {
@@ -203,9 +350,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_415_revs),
 	  .device_str            = "STM32L47/L48xx",
 	  .max_flash_size_kb     = 1024,
-	  .has_dual_bank         = true,
+	  .flags                 = F_HAS_DUAL_BANK,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x435,
@@ -213,9 +362,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_435_revs),
 	  .device_str            = "STM32L43/L44xx",
 	  .max_flash_size_kb     = 256,
-	  .has_dual_bank         = false,
+	  .flags                 = F_NONE,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x460,
@@ -223,9 +374,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_460_revs),
 	  .device_str            = "STM32G07/G08xx",
 	  .max_flash_size_kb     = 128,
-	  .has_dual_bank         = false,
+	  .flags                 = F_NONE,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x461,
@@ -233,9 +386,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_461_revs),
 	  .device_str            = "STM32L49/L4Axx",
 	  .max_flash_size_kb     = 1024,
-	  .has_dual_bank         = true,
+	  .flags                 = F_HAS_DUAL_BANK,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x462,
@@ -243,9 +398,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_462_revs),
 	  .device_str            = "STM32L45/L46xx",
 	  .max_flash_size_kb     = 512,
-	  .has_dual_bank         = false,
+	  .flags                 = F_NONE,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x464,
@@ -253,9 +410,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_464_revs),
 	  .device_str            = "STM32L41/L42xx",
 	  .max_flash_size_kb     = 128,
-	  .has_dual_bank         = false,
+	  .flags                 = F_NONE,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x466,
@@ -263,9 +422,23 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_466_revs),
 	  .device_str            = "STM32G03/G04xx",
 	  .max_flash_size_kb     = 64,
-	  .has_dual_bank         = false,
+	  .flags                 = F_NONE,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
+	},
+	{
+	  .id                    = 0x467,
+	  .revs                  = stm32_467_revs,
+	  .num_revs              = ARRAY_SIZE(stm32_467_revs),
+	  .device_str            = "STM32G0Bx/G0Cx",
+	  .max_flash_size_kb     = 512,
+	  .flags                 = F_HAS_DUAL_BANK,
+	  .flash_regs_base       = 0x40022000,
+	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x468,
@@ -273,9 +446,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_468_revs),
 	  .device_str            = "STM32G43/G44xx",
 	  .max_flash_size_kb     = 128,
-	  .has_dual_bank         = false,
+	  .flags                 = F_NONE,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x469,
@@ -283,9 +458,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_469_revs),
 	  .device_str            = "STM32G47/G48xx",
 	  .max_flash_size_kb     = 512,
-	  .has_dual_bank         = true,
+	  .flags                 = F_HAS_DUAL_BANK | F_USE_ALL_WRPXX,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x470,
@@ -293,9 +470,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_470_revs),
 	  .device_str            = "STM32L4R/L4Sxx",
 	  .max_flash_size_kb     = 2048,
-	  .has_dual_bank         = true,
+	  .flags                 = F_HAS_DUAL_BANK | F_USE_ALL_WRPXX,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x471,
@@ -303,9 +482,47 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_471_revs),
 	  .device_str            = "STM32L4P5/L4Q5x",
 	  .max_flash_size_kb     = 1024,
-	  .has_dual_bank         = true,
+	  .flags                 = F_HAS_DUAL_BANK | F_USE_ALL_WRPXX,
 	  .flash_regs_base       = 0x40022000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
+	},
+	{
+	  .id                    = 0x472,
+	  .revs                  = stm32_472_revs,
+	  .num_revs              = ARRAY_SIZE(stm32_472_revs),
+	  .device_str            = "STM32L55/L56xx",
+	  .max_flash_size_kb     = 512,
+	  .flags                 = F_HAS_DUAL_BANK | F_USE_ALL_WRPXX | F_HAS_TZ | F_HAS_L5_FLASH_REGS,
+	  .flash_regs_base       = 0x40022000,
+	  .fsize_addr            = 0x0BFA05E0,
+	  .otp_base              = 0x0BFA0000,
+	  .otp_size              = 512,
+	},
+	{
+	  .id                    = 0x479,
+	  .revs                  = stm32_479_revs,
+	  .num_revs              = ARRAY_SIZE(stm32_479_revs),
+	  .device_str            = "STM32G49/G4Axx",
+	  .max_flash_size_kb     = 512,
+	  .flags                 = F_NONE,
+	  .flash_regs_base       = 0x40022000,
+	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
+	},
+	{
+	  .id                    = 0x482,
+	  .revs                  = stm32_482_revs,
+	  .num_revs              = ARRAY_SIZE(stm32_482_revs),
+	  .device_str            = "STM32U57/U58xx",
+	  .max_flash_size_kb     = 2048,
+	  .flags                 = F_HAS_DUAL_BANK | F_QUAD_WORD_PROG | F_HAS_TZ | F_HAS_L5_FLASH_REGS,
+	  .flash_regs_base       = 0x40022000,
+	  .fsize_addr            = 0x0BFA07A0,
+	  .otp_base              = 0x0BFA0000,
+	  .otp_size              = 512,
 	},
 	{
 	  .id                    = 0x495,
@@ -313,9 +530,11 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_495_revs),
 	  .device_str            = "STM32WB5x",
 	  .max_flash_size_kb     = 1024,
-	  .has_dual_bank         = false,
+	  .flags                 = F_NONE,
 	  .flash_regs_base       = 0x58004000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x496,
@@ -323,19 +542,23 @@ static const struct stm32l4_part_info stm32l4_parts[] = {
 	  .num_revs              = ARRAY_SIZE(stm32_496_revs),
 	  .device_str            = "STM32WB3x",
 	  .max_flash_size_kb     = 512,
-	  .has_dual_bank         = false,
+	  .flags                 = F_NONE,
 	  .flash_regs_base       = 0x58004000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 	{
 	  .id                    = 0x497,
 	  .revs                  = stm32_497_revs,
 	  .num_revs              = ARRAY_SIZE(stm32_497_revs),
-	  .device_str            = "STM32WLEx",
+	  .device_str            = "STM32WLEx/WL5x",
 	  .max_flash_size_kb     = 256,
-	  .has_dual_bank         = false,
+	  .flags                 = F_NONE,
 	  .flash_regs_base       = 0x58004000,
 	  .fsize_addr            = 0x1FFF75E0,
+	  .otp_base              = 0x1FFF7000,
+	  .otp_size              = 1024,
 	},
 };
 
@@ -347,25 +570,151 @@ FLASH_BANK_COMMAND_HANDLER(stm32l4_flash_bank_command)
 	if (CMD_ARGC < 6)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	stm32l4_info = malloc(sizeof(struct stm32l4_flash_bank));
+	/* fix-up bank base address: 0 is used for normal flash memory */
+	if (bank->base == 0)
+		bank->base = STM32_FLASH_BANK_BASE;
+
+	stm32l4_info = calloc(1, sizeof(struct stm32l4_flash_bank));
 	if (!stm32l4_info)
 		return ERROR_FAIL; /* Checkme: What better error to use?*/
 	bank->driver_priv = stm32l4_info;
 
-	/* The flash write must be aligned to a double word (8-bytes) boundary.
-	 * Ask the flash infrastructure to ensure required alignment */
-	bank->write_start_alignment = bank->write_end_alignment = 8;
-
 	stm32l4_info->probed = false;
+	stm32l4_info->otp_enabled = false;
 	stm32l4_info->user_bank_size = bank->size;
+	stm32l4_info->use_flashloader = true;
 
 	return ERROR_OK;
+}
+
+/* bitmap helper extension */
+struct range {
+	unsigned int start;
+	unsigned int end;
+};
+
+static void bitmap_to_ranges(unsigned long *bitmap, unsigned int nbits,
+		struct range *ranges, unsigned int *ranges_count) {
+	*ranges_count = 0;
+	bool last_bit = 0, cur_bit;
+	for (unsigned int i = 0; i < nbits; i++) {
+		cur_bit = test_bit(i, bitmap);
+
+		if (cur_bit && !last_bit) {
+			(*ranges_count)++;
+			ranges[*ranges_count - 1].start = i;
+			ranges[*ranges_count - 1].end = i;
+		} else if (cur_bit && last_bit) {
+			/* update (increment) the end this range */
+			ranges[*ranges_count - 1].end = i;
+		}
+
+		last_bit = cur_bit;
+	}
+}
+
+static inline int range_print_one(struct range *range, char *str)
+{
+	if (range->start == range->end)
+		return sprintf(str, "[%d]", range->start);
+
+	return sprintf(str, "[%d,%d]", range->start, range->end);
+}
+
+static char *range_print_alloc(struct range *ranges, unsigned int ranges_count)
+{
+	/* each range will be printed like the following: [start,end]
+	 * start and end, both are unsigned int, an unsigned int takes 10 characters max
+	 * plus 3 characters for '[', ',' and ']'
+	 * thus means each range can take maximum 23 character
+	 * after each range we add a ' ' as separator and finally we need the '\0'
+	 * if the ranges_count is zero we reserve one char for '\0' to return an empty string */
+	char *str = calloc(1, ranges_count * (24 * sizeof(char)) + 1);
+	char *ptr = str;
+
+	for (unsigned int i = 0; i < ranges_count; i++) {
+		ptr += range_print_one(&(ranges[i]), ptr);
+
+		if (i < ranges_count - 1)
+			*(ptr++) = ' ';
+	}
+
+	return str;
+}
+
+/* end of bitmap helper extension */
+
+static inline bool stm32l4_is_otp(struct flash_bank *bank)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	return bank->base == stm32l4_info->part_info->otp_base;
+}
+
+static int stm32l4_otp_enable(struct flash_bank *bank, bool enable)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+
+	if (!stm32l4_is_otp(bank))
+		return ERROR_FAIL;
+
+	char *op_str = enable ? "enabled" : "disabled";
+
+	LOG_INFO("OTP memory (bank #%d) is %s%s for write commands",
+			bank->bank_number,
+			stm32l4_info->otp_enabled == enable ? "already " : "",
+			op_str);
+
+	stm32l4_info->otp_enabled = enable;
+
+	return ERROR_OK;
+}
+
+static inline bool stm32l4_otp_is_enabled(struct flash_bank *bank)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	return stm32l4_info->otp_enabled;
+}
+
+static void stm32l4_sync_rdp_tzen(struct flash_bank *bank)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+
+	bool tzen = false;
+
+	if (stm32l4_info->part_info->flags & F_HAS_TZ)
+		tzen = (stm32l4_info->optr & FLASH_TZEN) != 0;
+
+	uint32_t rdp = stm32l4_info->optr & FLASH_RDP_MASK;
+
+	/* for devices without TrustZone:
+	 *   RDP level 0 and 2 values are to 0xAA and 0xCC
+	 *   Any other value corresponds to RDP level 1
+	 * for devices with TrusZone:
+	 *   RDP level 0 and 2 values are 0xAA and 0xCC
+	 *   RDP level 0.5 value is 0x55 only if TZEN = 1
+	 *   Any other value corresponds to RDP level 1, including 0x55 if TZEN = 0
+	 */
+
+	if (rdp != RDP_LEVEL_0 && rdp != RDP_LEVEL_2) {
+		if (!tzen || (tzen && rdp != RDP_LEVEL_0_5))
+			rdp = RDP_LEVEL_1;
+	}
+
+	stm32l4_info->tzen = tzen;
+	stm32l4_info->rdp = rdp;
 }
 
 static inline uint32_t stm32l4_get_flash_reg(struct flash_bank *bank, uint32_t reg_offset)
 {
 	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
-	return stm32l4_info->part_info->flash_regs_base + reg_offset;
+	return stm32l4_info->flash_regs_base + reg_offset;
+}
+
+static inline uint32_t stm32l4_get_flash_reg_by_index(struct flash_bank *bank,
+	enum stm32l4_flash_reg_index reg_index)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	return stm32l4_get_flash_reg(bank, stm32l4_info->flash_regs[reg_index]);
 }
 
 static inline int stm32l4_read_flash_reg(struct flash_bank *bank, uint32_t reg_offset, uint32_t *value)
@@ -373,23 +722,38 @@ static inline int stm32l4_read_flash_reg(struct flash_bank *bank, uint32_t reg_o
 	return target_read_u32(bank->target, stm32l4_get_flash_reg(bank, reg_offset), value);
 }
 
+static inline int stm32l4_read_flash_reg_by_index(struct flash_bank *bank,
+	enum stm32l4_flash_reg_index reg_index, uint32_t *value)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	return stm32l4_read_flash_reg(bank, stm32l4_info->flash_regs[reg_index], value);
+}
+
 static inline int stm32l4_write_flash_reg(struct flash_bank *bank, uint32_t reg_offset, uint32_t value)
 {
 	return target_write_u32(bank->target, stm32l4_get_flash_reg(bank, reg_offset), value);
 }
 
+static inline int stm32l4_write_flash_reg_by_index(struct flash_bank *bank,
+	enum stm32l4_flash_reg_index reg_index, uint32_t value)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	return stm32l4_write_flash_reg(bank, stm32l4_info->flash_regs[reg_index], value);
+}
+
 static int stm32l4_wait_status_busy(struct flash_bank *bank, int timeout)
 {
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
 	uint32_t status;
 	int retval = ERROR_OK;
 
 	/* wait for busy to clear */
 	for (;;) {
-		retval = stm32l4_read_flash_reg(bank, STM32_FLASH_SR, &status);
+		retval = stm32l4_read_flash_reg_by_index(bank, STM32_FLASH_SR_INDEX, &status);
 		if (retval != ERROR_OK)
 			return retval;
 		LOG_DEBUG("status: 0x%" PRIx32 "", status);
-		if ((status & FLASH_BSY) == 0)
+		if ((status & stm32l4_info->sr_bsy_mask) == 0)
 			break;
 		if (timeout-- <= 0) {
 			LOG_ERROR("timed out waiting for flash");
@@ -397,7 +761,6 @@ static int stm32l4_wait_status_busy(struct flash_bank *bank, int timeout)
 		}
 		alive_sleep(1);
 	}
-
 
 	if (status & FLASH_WRPERR) {
 		LOG_ERROR("stm32x device protected");
@@ -411,20 +774,71 @@ static int stm32l4_wait_status_busy(struct flash_bank *bank, int timeout)
 		/* If this operation fails, we ignore it and report the original
 		 * retval
 		 */
-		stm32l4_write_flash_reg(bank, STM32_FLASH_SR, status & FLASH_ERROR);
+		stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_SR_INDEX, status & FLASH_ERROR);
 	}
 
 	return retval;
 }
 
+/** set all FLASH_SECBB registers to the same value */
+static int stm32l4_set_secbb(struct flash_bank *bank, uint32_t value)
+{
+	/* This function should be used only with device with TrustZone, do just a security check */
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	assert(stm32l4_info->part_info->flags & F_HAS_TZ);
+
+	/* based on RM0438 Rev6 for STM32L5x devices:
+	 * to modify a page block-based security attribution, it is recommended to
+	 *  1- check that no flash operation is ongoing on the related page
+	 *  2- add ISB instruction after modifying the page security attribute in SECBBxRy
+	 *     this step is not need in case of JTAG direct access
+	 */
+	int retval = stm32l4_wait_status_busy(bank, FLASH_ERASE_TIMEOUT);
+	if (retval != ERROR_OK)
+		return retval;
+
+	/* write SECBBxRy registers */
+	LOG_DEBUG("setting secure block-based areas registers (SECBBxRy) to 0x%08x", value);
+
+	const uint8_t secbb_regs[] = {
+			FLASH_SECBB1(1), FLASH_SECBB1(2), FLASH_SECBB1(3), FLASH_SECBB1(4), /* bank 1 SECBB register offsets */
+			FLASH_SECBB2(1), FLASH_SECBB2(2), FLASH_SECBB2(3), FLASH_SECBB2(4)  /* bank 2 SECBB register offsets */
+	};
+
+
+	unsigned int num_secbb_regs = ARRAY_SIZE(secbb_regs);
+
+	/* in single bank mode, it's useless to modify FLASH_SECBB2Rx registers
+	 * then consider only the first half of secbb_regs
+	 */
+	if (!stm32l4_info->dual_bank_mode)
+		num_secbb_regs /= 2;
+
+	for (unsigned int i = 0; i < num_secbb_regs; i++) {
+		retval = stm32l4_write_flash_reg(bank, secbb_regs[i], value);
+		if (retval != ERROR_OK)
+			return retval;
+	}
+
+	return ERROR_OK;
+}
+
+static inline int stm32l4_get_flash_cr_with_lock_index(struct flash_bank *bank)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	return (stm32l4_info->flash_regs[STM32_FLASH_CR_WLK_INDEX]) ?
+		STM32_FLASH_CR_WLK_INDEX : STM32_FLASH_CR_INDEX;
+}
+
 static int stm32l4_unlock_reg(struct flash_bank *bank)
 {
+	const uint32_t flash_cr_index = stm32l4_get_flash_cr_with_lock_index(bank);
 	uint32_t ctrl;
 
 	/* first check if not already unlocked
 	 * otherwise writing on STM32_FLASH_KEYR will fail
 	 */
-	int retval = stm32l4_read_flash_reg(bank, STM32_FLASH_CR, &ctrl);
+	int retval = stm32l4_read_flash_reg_by_index(bank, flash_cr_index, &ctrl);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -432,15 +846,15 @@ static int stm32l4_unlock_reg(struct flash_bank *bank)
 		return ERROR_OK;
 
 	/* unlock flash registers */
-	retval = stm32l4_write_flash_reg(bank, STM32_FLASH_KEYR, KEY1);
+	retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_KEYR_INDEX, KEY1);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = stm32l4_write_flash_reg(bank, STM32_FLASH_KEYR, KEY2);
+	retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_KEYR_INDEX, KEY2);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = stm32l4_read_flash_reg(bank, STM32_FLASH_CR, &ctrl);
+	retval = stm32l4_read_flash_reg_by_index(bank, flash_cr_index, &ctrl);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -454,9 +868,10 @@ static int stm32l4_unlock_reg(struct flash_bank *bank)
 
 static int stm32l4_unlock_option_reg(struct flash_bank *bank)
 {
+	const uint32_t flash_cr_index = stm32l4_get_flash_cr_with_lock_index(bank);
 	uint32_t ctrl;
 
-	int retval = stm32l4_read_flash_reg(bank, STM32_FLASH_CR, &ctrl);
+	int retval = stm32l4_read_flash_reg_by_index(bank, flash_cr_index, &ctrl);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -464,15 +879,15 @@ static int stm32l4_unlock_option_reg(struct flash_bank *bank)
 		return ERROR_OK;
 
 	/* unlock option registers */
-	retval = stm32l4_write_flash_reg(bank, STM32_FLASH_OPTKEYR, OPTKEY1);
+	retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_OPTKEYR_INDEX, OPTKEY1);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = stm32l4_write_flash_reg(bank, STM32_FLASH_OPTKEYR, OPTKEY2);
+	retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_OPTKEYR_INDEX, OPTKEY2);
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = stm32l4_read_flash_reg(bank, STM32_FLASH_CR, &ctrl);
+	retval = stm32l4_read_flash_reg_by_index(bank, flash_cr_index, &ctrl);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -484,15 +899,59 @@ static int stm32l4_unlock_option_reg(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
+static int stm32l4_perform_obl_launch(struct flash_bank *bank)
+{
+	int retval, retval2;
+
+	retval = stm32l4_unlock_reg(bank);
+	if (retval != ERROR_OK)
+		goto err_lock;
+
+	retval = stm32l4_unlock_option_reg(bank);
+	if (retval != ERROR_OK)
+		goto err_lock;
+
+	/* Set OBL_LAUNCH bit in CR -> system reset and option bytes reload,
+	 * but the RMs explicitly do *NOT* list this as power-on reset cause, and:
+	 * "Note: If the read protection is set while the debugger is still
+	 * connected through JTAG/SWD, apply a POR (power-on reset) instead of a system reset."
+	 */
+
+	/* "Setting OBL_LAUNCH generates a reset so the option byte loading is performed under system reset" */
+	/* Due to this reset ST-Link reports an SWD_DP_ERROR, despite the write was successful,
+	 * then just ignore the returned value */
+	stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_CR_INDEX, FLASH_OBL_LAUNCH);
+
+	/* Need to re-probe after change */
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	stm32l4_info->probed = false;
+
+err_lock:
+	retval2 = stm32l4_write_flash_reg_by_index(bank, stm32l4_get_flash_cr_with_lock_index(bank),
+			FLASH_LOCK | FLASH_OPTLOCK);
+
+	if (retval != ERROR_OK)
+		return retval;
+
+	return retval2;
+}
+
 static int stm32l4_write_option(struct flash_bank *bank, uint32_t reg_offset,
 	uint32_t value, uint32_t mask)
 {
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
 	uint32_t optiondata;
 	int retval, retval2;
 
 	retval = stm32l4_read_flash_reg(bank, reg_offset, &optiondata);
 	if (retval != ERROR_OK)
 		return retval;
+
+	/* for STM32L5 and similar devices, use always non-secure
+	 * registers for option bytes programming */
+	const uint32_t *saved_flash_regs = stm32l4_info->flash_regs;
+	if (stm32l4_info->part_info->flags & F_HAS_L5_FLASH_REGS)
+		stm32l4_info->flash_regs = stm32l5_ns_flash_regs;
 
 	retval = stm32l4_unlock_reg(bank);
 	if (retval != ERROR_OK)
@@ -508,14 +967,16 @@ static int stm32l4_write_option(struct flash_bank *bank, uint32_t reg_offset,
 	if (retval != ERROR_OK)
 		goto err_lock;
 
-	retval = stm32l4_write_flash_reg(bank, STM32_FLASH_CR, FLASH_OPTSTRT);
+	retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_CR_INDEX, FLASH_OPTSTRT);
 	if (retval != ERROR_OK)
 		goto err_lock;
 
 	retval = stm32l4_wait_status_busy(bank, FLASH_ERASE_TIMEOUT);
 
 err_lock:
-	retval2 = stm32l4_write_flash_reg(bank, STM32_FLASH_CR, FLASH_LOCK | FLASH_OPTLOCK);
+	retval2 = stm32l4_write_flash_reg_by_index(bank, stm32l4_get_flash_cr_with_lock_index(bank),
+			FLASH_LOCK | FLASH_OPTLOCK);
+	stm32l4_info->flash_regs = saved_flash_regs;
 
 	if (retval != ERROR_OK)
 		return retval;
@@ -523,53 +984,125 @@ err_lock:
 	return retval2;
 }
 
-static int stm32l4_protect_check(struct flash_bank *bank)
+static int stm32l4_get_one_wrpxy(struct flash_bank *bank, struct stm32l4_wrp *wrpxy,
+		enum stm32l4_flash_reg_index reg_idx, int offset)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	int ret;
+
+	wrpxy->reg_idx = reg_idx;
+	wrpxy->offset = offset;
+
+	ret = stm32l4_read_flash_reg_by_index(bank, wrpxy->reg_idx , &wrpxy->value);
+	if (ret != ERROR_OK)
+		return ret;
+
+	wrpxy->first = (wrpxy->value & stm32l4_info->wrpxxr_mask) + wrpxy->offset;
+	wrpxy->last = ((wrpxy->value >> 16) & stm32l4_info->wrpxxr_mask) + wrpxy->offset;
+	wrpxy->used = wrpxy->first <= wrpxy->last;
+
+	return ERROR_OK;
+}
+
+static int stm32l4_get_all_wrpxy(struct flash_bank *bank, enum stm32_bank_id dev_bank_id,
+		struct stm32l4_wrp *wrpxy, unsigned int *n_wrp)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	int ret;
+
+	*n_wrp = 0;
+
+	/* for single bank devices there is 2 WRP regions.
+	 * for dual bank devices there is 2 WRP regions per bank,
+	 *   if configured as single bank only 2 WRP are usable
+	 *   except for STM32L4R/S/P/Q, G4 cat3, L5 ... all 4 WRP are usable
+	 * note: this should be revised, if a device will have the SWAP banks option
+	 */
+
+	int wrp2y_sectors_offset = -1; /* -1 : unused */
+
+	/* if bank_id is BANK1 or ALL_BANKS */
+	if (dev_bank_id != STM32_BANK2) {
+		/* get FLASH_WRP1AR */
+		ret = stm32l4_get_one_wrpxy(bank, &wrpxy[(*n_wrp)++], STM32_FLASH_WRP1AR_INDEX, 0);
+		if (ret != ERROR_OK)
+			return ret;
+
+		/* get WRP1BR */
+		ret = stm32l4_get_one_wrpxy(bank, &wrpxy[(*n_wrp)++], STM32_FLASH_WRP1BR_INDEX, 0);
+		if (ret != ERROR_OK)
+			return ret;
+
+		/* for some devices (like STM32L4R/S) in single-bank mode, the 4 WRPxx are usable */
+		if ((stm32l4_info->part_info->flags & F_USE_ALL_WRPXX) && !stm32l4_info->dual_bank_mode)
+			wrp2y_sectors_offset = 0;
+	}
+
+	/* if bank_id is BANK2 or ALL_BANKS */
+	if (dev_bank_id != STM32_BANK1 && stm32l4_info->dual_bank_mode)
+		wrp2y_sectors_offset = stm32l4_info->bank1_sectors;
+
+	if (wrp2y_sectors_offset > -1) {
+		/* get WRP2AR */
+		ret = stm32l4_get_one_wrpxy(bank, &wrpxy[(*n_wrp)++], STM32_FLASH_WRP2AR_INDEX, wrp2y_sectors_offset);
+		if (ret != ERROR_OK)
+			return ret;
+
+		/* get WRP2BR */
+		ret = stm32l4_get_one_wrpxy(bank, &wrpxy[(*n_wrp)++], STM32_FLASH_WRP2BR_INDEX, wrp2y_sectors_offset);
+		if (ret != ERROR_OK)
+			return ret;
+	}
+
+	return ERROR_OK;
+}
+
+static int stm32l4_write_one_wrpxy(struct flash_bank *bank, struct stm32l4_wrp *wrpxy)
 {
 	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
 
-	uint32_t wrp1ar, wrp1br, wrp2ar, wrp2br;
-	stm32l4_read_flash_reg(bank, STM32_FLASH_WRP1AR, &wrp1ar);
-	stm32l4_read_flash_reg(bank, STM32_FLASH_WRP1BR, &wrp1br);
-	if (stm32l4_info->part_info->has_dual_bank) {
-		stm32l4_read_flash_reg(bank, STM32_FLASH_WRP2AR, &wrp2ar);
-		stm32l4_read_flash_reg(bank, STM32_FLASH_WRP2BR, &wrp2br);
-	} else {
-		/* prevent uninitialized errors */
-		wrp2ar = 0;
-		wrp2br = 0;
+	int wrp_start = wrpxy->first - wrpxy->offset;
+	int wrp_end = wrpxy->last - wrpxy->offset;
+
+	uint32_t wrp_value = (wrp_start & stm32l4_info->wrpxxr_mask) | ((wrp_end & stm32l4_info->wrpxxr_mask) << 16);
+
+	return stm32l4_write_option(bank, stm32l4_info->flash_regs[wrpxy->reg_idx], wrp_value, 0xffffffff);
+}
+
+static int stm32l4_write_all_wrpxy(struct flash_bank *bank, struct stm32l4_wrp *wrpxy, unsigned int n_wrp)
+{
+	int ret;
+
+	for (unsigned int i = 0; i < n_wrp; i++) {
+		ret = stm32l4_write_one_wrpxy(bank, &wrpxy[i]);
+		if (ret != ERROR_OK)
+			return ret;
 	}
 
-	const uint8_t wrp1a_start = wrp1ar & stm32l4_info->wrpxxr_mask;
-	const uint8_t wrp1a_end = (wrp1ar >> 16) & stm32l4_info->wrpxxr_mask;
-	const uint8_t wrp1b_start = wrp1br & stm32l4_info->wrpxxr_mask;
-	const uint8_t wrp1b_end = (wrp1br >> 16) & stm32l4_info->wrpxxr_mask;
-	const uint8_t wrp2a_start = wrp2ar & stm32l4_info->wrpxxr_mask;
-	const uint8_t wrp2a_end = (wrp2ar >> 16) & stm32l4_info->wrpxxr_mask;
-	const uint8_t wrp2b_start = wrp2br & stm32l4_info->wrpxxr_mask;
-	const uint8_t wrp2b_end = (wrp2br >> 16) & stm32l4_info->wrpxxr_mask;
+	return ERROR_OK;
+}
 
-	for (unsigned int i = 0; i < bank->num_sectors; i++) {
-		if (i < stm32l4_info->bank1_sectors) {
-			if (((i >= wrp1a_start) &&
-				 (i <= wrp1a_end)) ||
-				((i >= wrp1b_start) &&
-				 (i <= wrp1b_end)))
-				bank->sectors[i].is_protected = 1;
-			else
-				bank->sectors[i].is_protected = 0;
-		} else {
-			assert(stm32l4_info->part_info->has_dual_bank == true);
-			uint8_t snb;
-			snb = i - stm32l4_info->bank1_sectors;
-			if (((snb >= wrp2a_start) &&
-				 (snb <= wrp2a_end)) ||
-				((snb >= wrp2b_start) &&
-				 (snb <= wrp2b_end)))
-				bank->sectors[i].is_protected = 1;
-			else
-				bank->sectors[i].is_protected = 0;
+static int stm32l4_protect_check(struct flash_bank *bank)
+{
+	unsigned int n_wrp;
+	struct stm32l4_wrp wrpxy[4];
+
+	int ret = stm32l4_get_all_wrpxy(bank, STM32_ALL_BANKS, wrpxy, &n_wrp);
+	if (ret != ERROR_OK)
+		return ret;
+
+	/* initialize all sectors as unprotected */
+	for (unsigned int i = 0; i < bank->num_sectors; i++)
+		bank->sectors[i].is_protected = 0;
+
+	/* now check WRPxy and mark the protected sectors */
+	for (unsigned int i = 0; i < n_wrp; i++) {
+		if (wrpxy[i].used) {
+			for (int s = wrpxy[i].first; s <= wrpxy[i].last; s++)
+				bank->sectors[s].is_protected = 1;
 		}
 	}
+
 	return ERROR_OK;
 }
 
@@ -581,9 +1114,24 @@ static int stm32l4_erase(struct flash_bank *bank, unsigned int first,
 
 	assert((first <= last) && (last < bank->num_sectors));
 
+	if (stm32l4_is_otp(bank)) {
+		LOG_ERROR("cannot erase OTP memory");
+		return ERROR_FLASH_OPER_UNSUPPORTED;
+	}
+
 	if (bank->target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	if (stm32l4_info->tzen && (stm32l4_info->rdp == RDP_LEVEL_0)) {
+		/* set all FLASH pages as secure */
+		retval = stm32l4_set_secbb(bank, FLASH_SECBB_SECURE);
+		if (retval != ERROR_OK) {
+			/* restore all FLASH pages as non-secure */
+			stm32l4_set_secbb(bank, FLASH_SECBB_NON_SECURE); /* ignore the return value */
+			return retval;
+		}
 	}
 
 	retval = stm32l4_unlock_reg(bank);
@@ -608,22 +1156,27 @@ static int stm32l4_erase(struct flash_bank *bank, unsigned int first,
 		if (i >= stm32l4_info->bank1_sectors) {
 			uint8_t snb;
 			snb = i - stm32l4_info->bank1_sectors;
-			erase_flags |= snb << FLASH_PAGE_SHIFT | FLASH_CR_BKER;
+			erase_flags |= snb << FLASH_PAGE_SHIFT | stm32l4_info->cr_bker_mask;
 		} else
 			erase_flags |= i << FLASH_PAGE_SHIFT;
-		retval = stm32l4_write_flash_reg(bank, STM32_FLASH_CR, erase_flags);
+		retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_CR_INDEX, erase_flags);
 		if (retval != ERROR_OK)
 			break;
 
 		retval = stm32l4_wait_status_busy(bank, FLASH_ERASE_TIMEOUT);
 		if (retval != ERROR_OK)
 			break;
-
-		bank->sectors[i].is_erased = 1;
 	}
 
 err_lock:
-	retval2 = stm32l4_write_flash_reg(bank, STM32_FLASH_CR, FLASH_LOCK);
+	retval2 = stm32l4_write_flash_reg_by_index(bank, stm32l4_get_flash_cr_with_lock_index(bank), FLASH_LOCK);
+
+	if (stm32l4_info->tzen && (stm32l4_info->rdp == RDP_LEVEL_0)) {
+		/* restore all FLASH pages as non-secure */
+		int retval3 = stm32l4_set_secbb(bank, FLASH_SECBB_NON_SECURE);
+		if (retval3 != ERROR_OK)
+			return retval3;
+	}
 
 	if (retval != ERROR_OK)
 		return retval;
@@ -631,47 +1184,141 @@ err_lock:
 	return retval2;
 }
 
-static int stm32l4_protect(struct flash_bank *bank, int set, unsigned int first,
-		unsigned int last)
+static int stm32l4_protect(struct flash_bank *bank, int set, unsigned int first, unsigned int last)
 {
 	struct target *target = bank->target;
 	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	int ret = ERROR_OK;
+	unsigned int i;
+
+	if (stm32l4_is_otp(bank)) {
+		LOG_ERROR("cannot protect/unprotect OTP memory");
+		return ERROR_FLASH_OPER_UNSUPPORTED;
+	}
 
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	int ret = ERROR_OK;
-	/* Bank 2 */
-	uint32_t reg_value = 0xFF; /* Default to bank un-protected */
+	/* the requested sectors could be located into bank1 and/or bank2 */
+	bool use_bank2 = false;
 	if (last >= stm32l4_info->bank1_sectors) {
-		if (set == 1) {
-			uint8_t begin = first > stm32l4_info->bank1_sectors ? first : 0x00;
-			reg_value = ((last & 0xFF) << 16) | begin;
+		if (first < stm32l4_info->bank1_sectors) {
+			/* the requested sectors for (un)protection are shared between
+			 * bank 1 and 2, then split the operation */
+
+			/*  1- deal with bank 1 sectors */
+			LOG_DEBUG("The requested sectors for %s are shared between bank 1 and 2",
+					set ? "protection" : "unprotection");
+			ret = stm32l4_protect(bank, set, first, stm32l4_info->bank1_sectors - 1);
+			if (ret != ERROR_OK)
+				return ret;
+
+			/*  2- then continue with bank 2 sectors */
+			first = stm32l4_info->bank1_sectors;
 		}
 
-		ret = stm32l4_write_option(bank, STM32_FLASH_WRP2AR, reg_value, 0xffffffff);
+		use_bank2 = true;
 	}
-	/* Bank 1 */
-	reg_value = 0xFF; /* Default to bank un-protected */
-	if (first < stm32l4_info->bank1_sectors) {
-		if (set == 1) {
-			uint8_t end = last >= stm32l4_info->bank1_sectors ? 0xFF : last;
-			reg_value = (end << 16) | (first & 0xFF);
+
+	/* refresh the sectors' protection */
+	ret = stm32l4_protect_check(bank);
+	if (ret != ERROR_OK)
+		return ret;
+
+	/* check if the desired protection is already configured */
+	for (i = first; i <= last; i++) {
+		if (bank->sectors[i].is_protected != set)
+			break;
+		else if (i == last) {
+			LOG_INFO("The specified sectors are already %s", set ? "protected" : "unprotected");
+			return ERROR_OK;
 		}
-
-		ret = stm32l4_write_option(bank, STM32_FLASH_WRP1AR, reg_value, 0xffffffff);
 	}
 
-	return ret;
+	/* all sectors from first to last (or part of them) could have different
+	 * protection other than the requested */
+	unsigned int n_wrp;
+	struct stm32l4_wrp wrpxy[4];
+
+	ret = stm32l4_get_all_wrpxy(bank, use_bank2 ? STM32_BANK2 : STM32_BANK1, wrpxy, &n_wrp);
+	if (ret != ERROR_OK)
+		return ret;
+
+	/* use bitmap and range helpers to optimize the WRP usage */
+	DECLARE_BITMAP(pages, bank->num_sectors);
+	bitmap_zero(pages, bank->num_sectors);
+
+	for (i = 0; i < n_wrp; i++) {
+		if (wrpxy[i].used) {
+			for (int p = wrpxy[i].first; p <= wrpxy[i].last; p++)
+				set_bit(p, pages);
+		}
+	}
+
+	/* we have at most 'n_wrp' WRP areas
+	 * add one range if the user is trying to protect a fifth range */
+	struct range ranges[n_wrp + 1];
+	unsigned int ranges_count = 0;
+
+	bitmap_to_ranges(pages, bank->num_sectors, ranges, &ranges_count);
+
+	/* pretty-print the currently protected ranges */
+	if (ranges_count > 0) {
+		char *ranges_str = range_print_alloc(ranges, ranges_count);
+		LOG_DEBUG("current protected areas: %s", ranges_str);
+		free(ranges_str);
+	} else
+		LOG_DEBUG("current protected areas: none");
+
+	if (set) { /* flash protect */
+		for (i = first; i <= last; i++)
+			set_bit(i, pages);
+	} else { /* flash unprotect */
+		for (i = first; i <= last; i++)
+			clear_bit(i, pages);
+	}
+
+	/* check the ranges_count after the user request */
+	bitmap_to_ranges(pages, bank->num_sectors, ranges, &ranges_count);
+
+	/* pretty-print the requested areas for protection */
+	if (ranges_count > 0) {
+		char *ranges_str = range_print_alloc(ranges, ranges_count);
+		LOG_DEBUG("requested areas for protection: %s", ranges_str);
+		free(ranges_str);
+	} else
+		LOG_DEBUG("requested areas for protection: none");
+
+	if (ranges_count > n_wrp) {
+		LOG_ERROR("cannot set the requested protection "
+				"(only %u write protection areas are available)" , n_wrp);
+		return ERROR_FAIL;
+	}
+
+	/* re-init all WRPxy as disabled (first > last)*/
+	for (i = 0; i < n_wrp; i++) {
+		wrpxy[i].first = wrpxy[i].offset + 1;
+		wrpxy[i].last = wrpxy[i].offset;
+	}
+
+	/* then configure WRPxy areas */
+	for (i = 0; i < ranges_count; i++) {
+		wrpxy[i].first = ranges[i].start;
+		wrpxy[i].last = ranges[i].end;
+	}
+
+	/* finally write WRPxy registers */
+	return stm32l4_write_all_wrpxy(bank, wrpxy, n_wrp);
 }
 
-/* Count is in double-words */
+/* count is the size divided by stm32l4_info->data_width */
 static int stm32l4_write_block(struct flash_bank *bank, const uint8_t *buffer,
 	uint32_t offset, uint32_t count)
 {
 	struct target *target = bank->target;
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
 	uint32_t buffer_size;
 	struct working_area *write_algorithm;
 	struct working_area *source;
@@ -698,10 +1345,15 @@ static int stm32l4_write_block(struct flash_bank *bank, const uint8_t *buffer,
 		return retval;
 	}
 
-	/* memory buffer, size *must* be multiple of dword plus one dword for rp and one for wp */
+	/* memory buffer, size *must* be multiple of stm32l4_info->data_width
+	 * plus one dword for rp and one for wp */
+	/* FIXME, currently only STM32U5 devices do have a different data_width,
+	 * but STM32U5 device flash programming does not go through this function
+	 * so temporarily continue to consider the default data_width = 8 */
 	buffer_size = target_get_working_area_avail(target) & ~(2 * sizeof(uint32_t) - 1);
 	if (buffer_size < 256) {
 		LOG_WARNING("large enough working area not available, can't do block memory writes");
+		target_free_working_area(target, write_algorithm);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	} else if (buffer_size > 16384) {
 		/* probably won't benefit from more than 16k ... */
@@ -727,10 +1379,10 @@ static int stm32l4_write_block(struct flash_bank *bank, const uint8_t *buffer,
 	buf_set_u32(reg_params[1].value, 0, 32, source->address + source->size);
 	buf_set_u32(reg_params[2].value, 0, 32, address);
 	buf_set_u32(reg_params[3].value, 0, 32, count);
-	buf_set_u32(reg_params[4].value, 0, 32, stm32l4_get_flash_reg(bank, STM32_FLASH_SR));
-	buf_set_u32(reg_params[5].value, 0, 32, stm32l4_get_flash_reg(bank, STM32_FLASH_CR));
+	buf_set_u32(reg_params[4].value, 0, 32, stm32l4_get_flash_reg_by_index(bank, STM32_FLASH_SR_INDEX));
+	buf_set_u32(reg_params[5].value, 0, 32, stm32l4_get_flash_reg_by_index(bank, STM32_FLASH_CR_INDEX));
 
-	retval = target_run_flash_async_algorithm(target, buffer, count, 8,
+	retval = target_run_flash_async_algorithm(target, buffer, count, stm32l4_info->data_width,
 			0, NULL,
 			ARRAY_SIZE(reg_params), reg_params,
 			source->address, source->size,
@@ -748,7 +1400,7 @@ static int stm32l4_write_block(struct flash_bank *bank, const uint8_t *buffer,
 		if (error != 0) {
 			LOG_ERROR("flash write failed = %08" PRIx32, error);
 			/* Clear but report errors */
-			stm32l4_write_flash_reg(bank, STM32_FLASH_SR, error);
+			stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_SR_INDEX, error);
 			retval = ERROR_FAIL;
 		}
 	}
@@ -766,20 +1418,74 @@ static int stm32l4_write_block(struct flash_bank *bank, const uint8_t *buffer,
 	return retval;
 }
 
+/* count is the size divided by stm32l4_info->data_width */
+static int stm32l4_write_block_without_loader(struct flash_bank *bank, const uint8_t *buffer,
+				uint32_t offset, uint32_t count)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	struct target *target = bank->target;
+	uint32_t address = bank->base + offset;
+	int retval = ERROR_OK;
+
+	/* wait for BSY bit */
+	retval = stm32l4_wait_status_busy(bank, FLASH_WRITE_TIMEOUT);
+	if (retval != ERROR_OK)
+		return retval;
+
+	/* set PG in FLASH_CR */
+	retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_CR_INDEX, FLASH_PG);
+	if (retval != ERROR_OK)
+		return retval;
+
+
+	/* write directly to flash memory */
+	const uint8_t *src = buffer;
+	const uint32_t data_width_in_words = stm32l4_info->data_width / 4;
+	while (count--) {
+		retval = target_write_memory(target, address, 4, data_width_in_words, src);
+		if (retval != ERROR_OK)
+			return retval;
+
+		/* wait for BSY bit */
+		retval = stm32l4_wait_status_busy(bank, FLASH_WRITE_TIMEOUT);
+		if (retval != ERROR_OK)
+			return retval;
+
+		src += stm32l4_info->data_width;
+		address += stm32l4_info->data_width;
+	}
+
+	/* reset PG in FLASH_CR */
+	retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_CR_INDEX, 0);
+	if (retval != ERROR_OK)
+		return retval;
+
+	return retval;
+}
+
 static int stm32l4_write(struct flash_bank *bank, const uint8_t *buffer,
 	uint32_t offset, uint32_t count)
 {
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
 	int retval = ERROR_OK, retval2;
+
+	if (stm32l4_is_otp(bank) && !stm32l4_otp_is_enabled(bank)) {
+		LOG_ERROR("OTP memory is disabled for write commands");
+		return ERROR_FAIL;
+	}
 
 	if (bank->target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	/* The flash write must be aligned to a double word (8-bytes) boundary.
+	/* ensure that stm32l4_info->data_width is 'at least' a multiple of dword */
+	assert(stm32l4_info->data_width % 8 == 0);
+
+	/* The flash write must be aligned to the 'stm32l4_info->data_width' boundary.
 	 * The flash infrastructure ensures it, do just a security check */
-	assert(offset % 8 == 0);
-	assert(count % 8 == 0);
+	assert(offset % stm32l4_info->data_width == 0);
+	assert(count % stm32l4_info->data_width == 0);
 
 	/* STM32G4xxx Cat. 3 devices may have gaps between banks, check whether
 	 * data to be written does not go into a gap:
@@ -818,14 +1524,64 @@ static int stm32l4_write(struct flash_bank *bank, const uint8_t *buffer,
 	if (retval != ERROR_OK)
 		return retval;
 
+	if (stm32l4_info->tzen && (stm32l4_info->rdp == RDP_LEVEL_0)) {
+		/* set all FLASH pages as secure */
+		retval = stm32l4_set_secbb(bank, FLASH_SECBB_SECURE);
+		if (retval != ERROR_OK) {
+			/* restore all FLASH pages as non-secure */
+			stm32l4_set_secbb(bank, FLASH_SECBB_NON_SECURE); /* ignore the return value */
+			return retval;
+		}
+	}
+
 	retval = stm32l4_unlock_reg(bank);
 	if (retval != ERROR_OK)
 		goto err_lock;
 
-	retval = stm32l4_write_block(bank, buffer, offset, count / 8);
+	/**
+	 * FIXME update the flash loader to use a custom FLASH_SR_BSY mask
+	 * Workaround for STM32G0Bx/G0Cx devices in dual bank mode,
+	 * as the flash loader does not use the SR_BSY2
+	 */
+	bool use_flashloader = stm32l4_info->use_flashloader;
+	if ((stm32l4_info->part_info->id == 0x467) && stm32l4_info->dual_bank_mode) {
+		LOG_INFO("Couldn't use the flash loader in dual-bank mode");
+		use_flashloader = false;
+	} else if (stm32l4_info->part_info->id == 0x482) {
+		/**
+		 * FIXME the current flashloader does not support writing in quad-words
+		 * which is required for STM32U5 devices.
+		 */
+		use_flashloader = false;
+	}
+
+	if (use_flashloader) {
+		/* For TrustZone enabled devices, when TZEN is set and RDP level is 0.5,
+		 * the debug is possible only in non-secure state.
+		 * Thus means the flashloader will run in non-secure mode,
+		 * and the workarea need to be in non-secure RAM */
+		if (stm32l4_info->tzen && (stm32l4_info->rdp == RDP_LEVEL_0_5))
+			LOG_INFO("RDP level is 0.5, the work-area should reside in non-secure RAM");
+
+		retval = stm32l4_write_block(bank, buffer, offset,
+				count / stm32l4_info->data_width);
+	}
+
+	if (!use_flashloader || retval == ERROR_TARGET_RESOURCE_NOT_AVAILABLE) {
+		LOG_INFO("falling back to single memory accesses");
+		retval = stm32l4_write_block_without_loader(bank, buffer, offset,
+				count / stm32l4_info->data_width);
+	}
 
 err_lock:
-	retval2 = stm32l4_write_flash_reg(bank, STM32_FLASH_CR, FLASH_LOCK);
+	retval2 = stm32l4_write_flash_reg_by_index(bank, stm32l4_get_flash_cr_with_lock_index(bank), FLASH_LOCK);
+
+	if (stm32l4_info->tzen && (stm32l4_info->rdp == RDP_LEVEL_0)) {
+		/* restore all FLASH pages as non-secure */
+		int retval3 = stm32l4_set_secbb(bank, FLASH_SECBB_NON_SECURE);
+		if (retval3 != ERROR_OK)
+			return retval3;
+	}
 
 	if (retval != ERROR_OK) {
 		LOG_ERROR("block write failed");
@@ -838,27 +1594,73 @@ static int stm32l4_read_idcode(struct flash_bank *bank, uint32_t *id)
 {
 	int retval;
 
-	/* try stm32l4/l4+/wb/g4 id register first, then stm32g0 id register */
-	retval = target_read_u32(bank->target, DBGMCU_IDCODE_L4_G4, id);
-	if ((retval != ERROR_OK) || ((*id & 0xfff) == 0) || ((*id & 0xfff) == 0xfff)) {
-		retval = target_read_u32(bank->target, DBGMCU_IDCODE_G0, id);
-		if ((retval != ERROR_OK) || ((*id & 0xfff) == 0) || ((*id & 0xfff) == 0xfff)) {
-			LOG_ERROR("can't get device id");
-			return (retval == ERROR_OK) ? ERROR_FAIL : retval;
+	/* try reading possible IDCODE registers, in the following order */
+	uint32_t dbgmcu_idcode[] = {DBGMCU_IDCODE_L4_G4, DBGMCU_IDCODE_G0, DBGMCU_IDCODE_L5};
+
+	for (unsigned int i = 0; i < ARRAY_SIZE(dbgmcu_idcode); i++) {
+		retval = target_read_u32(bank->target, dbgmcu_idcode[i], id);
+		if ((retval == ERROR_OK) && ((*id & 0xfff) != 0) && ((*id & 0xfff) != 0xfff))
+			return ERROR_OK;
+	}
+
+	/* Workaround for STM32WL5x devices:
+	 * DBGMCU_IDCODE cannot be read using CPU1 (Cortex-M0+) at AP1,
+	 * to solve this read the UID64 (IEEE 64-bit unique device ID register) */
+
+	struct cortex_m_common *cortex_m = target_to_cm(bank->target);
+
+	if (cortex_m->core_info->partno == CORTEX_M0P_PARTNO && cortex_m->armv7m.debug_ap->ap_num == 1) {
+		uint32_t uid64_ids;
+
+		/* UID64 is contains
+		 *  - Bits 63:32 : DEVNUM (unique device number, different for each individual device)
+		 *  - Bits 31:08 : STID (company ID) = 0x0080E1
+		 *  - Bits 07:00 : DEVID (device ID) = 0x15
+		 *
+		 *  read only the fixed values {STID,DEVID} from UID64_IDS to identify the device as STM32WLx
+		 */
+		retval = target_read_u32(bank->target, UID64_IDS, &uid64_ids);
+		if (retval == ERROR_OK && uid64_ids == UID64_IDS_STM32WL) {
+			/* force the DEV_ID to 0x497 and the REV_ID to unknown */
+			*id = 0x00000497;
+			return ERROR_OK;
 		}
 	}
 
-	return retval;
+	LOG_ERROR("can't get the device id");
+	return (retval == ERROR_OK) ? ERROR_FAIL : retval;
+}
+
+static const char *get_stm32l4_rev_str(struct flash_bank *bank)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	const struct stm32l4_part_info *part_info = stm32l4_info->part_info;
+	assert(part_info);
+
+	const uint16_t rev_id = stm32l4_info->idcode >> 16;
+	for (unsigned int i = 0; i < part_info->num_revs; i++) {
+		if (rev_id == part_info->revs[i].rev)
+			return part_info->revs[i].str;
+	}
+	return "'unknown'";
+}
+
+static const char *get_stm32l4_bank_type_str(struct flash_bank *bank)
+{
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	assert(stm32l4_info->part_info);
+	return stm32l4_is_otp(bank) ? "OTP" :
+			stm32l4_info->dual_bank_mode ? "Flash dual" :
+			"Flash single";
 }
 
 static int stm32l4_probe(struct flash_bank *bank)
 {
 	struct target *target = bank->target;
+	struct armv7m_common *armv7m = target_to_armv7m(target);
 	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
 	const struct stm32l4_part_info *part_info;
 	uint16_t flash_size_kb = 0xffff;
-	uint32_t device_id;
-	uint32_t options;
 
 	stm32l4_info->probed = false;
 
@@ -867,11 +1669,13 @@ static int stm32l4_probe(struct flash_bank *bank)
 	if (retval != ERROR_OK)
 		return retval;
 
-	device_id = stm32l4_info->idcode & 0xFFF;
+	const uint32_t device_id = stm32l4_info->idcode & 0xFFF;
 
 	for (unsigned int n = 0; n < ARRAY_SIZE(stm32l4_parts); n++) {
-		if (device_id == stm32l4_parts[n].id)
+		if (device_id == stm32l4_parts[n].id) {
 			stm32l4_info->part_info = &stm32l4_parts[n];
+			break;
+		}
 	}
 
 	if (!stm32l4_info->part_info) {
@@ -880,13 +1684,75 @@ static int stm32l4_probe(struct flash_bank *bank)
 	}
 
 	part_info = stm32l4_info->part_info;
+	const char *rev_str = get_stm32l4_rev_str(bank);
+	const uint16_t rev_id = stm32l4_info->idcode >> 16;
 
-	char device_info[1024];
-	retval = bank->driver->info(bank, device_info, sizeof(device_info));
+	LOG_INFO("device idcode = 0x%08" PRIx32 " (%s - Rev %s : 0x%04x)",
+			stm32l4_info->idcode, part_info->device_str, rev_str, rev_id);
+
+	stm32l4_info->flash_regs_base = stm32l4_info->part_info->flash_regs_base;
+	stm32l4_info->data_width = (part_info->flags & F_QUAD_WORD_PROG) ? 16 : 8;
+	stm32l4_info->cr_bker_mask = FLASH_BKER;
+	stm32l4_info->sr_bsy_mask = FLASH_BSY;
+
+	/* Set flash write alignment boundaries.
+	 * Ask the flash infrastructure to ensure required alignment */
+	bank->write_start_alignment = bank->write_end_alignment = stm32l4_info->data_width;
+
+	/* initialise the flash registers layout */
+	if (part_info->flags & F_HAS_L5_FLASH_REGS)
+		stm32l4_info->flash_regs = stm32l5_ns_flash_regs;
+	else
+		stm32l4_info->flash_regs = stm32l4_flash_regs;
+
+	/* read flash option register */
+	retval = stm32l4_read_flash_reg_by_index(bank, STM32_FLASH_OPTR_INDEX, &stm32l4_info->optr);
 	if (retval != ERROR_OK)
 		return retval;
 
-	LOG_INFO("device idcode = 0x%08" PRIx32 " (%s)", stm32l4_info->idcode, device_info);
+	stm32l4_sync_rdp_tzen(bank);
+
+	/* for devices with trustzone, use flash secure registers when TZEN=1 and RDP is LEVEL_0 */
+	if (stm32l4_info->tzen && (stm32l4_info->rdp == RDP_LEVEL_0)) {
+		if (part_info->flags & F_HAS_L5_FLASH_REGS) {
+			stm32l4_info->flash_regs_base |= STM32L5_REGS_SEC_OFFSET;
+			stm32l4_info->flash_regs = stm32l5_s_flash_regs;
+		} else {
+			LOG_ERROR("BUG: device supported incomplete");
+			return ERROR_NOT_IMPLEMENTED;
+		}
+	}
+
+	if (part_info->flags & F_HAS_TZ)
+		LOG_INFO("TZEN = %d : TrustZone %s by option bytes",
+				stm32l4_info->tzen,
+				stm32l4_info->tzen ? "enabled" : "disabled");
+
+	LOG_INFO("RDP level %s (0x%02X)",
+			stm32l4_info->rdp == RDP_LEVEL_0 ? "0" : stm32l4_info->rdp == RDP_LEVEL_0_5 ? "0.5" : "1",
+			stm32l4_info->rdp);
+
+	if (stm32l4_is_otp(bank)) {
+		bank->size = part_info->otp_size;
+
+		LOG_INFO("OTP size is %d bytes, base address is " TARGET_ADDR_FMT, bank->size, bank->base);
+
+		/* OTP memory is considered as one sector */
+		free(bank->sectors);
+		bank->num_sectors = 1;
+		bank->sectors = alloc_block_array(0, part_info->otp_size, 1);
+
+		if (!bank->sectors) {
+			LOG_ERROR("failed to allocate bank sectors");
+			return ERROR_FAIL;
+		}
+
+		stm32l4_info->probed = true;
+		return ERROR_OK;
+	} else if (bank->base != STM32_FLASH_BANK_BASE && bank->base != STM32_FLASH_S_BANK_BASE) {
+		LOG_ERROR("invalid bank base address");
+		return ERROR_FAIL;
+	}
 
 	/* get flash size from target. */
 	retval = target_read_u16(target, part_info->fsize_addr, &flash_size_kb);
@@ -912,11 +1778,6 @@ static int stm32l4_probe(struct flash_bank *bank)
 	/* did we assign a flash size? */
 	assert((flash_size_kb != 0xffff) && flash_size_kb);
 
-	/* read flash option register */
-	retval = stm32l4_read_flash_reg(bank, STM32_FLASH_OPTR, &options);
-	if (retval != ERROR_OK)
-		return retval;
-
 	stm32l4_info->bank1_sectors = 0;
 	stm32l4_info->hole_sectors = 0;
 
@@ -924,6 +1785,7 @@ static int stm32l4_probe(struct flash_bank *bank)
 	int page_size_kb = 0;
 
 	stm32l4_info->dual_bank_mode = false;
+	bool use_dbank_bit = false;
 
 	switch (device_id) {
 	case 0x415: /* STM32L47/L48xx */
@@ -941,7 +1803,7 @@ static int stm32l4_probe(struct flash_bank *bank)
 		stm32l4_info->bank1_sectors = num_pages;
 
 		/* check DUAL_BANK bit[21] if the flash is less than 1M */
-		if (flash_size_kb == 1024 || (options & BIT(21))) {
+		if (flash_size_kb == 1024 || (stm32l4_info->optr & BIT(21))) {
 			stm32l4_info->dual_bank_mode = true;
 			stm32l4_info->bank1_sectors = num_pages / 2;
 		}
@@ -952,11 +1814,25 @@ static int stm32l4_probe(struct flash_bank *bank)
 	case 0x464: /* STM32L41/L42xx */
 	case 0x466: /* STM32G03/G04xx */
 	case 0x468: /* STM32G43/G44xx */
-	case 0x497: /* STM32WLEx */
+	case 0x479: /* STM32G49/G4Axx */
 		/* single bank flash */
 		page_size_kb = 2;
 		num_pages = flash_size_kb / page_size_kb;
 		stm32l4_info->bank1_sectors = num_pages;
+		break;
+	case 0x467: /* STM32G0B/G0Cxx */
+		/* single/dual bank depending on bit(21) */
+		page_size_kb = 2;
+		num_pages = flash_size_kb / page_size_kb;
+		stm32l4_info->bank1_sectors = num_pages;
+		stm32l4_info->cr_bker_mask = FLASH_BKER_G0;
+
+		/* check DUAL_BANK bit */
+		if (stm32l4_info->optr & BIT(21)) {
+			stm32l4_info->sr_bsy_mask = FLASH_BSY | FLASH_BSY2;
+			stm32l4_info->dual_bank_mode = true;
+			stm32l4_info->bank1_sectors = num_pages / 2;
+		}
 		break;
 	case 0x469: /* STM32G47/G48xx */
 		/* STM32G47/8 can be single/dual bank:
@@ -966,7 +1842,7 @@ static int stm32l4_probe(struct flash_bank *bank)
 		page_size_kb = 4;
 		num_pages = flash_size_kb / page_size_kb;
 		stm32l4_info->bank1_sectors = num_pages;
-		if (options & BIT(22)) {
+		if (stm32l4_info->optr & BIT(22)) {
 			stm32l4_info->dual_bank_mode = true;
 			page_size_kb = 2;
 			num_pages = flash_size_kb / page_size_kb;
@@ -989,12 +1865,41 @@ static int stm32l4_probe(struct flash_bank *bank)
 		page_size_kb = 8;
 		num_pages = flash_size_kb / page_size_kb;
 		stm32l4_info->bank1_sectors = num_pages;
-		const bool use_dbank_bit = flash_size_kb == part_info->max_flash_size_kb;
-		if ((use_dbank_bit && (options & BIT(22))) ||
-			(!use_dbank_bit && (options & BIT(21)))) {
+		use_dbank_bit = flash_size_kb == part_info->max_flash_size_kb;
+		if ((use_dbank_bit && (stm32l4_info->optr & BIT(22))) ||
+			(!use_dbank_bit && (stm32l4_info->optr & BIT(21)))) {
 			stm32l4_info->dual_bank_mode = true;
 			page_size_kb = 4;
 			num_pages = flash_size_kb / page_size_kb;
+			stm32l4_info->bank1_sectors = num_pages / 2;
+		}
+		break;
+	case 0x472: /* STM32L55/L56xx */
+		/* STM32L55/L56xx can be single/dual bank:
+		 *   if size = 512K check DBANK bit(22)
+		 *   if size = 256K check DB256K bit(21)
+		 */
+		page_size_kb = 4;
+		num_pages = flash_size_kb / page_size_kb;
+		stm32l4_info->bank1_sectors = num_pages;
+		use_dbank_bit = flash_size_kb == part_info->max_flash_size_kb;
+		if ((use_dbank_bit && (stm32l4_info->optr & BIT(22))) ||
+			(!use_dbank_bit && (stm32l4_info->optr & BIT(21)))) {
+			stm32l4_info->dual_bank_mode = true;
+			page_size_kb = 2;
+			num_pages = flash_size_kb / page_size_kb;
+			stm32l4_info->bank1_sectors = num_pages / 2;
+		}
+		break;
+	case 0x482: /* STM32U57/U58xx */
+		/* if flash size is max (2M) the device is always dual bank
+		 * otherwise check DUALBANK bit(21)
+		 */
+		page_size_kb = 8;
+		num_pages = flash_size_kb / page_size_kb;
+		stm32l4_info->bank1_sectors = num_pages;
+		if ((flash_size_kb == part_info->max_flash_size_kb) || (stm32l4_info->optr & BIT(21))) {
+			stm32l4_info->dual_bank_mode = true;
 			stm32l4_info->bank1_sectors = num_pages / 2;
 		}
 		break;
@@ -1004,6 +1909,14 @@ static int stm32l4_probe(struct flash_bank *bank)
 		page_size_kb = 4;
 		num_pages = flash_size_kb / page_size_kb;
 		stm32l4_info->bank1_sectors = num_pages;
+		break;
+	case 0x497: /* STM32WLEx/WL5x */
+		/* single bank flash */
+		page_size_kb = 2;
+		num_pages = flash_size_kb / page_size_kb;
+		stm32l4_info->bank1_sectors = num_pages;
+		if (armv7m->debug_ap->ap_num == 1)
+			stm32l4_info->flash_regs = stm32wl_cpu2_flash_regs;
 		break;
 	default:
 		LOG_ERROR("unsupported device");
@@ -1033,7 +1946,7 @@ static int stm32l4_probe(struct flash_bank *bank)
 	 * max_flash_size is always power of two, so max_pages too
 	 */
 	uint32_t max_pages = stm32l4_info->part_info->max_flash_size_kb / page_size_kb;
-	assert((max_pages & (max_pages - 1)) == 0);
+	assert(IS_PWR_OF_2(max_pages));
 
 	/* in dual bank mode number of pages is doubled, but extra bit is bank selection */
 	stm32l4_info->wrpxxr_mask = ((max_pages >> (stm32l4_info->dual_bank_mode ? 1 : 0)) - 1);
@@ -1043,10 +1956,9 @@ static int stm32l4_probe(struct flash_bank *bank)
 	free(bank->sectors);
 
 	bank->size = (flash_size_kb + gap_size_kb) * 1024;
-	bank->base = STM32_FLASH_BANK_BASE;
 	bank->num_sectors = num_pages;
 	bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
-	if (bank->sectors == NULL) {
+	if (!bank->sectors) {
 		LOG_ERROR("failed to allocate bank sectors");
 		return ERROR_FAIL;
 	}
@@ -1069,40 +1981,34 @@ static int stm32l4_probe(struct flash_bank *bank)
 static int stm32l4_auto_probe(struct flash_bank *bank)
 {
 	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
-	if (stm32l4_info->probed)
-		return ERROR_OK;
+	if (stm32l4_info->probed) {
+		uint32_t optr_cur;
+
+		/* read flash option register and re-probe if optr value is changed */
+		int retval = stm32l4_read_flash_reg_by_index(bank, STM32_FLASH_OPTR_INDEX, &optr_cur);
+		if (retval != ERROR_OK)
+			return retval;
+
+		if (stm32l4_info->optr == optr_cur)
+			return ERROR_OK;
+	}
 
 	return stm32l4_probe(bank);
 }
 
-static int get_stm32l4_info(struct flash_bank *bank, char *buf, int buf_size)
+static int get_stm32l4_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
 	const struct stm32l4_part_info *part_info = stm32l4_info->part_info;
 
 	if (part_info) {
-		const char *rev_str = NULL;
-		uint16_t rev_id = stm32l4_info->idcode >> 16;
-		for (unsigned int i = 0; i < part_info->num_revs; i++) {
-			if (rev_id == part_info->revs[i].rev) {
-				rev_str = part_info->revs[i].str;
-
-				if (rev_str != NULL) {
-					snprintf(buf, buf_size, "%s - Rev: %s%s",
-						part_info->device_str, rev_str, stm32l4_info->probed ?
-							(stm32l4_info->dual_bank_mode ? " dual-bank" : " single-bank") : "");
-					return ERROR_OK;
-				}
-			}
-		}
-
-		snprintf(buf, buf_size, "%s - Rev: unknown (0x%04x)%s",
-			part_info->device_str, rev_id, stm32l4_info->probed ?
-				(stm32l4_info->dual_bank_mode ? " dual-bank" : " single-bank") : "");
-		return ERROR_OK;
+		const uint16_t rev_id = stm32l4_info->idcode >> 16;
+		command_print_sameline(cmd, "%s - Rev %s : 0x%04x", part_info->device_str,
+				get_stm32l4_rev_str(bank), rev_id);
+		if (stm32l4_info->probed)
+			command_print_sameline(cmd, " - %s-bank", get_stm32l4_bank_type_str(bank));
 	} else {
-		snprintf(buf, buf_size, "Cannot identify target as an %s device", device_families);
-		return ERROR_FAIL;
+		command_print_sameline(cmd, "Cannot identify target as an %s device", device_families);
 	}
 
 	return ERROR_OK;
@@ -1114,14 +2020,29 @@ static int stm32l4_mass_erase(struct flash_bank *bank)
 	struct target *target = bank->target;
 	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
 
+	if (stm32l4_is_otp(bank)) {
+		LOG_ERROR("cannot erase OTP memory");
+		return ERROR_FLASH_OPER_UNSUPPORTED;
+	}
+
 	uint32_t action = FLASH_MER1;
 
-	if (stm32l4_info->part_info->has_dual_bank)
+	if (stm32l4_info->part_info->flags & F_HAS_DUAL_BANK)
 		action |= FLASH_MER2;
 
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	if (stm32l4_info->tzen && (stm32l4_info->rdp == RDP_LEVEL_0)) {
+		/* set all FLASH pages as secure */
+		retval = stm32l4_set_secbb(bank, FLASH_SECBB_SECURE);
+		if (retval != ERROR_OK) {
+			/* restore all FLASH pages as non-secure */
+			stm32l4_set_secbb(bank, FLASH_SECBB_NON_SECURE); /* ignore the return value */
+			return retval;
+		}
 	}
 
 	retval = stm32l4_unlock_reg(bank);
@@ -1133,18 +2054,25 @@ static int stm32l4_mass_erase(struct flash_bank *bank)
 	if (retval != ERROR_OK)
 		goto err_lock;
 
-	retval = stm32l4_write_flash_reg(bank, STM32_FLASH_CR, action);
+	retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_CR_INDEX, action);
 	if (retval != ERROR_OK)
 		goto err_lock;
 
-	retval = stm32l4_write_flash_reg(bank, STM32_FLASH_CR, action | FLASH_STRT);
+	retval = stm32l4_write_flash_reg_by_index(bank, STM32_FLASH_CR_INDEX, action | FLASH_STRT);
 	if (retval != ERROR_OK)
 		goto err_lock;
 
 	retval = stm32l4_wait_status_busy(bank, FLASH_ERASE_TIMEOUT);
 
 err_lock:
-	retval2 = stm32l4_write_flash_reg(bank, STM32_FLASH_CR, FLASH_LOCK);
+	retval2 = stm32l4_write_flash_reg_by_index(bank, stm32l4_get_flash_cr_with_lock_index(bank), FLASH_LOCK);
+
+	if (stm32l4_info->tzen && (stm32l4_info->rdp == RDP_LEVEL_0)) {
+		/* restore all FLASH pages as non-secure */
+		int retval3 = stm32l4_set_secbb(bank, FLASH_SECBB_NON_SECURE);
+		if (retval3 != ERROR_OK)
+			return retval3;
+	}
 
 	if (retval != ERROR_OK)
 		return retval;
@@ -1161,19 +2089,14 @@ COMMAND_HANDLER(stm32l4_handle_mass_erase_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	retval = stm32l4_mass_erase(bank);
-	if (retval == ERROR_OK) {
-		/* set all sectors as erased */
-		for (unsigned int i = 0; i < bank->num_sectors; i++)
-			bank->sectors[i].is_erased = 1;
-
+	if (retval == ERROR_OK)
 		command_print(CMD, "stm32l4x mass erase complete");
-	} else {
+	else
 		command_print(CMD, "stm32l4x mass erase failed");
-	}
 
 	return retval;
 }
@@ -1187,17 +2110,17 @@ COMMAND_HANDLER(stm32l4_handle_option_read_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	uint32_t reg_offset, reg_addr;
 	uint32_t value = 0;
 
-	reg_offset = strtoul(CMD_ARGV[1], NULL, 16);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], reg_offset);
 	reg_addr = stm32l4_get_flash_reg(bank, reg_offset);
 
 	retval = stm32l4_read_flash_reg(bank, reg_offset, &value);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	command_print(CMD, "Option Register: <0x%" PRIx32 "> = 0x%" PRIx32 "", reg_addr, value);
@@ -1214,17 +2137,18 @@ COMMAND_HANDLER(stm32l4_handle_option_write_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	uint32_t reg_offset;
 	uint32_t value = 0;
 	uint32_t mask = 0xFFFFFFFF;
 
-	reg_offset = strtoul(CMD_ARGV[1], NULL, 16);
-	value = strtoul(CMD_ARGV[2], NULL, 16);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], reg_offset);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], value);
+
 	if (CMD_ARGC > 3)
-		mask = strtoul(CMD_ARGV[3], NULL, 16);
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[3], mask);
 
 	command_print(CMD, "%s Option written.\n"
 				"INFO: a reset or power cycle is required "
@@ -1234,6 +2158,87 @@ COMMAND_HANDLER(stm32l4_handle_option_write_command)
 	return retval;
 }
 
+COMMAND_HANDLER(stm32l4_handle_trustzone_command)
+{
+	if (CMD_ARGC < 1 || CMD_ARGC > 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	struct flash_bank *bank;
+	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
+	if (retval != ERROR_OK)
+		return retval;
+
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	if (!(stm32l4_info->part_info->flags & F_HAS_TZ)) {
+		LOG_ERROR("This device does not have a TrustZone");
+		return ERROR_FAIL;
+	}
+
+	retval = stm32l4_read_flash_reg_by_index(bank, STM32_FLASH_OPTR_INDEX, &stm32l4_info->optr);
+	if (retval != ERROR_OK)
+		return retval;
+
+	stm32l4_sync_rdp_tzen(bank);
+
+	if (CMD_ARGC == 1) {
+		/* only display the TZEN value */
+		LOG_INFO("Global TrustZone Security is %s", stm32l4_info->tzen ? "enabled" : "disabled");
+		return ERROR_OK;
+	}
+
+	bool new_tzen;
+	COMMAND_PARSE_ENABLE(CMD_ARGV[1], new_tzen);
+
+	if (new_tzen == stm32l4_info->tzen) {
+		LOG_INFO("The requested TZEN is already programmed");
+		return ERROR_OK;
+	}
+
+	if (new_tzen) {
+		if (stm32l4_info->rdp != RDP_LEVEL_0) {
+			LOG_ERROR("TZEN can be set only when RDP level is 0");
+			return ERROR_FAIL;
+		}
+		retval = stm32l4_write_option(bank, stm32l4_info->flash_regs[STM32_FLASH_OPTR_INDEX],
+				FLASH_TZEN, FLASH_TZEN);
+	} else {
+		/* Deactivation of TZEN (from 1 to 0) is only possible when the RDP is
+		 * changing to level 0 (from level 1 to level 0 or from level 0.5 to level 0). */
+		if (stm32l4_info->rdp != RDP_LEVEL_1 && stm32l4_info->rdp != RDP_LEVEL_0_5) {
+			LOG_ERROR("Deactivation of TZEN is only possible when the RDP is changing to level 0");
+			return ERROR_FAIL;
+		}
+
+		retval = stm32l4_write_option(bank, stm32l4_info->flash_regs[STM32_FLASH_OPTR_INDEX],
+				RDP_LEVEL_0, FLASH_RDP_MASK | FLASH_TZEN);
+	}
+
+	if (retval != ERROR_OK)
+		return retval;
+
+	return stm32l4_perform_obl_launch(bank);
+}
+
+COMMAND_HANDLER(stm32l4_handle_flashloader_command)
+{
+	if (CMD_ARGC < 1 || CMD_ARGC > 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	struct flash_bank *bank;
+	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
+	if (retval != ERROR_OK)
+		return retval;
+
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+
+	if (CMD_ARGC == 2)
+		COMMAND_PARSE_ENABLE(CMD_ARGV[1], stm32l4_info->use_flashloader);
+
+	command_print(CMD, "FlashLoader usage is %s", stm32l4_info->use_flashloader ? "enabled" : "disabled");
+
+	return ERROR_OK;
+}
+
 COMMAND_HANDLER(stm32l4_handle_option_load_command)
 {
 	if (CMD_ARGC != 1)
@@ -1241,31 +2246,19 @@ COMMAND_HANDLER(stm32l4_handle_option_load_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
-	retval = stm32l4_unlock_reg(bank);
-	if (ERROR_OK != retval)
+	retval = stm32l4_perform_obl_launch(bank);
+	if (retval != ERROR_OK) {
+		command_print(CMD, "stm32l4x option load failed");
 		return retval;
+	}
 
-	retval = stm32l4_unlock_option_reg(bank);
-	if (ERROR_OK != retval)
-		return retval;
-
-	/* Set OBL_LAUNCH bit in CR -> system reset and option bytes reload,
-	 * but the RMs explicitly do *NOT* list this as power-on reset cause, and:
-	 * "Note: If the read protection is set while the debugger is still
-	 * connected through JTAG/SWD, apply a POR (power-on reset) instead of a system reset."
-	 */
-	retval = stm32l4_write_flash_reg(bank, STM32_FLASH_CR, FLASH_OBL_LAUNCH);
 
 	command_print(CMD, "stm32l4x option load completed. Power-on reset might be required");
 
-	/* Need to re-probe after change */
-	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
-	stm32l4_info->probed = false;
-
-	return retval;
+	return ERROR_OK;
 }
 
 COMMAND_HANDLER(stm32l4_handle_lock_command)
@@ -1277,8 +2270,13 @@ COMMAND_HANDLER(stm32l4_handle_lock_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
+
+	if (stm32l4_is_otp(bank)) {
+		LOG_ERROR("cannot lock/unlock OTP memory");
+		return ERROR_FLASH_OPER_UNSUPPORTED;
+	}
 
 	target = bank->target;
 
@@ -1288,7 +2286,9 @@ COMMAND_HANDLER(stm32l4_handle_lock_command)
 	}
 
 	/* set readout protection level 1 by erasing the RDP option byte */
-	if (stm32l4_write_option(bank, STM32_FLASH_OPTR, 0, 0x000000FF) != ERROR_OK) {
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	if (stm32l4_write_option(bank, stm32l4_info->flash_regs[STM32_FLASH_OPTR_INDEX],
+			RDP_LEVEL_1, FLASH_RDP_MASK) != ERROR_OK) {
 		command_print(CMD, "%s failed to lock device", bank->driver->name);
 		return ERROR_OK;
 	}
@@ -1305,8 +2305,13 @@ COMMAND_HANDLER(stm32l4_handle_unlock_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
+
+	if (stm32l4_is_otp(bank)) {
+		LOG_ERROR("cannot lock/unlock OTP memory");
+		return ERROR_FLASH_OPER_UNSUPPORTED;
+	}
 
 	target = bank->target;
 
@@ -1315,10 +2320,111 @@ COMMAND_HANDLER(stm32l4_handle_unlock_command)
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	if (stm32l4_write_option(bank, STM32_FLASH_OPTR, RDP_LEVEL_0, 0x000000FF) != ERROR_OK) {
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	if (stm32l4_write_option(bank, stm32l4_info->flash_regs[STM32_FLASH_OPTR_INDEX],
+			RDP_LEVEL_0, FLASH_RDP_MASK) != ERROR_OK) {
 		command_print(CMD, "%s failed to unlock device", bank->driver->name);
 		return ERROR_OK;
 	}
+
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(stm32l4_handle_wrp_info_command)
+{
+	if (CMD_ARGC < 1 || CMD_ARGC > 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	struct flash_bank *bank;
+	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
+	if (retval != ERROR_OK)
+		return retval;
+
+	if (stm32l4_is_otp(bank)) {
+		LOG_ERROR("OTP memory does not have write protection areas");
+		return ERROR_FLASH_OPER_UNSUPPORTED;
+	}
+
+	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	enum stm32_bank_id dev_bank_id = STM32_ALL_BANKS;
+	if (CMD_ARGC == 2) {
+		if (strcmp(CMD_ARGV[1], "bank1") == 0)
+			dev_bank_id = STM32_BANK1;
+		else if (strcmp(CMD_ARGV[1], "bank2") == 0)
+			dev_bank_id = STM32_BANK2;
+		else
+			return ERROR_COMMAND_ARGUMENT_INVALID;
+	}
+
+	if (dev_bank_id == STM32_BANK2) {
+		if (!(stm32l4_info->part_info->flags & F_HAS_DUAL_BANK)) {
+			LOG_ERROR("this device has no second bank");
+			return ERROR_FAIL;
+		} else if (!stm32l4_info->dual_bank_mode) {
+			LOG_ERROR("this device is configured in single bank mode");
+			return ERROR_FAIL;
+		}
+	}
+
+	int ret;
+	unsigned int n_wrp, i;
+	struct stm32l4_wrp wrpxy[4];
+
+	ret = stm32l4_get_all_wrpxy(bank, dev_bank_id, wrpxy, &n_wrp);
+	if (ret != ERROR_OK)
+		return ret;
+
+	/* use bitmap and range helpers to better describe protected areas */
+	DECLARE_BITMAP(pages, bank->num_sectors);
+	bitmap_zero(pages, bank->num_sectors);
+
+	for (i = 0; i < n_wrp; i++) {
+		if (wrpxy[i].used) {
+			for (int p = wrpxy[i].first; p <= wrpxy[i].last; p++)
+				set_bit(p, pages);
+		}
+	}
+
+	/* we have at most 'n_wrp' WRP areas */
+	struct range ranges[n_wrp];
+	unsigned int ranges_count = 0;
+
+	bitmap_to_ranges(pages, bank->num_sectors, ranges, &ranges_count);
+
+	if (ranges_count > 0) {
+		/* pretty-print the protected ranges */
+		char *ranges_str = range_print_alloc(ranges, ranges_count);
+		command_print(CMD, "protected areas: %s", ranges_str);
+		free(ranges_str);
+	} else
+		command_print(CMD, "no protected areas");
+
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(stm32l4_handle_otp_command)
+{
+	if (CMD_ARGC < 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	struct flash_bank *bank;
+	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
+	if (retval != ERROR_OK)
+		return retval;
+
+	if (!stm32l4_is_otp(bank)) {
+		command_print(CMD, "the specified bank is not an OTP memory");
+		return ERROR_FAIL;
+	}
+	if (strcmp(CMD_ARGV[1], "enable") == 0)
+		stm32l4_otp_enable(bank, true);
+	else if (strcmp(CMD_ARGV[1], "disable") == 0)
+		stm32l4_otp_enable(bank, false);
+	else if (strcmp(CMD_ARGV[1], "show") == 0)
+		command_print(CMD, "OTP memory bank #%d is %s for write commands.",
+				bank->bank_number, stm32l4_otp_is_enabled(bank) ? "enabled" : "disabled");
+	else
+		return ERROR_COMMAND_SYNTAX_ERROR;
 
 	return ERROR_OK;
 }
@@ -1337,6 +2443,13 @@ static const struct command_registration stm32l4_exec_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.usage = "bank_id",
 		.help = "Unlock entire protected flash device.",
+	},
+	{
+		.name = "flashloader",
+		.handler = stm32l4_handle_flashloader_command,
+		.mode = COMMAND_EXEC,
+		.usage = "<bank_id> [enable|disable]",
+		.help = "Configure the flashloader usage",
 	},
 	{
 		.name = "mass_erase",
@@ -1360,11 +2473,32 @@ static const struct command_registration stm32l4_exec_command_handlers[] = {
 		.help = "Write device option bit fields with provided value.",
 	},
 	{
+		.name = "trustzone",
+		.handler = stm32l4_handle_trustzone_command,
+		.mode = COMMAND_EXEC,
+		.usage = "<bank_id> [enable|disable]",
+		.help = "Configure TrustZone security",
+	},
+	{
+		.name = "wrp_info",
+		.handler = stm32l4_handle_wrp_info_command,
+		.mode = COMMAND_EXEC,
+		.usage = "bank_id [bank1|bank2]",
+		.help = "list the protected areas using WRP",
+	},
+	{
 		.name = "option_load",
 		.handler = stm32l4_handle_option_load_command,
 		.mode = COMMAND_EXEC,
 		.usage = "bank_id",
 		.help = "Force re-load of device options (will cause device reset).",
+	},
+	{
+		.name = "otp",
+		.handler = stm32l4_handle_otp_command,
+		.mode = COMMAND_EXEC,
+		.usage = "<bank_id> <enable|disable|show>",
+		.help = "OTP (One Time Programmable) memory write enable/disable",
 	},
 	COMMAND_REGISTRATION_DONE
 };

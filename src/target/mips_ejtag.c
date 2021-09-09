@@ -32,7 +32,7 @@
 
 void mips_ejtag_set_instr(struct mips_ejtag *ejtag_info, uint32_t new_instr)
 {
-	assert(ejtag_info->tap != NULL);
+	assert(ejtag_info->tap);
 	struct jtag_tap *tap = ejtag_info->tap;
 
 	if (buf_get_u32(tap->cur_instr, 0, tap->ir_length) != new_instr) {
@@ -58,7 +58,7 @@ int mips_ejtag_get_idcode(struct mips_ejtag *ejtag_info)
 	return mips_ejtag_drscan_32(ejtag_info, &ejtag_info->idcode);
 }
 
-int mips_ejtag_get_impcode(struct mips_ejtag *ejtag_info)
+static int mips_ejtag_get_impcode(struct mips_ejtag *ejtag_info)
 {
 	mips_ejtag_set_instr(ejtag_info, EJTAG_INST_IMPCODE);
 
@@ -68,7 +68,7 @@ int mips_ejtag_get_impcode(struct mips_ejtag *ejtag_info)
 
 void mips_ejtag_add_scan_96(struct mips_ejtag *ejtag_info, uint32_t ctrl, uint32_t data, uint8_t *in_scan_buf)
 {
-	assert(ejtag_info->tap != NULL);
+	assert(ejtag_info->tap);
 	struct jtag_tap *tap = ejtag_info->tap;
 
 	struct scan_field field;
@@ -94,7 +94,7 @@ int mips_ejtag_drscan_64(struct mips_ejtag *ejtag_info, uint64_t *data)
 	struct jtag_tap *tap;
 	tap  = ejtag_info->tap;
 
-	if (tap == NULL)
+	if (!tap)
 		return ERROR_FAIL;
 	struct scan_field field;
 	uint8_t t[8] = { 0 }, r[8];
@@ -119,9 +119,10 @@ int mips_ejtag_drscan_64(struct mips_ejtag *ejtag_info, uint64_t *data)
 	return ERROR_OK;
 }
 
-void mips_ejtag_drscan_32_queued(struct mips_ejtag *ejtag_info, uint32_t data_out, uint8_t *data_in)
+static void mips_ejtag_drscan_32_queued(struct mips_ejtag *ejtag_info,
+		uint32_t data_out, uint8_t *data_in)
 {
-	assert(ejtag_info->tap != NULL);
+	assert(ejtag_info->tap);
 	struct jtag_tap *tap = ejtag_info->tap;
 
 	struct scan_field field;
@@ -159,7 +160,7 @@ void mips_ejtag_drscan_32_out(struct mips_ejtag *ejtag_info, uint32_t data)
 
 int mips_ejtag_drscan_8(struct mips_ejtag *ejtag_info, uint8_t *data)
 {
-	assert(ejtag_info->tap != NULL);
+	assert(ejtag_info->tap);
 	struct jtag_tap *tap = ejtag_info->tap;
 
 	struct scan_field field;
@@ -180,7 +181,7 @@ int mips_ejtag_drscan_8(struct mips_ejtag *ejtag_info, uint8_t *data)
 
 void mips_ejtag_drscan_8_out(struct mips_ejtag *ejtag_info, uint8_t data)
 {
-	assert(ejtag_info->tap != NULL);
+	assert(ejtag_info->tap);
 	struct jtag_tap *tap = ejtag_info->tap;
 
 	struct scan_field field;
@@ -267,7 +268,7 @@ error:
 
 int mips_ejtag_exit_debug(struct mips_ejtag *ejtag_info)
 {
-	pa_list pracc_list = {.instr = MIPS32_DRET(ejtag_info->isa), .addr = 0};
+	struct pa_list pracc_list = {.instr = MIPS32_DRET(ejtag_info->isa), .addr = 0};
 	struct pracc_queue_info ctx = {.max_code = 1, .pracc_list = &pracc_list, .code_count = 1, .store_count = 0};
 
 	/* execute our dret instruction */
@@ -295,8 +296,8 @@ static void mips_ejtag_init_mmr(struct mips_ejtag *ejtag_info)
 		ejtag_info->ejtag_dbm_offs	= EJTAG_V20_DBM_OFFS;
 		ejtag_info->ejtag_dbv_offs	= EJTAG_V20_DBV_OFFS;
 
-		ejtag_info->ejtag_iba_step_size	= EJTAG_V20_IBAn_STEP;
-		ejtag_info->ejtag_dba_step_size	= EJTAG_V20_DBAn_STEP;
+		ejtag_info->ejtag_iba_step_size	= EJTAG_V20_IBAN_STEP;
+		ejtag_info->ejtag_dba_step_size	= EJTAG_V20_DBAN_STEP;
 	} else {
 		ejtag_info->ejtag_ibs_addr	= EJTAG_V25_IBS;
 		ejtag_info->ejtag_iba0_addr	= EJTAG_V25_IBA0;
@@ -311,8 +312,8 @@ static void mips_ejtag_init_mmr(struct mips_ejtag *ejtag_info)
 		ejtag_info->ejtag_dbc_offs	= EJTAG_V25_DBC_OFFS;
 		ejtag_info->ejtag_dbv_offs	= EJTAG_V25_DBV_OFFS;
 
-		ejtag_info->ejtag_iba_step_size	= EJTAG_V25_IBAn_STEP;
-		ejtag_info->ejtag_dba_step_size	= EJTAG_V25_DBAn_STEP;
+		ejtag_info->ejtag_iba_step_size	= EJTAG_V25_IBAN_STEP;
+		ejtag_info->ejtag_dba_step_size	= EJTAG_V25_DBAN_STEP;
 	}
 }
 
@@ -420,7 +421,7 @@ int mips_ejtag_init(struct mips_ejtag *ejtag_info)
 
 int mips_ejtag_fastdata_scan(struct mips_ejtag *ejtag_info, int write_t, uint32_t *data)
 {
-	assert(ejtag_info->tap != NULL);
+	assert(ejtag_info->tap);
 	struct jtag_tap *tap = ejtag_info->tap;
 
 	struct scan_field fields[2];
@@ -529,7 +530,7 @@ int mips64_ejtag_fastdata_scan(struct mips_ejtag *ejtag_info, bool write_t, uint
 	struct jtag_tap *tap;
 
 	tap = ejtag_info->tap;
-	assert(tap != NULL);
+	assert(tap);
 
 	struct scan_field fields[2];
 	uint8_t spracc = 0;

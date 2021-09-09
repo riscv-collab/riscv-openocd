@@ -200,6 +200,7 @@ void default_flash_free_driver_priv(struct flash_bank *bank);
 
 /** Deallocates all flash banks */
 void flash_free_all_banks(void);
+
 /**
  * Provides default read implementation for flash memory.
  * @param bank The bank to read.
@@ -210,6 +211,18 @@ void flash_free_all_banks(void);
  */
 int default_flash_read(struct flash_bank *bank,
 		uint8_t *buffer, uint32_t offset, uint32_t count);
+
+/**
+ * Provides default verify implementation for flash memory.
+ * @param bank The bank to verify.
+ * @param buffer The data bytes to verify.
+ * @param offset The offset into the chip to verify.
+ * @param count The number of bytes to verify.
+ * @returns ERROR_OK if successful; otherwise, an error code.
+ */
+int default_flash_verify(struct flash_bank *bank,
+		const uint8_t *buffer, uint32_t offset, uint32_t count);
+
 /**
  * Provides default erased-bank check handling. Checks to see if
  * the flash driver knows they are erased; if things look uncertain,
@@ -217,7 +230,6 @@ int default_flash_read(struct flash_bank *bank,
  * @returns ERROR_OK if successful; otherwise, an error code.
  */
 int default_flash_blank_check(struct flash_bank *bank);
-
 /**
  * Returns the flash bank specified by @a name, which matches the
  * driver name and a suffix (option) specify the driver-specific
@@ -264,7 +276,8 @@ struct flash_bank *get_flash_bank_by_num_noprobe(unsigned int num);
  * @param target The target, presumed to contain one or more banks.
  * @param addr An address that is within the range of the bank.
  * @param check return ERROR_OK and result_bank NULL if the bank does not exist
- * @returns The struct flash_bank located at @a addr, or NULL.
+ * @param result_bank The struct flash_bank located at @a addr, or NULL.
+ * @returns ERROR_OK on success, or an error indicating the problem.
  */
 int get_flash_bank_by_addr(struct target *target, target_addr_t addr, bool check,
 		struct flash_bank **result_bank);

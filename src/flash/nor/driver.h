@@ -156,6 +156,20 @@ struct flash_driver {
 			uint8_t *buffer, uint32_t offset, uint32_t count);
 
 	/**
+	 * Verify data in flash.  Note CPU address will be
+	 * "bank->base + offset", while the physical address is
+	 * dependent upon current target MMU mappings.
+	 *
+	 * @param bank The bank to verify
+	 * @param buffer The data bytes to verify against.
+	 * @param offset The offset into the chip to verify.
+	 * @param count The number of bytes to verify.
+	 * @returns ERROR_OK if successful; otherwise, an error code.
+	 */
+	int (*verify)(struct flash_bank *bank,
+			const uint8_t *buffer, uint32_t offset, uint32_t count);
+
+	/**
 	 * Probe to determine what kind of flash is present.
 	 * This is invoked by the "probe" script command.
 	 *
@@ -191,15 +205,14 @@ struct flash_driver {
 
 	/**
 	 * Display human-readable information about the flash
-	 * bank into the given buffer.  Drivers must be careful to avoid
-	 * overflowing the buffer.
+	 * bank.
 	 *
 	 * @param bank - the bank to get info about
-	 * @param char - where to put the text for the human to read
-	 * @param buf_size - the size of the human buffer.
+	 * @param cmd - command invocation instance for which to generate
+	 *              the textual output
 	 * @returns ERROR_OK if successful; otherwise, an error code.
 	 */
-	int (*info)(struct flash_bank *bank, char *buf, int buf_size);
+	int (*info)(struct flash_bank *bank, struct command_invocation *cmd);
 
 	/**
 	 * A more gentle flavor of flash_driver_s::probe, performing

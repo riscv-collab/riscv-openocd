@@ -490,7 +490,7 @@ static int dpmv8_bpwp_disable(struct arm_dpm *dpm, unsigned index_t)
 
 /* Read coprocessor */
 static int dpmv8_mrc(struct target *target, int cpnum,
-	uint32_t op1, uint32_t op2, uint32_t CRn, uint32_t CRm,
+	uint32_t op1, uint32_t op2, uint32_t crn, uint32_t crm,
 	uint32_t *value)
 {
 	struct arm *arm = target_to_arm(target);
@@ -502,12 +502,12 @@ static int dpmv8_mrc(struct target *target, int cpnum,
 		return retval;
 
 	LOG_DEBUG("MRC p%d, %d, r0, c%d, c%d, %d", cpnum,
-		(int) op1, (int) CRn,
-		(int) CRm, (int) op2);
+		(int) op1, (int) crn,
+		(int) crm, (int) op2);
 
 	/* read coprocessor register into R0; return via DCC */
 	retval = dpm->instr_read_data_r0(dpm,
-			ARMV4_5_MRC(cpnum, op1, 0, CRn, CRm, op2),
+			ARMV4_5_MRC(cpnum, op1, 0, crn, crm, op2),
 			value);
 
 	/* (void) */ dpm->finish(dpm);
@@ -515,7 +515,7 @@ static int dpmv8_mrc(struct target *target, int cpnum,
 }
 
 static int dpmv8_mcr(struct target *target, int cpnum,
-	uint32_t op1, uint32_t op2, uint32_t CRn, uint32_t CRm,
+	uint32_t op1, uint32_t op2, uint32_t crn, uint32_t crm,
 	uint32_t value)
 {
 	struct arm *arm = target_to_arm(target);
@@ -527,12 +527,12 @@ static int dpmv8_mcr(struct target *target, int cpnum,
 		return retval;
 
 	LOG_DEBUG("MCR p%d, %d, r0, c%d, c%d, %d", cpnum,
-		(int) op1, (int) CRn,
-		(int) CRm, (int) op2);
+		(int) op1, (int) crn,
+		(int) crm, (int) op2);
 
 	/* read DCC into r0; then write coprocessor register from R0 */
 	retval = dpm->instr_write_data_r0(dpm,
-			ARMV4_5_MCR(cpnum, op1, 0, CRn, CRm, op2),
+			ARMV4_5_MCR(cpnum, op1, 0, crn, crm, op2),
 			value);
 
 	/* (void) */ dpm->finish(dpm);
@@ -782,7 +782,7 @@ int armv8_dpm_read_current_registers(struct arm_dpm *dpm)
 		struct arm_reg *arm_reg;
 
 		r = armv8_reg_current(arm, i);
-		if (r->valid)
+		if (!r->exist || r->valid)
 			continue;
 
 		/* Skip reading FP-SIMD registers */
@@ -922,6 +922,9 @@ int armv8_dpm_write_dirty_registers(struct arm_dpm *dpm, bool bpwp)
 	for (unsigned i = 1; i < cache->num_regs; i++) {
 		struct arm_reg *r;
 
+		/* skip non-existent */
+		if (!cache->reg_list[i].exist)
+			continue;
 		/* skip PC and CPSR */
 		if (i == ARMV8_PC || i == ARMV8_xPSR)
 			continue;
@@ -1047,7 +1050,7 @@ static int armv8_dpm_full_context(struct target *target)
 		for (unsigned i = 0; i < cache->num_regs; i++) {
 			struct arm_reg *r;
 
-			if (cache->reg_list[i].valid)
+			if (!cache->reg_list[i].exist || cache->reg_list[i].valid)
 				continue;
 			r = cache->reg_list[i].arch_info;
 
@@ -1279,27 +1282,6 @@ static int dpmv8_remove_watchpoint(struct target *target, struct watchpoint *wp)
 	return retval;
 }
 
-void armv8_dpm_report_wfar(struct arm_dpm *dpm, uint64_t addr)
-{
-	switch (dpm->arm->core_state) {
-		case ARM_STATE_ARM:
-		case ARM_STATE_AARCH64:
-			addr -= 8;
-			break;
-		case ARM_STATE_THUMB:
-		case ARM_STATE_THUMB_EE:
-			addr -= 4;
-			break;
-		case ARM_STATE_JAZELLE:
-			/* ?? */
-			break;
-		default:
-			LOG_DEBUG("Unknown core_state");
-			break;
-	}
-	dpm->wp_pc = addr;
-}
-
 /*
  * Handle exceptions taken in debug state. This happens mostly for memory
  * accesses that violated a MMU policy. Taking an exception while in debug
@@ -1428,7 +1410,7 @@ int armv8_dpm_setup(struct arm_dpm *dpm)
 	arm->read_core_reg = armv8_dpm_read_core_reg;
 	arm->write_core_reg = armv8_dpm_write_core_reg;
 
-	if (arm->core_cache == NULL) {
+	if (!arm->core_cache) {
 		cache = armv8_build_reg_cache(target);
 		if (!cache)
 			return ERROR_FAIL;
@@ -1465,8 +1447,10 @@ int armv8_dpm_setup(struct arm_dpm *dpm)
 	}
 
 	/* watchpoint setup */
-	target->type->add_watchpoint = dpmv8_add_watchpoint;
-	target->type->remove_watchpoint = dpmv8_remove_watchpoint;
+	if (!target->type->add_watchpoint) {
+		target->type->add_watchpoint = dpmv8_add_watchpoint;
+		target->type->remove_watchpoint = dpmv8_remove_watchpoint;
+	}
 
 	/* FIXME add vector catch support */
 

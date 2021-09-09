@@ -24,7 +24,7 @@
 
 #define STACK_DEPTH	32
 
-typedef struct {
+struct mips64_pracc_context {
 	uint64_t *local_iparam;
 	unsigned num_iparam;
 	uint64_t *local_oparam;
@@ -34,7 +34,7 @@ typedef struct {
 	uint64_t stack[STACK_DEPTH];
 	unsigned stack_offset;
 	struct mips_ejtag *ejtag_info;
-} mips64_pracc_context;
+};
 
 static int wait_for_pracc_rw(struct mips_ejtag *ejtag_info, uint32_t *ctrl)
 {
@@ -61,7 +61,7 @@ static int wait_for_pracc_rw(struct mips_ejtag *ejtag_info, uint32_t *ctrl)
 	return ERROR_OK;
 }
 
-static int mips64_pracc_exec_read(mips64_pracc_context *ctx, uint64_t address)
+static int mips64_pracc_exec_read(struct mips64_pracc_context *ctx, uint64_t address)
 {
 	struct mips_ejtag *ejtag_info = ctx->ejtag_info;
 	unsigned offset;
@@ -79,7 +79,7 @@ static int mips64_pracc_exec_read(mips64_pracc_context *ctx, uint64_t address)
 			return ERROR_JTAG_DEVICE_ERROR;
 		}
 
-		if (ctx->local_iparam == NULL) {
+		if (!ctx->local_iparam) {
 			LOG_ERROR("Error: unexpected reading of input parameter");
 			return ERROR_JTAG_DEVICE_ERROR;
 		}
@@ -91,7 +91,7 @@ static int mips64_pracc_exec_read(mips64_pracc_context *ctx, uint64_t address)
 		   && (address < MIPS64_PRACC_PARAM_OUT + ctx->num_oparam * MIPS64_PRACC_DATA_STEP)) {
 
 		offset = (address - MIPS64_PRACC_PARAM_OUT) / MIPS64_PRACC_DATA_STEP;
-		if (ctx->local_oparam == NULL) {
+		if (!ctx->local_oparam) {
 			LOG_ERROR("Error: unexpected reading of output parameter");
 			return ERROR_JTAG_DEVICE_ERROR;
 		}
@@ -149,7 +149,7 @@ static int mips64_pracc_exec_read(mips64_pracc_context *ctx, uint64_t address)
 	return jtag_execute_queue();
 }
 
-static int mips64_pracc_exec_write(mips64_pracc_context *ctx, uint64_t address)
+static int mips64_pracc_exec_write(struct mips64_pracc_context *ctx, uint64_t address)
 {
 	uint32_t ejtag_ctrl;
 	uint64_t data;
@@ -179,7 +179,7 @@ static int mips64_pracc_exec_write(mips64_pracc_context *ctx, uint64_t address)
 	if ((address >= MIPS64_PRACC_PARAM_IN)
 		&& (address < MIPS64_PRACC_PARAM_IN + ctx->num_iparam * MIPS64_PRACC_DATA_STEP)) {
 		offset = (address - MIPS64_PRACC_PARAM_IN) / MIPS64_PRACC_DATA_STEP;
-		if (ctx->local_iparam == NULL) {
+		if (!ctx->local_iparam) {
 			LOG_ERROR("Error: unexpected writing of input parameter");
 			return ERROR_JTAG_DEVICE_ERROR;
 		}
@@ -187,7 +187,7 @@ static int mips64_pracc_exec_write(mips64_pracc_context *ctx, uint64_t address)
 	} else if ((address >= MIPS64_PRACC_PARAM_OUT)
 		&& (address < MIPS64_PRACC_PARAM_OUT + ctx->num_oparam * MIPS64_PRACC_DATA_STEP)) {
 		offset = (address - MIPS64_PRACC_PARAM_OUT) / MIPS64_PRACC_DATA_STEP;
-		if (ctx->local_oparam == NULL) {
+		if (!ctx->local_oparam) {
 			LOG_ERROR("Error: unexpected writing of output parameter");
 			return ERROR_JTAG_DEVICE_ERROR;
 		}
@@ -214,7 +214,7 @@ int mips64_pracc_exec(struct mips_ejtag *ejtag_info,
 {
 	uint32_t ejtag_ctrl;
 	uint64_t address = 0, address_prev = 0, data;
-	mips64_pracc_context ctx;
+	struct mips64_pracc_context ctx;
 	int retval;
 	int pass = 0;
 	bool first_time_call = true;
@@ -283,7 +283,7 @@ int mips64_pracc_exec(struct mips_ejtag *ejtag_info,
 		if (ejtag_ctrl & EJTAG_CTRL_PRNW) {
 			retval = mips64_pracc_exec_write(&ctx, address);
 			if (retval != ERROR_OK) {
-				printf("ERROR mips64_pracc_exec_write\n");
+				LOG_ERROR("mips64_pracc_exec_write() failed");
 				return retval;
 			}
 		} else {
@@ -296,7 +296,7 @@ int mips64_pracc_exec(struct mips_ejtag *ejtag_info,
 			}
 			retval = mips64_pracc_exec_read(&ctx, address);
 			if (retval != ERROR_OK) {
-				printf("ERROR mips64_pracc_exec_read\n");
+				LOG_ERROR("mips64_pracc_exec_read() failed");
 				return retval;
 			}
 

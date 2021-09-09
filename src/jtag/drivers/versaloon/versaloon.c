@@ -19,11 +19,12 @@
 #include "config.h"
 #endif
 
+#include "versaloon_include.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <libusb.h>
 
-#include "versaloon_include.h"
 #include "versaloon.h"
 #include "versaloon_internal.h"
 #include "usbtoxxx/usbtoxxx.h"
@@ -35,15 +36,15 @@ uint16_t versaloon_buf_size;
 struct versaloon_pending_t versaloon_pending[VERSALOON_MAX_PENDING_NUMBER];
 uint16_t versaloon_pending_idx;
 
-libusb_device_handle *versaloon_usb_device_handle;
+struct libusb_device_handle *versaloon_usb_device_handle;
 static uint32_t versaloon_usb_to = VERSALOON_TIMEOUT;
 
-RESULT versaloon_init(void);
-RESULT versaloon_fini(void);
-RESULT versaloon_get_target_voltage(uint16_t *voltage);
-RESULT versaloon_set_target_voltage(uint16_t voltage);
-RESULT versaloon_delay_ms(uint16_t ms);
-RESULT versaloon_delay_us(uint16_t us);
+static RESULT versaloon_init(void);
+static RESULT versaloon_fini(void);
+static RESULT versaloon_get_target_voltage(uint16_t *voltage);
+static RESULT versaloon_set_target_voltage(uint16_t voltage);
+static RESULT versaloon_delay_ms(uint16_t ms);
+static RESULT versaloon_delay_us(uint16_t us);
 
 struct versaloon_interface_t versaloon_interface = {
 	.init				= versaloon_init,
@@ -116,16 +117,16 @@ void versaloon_free_want_pos(void)
 	struct versaloon_want_pos_t *tmp, *free_tmp;
 
 	tmp = versaloon_want_pos;
-	while (tmp != NULL) {
+	while (tmp) {
 		free_tmp = tmp;
 		tmp = tmp->next;
 		free(free_tmp);
 	}
 	versaloon_want_pos = NULL;
 
-	for (i = 0; i < dimof(versaloon_pending); i++) {
+	for (i = 0; i < ARRAY_SIZE(versaloon_pending); i++) {
 		tmp = versaloon_pending[i].pos;
-		while (tmp != NULL) {
+		while (tmp) {
 			free_tmp = tmp;
 			tmp = tmp->next;
 			free(free_tmp);
@@ -139,7 +140,7 @@ RESULT versaloon_add_want_pos(uint16_t offset, uint16_t size, uint8_t *buff)
 	struct versaloon_want_pos_t *new_pos = NULL;
 
 	new_pos = malloc(sizeof(*new_pos));
-	if (NULL == new_pos) {
+	if (!new_pos) {
 		LOG_ERROR(ERRMSG_NOT_ENOUGH_MEMORY);
 		return ERRCODE_NOT_ENOUGH_MEMORY;
 	}
@@ -148,12 +149,12 @@ RESULT versaloon_add_want_pos(uint16_t offset, uint16_t size, uint8_t *buff)
 	new_pos->buff = buff;
 	new_pos->next = NULL;
 
-	if (NULL == versaloon_want_pos)
+	if (!versaloon_want_pos)
 		versaloon_want_pos = new_pos;
 	else {
 		struct versaloon_want_pos_t *tmp = versaloon_want_pos;
 
-		while (tmp->next != NULL)
+		while (tmp->next)
 			tmp = tmp->next;
 		tmp->next = new_pos;
 	}
@@ -198,11 +199,11 @@ RESULT versaloon_send_command(uint16_t out_len, uint16_t *inlen)
 	int transferred;
 
 #if PARAM_CHECK
-	if (NULL == versaloon_buf) {
+	if (!versaloon_buf) {
 		LOG_BUG(ERRMSG_INVALID_BUFFER, TO_STR(versaloon_buf));
 		return ERRCODE_INVALID_BUFFER;
 	}
-	if ((0 == out_len) || (out_len > versaloon_interface.usb_setting.buf_size)) {
+	if ((out_len == 0) || (out_len > versaloon_interface.usb_setting.buf_size)) {
 		LOG_BUG(ERRMSG_INVALID_PARAMETER, __func__);
 		return ERRCODE_INVALID_PARAMETER;
 	}
@@ -211,17 +212,17 @@ RESULT versaloon_send_command(uint16_t out_len, uint16_t *inlen)
 	ret = libusb_bulk_transfer(versaloon_usb_device_handle,
 			versaloon_interface.usb_setting.ep_out,
 			versaloon_buf, out_len, &transferred, versaloon_usb_to);
-	if (0 != ret || transferred != out_len) {
+	if (ret != 0 || transferred != out_len) {
 		LOG_ERROR(ERRMSG_FAILURE_OPERATION, "send usb data");
 		return ERRCODE_FAILURE_OPERATION;
 	}
 
-	if (inlen != NULL) {
+	if (inlen) {
 		ret = libusb_bulk_transfer(versaloon_usb_device_handle,
 			versaloon_interface.usb_setting.ep_in,
 			versaloon_buf, versaloon_interface.usb_setting.buf_size,
 			&transferred, versaloon_usb_to);
-		if (0 == ret) {
+		if (ret == 0) {
 			*inlen = (uint16_t)transferred;
 			return ERROR_OK;
 		} else {
@@ -233,7 +234,7 @@ RESULT versaloon_send_command(uint16_t out_len, uint16_t *inlen)
 }
 
 #define VERSALOON_RETRY_CNT 10
-RESULT versaloon_init(void)
+static RESULT versaloon_init(void)
 {
 	uint16_t ret = 0;
 	uint8_t retry;
@@ -241,7 +242,7 @@ RESULT versaloon_init(void)
 
 	/* malloc temporary buffer */
 	versaloon_buf = malloc(versaloon_interface.usb_setting.buf_size);
-	if (NULL == versaloon_buf) {
+	if (!versaloon_buf) {
 		LOG_ERROR(ERRMSG_NOT_ENOUGH_MEMORY);
 		return ERRCODE_NOT_ENOUGH_MEMORY;
 	}
@@ -253,11 +254,11 @@ RESULT versaloon_init(void)
 	versaloon_usb_to = 100;
 	for (retry = 0; retry < VERSALOON_RETRY_CNT; retry++) {
 		versaloon_buf[0] = VERSALOON_GET_INFO;
-		if ((ERROR_OK == versaloon_send_command(1, &ret)) && (ret >= 3))
+		if ((versaloon_send_command(1, &ret) == ERROR_OK) && (ret >= 3))
 			break;
 	}
 	versaloon_usb_to = timeout_tmp;
-	if (VERSALOON_RETRY_CNT == retry) {
+	if (retry == VERSALOON_RETRY_CNT) {
 		versaloon_fini();
 		LOG_ERROR(ERRMSG_FAILURE_OPERATION, "communicate with versaloon");
 		return ERRCODE_FAILURE_OPERATION;
@@ -273,27 +274,27 @@ RESULT versaloon_init(void)
 	versaloon_buf = NULL;
 
 	versaloon_buf = malloc(versaloon_interface.usb_setting.buf_size);
-	if (NULL == versaloon_buf) {
+	if (!versaloon_buf) {
 		versaloon_fini();
 		LOG_ERROR(ERRMSG_NOT_ENOUGH_MEMORY);
 		return ERRCODE_NOT_ENOUGH_MEMORY;
 	}
 	versaloon_cmd_buf = malloc(versaloon_interface.usb_setting.buf_size - 3);
-	if (NULL == versaloon_cmd_buf) {
+	if (!versaloon_cmd_buf) {
 		versaloon_fini();
 		LOG_ERROR(ERRMSG_NOT_ENOUGH_MEMORY);
 		return ERRCODE_NOT_ENOUGH_MEMORY;
 	}
-	if (ERROR_OK != usbtoxxx_init()) {
+	if (usbtoxxx_init() != ERROR_OK) {
 		LOG_ERROR(ERRMSG_FAILURE_OPERATION, "initialize usbtoxxx");
 		return ERROR_FAIL;
 	}
 	return versaloon_get_target_voltage(&ret);
 }
 
-RESULT versaloon_fini(void)
+static RESULT versaloon_fini(void)
 {
-	if (versaloon_usb_device_handle != NULL) {
+	if (versaloon_usb_device_handle) {
 		usbtoxxx_fini();
 		versaloon_free_want_pos();
 
@@ -309,7 +310,7 @@ RESULT versaloon_fini(void)
 	return ERROR_OK;
 }
 
-RESULT versaloon_set_target_voltage(uint16_t voltage)
+static RESULT versaloon_set_target_voltage(uint16_t voltage)
 {
 	usbtopwr_init(0);
 	usbtopwr_config(0);
@@ -319,16 +320,16 @@ RESULT versaloon_set_target_voltage(uint16_t voltage)
 	return usbtoxxx_execute_command();
 }
 
-RESULT versaloon_get_target_voltage(uint16_t *voltage)
+static RESULT versaloon_get_target_voltage(uint16_t *voltage)
 {
 	uint16_t inlen;
 
 #if PARAM_CHECK
-	if (NULL == versaloon_buf) {
+	if (!versaloon_buf) {
 		LOG_BUG(ERRMSG_INVALID_BUFFER, TO_STR(versaloon_buf));
 		return ERRCODE_INVALID_BUFFER;
 	}
-	if (NULL == voltage) {
+	if (!voltage) {
 		LOG_BUG(ERRMSG_INVALID_PARAMETER, __func__);
 		return ERRCODE_INVALID_PARAMETER;
 	}
@@ -336,7 +337,7 @@ RESULT versaloon_get_target_voltage(uint16_t *voltage)
 
 	versaloon_buf[0] = VERSALOON_GET_TVCC;
 
-	if ((ERROR_OK != versaloon_send_command(1, &inlen)) || (inlen != 2)) {
+	if ((versaloon_send_command(1, &inlen) != ERROR_OK) || (inlen != 2)) {
 		LOG_ERROR(ERRMSG_FAILURE_OPERATION, "communicate with versaloon");
 		return ERRCODE_FAILURE_OPERATION;
 	} else {
@@ -345,12 +346,12 @@ RESULT versaloon_get_target_voltage(uint16_t *voltage)
 	}
 }
 
-RESULT versaloon_delay_ms(uint16_t ms)
+static RESULT versaloon_delay_ms(uint16_t ms)
 {
 	return usbtodelay_delay(ms | 0x8000);
 }
 
-RESULT versaloon_delay_us(uint16_t us)
+static RESULT versaloon_delay_us(uint16_t us)
 {
 	return usbtodelay_delay(us & 0x7FFF);
 }

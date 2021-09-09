@@ -68,6 +68,7 @@
 #include "config.h"
 #endif
 
+#include <helper/align.h>
 #include <helper/time_support.h>
 
 #include "mips32.h"
@@ -120,7 +121,7 @@ static void mips32_pracc_finish(struct mips_ejtag *ejtag_info)
 	mips_ejtag_drscan_32_out(ejtag_info, ctrl);
 }
 
-int mips32_pracc_clean_text_jump(struct mips_ejtag *ejtag_info)
+static int mips32_pracc_clean_text_jump(struct mips_ejtag *ejtag_info)
 {
 	uint32_t jt_code = MIPS32_J(ejtag_info->isa, MIPS32_PRACC_TEXT);
 	pracc_swap16_array(ejtag_info, &jt_code, 1);
@@ -317,7 +318,7 @@ void pracc_add(struct pracc_queue_info *ctx, uint32_t addr, uint32_t instr)
 	if (ctx->retval != ERROR_OK)	/* On previous out of memory, return */
 		return;
 	if (ctx->code_count == ctx->max_code) {
-		void *p = realloc(ctx->pracc_list, sizeof(pa_list) * (ctx->max_code + PRACC_BLOCK));
+		void *p = realloc(ctx->pracc_list, sizeof(struct pa_list) * (ctx->max_code + PRACC_BLOCK));
 		if (p) {
 			ctx->max_code += PRACC_BLOCK;
 			ctx->pracc_list = p;
@@ -373,7 +374,7 @@ int mips32_pracc_queue_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_in
 		} scan_32;
 
 	} *scan_in = malloc(sizeof(union scan_in) * (ctx->code_count + ctx->store_count));
-	if (scan_in == NULL) {
+	if (!scan_in) {
 		LOG_ERROR("Out of memory");
 		return ERROR_FAIL;
 	}
@@ -453,7 +454,7 @@ exit:
 	return retval;
 }
 
-int mips32_pracc_read_u32(struct mips_ejtag *ejtag_info, uint32_t addr, uint32_t *buf)
+static int mips32_pracc_read_u32(struct mips_ejtag *ejtag_info, uint32_t addr, uint32_t *buf)
 {
 	struct pracc_queue_info ctx = {.ejtag_info = ejtag_info};
 	pracc_queue_init(&ctx);
@@ -483,7 +484,7 @@ int mips32_pracc_read_mem(struct mips_ejtag *ejtag_info, uint32_t addr, int size
 	uint32_t *data = NULL;
 	if (size != 4) {
 		data = malloc(256 * sizeof(uint32_t));
-		if (data == NULL) {
+		if (!data) {
 			LOG_ERROR("Out of memory");
 			goto exit;
 		}
@@ -658,7 +659,7 @@ static int mips32_pracc_synchronize_cache(struct mips_ejtag *ejtag_info,
 		goto exit;  /* Nothing to do */
 
 	/* make sure clsiz is power of 2 */
-	if (clsiz & (clsiz - 1)) {
+	if (!IS_PWR_OF_2(clsiz)) {
 		LOG_DEBUG("clsiz must be power of 2");
 		ctx.retval = ERROR_FAIL;
 		goto exit;

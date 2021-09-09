@@ -310,7 +310,7 @@ static int nds32_v3_add_breakpoint(struct target *target,
 		return ERROR_OK;
 	} else if (breakpoint->type == BKPT_SOFT) {
 		result = nds32_add_software_breakpoint(target, breakpoint);
-		if (ERROR_OK != result) {
+		if (result != ERROR_OK) {
 			/* auto convert to hardware breakpoint if failed */
 			if (nds32->auto_convert_hw_bp) {
 				/* convert to hardware breakpoint */
@@ -404,7 +404,7 @@ static int nds32_v3_remove_watchpoint(struct target *target,
 	return ERROR_OK;
 }
 
-struct nds32_v3_common_callback nds32_v3_common_callback = {
+static struct nds32_v3_common_callback nds32_v3_common_callback = {
 	.check_interrupt_stack = nds32_v3_check_interrupt_stack,
 	.restore_interrupt_stack = nds32_v3_restore_interrupt_stack,
 	.activate_hardware_breakpoint = nds32_v3_activate_hardware_breakpoint,

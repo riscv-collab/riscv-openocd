@@ -253,7 +253,7 @@ static int nulink_usb_write_debug_reg(void *handle, uint32_t addr, uint32_t val)
 {
 	struct nulink_usb_handle_s *h = handle;
 
-	LOG_DEBUG("nulink_usb_write_debug_reg 0x%08" PRIX32 "0x%08" PRIX32, addr, val);
+	LOG_DEBUG("nulink_usb_write_debug_reg 0x%08" PRIX32 " 0x%08" PRIX32, addr, val);
 
 	nulink_usb_init_buffer(handle, 8 + 12 * 1);
 	/* set command ID */
@@ -411,7 +411,7 @@ static int nulink_usb_step(void *handle)
 	return res;
 }
 
-static int nulink_usb_read_reg(void *handle, int num, uint32_t *val)
+static int nulink_usb_read_reg(void *handle, unsigned int regsel, uint32_t *val)
 {
 	struct nulink_usb_handle_s *h = handle;
 
@@ -434,7 +434,7 @@ static int nulink_usb_read_reg(void *handle, int num, uint32_t *val)
 	h->cmdbuf[h->cmdidx] = 0;
 	h->cmdidx += 1;
 	/* u32Addr */
-	h_u32_to_le(h->cmdbuf + h->cmdidx, num);
+	h_u32_to_le(h->cmdbuf + h->cmdidx, regsel);
 	h->cmdidx += 4;
 	/* u32Data */
 	h_u32_to_le(h->cmdbuf + h->cmdidx, 0);
@@ -450,7 +450,7 @@ static int nulink_usb_read_reg(void *handle, int num, uint32_t *val)
 	return res;
 }
 
-static int nulink_usb_write_reg(void *handle, int num, uint32_t val)
+static int nulink_usb_write_reg(void *handle, unsigned int regsel, uint32_t val)
 {
 	struct nulink_usb_handle_s *h = handle;
 
@@ -473,7 +473,7 @@ static int nulink_usb_write_reg(void *handle, int num, uint32_t val)
 	h->cmdbuf[h->cmdidx] = 0;
 	h->cmdidx += 1;
 	/* u32Addr */
-	h_u32_to_le(h->cmdbuf + h->cmdidx, num);
+	h_u32_to_le(h->cmdbuf + h->cmdidx, regsel);
 	h->cmdidx += 4;
 	/* u32Data */
 	h_u32_to_le(h->cmdbuf + h->cmdidx, val);
@@ -503,7 +503,7 @@ static int nulink_usb_read_mem8(void *handle, uint32_t addr, uint16_t len,
 		aligned_addr = aligned_addr * 4;
 		offset = addr - aligned_addr;
 		LOG_DEBUG("nulink_usb_read_mem8: unaligned address addr 0x%08" PRIx32
-				"/aligned addr 0x%08" PRIx32 "offset %" PRIu32,
+				"/aligned addr 0x%08" PRIx32 " offset %" PRIu32,
 				addr, aligned_addr, offset);
 
 		addr = aligned_addr;
@@ -844,11 +844,11 @@ static int nulink_usb_read_mem(void *handle, uint32_t addr, uint32_t size,
 		/* the nulink only supports 8/32bit memory read/writes
 		 * honour 32bit, all others will be handled as 8bit access */
 		if (size == 4) {
-			/* When in jtag mode the nulink uses the auto-increment functinality.
+			/* When in jtag mode the nulink uses the auto-increment functionality.
 			 * However it expects us to pass the data correctly, this includes
 			 * alignment and any page boundaries. We already do this as part of the
 			 * adi_v5 implementation, but the nulink is a hla adapter and so this
-			 * needs implementiong manually.
+			 * needs implementing manually.
 			 * currently this only affects jtag mode, they do single
 			 * access in SWD mode - but this may change and so we do it for both modes */
 
@@ -909,11 +909,11 @@ static int nulink_usb_write_mem(void *handle, uint32_t addr, uint32_t size,
 		/* the nulink only supports 8/32bit memory read/writes
 		 * honour 32bit, all others will be handled as 8bit access */
 		if (size == 4) {
-			/* When in jtag mode the nulink uses the auto-increment functinality.
+			/* When in jtag mode the nulink uses the auto-increment functionality.
 			 * However it expects us to pass the data correctly, this includes
 			 * alignment and any page boundaries. We already do this as part of the
 			 * adi_v5 implementation, but the nulink is a hla adapter and so this
-			 * needs implementiong manually.
+			 * needs implementing manually.
 			 * currently this only affects jtag mode, do single
 			 * access in SWD mode - but this may change and so we do it for both modes */
 

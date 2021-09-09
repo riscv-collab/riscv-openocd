@@ -150,7 +150,7 @@ static int xscale_verify_pointer(struct command_invocation *cmd,
 
 static int xscale_jtag_set_instr(struct jtag_tap *tap, uint32_t new_instr, tap_state_t end_state)
 {
-	assert(tap != NULL);
+	assert(tap);
 
 	if (buf_get_u32(tap->cur_instr, 0, tap->ir_length) != new_instr) {
 		struct scan_field field;
@@ -1158,7 +1158,7 @@ static int xscale_resume(struct target *target, int current,
 		struct breakpoint *breakpoint;
 		breakpoint = breakpoint_find(target,
 				buf_get_u32(arm->pc->value, 0, 32));
-		if (breakpoint != NULL) {
+		if (breakpoint) {
 			uint32_t next_pc;
 			enum trace_mode saved_trace_mode;
 
@@ -1421,7 +1421,7 @@ static int xscale_step(struct target *target, int current,
 	if (handle_breakpoints)
 		breakpoint = breakpoint_find(target,
 				buf_get_u32(arm->pc->value, 0, 32));
-	if (breakpoint != NULL) {
+	if (breakpoint) {
 		retval = xscale_unset_breakpoint(target, breakpoint);
 		if (retval != ERROR_OK)
 			return retval;
@@ -2582,7 +2582,6 @@ static int xscale_read_instruction(struct target *target, uint32_t pc,
 	struct arm_instruction *instruction)
 {
 	struct xscale_common *const xscale = target_to_xscale(target);
-	int i;
 	int section = -1;
 	size_t size_read;
 	uint32_t opcode;
@@ -2592,7 +2591,7 @@ static int xscale_read_instruction(struct target *target, uint32_t pc,
 		return ERROR_TRACE_IMAGE_UNAVAILABLE;
 
 	/* search for the section the current instruction belongs to */
-	for (i = 0; i < xscale->trace.image->num_sections; i++) {
+	for (unsigned int i = 0; i < xscale->trace.image->num_sections; i++) {
 		if ((xscale->trace.image->sections[i].base_address <= pc) &&
 			(xscale->trace.image->sections[i].base_address +
 			xscale->trace.image->sections[i].size > pc)) {
@@ -2883,7 +2882,7 @@ static void xscale_build_reg_cache(struct target *target)
 	/* fill in values for the xscale reg cache */
 	(*cache_p)->name = "XScale registers";
 	(*cache_p)->next = NULL;
-	(*cache_p)->reg_list = malloc(num_regs * sizeof(struct reg));
+	(*cache_p)->reg_list = calloc(num_regs, sizeof(struct reg));
 	(*cache_p)->num_regs = num_regs;
 
 	for (i = 0; i < num_regs; i++) {
@@ -3049,7 +3048,7 @@ COMMAND_HANDLER(xscale_handle_debug_handler_command)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
 	target = get_target(CMD_ARGV[0]);
-	if (target == NULL) {
+	if (!target) {
 		LOG_ERROR("target '%s' not defined", CMD_ARGV[0]);
 		return ERROR_FAIL;
 	}
@@ -3084,7 +3083,7 @@ COMMAND_HANDLER(xscale_handle_cache_clean_address_command)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
 	target = get_target(CMD_ARGV[0]);
-	if (target == NULL) {
+	if (!target) {
 		LOG_ERROR("target '%s' not defined", CMD_ARGV[0]);
 		return ERROR_FAIL;
 	}
@@ -3428,15 +3427,15 @@ COMMAND_HANDLER(xscale_handle_trace_image_command)
 	}
 
 	xscale->trace.image = malloc(sizeof(struct image));
-	xscale->trace.image->base_address_set = 0;
-	xscale->trace.image->start_address_set = 0;
+	xscale->trace.image->base_address_set = false;
+	xscale->trace.image->start_address_set = false;
 
 	/* a base address isn't always necessary, default to 0x0 (i.e. don't relocate) */
 	if (CMD_ARGC >= 2) {
-		xscale->trace.image->base_address_set = 1;
+		xscale->trace.image->base_address_set = true;
 		COMMAND_PARSE_NUMBER(llong, CMD_ARGV[1], xscale->trace.image->base_address);
 	} else
-		xscale->trace.image->base_address_set = 0;
+		xscale->trace.image->base_address_set = false;
 
 	if (image_open(xscale->trace.image, CMD_ARGV[0],
 		(CMD_ARGC >= 3) ? CMD_ARGV[2] : NULL) != ERROR_OK) {

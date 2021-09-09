@@ -197,7 +197,6 @@ static int mdr_erase(struct flash_bank *bank, unsigned int first,
 			if (retval != ERROR_OK)
 				goto reset_pg_and_lock;
 		}
-		bank->sectors[i].is_erased = 1;
 	}
 
 reset_pg_and_lock:
@@ -328,7 +327,7 @@ static int mdr_write(struct flash_bank *bank, const uint8_t *buffer,
 	int rem = count % 4;
 	if (rem) {
 		new_buffer = malloc(count + rem);
-		if (new_buffer == NULL) {
+		if (!new_buffer) {
 			LOG_ERROR("odd number of bytes to write and no memory for padding buffer");
 			return ERROR_FAIL;
 		}
@@ -597,11 +596,11 @@ static int mdr_auto_probe(struct flash_bank *bank)
 	return mdr_probe(bank);
 }
 
-static int get_mdr_info(struct flash_bank *bank, char *buf, int buf_size)
+static int get_mdr_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct mdr_flash_bank *mdr_info = bank->driver_priv;
-	snprintf(buf, buf_size, "MDR32Fx - %s",
-		 mdr_info->mem_type ? "info memory" : "main memory");
+	command_print_sameline(cmd, "MDR32Fx - %s",
+			mdr_info->mem_type ? "info memory" : "main memory");
 
 	return ERROR_OK;
 }

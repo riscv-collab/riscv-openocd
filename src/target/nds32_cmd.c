@@ -28,12 +28,12 @@
 extern struct nds32_edm_operation nds32_edm_ops[NDS32_EDM_OPERATION_MAX_NUM];
 extern uint32_t nds32_edm_ops_num;
 
-static const char *const NDS_MEMORY_ACCESS_NAME[] = {
+static const char *const nds_memory_access_name[] = {
 	"BUS",
 	"CPU",
 };
 
-static const char *const NDS_MEMORY_SELECT_NAME[] = {
+static const char *const nds_memory_select_name[] = {
 	"AUTO",
 	"MEM",
 	"ILM",
@@ -84,13 +84,13 @@ COMMAND_HANDLER(handle_nds32_memory_access_command)
 			memory->access_channel = NDS_MEMORY_ACC_CPU;
 
 		LOG_DEBUG("memory access channel is changed to %s",
-				NDS_MEMORY_ACCESS_NAME[memory->access_channel]);
+				nds_memory_access_name[memory->access_channel]);
 
 		aice_memory_access(aice, memory->access_channel);
 	} else {
 		command_print(CMD, "%s: memory access channel: %s",
 				target_name(target),
-				NDS_MEMORY_ACCESS_NAME[memory->access_channel]);
+				nds_memory_access_name[memory->access_channel]);
 	}
 
 	return ERROR_OK;
@@ -147,7 +147,7 @@ COMMAND_HANDLER(handle_nds32_memory_mode_command)
 
 	command_print(CMD, "%s: memory mode: %s",
 			target_name(target),
-			NDS_MEMORY_SELECT_NAME[nds32->memory.mode]);
+			nds_memory_select_name[nds32->memory.mode]);
 
 	return ERROR_OK;
 }
@@ -575,10 +575,9 @@ COMMAND_HANDLER(handle_nds32_decode_command)
 		read_addr = addr;
 		i = 0;
 		while (i < insn_count) {
-			if (ERROR_OK != nds32_read_opcode(nds32, read_addr, &opcode))
+			if (nds32_read_opcode(nds32, read_addr, &opcode) != ERROR_OK)
 				return ERROR_FAIL;
-			if (ERROR_OK != nds32_evaluate_opcode(nds32, opcode,
-						read_addr, &instruction))
+			if (nds32_evaluate_opcode(nds32, opcode, read_addr, &instruction) != ERROR_OK)
 				return ERROR_FAIL;
 
 			command_print(CMD, "%s", instruction.text);
@@ -594,9 +593,9 @@ COMMAND_HANDLER(handle_nds32_decode_command)
 
 		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], addr);
 
-		if (ERROR_OK != nds32_read_opcode(nds32, addr, &opcode))
+		if (nds32_read_opcode(nds32, addr, &opcode) != ERROR_OK)
 			return ERROR_FAIL;
-		if (ERROR_OK != nds32_evaluate_opcode(nds32, opcode, addr, &instruction))
+		if (nds32_evaluate_opcode(nds32, opcode, addr, &instruction) != ERROR_OK)
 			return ERROR_FAIL;
 
 		command_print(CMD, "%s", instruction.text);
@@ -681,8 +680,8 @@ static int jim_nds32_bulk_write(Jim_Interp *interp, int argc, Jim_Obj * const *a
 {
 	const char *cmd_name = Jim_GetString(argv[0], NULL);
 
-	Jim_GetOptInfo goi;
-	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
+	struct jim_getopt_info goi;
+	jim_getopt_setup(&goi, interp, argc - 1, argv + 1);
 
 	if (goi.argc < 3) {
 		Jim_SetResultFormatted(goi.interp,
@@ -692,23 +691,23 @@ static int jim_nds32_bulk_write(Jim_Interp *interp, int argc, Jim_Obj * const *a
 
 	int e;
 	jim_wide address;
-	e = Jim_GetOpt_Wide(&goi, &address);
+	e = jim_getopt_wide(&goi, &address);
 	if (e != JIM_OK)
 		return e;
 
 	jim_wide count;
-	e = Jim_GetOpt_Wide(&goi, &count);
+	e = jim_getopt_wide(&goi, &count);
 	if (e != JIM_OK)
 		return e;
 
 	uint32_t *data = malloc(count * sizeof(uint32_t));
-	if (data == NULL)
+	if (!data)
 		return JIM_ERR;
 
 	jim_wide i;
 	for (i = 0; i < count; i++) {
 		jim_wide tmp;
-		e = Jim_GetOpt_Wide(&goi, &tmp);
+		e = jim_getopt_wide(&goi, &tmp);
 		if (e != JIM_OK) {
 			free(data);
 			return e;
@@ -722,7 +721,9 @@ static int jim_nds32_bulk_write(Jim_Interp *interp, int argc, Jim_Obj * const *a
 		return JIM_ERR;
 	}
 
-	struct target *target = Jim_CmdPrivData(goi.interp);
+	struct command_context *cmd_ctx = current_command_context(interp);
+	assert(cmd_ctx);
+	struct target *target = get_current_target(cmd_ctx);
 	int result;
 
 	result = target_write_buffer(target, address, count * 4, (const uint8_t *)data);
@@ -736,8 +737,8 @@ static int jim_nds32_multi_write(Jim_Interp *interp, int argc, Jim_Obj * const *
 {
 	const char *cmd_name = Jim_GetString(argv[0], NULL);
 
-	Jim_GetOptInfo goi;
-	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
+	struct jim_getopt_info goi;
+	jim_getopt_setup(&goi, interp, argc - 1, argv + 1);
 
 	if (goi.argc < 3) {
 		Jim_SetResultFormatted(goi.interp,
@@ -747,11 +748,13 @@ static int jim_nds32_multi_write(Jim_Interp *interp, int argc, Jim_Obj * const *
 
 	int e;
 	jim_wide num_of_pairs;
-	e = Jim_GetOpt_Wide(&goi, &num_of_pairs);
+	e = jim_getopt_wide(&goi, &num_of_pairs);
 	if (e != JIM_OK)
 		return e;
 
-	struct target *target = Jim_CmdPrivData(goi.interp);
+	struct command_context *cmd_ctx = current_command_context(interp);
+	assert(cmd_ctx);
+	struct target *target = get_current_target(cmd_ctx);
 	struct aice_port_s *aice = target_to_aice(target);
 	int result;
 	uint32_t address;
@@ -761,12 +764,12 @@ static int jim_nds32_multi_write(Jim_Interp *interp, int argc, Jim_Obj * const *
 	aice_set_command_mode(aice, AICE_COMMAND_MODE_PACK);
 	for (i = 0; i < num_of_pairs; i++) {
 		jim_wide tmp;
-		e = Jim_GetOpt_Wide(&goi, &tmp);
+		e = jim_getopt_wide(&goi, &tmp);
 		if (e != JIM_OK)
 			break;
 		address = (uint32_t)tmp;
 
-		e = Jim_GetOpt_Wide(&goi, &tmp);
+		e = jim_getopt_wide(&goi, &tmp);
 		if (e != JIM_OK)
 			break;
 		data = (uint32_t)tmp;
@@ -788,8 +791,8 @@ static int jim_nds32_bulk_read(Jim_Interp *interp, int argc, Jim_Obj * const *ar
 {
 	const char *cmd_name = Jim_GetString(argv[0], NULL);
 
-	Jim_GetOptInfo goi;
-	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
+	struct jim_getopt_info goi;
+	jim_getopt_setup(&goi, interp, argc - 1, argv + 1);
 
 	if (goi.argc < 2) {
 		Jim_SetResultFormatted(goi.interp,
@@ -799,12 +802,12 @@ static int jim_nds32_bulk_read(Jim_Interp *interp, int argc, Jim_Obj * const *ar
 
 	int e;
 	jim_wide address;
-	e = Jim_GetOpt_Wide(&goi, &address);
+	e = jim_getopt_wide(&goi, &address);
 	if (e != JIM_OK)
 		return e;
 
 	jim_wide count;
-	e = Jim_GetOpt_Wide(&goi, &count);
+	e = jim_getopt_wide(&goi, &count);
 	if (e != JIM_OK)
 		return e;
 
@@ -812,7 +815,9 @@ static int jim_nds32_bulk_read(Jim_Interp *interp, int argc, Jim_Obj * const *ar
 	if (goi.argc != 0)
 		return JIM_ERR;
 
-	struct target *target = Jim_CmdPrivData(goi.interp);
+	struct command_context *cmd_ctx = current_command_context(interp);
+	assert(cmd_ctx);
+	struct target *target = get_current_target(cmd_ctx);
 	uint32_t *data = malloc(count * sizeof(uint32_t));
 	int result;
 	result = target_read_buffer(target, address, count * 4, (uint8_t *)data);
@@ -834,8 +839,8 @@ static int jim_nds32_read_edm_sr(Jim_Interp *interp, int argc, Jim_Obj * const *
 {
 	const char *cmd_name = Jim_GetString(argv[0], NULL);
 
-	Jim_GetOptInfo goi;
-	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
+	struct jim_getopt_info goi;
+	jim_getopt_setup(&goi, interp, argc - 1, argv + 1);
 
 	if (goi.argc < 1) {
 		Jim_SetResultFormatted(goi.interp,
@@ -846,7 +851,7 @@ static int jim_nds32_read_edm_sr(Jim_Interp *interp, int argc, Jim_Obj * const *
 	int e;
 	const char *edm_sr_name;
 	int edm_sr_name_len;
-	e = Jim_GetOpt_String(&goi, &edm_sr_name, &edm_sr_name_len);
+	e = jim_getopt_string(&goi, &edm_sr_name, &edm_sr_name_len);
 	if (e != JIM_OK)
 		return e;
 
@@ -863,7 +868,9 @@ static int jim_nds32_read_edm_sr(Jim_Interp *interp, int argc, Jim_Obj * const *
 	else
 		return ERROR_FAIL;
 
-	struct target *target = Jim_CmdPrivData(goi.interp);
+	struct command_context *cmd_ctx = current_command_context(interp);
+	assert(cmd_ctx);
+	struct target *target = get_current_target(cmd_ctx);
 	struct aice_port_s *aice = target_to_aice(target);
 	char data_str[11];
 
@@ -880,8 +887,8 @@ static int jim_nds32_write_edm_sr(Jim_Interp *interp, int argc, Jim_Obj * const 
 {
 	const char *cmd_name = Jim_GetString(argv[0], NULL);
 
-	Jim_GetOptInfo goi;
-	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
+	struct jim_getopt_info goi;
+	jim_getopt_setup(&goi, interp, argc - 1, argv + 1);
 
 	if (goi.argc < 2) {
 		Jim_SetResultFormatted(goi.interp,
@@ -892,12 +899,12 @@ static int jim_nds32_write_edm_sr(Jim_Interp *interp, int argc, Jim_Obj * const 
 	int e;
 	const char *edm_sr_name;
 	int edm_sr_name_len;
-	e = Jim_GetOpt_String(&goi, &edm_sr_name, &edm_sr_name_len);
+	e = jim_getopt_string(&goi, &edm_sr_name, &edm_sr_name_len);
 	if (e != JIM_OK)
 		return e;
 
 	jim_wide value;
-	e = Jim_GetOpt_Wide(&goi, &value);
+	e = jim_getopt_wide(&goi, &value);
 	if (e != JIM_OK)
 		return e;
 
@@ -911,7 +918,9 @@ static int jim_nds32_write_edm_sr(Jim_Interp *interp, int argc, Jim_Obj * const 
 	else
 		return ERROR_FAIL;
 
-	struct target *target = Jim_CmdPrivData(goi.interp);
+	struct command_context *cmd_ctx = current_command_context(interp);
+	assert(cmd_ctx);
+	struct target *target = get_current_target(cmd_ctx);
 	struct aice_port_s *aice = target_to_aice(target);
 
 	aice_write_debug_reg(aice, edm_sr_number, value);

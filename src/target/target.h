@@ -32,6 +32,8 @@
 #define OPENOCD_TARGET_TARGET_H
 
 #include <helper/list.h>
+#include "helper/replacements.h"
+#include "helper/system.h"
 #include <jim.h>
 
 struct reg;
@@ -47,7 +49,7 @@ struct gdb_fileio_info;
 
 /*
  * TARGET_UNKNOWN = 0: we don't know anything about the target yet
- * TARGET_RUNNING = 1: the target is executing user code
+ * TARGET_RUNNING = 1: the target is executing or ready to execute user code
  * TARGET_HALTED  = 2: the target is not executing code, and ready to talk to the
  * debugger. on an xscale it means that the debug handler is executing
  * TARGET_RESET   = 3: the target is being held in reset (only a temporary state,
@@ -155,7 +157,7 @@ struct target {
 
 	struct target_event_action *event_action;
 
-	int reset_halt;						/* attempt resetting the CPU into the halted mode? */
+	bool reset_halt;						/* attempt resetting the CPU into the halted mode? */
 	target_addr_t working_area;				/* working area (initialised RAM). Evaluated
 										 * upon first allocation from virtual/physical address. */
 	bool working_area_virt_spec;		/* virtual address specified? */
@@ -210,6 +212,8 @@ struct target {
 	struct gdb_fileio_info *fileio_info;
 
 	char *gdb_port_override;			/* target-specific override for gdb_port */
+
+	int gdb_max_connections;			/* max number of simultaneous gdb connections */
 
 	/* The semihosting information, extracted from the target. */
 	struct semihosting *semihosting;
@@ -397,12 +401,17 @@ int target_call_trace_callbacks(struct target *target, size_t len, uint8_t *data
 int target_register_timer_callback(int (*callback)(void *priv),
 		unsigned int time_ms, enum target_timer_type type, void *priv);
 int target_unregister_timer_callback(int (*callback)(void *priv), void *priv);
-int target_call_timer_callbacks(int64_t *next_event);
+int target_call_timer_callbacks(void);
 /**
  * Invoke this to ensure that e.g. polling timer callbacks happen before
  * a synchronous command completes.
  */
-int target_call_timer_callbacks_now(int64_t *next_event);
+int target_call_timer_callbacks_now(void);
+/**
+ * Returns when the next registered event will take place. Callers can use this
+ * to go to sleep until that time occurs.
+ */
+int64_t target_timer_next_event(void);
 
 struct target *get_target_by_num(int num);
 struct target *get_current_target(struct command_context *cmd_ctx);
@@ -576,6 +585,18 @@ int target_run_flash_async_algorithm(struct target *target,
 		void *arch_info);
 
 /**
+ * This routine is a wrapper for asynchronous algorithms.
+ *
+ */
+int target_run_read_async_algorithm(struct target *target,
+		uint8_t *buffer, uint32_t count, int block_size,
+		int num_mem_params, struct mem_param *mem_params,
+		int num_reg_params, struct reg_param *reg_params,
+		uint32_t buffer_start, uint32_t buffer_size,
+		uint32_t entry_point, uint32_t exit_point,
+		void *arch_info);
+
+/**
  * Read @a count items of @a size bytes from the memory of @a target at
  * the @a address given.
  *
@@ -673,7 +694,7 @@ unsigned target_address_bits(struct target *target);
  *
  * This routine is a wrapper for target->type->data_bits.
  */
-unsigned target_data_bits(struct target *target);
+unsigned int target_data_bits(struct target *target);
 
 /** Return the *name* of this targets current state */
 const char *target_state_name(struct target *target);
@@ -754,6 +775,9 @@ void target_handle_event(struct target *t, enum target_event e);
 void target_handle_md_output(struct command_invocation *cmd,
 	struct target *target, target_addr_t address, unsigned size,
 	unsigned count, const uint8_t *buffer, bool include_address);
+
+int target_profiling_default(struct target *target, uint32_t *samples, uint32_t
+		max_num_samples, uint32_t *num_samples, uint32_t seconds);
 
 #define ERROR_TARGET_INVALID	(-300)
 #define ERROR_TARGET_INIT_FAILED (-301)

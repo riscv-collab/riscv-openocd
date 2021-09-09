@@ -29,7 +29,7 @@
 #include "imp.h"
 #include <helper/binarybuffer.h>
 #include <target/algorithm.h>
-#include <target/armv7m.h>
+#include <target/cortex_m.h>
 
 /* stm32x register locations */
 
@@ -215,7 +215,7 @@ static int stm32x_check_operation_supported(struct flash_bank *bank)
 	/* if we have a dual flash bank device then
 	 * we need to perform option byte stuff on bank0 only */
 	if (stm32x_info->register_base != FLASH_REG_BASE_B0) {
-		LOG_ERROR("Option Byte Operation's must use bank0");
+		LOG_ERROR("Option byte operations must use bank 0");
 		return ERROR_FLASH_OPERATION_FAILED;
 	}
 
@@ -349,7 +349,7 @@ static int stm32x_protect_check(struct flash_bank *bank)
 	uint32_t protection;
 
 	int retval = stm32x_check_operation_supported(bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	/* medium density - each bit refers to a 4 sector protection block
@@ -402,8 +402,6 @@ static int stm32x_erase(struct flash_bank *bank, unsigned int first,
 		retval = stm32x_wait_status_busy(bank, FLASH_ERASE_TIMEOUT);
 		if (retval != ERROR_OK)
 			return retval;
-
-		bank->sectors[i].is_erased = 1;
 	}
 
 	retval = target_write_u32(target, stm32x_get_flash_reg(bank, STM32_FLASH_CR), FLASH_LOCK);
@@ -561,7 +559,7 @@ static int stm32x_write(struct flash_bank *bank, const uint8_t *buffer,
 	 * discrete accesses. */
 	if (count & 1) {
 		new_buffer = malloc(count + 1);
-		if (new_buffer == NULL) {
+		if (!new_buffer) {
 			LOG_ERROR("odd number of bytes to write and no memory for padding buffer");
 			return ERROR_FAIL;
 		}
@@ -623,34 +621,32 @@ cleanup:
 
 static int stm32x_get_device_id(struct flash_bank *bank, uint32_t *device_id)
 {
-	/* This check the device CPUID core register to detect
-	 * the M0 from the M3 devices. */
-
 	struct target *target = bank->target;
-	uint32_t cpuid, device_id_register = 0;
+	struct cortex_m_common *cortex_m = target_to_cm(target);
+	uint32_t device_id_register = 0;
 
-	/* Get the CPUID from the ARM Core
-	 * http://infocenter.arm.com/help/topic/com.arm.doc.ddi0432c/DDI0432C_cortex_m0_r0p0_trm.pdf 4.2.1 */
-	int retval = target_read_u32(target, 0xE000ED00, &cpuid);
-	if (retval != ERROR_OK)
-		return retval;
+	if (!target_was_examined(target)) {
+		LOG_ERROR("Target not examined yet");
+		return ERROR_FAIL;
+	}
 
-	if (((cpuid >> 4) & 0xFFF) == 0xC20) {
-		/* 0xC20 is M0 devices */
+	switch (cortex_m->core_info->partno) {
+	case CORTEX_M0_PARTNO: /* STM32F0x devices */
 		device_id_register = 0x40015800;
-	} else if (((cpuid >> 4) & 0xFFF) == 0xC23) {
-		/* 0xC23 is M3 devices */
+		break;
+	case CORTEX_M3_PARTNO: /* STM32F1x devices */
 		device_id_register = 0xE0042000;
-	} else if (((cpuid >> 4) & 0xFFF) == 0xC24) {
-		/* 0xC24 is M4 devices */
+		break;
+	case CORTEX_M4_PARTNO: /* STM32F3x devices */
 		device_id_register = 0xE0042000;
-	} else {
+		break;
+	default:
 		LOG_ERROR("Cannot identify target as a stm32x");
 		return ERROR_FAIL;
 	}
 
 	/* read stm32 device id register */
-	retval = target_read_u32(target, device_id_register, device_id);
+	int retval = target_read_u32(target, device_id_register, device_id);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -660,27 +656,30 @@ static int stm32x_get_device_id(struct flash_bank *bank, uint32_t *device_id)
 static int stm32x_get_flash_size(struct flash_bank *bank, uint16_t *flash_size_in_kb)
 {
 	struct target *target = bank->target;
-	uint32_t cpuid, flash_size_reg;
+	struct cortex_m_common *cortex_m = target_to_cm(target);
+	uint32_t flash_size_reg;
 
-	int retval = target_read_u32(target, 0xE000ED00, &cpuid);
-	if (retval != ERROR_OK)
-		return retval;
+	if (!target_was_examined(target)) {
+		LOG_ERROR("Target not examined yet");
+		return ERROR_FAIL;
+	}
 
-	if (((cpuid >> 4) & 0xFFF) == 0xC20) {
-		/* 0xC20 is M0 devices */
+	switch (cortex_m->core_info->partno) {
+	case CORTEX_M0_PARTNO: /* STM32F0x devices */
 		flash_size_reg = 0x1FFFF7CC;
-	} else if (((cpuid >> 4) & 0xFFF) == 0xC23) {
-		/* 0xC23 is M3 devices */
+		break;
+	case CORTEX_M3_PARTNO: /* STM32F1x devices */
 		flash_size_reg = 0x1FFFF7E0;
-	} else if (((cpuid >> 4) & 0xFFF) == 0xC24) {
-		/* 0xC24 is M4 devices */
+		break;
+	case CORTEX_M4_PARTNO: /* STM32F3x devices */
 		flash_size_reg = 0x1FFFF7CC;
-	} else {
+		break;
+	default:
 		LOG_ERROR("Cannot identify target as a stm32x");
 		return ERROR_FAIL;
 	}
 
-	retval = target_read_u16(target, flash_size_reg, flash_size_in_kb);
+	int retval = target_read_u16(target, flash_size_reg, flash_size_in_kb);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -692,7 +691,7 @@ static int stm32x_probe(struct flash_bank *bank)
 	struct stm32x_flash_bank *stm32x_info = bank->driver_priv;
 	uint16_t flash_size_in_kb;
 	uint16_t max_flash_size_in_kb;
-	uint32_t device_id;
+	uint32_t dbgmcu_idcode;
 	int page_size;
 	uint32_t base_address = 0x08000000;
 
@@ -705,14 +704,17 @@ static int stm32x_probe(struct flash_bank *bank)
 	stm32x_info->default_rdp = 0xA5;
 
 	/* read stm32 device id register */
-	int retval = stm32x_get_device_id(bank, &device_id);
+	int retval = stm32x_get_device_id(bank, &dbgmcu_idcode);
 	if (retval != ERROR_OK)
 		return retval;
 
-	LOG_INFO("device id = 0x%08" PRIx32 "", device_id);
+	LOG_INFO("device id = 0x%08" PRIx32 "", dbgmcu_idcode);
+
+	uint16_t device_id = dbgmcu_idcode & 0xfff;
+	uint16_t rev_id = dbgmcu_idcode >> 16;
 
 	/* set page size, protection granularity and max flash size depending on family */
-	switch (device_id & 0xfff) {
+	switch (device_id) {
 	case 0x440: /* stm32f05x */
 		page_size = 1024;
 		stm32x_info->ppage_size = 4;
@@ -754,6 +756,25 @@ static int stm32x_probe(struct flash_bank *bank)
 		page_size = 1024;
 		stm32x_info->ppage_size = 4;
 		max_flash_size_in_kb = 128;
+		/* GigaDevice GD32F1x0 & GD32F3x0 series devices share DEV_ID
+		   with STM32F101/2/3 medium-density line,
+		   however they use a REV_ID different from any STM32 device.
+		   The main difference is another offset of user option bits
+		   (like WDG_SW, nRST_STOP, nRST_STDBY) in option byte register
+		   (FLASH_OBR/FMC_OBSTAT 0x4002201C).
+		   This caused problems e.g. during flash block programming
+		   because of unexpected active hardware watchog. */
+		switch (rev_id) {
+		case 0x1303: /* gd32f1x0 */
+			stm32x_info->user_data_offset = 16;
+			stm32x_info->option_offset = 6;
+			max_flash_size_in_kb = 64;
+			break;
+		case 0x1704: /* gd32f3x0 */
+			stm32x_info->user_data_offset = 16;
+			stm32x_info->option_offset = 6;
+			break;
+		}
 		break;
 	case 0x412: /* stm32f1x low-density */
 		page_size = 1024;
@@ -932,11 +953,11 @@ static const char *get_stm32f0_revision(uint16_t rev_id)
 	return rev_str;
 }
 
-static int get_stm32x_info(struct flash_bank *bank, char *buf, int buf_size)
+static int get_stm32x_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	uint32_t dbgmcu_idcode;
 
-		/* read stm32 device id register */
+	/* read stm32 device id register */
 	int retval = stm32x_get_device_id(bank, &dbgmcu_idcode);
 	if (retval != ERROR_OK)
 		return retval;
@@ -953,6 +974,14 @@ static int get_stm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 		switch (rev_id) {
 		case 0x0000:
 			rev_str = "A";
+			break;
+
+		case 0x1303: /* gd32f1x0 */
+			device_str = "GD32F1x0";
+			break;
+
+		case 0x1704: /* gd32f3x0 */
+			device_str = "GD32F3x0";
 			break;
 
 		case 0x2000:
@@ -1144,14 +1173,14 @@ static int get_stm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 		break;
 
 	default:
-		snprintf(buf, buf_size, "Cannot identify target as a STM32F0/1/3\n");
+		command_print_sameline(cmd, "Cannot identify target as a STM32F0/1/3\n");
 		return ERROR_FAIL;
 	}
 
-	if (rev_str != NULL)
-		snprintf(buf, buf_size, "%s - Rev: %s", device_str, rev_str);
+	if (rev_str)
+		command_print_sameline(cmd, "%s - Rev: %s", device_str, rev_str);
 	else
-		snprintf(buf, buf_size, "%s - Rev: unknown (0x%04x)", device_str, rev_id);
+		command_print_sameline(cmd, "%s - Rev: unknown (0x%04x)", device_str, rev_id);
 
 	return ERROR_OK;
 }
@@ -1166,7 +1195,7 @@ COMMAND_HANDLER(stm32x_handle_lock_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	stm32x_info = bank->driver_priv;
@@ -1179,7 +1208,7 @@ COMMAND_HANDLER(stm32x_handle_lock_command)
 	}
 
 	retval = stm32x_check_operation_supported(bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	if (stm32x_erase_options(bank) != ERROR_OK) {
@@ -1209,7 +1238,7 @@ COMMAND_HANDLER(stm32x_handle_unlock_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	target = bank->target;
@@ -1220,7 +1249,7 @@ COMMAND_HANDLER(stm32x_handle_unlock_command)
 	}
 
 	retval = stm32x_check_operation_supported(bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	if (stm32x_erase_options(bank) != ERROR_OK) {
@@ -1251,7 +1280,7 @@ COMMAND_HANDLER(stm32x_handle_options_read_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	stm32x_info = bank->driver_priv;
@@ -1264,7 +1293,7 @@ COMMAND_HANDLER(stm32x_handle_options_read_command)
 	}
 
 	retval = stm32x_check_operation_supported(bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	retval = target_read_u32(target, STM32_FLASH_OBR_B0, &optionbyte);
@@ -1318,7 +1347,7 @@ COMMAND_HANDLER(stm32x_handle_options_write_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	stm32x_info = bank->driver_priv;
@@ -1331,11 +1360,11 @@ COMMAND_HANDLER(stm32x_handle_options_write_command)
 	}
 
 	retval = stm32x_check_operation_supported(bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	retval = stm32x_read_options(bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	/* start with current options */
@@ -1407,7 +1436,7 @@ COMMAND_HANDLER(stm32x_handle_options_load_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct stm32x_flash_bank *stm32x_info = bank->driver_priv;
@@ -1426,7 +1455,7 @@ COMMAND_HANDLER(stm32x_handle_options_load_command)
 	}
 
 	retval = stm32x_check_operation_supported(bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	/* unlock option flash registers */
@@ -1489,17 +1518,13 @@ COMMAND_HANDLER(stm32x_handle_mass_erase_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	retval = stm32x_mass_erase(bank);
-	if (retval == ERROR_OK) {
-		/* set all sectors as erased */
-		for (unsigned int i = 0; i < bank->num_sectors; i++)
-			bank->sectors[i].is_erased = 1;
-
+	if (retval == ERROR_OK)
 		command_print(CMD, "stm32x mass erase complete");
-	} else
+	else
 		command_print(CMD, "stm32x mass erase failed");
 
 	return retval;

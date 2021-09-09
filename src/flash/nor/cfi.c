@@ -426,7 +426,7 @@ static int cfi_read_intel_pri_ext(struct flash_bank *bank)
 	free(cfi_info->pri_ext);
 
 	pri_ext = malloc(sizeof(struct cfi_intel_pri_ext));
-	if (pri_ext == NULL) {
+	if (!pri_ext) {
 		LOG_ERROR("Out of memory");
 		return ERROR_FAIL;
 	}
@@ -522,7 +522,7 @@ static int cfi_read_spansion_pri_ext(struct flash_bank *bank)
 	free(cfi_info->pri_ext);
 
 	pri_ext = malloc(sizeof(struct cfi_spansion_pri_ext));
-	if (pri_ext == NULL) {
+	if (!pri_ext) {
 		LOG_ERROR("Out of memory");
 		return ERROR_FAIL;
 	}
@@ -561,55 +561,55 @@ static int cfi_read_spansion_pri_ext(struct flash_bank *bank)
 	LOG_DEBUG("pri: '%c%c%c', version: %c.%c", pri_ext->pri[0], pri_ext->pri[1],
 		pri_ext->pri[2], pri_ext->major_version, pri_ext->minor_version);
 
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 5, &pri_ext->SiliconRevision);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 5, &pri_ext->silicon_revision);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 6, &pri_ext->EraseSuspend);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 6, &pri_ext->erase_suspend);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 7, &pri_ext->BlkProt);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 7, &pri_ext->blk_prot);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 8, &pri_ext->TmpBlkUnprotect);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 8, &pri_ext->tmp_blk_unprotected);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 9, &pri_ext->BlkProtUnprot);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 9, &pri_ext->blk_prot_unprot);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 10, &pri_ext->SimultaneousOps);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 10, &pri_ext->simultaneous_ops);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 11, &pri_ext->BurstMode);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 11, &pri_ext->burst_mode);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 12, &pri_ext->PageMode);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 12, &pri_ext->page_mode);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 13, &pri_ext->VppMin);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 13, &pri_ext->vpp_min);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 14, &pri_ext->VppMax);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 14, &pri_ext->vpp_max);
 	if (retval != ERROR_OK)
 		return retval;
-	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 15, &pri_ext->TopBottom);
+	retval = cfi_query_u8(bank, 0, cfi_info->pri_addr + 15, &pri_ext->top_bottom);
 	if (retval != ERROR_OK)
 		return retval;
 
 	LOG_DEBUG("Silicon Revision: 0x%x, Erase Suspend: 0x%x, Block protect: 0x%x",
-		pri_ext->SiliconRevision, pri_ext->EraseSuspend, pri_ext->BlkProt);
+		pri_ext->silicon_revision, pri_ext->erase_suspend, pri_ext->blk_prot);
 
 	LOG_DEBUG("Temporary Unprotect: 0x%x, Block Protect Scheme: 0x%x, "
-		"Simultaneous Ops: 0x%x", pri_ext->TmpBlkUnprotect,
-		pri_ext->BlkProtUnprot, pri_ext->SimultaneousOps);
+		"Simultaneous Ops: 0x%x", pri_ext->tmp_blk_unprotected,
+		pri_ext->blk_prot_unprot, pri_ext->simultaneous_ops);
 
-	LOG_DEBUG("Burst Mode: 0x%x, Page Mode: 0x%x, ", pri_ext->BurstMode, pri_ext->PageMode);
+	LOG_DEBUG("Burst Mode: 0x%x, Page Mode: 0x%x, ", pri_ext->burst_mode, pri_ext->page_mode);
 
 
 	LOG_DEBUG("Vpp min: %u.%x, Vpp max: %u.%x",
-		(pri_ext->VppMin & 0xf0) >> 4, pri_ext->VppMin & 0x0f,
-		(pri_ext->VppMax & 0xf0) >> 4, pri_ext->VppMax & 0x0f);
+		(pri_ext->vpp_min & 0xf0) >> 4, pri_ext->vpp_min & 0x0f,
+		(pri_ext->vpp_max & 0xf0) >> 4, pri_ext->vpp_max & 0x0f);
 
-	LOG_DEBUG("WP# protection 0x%x", pri_ext->TopBottom);
+	LOG_DEBUG("WP# protection 0x%x", pri_ext->top_bottom);
 
 	return ERROR_OK;
 }
@@ -624,7 +624,7 @@ static int cfi_read_atmel_pri_ext(struct flash_bank *bank)
 	free(cfi_info->pri_ext);
 
 	pri_ext = malloc(sizeof(struct cfi_spansion_pri_ext));
-	if (pri_ext == NULL) {
+	if (!pri_ext) {
 		LOG_ERROR("Out of memory");
 		return ERROR_FAIL;
 	}
@@ -696,20 +696,20 @@ static int cfi_read_atmel_pri_ext(struct flash_bank *bank)
 		atmel_pri_ext.page_mode);
 
 	if (atmel_pri_ext.features & 0x02)
-		pri_ext->EraseSuspend = 2;
+		pri_ext->erase_suspend = 2;
 
 	/* some chips got it backwards... */
 	if (cfi_info->device_id == AT49BV6416 ||
 			cfi_info->device_id == AT49BV6416T) {
 		if (atmel_pri_ext.bottom_boot)
-			pri_ext->TopBottom = 3;
+			pri_ext->top_bottom = 3;
 		else
-			pri_ext->TopBottom = 2;
+			pri_ext->top_bottom = 2;
 	} else {
 		if (atmel_pri_ext.bottom_boot)
-			pri_ext->TopBottom = 2;
+			pri_ext->top_bottom = 2;
 		else
-			pri_ext->TopBottom = 3;
+			pri_ext->top_bottom = 3;
 	}
 
 	pri_ext->_unlock1 = cfi_unlock_addresses[CFI_UNLOCK_555_2AA].unlock1;
@@ -728,79 +728,57 @@ static int cfi_read_0002_pri_ext(struct flash_bank *bank)
 		return cfi_read_spansion_pri_ext(bank);
 }
 
-static int cfi_spansion_info(struct flash_bank *bank, char *buf, int buf_size)
+static int cfi_spansion_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
-	int printed;
 	struct cfi_flash_bank *cfi_info = bank->driver_priv;
 	struct cfi_spansion_pri_ext *pri_ext = cfi_info->pri_ext;
 
-	printed = snprintf(buf, buf_size, "\nSpansion primary algorithm extend information:\n");
-	buf += printed;
-	buf_size -= printed;
+	command_print_sameline(cmd, "\nSpansion primary algorithm extend information:\n");
 
-	printed = snprintf(buf, buf_size, "pri: '%c%c%c', version: %c.%c\n", pri_ext->pri[0],
-			pri_ext->pri[1], pri_ext->pri[2],
+	command_print_sameline(cmd, "pri: '%c%c%c', version: %c.%c\n",
+			pri_ext->pri[0], pri_ext->pri[1], pri_ext->pri[2],
 			pri_ext->major_version, pri_ext->minor_version);
-	buf += printed;
-	buf_size -= printed;
 
-	printed = snprintf(buf, buf_size, "Silicon Rev.: 0x%x, Address Sensitive unlock: 0x%x\n",
-			(pri_ext->SiliconRevision) >> 2,
-			(pri_ext->SiliconRevision) & 0x03);
-	buf += printed;
-	buf_size -= printed;
+	command_print_sameline(cmd, "Silicon Rev.: 0x%x, Address Sensitive unlock: 0x%x\n",
+			(pri_ext->silicon_revision) >> 2,
+			(pri_ext->silicon_revision) & 0x03);
 
-	printed = snprintf(buf, buf_size, "Erase Suspend: 0x%x, Sector Protect: 0x%x\n",
-			pri_ext->EraseSuspend,
-			pri_ext->BlkProt);
-	buf += printed;
-	buf_size -= printed;
+	command_print_sameline(cmd, "Erase Suspend: 0x%x, Sector Protect: 0x%x\n",
+			pri_ext->erase_suspend,
+			pri_ext->blk_prot);
 
-	snprintf(buf, buf_size, "VppMin: %u.%x, VppMax: %u.%x\n",
-		(pri_ext->VppMin & 0xf0) >> 4, pri_ext->VppMin & 0x0f,
-		(pri_ext->VppMax & 0xf0) >> 4, pri_ext->VppMax & 0x0f);
+	command_print_sameline(cmd, "VppMin: %u.%x, VppMax: %u.%x\n",
+		(pri_ext->vpp_min & 0xf0) >> 4, pri_ext->vpp_min & 0x0f,
+		(pri_ext->vpp_max & 0xf0) >> 4, pri_ext->vpp_max & 0x0f);
 
 	return ERROR_OK;
 }
 
-static int cfi_intel_info(struct flash_bank *bank, char *buf, int buf_size)
+static int cfi_intel_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
-	int printed;
 	struct cfi_flash_bank *cfi_info = bank->driver_priv;
 	struct cfi_intel_pri_ext *pri_ext = cfi_info->pri_ext;
 
-	printed = snprintf(buf, buf_size, "\nintel primary algorithm extend information:\n");
-	buf += printed;
-	buf_size -= printed;
+	command_print_sameline(cmd, "\nintel primary algorithm extend information:\n");
 
-	printed = snprintf(buf,
-			buf_size,
-			"pri: '%c%c%c', version: %c.%c\n",
+	command_print_sameline(cmd, "pri: '%c%c%c', version: %c.%c\n",
 			pri_ext->pri[0],
 			pri_ext->pri[1],
 			pri_ext->pri[2],
 			pri_ext->major_version,
 			pri_ext->minor_version);
-	buf += printed;
-	buf_size -= printed;
 
-	printed = snprintf(buf,
-			buf_size,
-			"feature_support: 0x%" PRIx32 ", "
+	command_print_sameline(cmd, "feature_support: 0x%" PRIx32 ", "
 			"suspend_cmd_support: 0x%x, blk_status_reg_mask: 0x%x\n",
 			pri_ext->feature_support,
 			pri_ext->suspend_cmd_support,
 			pri_ext->blk_status_reg_mask);
-	buf += printed;
-	buf_size -= printed;
 
-	printed = snprintf(buf, buf_size, "Vcc opt: %x.%x, Vpp opt: %u.%x\n",
+	command_print_sameline(cmd, "Vcc opt: %x.%x, Vpp opt: %u.%x\n",
 			(pri_ext->vcc_optimal & 0xf0) >> 4, pri_ext->vcc_optimal & 0x0f,
 			(pri_ext->vpp_optimal & 0xf0) >> 4, pri_ext->vpp_optimal & 0x0f);
-	buf += printed;
-	buf_size -= printed;
 
-	snprintf(buf, buf_size, "protection_fields: %i, prot_reg_addr: 0x%x, "
+	command_print_sameline(cmd, "protection_fields: %i, prot_reg_addr: 0x%x, "
 		"factory pre-programmed: %i, user programmable: %i\n",
 		pri_ext->num_protection_fields, pri_ext->prot_reg_addr,
 		1 << pri_ext->fact_prot_reg_size, 1 << pri_ext->user_prot_reg_size);
@@ -832,16 +810,12 @@ int cfi_flash_bank_cmd(struct flash_bank *bank, unsigned int argc, const char **
 		return ERROR_FLASH_BANK_INVALID;
 	}
 
-	cfi_info = malloc(sizeof(struct cfi_flash_bank));
-	cfi_info->probed = false;
-	cfi_info->erase_region_info = NULL;
-	cfi_info->pri_ext = NULL;
+	cfi_info = calloc(1, sizeof(struct cfi_flash_bank));
+	if (!cfi_info) {
+		LOG_ERROR("No memory for flash bank info");
+		return ERROR_FAIL;
+	}
 	bank->driver_priv = cfi_info;
-
-	cfi_info->x16_as_x8 = false;
-	cfi_info->jedec_probe = false;
-	cfi_info->not_cfi = false;
-	cfi_info->data_swap = false;
 
 	for (unsigned i = 6; i < argc; i++) {
 		if (strcmp(argv[i], "x16_as_x8") == 0)
@@ -896,9 +870,7 @@ static int cfi_intel_erase(struct flash_bank *bank, unsigned int first,
 		if (retval != ERROR_OK)
 			return retval;
 
-		if (status == 0x80)
-			bank->sectors[i].is_erased = 1;
-		else {
+		if (status != 0x80) {
 			retval = cfi_send_command(bank, 0xff, cfi_flash_address(bank, 0, 0x0));
 			if (retval != ERROR_OK)
 				return retval;
@@ -953,9 +925,7 @@ static int cfi_spansion_erase(struct flash_bank *bank, unsigned int first,
 		if (retval != ERROR_OK)
 			return retval;
 
-		if (cfi_spansion_wait_status_busy(bank, cfi_info->block_erase_timeout) == ERROR_OK)
-			bank->sectors[i].is_erased = 1;
-		else {
+		if (cfi_spansion_wait_status_busy(bank, cfi_info->block_erase_timeout) != ERROR_OK) {
 			retval = cfi_send_command(bank, 0xf0, cfi_flash_address(bank, 0, 0x0));
 			if (retval != ERROR_OK)
 				return retval;
@@ -1514,7 +1484,7 @@ static int cfi_spansion_write_block_mips(struct flash_bank *bank, const uint8_t 
 
 	/* convert bus-width dependent algorithm code to correct endianness */
 	target_code = malloc(target_code_size);
-	if (target_code == NULL) {
+	if (!target_code) {
 		LOG_ERROR("Out of memory");
 		return ERROR_FAIL;
 	}
@@ -1893,7 +1863,7 @@ static int cfi_spansion_write_block(struct flash_bank *bank, const uint8_t *buff
 
 	/* convert bus-width dependent algorithm code to correct endianness */
 	target_code = malloc(target_code_size);
-	if (target_code == NULL) {
+	if (!target_code) {
 		LOG_ERROR("Out of memory");
 		return ERROR_FAIL;
 	}
@@ -2506,7 +2476,7 @@ static void cfi_fixup_0002_erase_regions(struct flash_bank *bank, const void *pa
 	struct cfi_spansion_pri_ext *pri_ext = cfi_info->pri_ext;
 	(void) param;
 
-	if ((pri_ext->_reversed_geometry) || (pri_ext->TopBottom == 3)) {
+	if ((pri_ext->_reversed_geometry) || (pri_ext->top_bottom == 3)) {
 		LOG_DEBUG("swapping reversed erase region information on cmdset 0002 device");
 
 		for (unsigned int i = 0; i < cfi_info->num_erase_regions / 2; i++) {
@@ -2996,45 +2966,36 @@ int cfi_protect_check(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
-int cfi_get_info(struct flash_bank *bank, char *buf, int buf_size)
+int cfi_get_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
-	int printed;
 	struct cfi_flash_bank *cfi_info = bank->driver_priv;
 
 	if (cfi_info->qry[0] == 0xff) {
-		snprintf(buf, buf_size, "\ncfi flash bank not probed yet\n");
+		command_print_sameline(cmd, "\ncfi flash bank not probed yet\n");
 		return ERROR_OK;
 	}
 
 	if (!cfi_info->not_cfi)
-		printed = snprintf(buf, buf_size, "\nCFI flash: ");
+		command_print_sameline(cmd, "\nCFI flash: ");
 	else
-		printed = snprintf(buf, buf_size, "\nnon-CFI flash: ");
-	buf += printed;
-	buf_size -= printed;
+		command_print_sameline(cmd, "\nnon-CFI flash: ");
 
-	printed = snprintf(buf, buf_size, "mfr: 0x%4.4x, id:0x%4.4x\n\n",
+	command_print_sameline(cmd, "mfr: 0x%4.4x, id:0x%4.4x\n",
 			cfi_info->manufacturer, cfi_info->device_id);
-	buf += printed;
-	buf_size -= printed;
 
-	printed = snprintf(buf, buf_size, "qry: '%c%c%c', pri_id: 0x%4.4x, pri_addr: "
+	command_print_sameline(cmd, "qry: '%c%c%c', pri_id: 0x%4.4x, pri_addr: "
 			"0x%4.4x, alt_id: 0x%4.4x, alt_addr: 0x%4.4x\n",
 			cfi_info->qry[0], cfi_info->qry[1], cfi_info->qry[2],
 			cfi_info->pri_id, cfi_info->pri_addr, cfi_info->alt_id, cfi_info->alt_addr);
-	buf += printed;
-	buf_size -= printed;
 
-	printed = snprintf(buf, buf_size, "Vcc min: %x.%x, Vcc max: %x.%x, "
+	command_print_sameline(cmd, "Vcc min: %x.%x, Vcc max: %x.%x, "
 			"Vpp min: %u.%x, Vpp max: %u.%x\n",
 			(cfi_info->vcc_min & 0xf0) >> 4, cfi_info->vcc_min & 0x0f,
 			(cfi_info->vcc_max & 0xf0) >> 4, cfi_info->vcc_max & 0x0f,
 			(cfi_info->vpp_min & 0xf0) >> 4, cfi_info->vpp_min & 0x0f,
 			(cfi_info->vpp_max & 0xf0) >> 4, cfi_info->vpp_max & 0x0f);
-	buf += printed;
-	buf_size -= printed;
 
-	printed = snprintf(buf, buf_size, "typ. word write timeout: %u us, "
+	command_print_sameline(cmd, "typ. word write timeout: %u us, "
 			"typ. buf write timeout: %u us, "
 			"typ. block erase timeout: %u ms, "
 			"typ. chip erase timeout: %u ms\n",
@@ -3042,12 +3003,8 @@ int cfi_get_info(struct flash_bank *bank, char *buf, int buf_size)
 			1 << cfi_info->buf_write_timeout_typ,
 			1 << cfi_info->block_erase_timeout_typ,
 			1 << cfi_info->chip_erase_timeout_typ);
-	buf += printed;
-	buf_size -= printed;
 
-	printed = snprintf(buf,
-			buf_size,
-			"max. word write timeout: %u us, "
+	command_print_sameline(cmd, "max. word write timeout: %u us, "
 			"max. buf write timeout: %u us, max. "
 			"block erase timeout: %u ms, max. chip erase timeout: %u ms\n",
 			(1 <<
@@ -3060,24 +3017,20 @@ int cfi_get_info(struct flash_bank *bank, char *buf, int buf_size)
 			(1 <<
 			 cfi_info->chip_erase_timeout_max) *
 			(1 << cfi_info->chip_erase_timeout_typ));
-	buf += printed;
-	buf_size -= printed;
 
-	printed = snprintf(buf, buf_size, "size: 0x%" PRIx32 ", interface desc: %i, "
+	command_print_sameline(cmd, "size: 0x%" PRIx32 ", interface desc: %i, "
 			"max buffer write size: 0x%x\n",
 			cfi_info->dev_size,
 			cfi_info->interface_desc,
 			1 << cfi_info->max_buf_write_size);
-	buf += printed;
-	buf_size -= printed;
 
 	switch (cfi_info->pri_id) {
 	    case 1:
 	    case 3:
-		    cfi_intel_info(bank, buf, buf_size);
+		    cfi_intel_info(bank, cmd);
 		    break;
 	    case 2:
-		    cfi_spansion_info(bank, buf, buf_size);
+		    cfi_spansion_info(bank, cmd);
 		    break;
 	    default:
 		    LOG_ERROR("cfi primary command set %i unsupported", cfi_info->pri_id);

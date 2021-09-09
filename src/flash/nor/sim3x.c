@@ -511,7 +511,7 @@ static int sim3x_flash_write(struct flash_bank *bank, const uint8_t *buffer, uin
 		count++;
 		new_buffer = malloc(count);
 
-		if (new_buffer == NULL) {
+		if (!new_buffer) {
 			LOG_ERROR("odd number of bytes to write and no memory "
 					"for padding buffer");
 			return ERROR_FAIL;
@@ -834,53 +834,32 @@ static int sim3x_auto_probe(struct flash_bank *bank)
 	}
 }
 
-static int sim3x_flash_info(struct flash_bank *bank, char *buf, int buf_size)
+static int sim3x_flash_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
-	int ret;
-	int printed = 0;
 	struct sim3x_info *sim3x_info;
 
 	sim3x_info = bank->driver_priv;
 
 	/* Read info about chip */
-	ret = sim3x_read_info(bank);
+	int ret = sim3x_read_info(bank);
 	if (ret != ERROR_OK)
 		return ret;
 
 	/* Part */
 	if (sim3x_info->part_family && sim3x_info->part_number) {
-		printed = snprintf(buf, buf_size, "SiM3%c%d", sim3x_info->part_family, sim3x_info->part_number);
-		buf += printed;
-		buf_size -= printed;
-
-		if (buf_size <= 0)
-			return ERROR_BUF_TOO_SMALL;
+		command_print_sameline(cmd, "SiM3%c%d", sim3x_info->part_family, sim3x_info->part_number);
 
 		/* Revision */
 		if (sim3x_info->device_revision && sim3x_info->device_revision <= 'Z' - 'A') {
-			printed = snprintf(buf, buf_size, "-%c", sim3x_info->device_revision + 'A');
-			buf += printed;
-			buf_size -= printed;
-
-			if (buf_size <= 0)
-				return ERROR_BUF_TOO_SMALL;
+			command_print_sameline(cmd, "-%c", sim3x_info->device_revision + 'A');
 
 			/* Package */
-			printed = snprintf(buf, buf_size, "-G%s", sim3x_info->device_package);
-			buf += printed;
-			buf_size -= printed;
-
-			if (buf_size <= 0)
-				return ERROR_BUF_TOO_SMALL;
+			command_print_sameline(cmd, "-G%s", sim3x_info->device_package);
 		}
 	}
 
 	/* Print flash size */
-	printed = snprintf(buf, buf_size, " flash_size = %dKB", sim3x_info->flash_size_kb);
-	buf_size -= printed;
-
-	if (buf_size <= 0)
-		return ERROR_BUF_TOO_SMALL;
+	command_print_sameline(cmd, " flash_size = %dKB", sim3x_info->flash_size_kb);
 
 	return ERROR_OK;
 }
@@ -956,7 +935,7 @@ COMMAND_HANDLER(sim3x_mass_erase)
 	struct cortex_m_common *cortex_m = target_to_cm(target);
 	struct adiv5_dap *dap = cortex_m->armv7m.arm.dap;
 
-	if (dap == NULL) {
+	if (!dap) {
 		/* Used debug interface doesn't support direct DAP access */
 		LOG_ERROR("mass_erase can't be used by this debug interface");
 		return ERROR_FAIL;
@@ -1001,7 +980,7 @@ COMMAND_HANDLER(sim3x_lock)
 	struct cortex_m_common *cortex_m = target_to_cm(target);
 	struct adiv5_dap *dap = cortex_m->armv7m.arm.dap;
 
-	if (dap == NULL) {
+	if (!dap) {
 		/* Used debug interface doesn't support direct DAP access */
 		LOG_INFO("Target can't by unlocked by this debug interface");
 
@@ -1060,7 +1039,7 @@ COMMAND_HANDLER(sim3x_lock)
 			return retval;
 
 		ret = sim3x_flash_write(bank, lock_word, LOCK_WORD_ADDRESS, 4);
-		if (ERROR_OK != ret)
+		if (ret != ERROR_OK)
 			return ret;
 
 		LOG_INFO("Target is successfully locked");
@@ -1073,7 +1052,7 @@ COMMAND_HANDLER(sim3x_lock)
 		LOG_ERROR("Unexpected lock word value");
 
 		/* SIM3X_AP_ID_VALUE is not checked */
-		if (dap == NULL)
+		if (!dap)
 			LOG_INFO("Maybe this isn't a SiM3x MCU");
 
 		return ERROR_FAIL;

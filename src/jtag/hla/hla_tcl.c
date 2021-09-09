@@ -28,26 +28,26 @@
 #include <transport/transport.h>
 #include <helper/time_support.h>
 
-static int jim_newtap_expected_id(Jim_Nvp *n, Jim_GetOptInfo *goi,
-				  struct jtag_tap *pTap)
+static int jim_newtap_expected_id(struct jim_nvp *n, struct jim_getopt_info *goi,
+				  struct jtag_tap *tap)
 {
 	jim_wide w;
-	int e = Jim_GetOpt_Wide(goi, &w);
+	int e = jim_getopt_wide(goi, &w);
 	if (e != JIM_OK) {
 		Jim_SetResultFormatted(goi->interp, "option: %s bad parameter",
 				       n->name);
 		return e;
 	}
 
-	uint32_t *p = realloc(pTap->expected_ids,
-			      (pTap->expected_ids_cnt + 1) * sizeof(uint32_t));
+	uint32_t *p = realloc(tap->expected_ids,
+			      (tap->expected_ids_cnt + 1) * sizeof(uint32_t));
 	if (!p) {
 		Jim_SetResultFormatted(goi->interp, "no memory");
 		return JIM_ERR;
 	}
 
-	pTap->expected_ids = p;
-	pTap->expected_ids[pTap->expected_ids_cnt++] = w;
+	tap->expected_ids = p;
+	tap->expected_ids[tap->expected_ids_cnt++] = w;
 
 	return JIM_OK;
 }
@@ -60,14 +60,14 @@ static int jim_newtap_expected_id(Jim_Nvp *n, Jim_GetOptInfo *goi,
 #define NTAP_OPT_EXPECTED_ID 5
 #define NTAP_OPT_VERSION   6
 
-static int jim_hl_newtap_cmd(Jim_GetOptInfo *goi)
+static int jim_hl_newtap_cmd(struct jim_getopt_info *goi)
 {
-	struct jtag_tap *pTap;
+	struct jtag_tap *tap;
 	int x;
 	int e;
-	Jim_Nvp *n;
+	struct jim_nvp *n;
 	char *cp;
-	const Jim_Nvp opts[] = {
+	const struct jim_nvp opts[] = {
 		{ .name = "-irlen",       .value = NTAP_OPT_IRLEN },
 		{ .name = "-irmask",       .value = NTAP_OPT_IRMASK },
 		{ .name = "-ircapture",       .value = NTAP_OPT_IRCAPTURE },
@@ -78,8 +78,8 @@ static int jim_hl_newtap_cmd(Jim_GetOptInfo *goi)
 		{ .name = NULL, .value = -1},
 	};
 
-	pTap = calloc(1, sizeof(struct jtag_tap));
-	if (!pTap) {
+	tap = calloc(1, sizeof(struct jtag_tap));
+	if (!tap) {
 		Jim_SetResultFormatted(goi->interp, "no memory");
 		return JIM_ERR;
 	}
@@ -90,41 +90,41 @@ static int jim_hl_newtap_cmd(Jim_GetOptInfo *goi)
 	if (goi->argc < 3) {
 		Jim_SetResultFormatted(goi->interp,
 				       "Missing CHIP TAP OPTIONS ....");
-		free(pTap);
+		free(tap);
 		return JIM_ERR;
 	}
 
 	const char *tmp;
-	Jim_GetOpt_String(goi, &tmp, NULL);
-	pTap->chip = strdup(tmp);
+	jim_getopt_string(goi, &tmp, NULL);
+	tap->chip = strdup(tmp);
 
-	Jim_GetOpt_String(goi, &tmp, NULL);
-	pTap->tapname = strdup(tmp);
+	jim_getopt_string(goi, &tmp, NULL);
+	tap->tapname = strdup(tmp);
 
 	/* name + dot + name + null */
-	x = strlen(pTap->chip) + 1 + strlen(pTap->tapname) + 1;
+	x = strlen(tap->chip) + 1 + strlen(tap->tapname) + 1;
 	cp = malloc(x);
-	sprintf(cp, "%s.%s", pTap->chip, pTap->tapname);
-	pTap->dotted_name = cp;
+	sprintf(cp, "%s.%s", tap->chip, tap->tapname);
+	tap->dotted_name = cp;
 
 	LOG_DEBUG("Creating New Tap, Chip: %s, Tap: %s, Dotted: %s, %d params",
-		  pTap->chip, pTap->tapname, pTap->dotted_name, goi->argc);
+		  tap->chip, tap->tapname, tap->dotted_name, goi->argc);
 
 	while (goi->argc) {
-		e = Jim_GetOpt_Nvp(goi, opts, &n);
+		e = jim_getopt_nvp(goi, opts, &n);
 		if (e != JIM_OK) {
-			Jim_GetOpt_NvpUnknown(goi, opts, 0);
+			jim_getopt_nvp_unknown(goi, opts, 0);
 			free(cp);
-			free(pTap);
+			free(tap);
 			return e;
 		}
 		LOG_DEBUG("Processing option: %s", n->name);
 		switch (n->value) {
 		case NTAP_OPT_EXPECTED_ID:
-			e = jim_newtap_expected_id(n, goi, pTap);
-			if (JIM_OK != e) {
+			e = jim_newtap_expected_id(n, goi, tap);
+			if (e != JIM_OK) {
 				free(cp);
-				free(pTap);
+				free(tap);
 				return e;
 			}
 			break;
@@ -132,21 +132,21 @@ static int jim_hl_newtap_cmd(Jim_GetOptInfo *goi)
 		case NTAP_OPT_IRMASK:
 		case NTAP_OPT_IRCAPTURE:
 			/* dummy read to ignore the next argument */
-			Jim_GetOpt_Wide(goi, NULL);
+			jim_getopt_wide(goi, NULL);
 			break;
 		}		/* switch (n->value) */
 	}			/* while (goi->argc) */
 
 	/* default is enabled-after-reset */
-	pTap->enabled = !pTap->disabled_after_reset;
+	tap->enabled = !tap->disabled_after_reset;
 
-	jtag_tap_init(pTap);
+	jtag_tap_init(tap);
 	return JIM_OK;
 }
 
 int jim_hl_newtap(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
 {
-	Jim_GetOptInfo goi;
-	Jim_GetOpt_Setup(&goi, interp, argc - 1, argv + 1);
+	struct jim_getopt_info goi;
+	jim_getopt_setup(&goi, interp, argc - 1, argv + 1);
 	return jim_hl_newtap_cmd(&goi);
 }

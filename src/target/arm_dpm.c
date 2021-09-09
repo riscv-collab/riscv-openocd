@@ -50,7 +50,7 @@
 
 /* Read coprocessor */
 static int dpm_mrc(struct target *target, int cpnum,
-	uint32_t op1, uint32_t op2, uint32_t CRn, uint32_t CRm,
+	uint32_t op1, uint32_t op2, uint32_t crn, uint32_t crm,
 	uint32_t *value)
 {
 	struct arm *arm = target_to_arm(target);
@@ -62,12 +62,12 @@ static int dpm_mrc(struct target *target, int cpnum,
 		return retval;
 
 	LOG_DEBUG("MRC p%d, %d, r0, c%d, c%d, %d", cpnum,
-		(int) op1, (int) CRn,
-		(int) CRm, (int) op2);
+		(int) op1, (int) crn,
+		(int) crm, (int) op2);
 
 	/* read coprocessor register into R0; return via DCC */
 	retval = dpm->instr_read_data_r0(dpm,
-			ARMV4_5_MRC(cpnum, op1, 0, CRn, CRm, op2),
+			ARMV4_5_MRC(cpnum, op1, 0, crn, crm, op2),
 			value);
 
 	/* (void) */ dpm->finish(dpm);
@@ -75,7 +75,7 @@ static int dpm_mrc(struct target *target, int cpnum,
 }
 
 static int dpm_mcr(struct target *target, int cpnum,
-	uint32_t op1, uint32_t op2, uint32_t CRn, uint32_t CRm,
+	uint32_t op1, uint32_t op2, uint32_t crn, uint32_t crm,
 	uint32_t value)
 {
 	struct arm *arm = target_to_arm(target);
@@ -87,12 +87,12 @@ static int dpm_mcr(struct target *target, int cpnum,
 		return retval;
 
 	LOG_DEBUG("MCR p%d, %d, r0, c%d, c%d, %d", cpnum,
-		(int) op1, (int) CRn,
-		(int) CRm, (int) op2);
+		(int) op1, (int) crn,
+		(int) crm, (int) op2);
 
 	/* read DCC into r0; then write coprocessor register from R0 */
 	retval = dpm->instr_write_data_r0(dpm,
-			ARMV4_5_MCR(cpnum, op1, 0, CRn, CRm, op2),
+			ARMV4_5_MCR(cpnum, op1, 0, crn, crm, op2),
 			value);
 
 	/* (void) */ dpm->finish(dpm);
@@ -514,7 +514,7 @@ int arm_dpm_write_dirty_registers(struct arm_dpm *dpm, bool bpwp)
 				continue;
 			if (arm->cpsr == cache->reg_list + i)
 				continue;
-			if (!cache->reg_list[i].dirty)
+			if (!cache->reg_list[i].exist || !cache->reg_list[i].dirty)
 				continue;
 
 			r = cache->reg_list[i].arch_info;
@@ -763,7 +763,7 @@ static int arm_dpm_full_context(struct target *target)
 		for (unsigned i = 0; i < cache->num_regs; i++) {
 			struct arm_reg *r;
 
-			if (cache->reg_list[i].valid)
+			if (!cache->reg_list[i].exist || cache->reg_list[i].valid)
 				continue;
 			r = cache->reg_list[i].arch_info;
 
@@ -1010,7 +1010,7 @@ void arm_dpm_report_wfar(struct arm_dpm *dpm, uint32_t addr)
 			/* ?? */
 			break;
 	}
-	dpm->wp_pc = addr;
+	dpm->wp_addr = addr;
 }
 
 /*----------------------------------------------------------------------*/
@@ -1070,7 +1070,7 @@ int arm_dpm_setup(struct arm_dpm *dpm)
 	arm->read_core_reg = arm_dpm_read_core_reg;
 	arm->write_core_reg = arm_dpm_write_core_reg;
 
-	if (arm->core_cache == NULL) {
+	if (!arm->core_cache) {
 		cache = arm_build_reg_cache(target, arm);
 		if (!cache)
 			return ERROR_FAIL;
@@ -1088,9 +1088,11 @@ int arm_dpm_setup(struct arm_dpm *dpm)
 		target->type->remove_breakpoint = dpm_remove_breakpoint;
 	}
 
-	/* watchpoint setup */
-	target->type->add_watchpoint = dpm_add_watchpoint;
-	target->type->remove_watchpoint = dpm_remove_watchpoint;
+	/* watchpoint setup -- optional until it works everywhere */
+	if (!target->type->add_watchpoint) {
+		target->type->add_watchpoint = dpm_add_watchpoint;
+		target->type->remove_watchpoint = dpm_remove_watchpoint;
+	}
 
 	/* FIXME add vector catch support */
 

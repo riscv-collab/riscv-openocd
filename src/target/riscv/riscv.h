@@ -10,6 +10,7 @@ struct riscv_program;
 #include "gdb_regs.h"
 #include "jtag/jtag.h"
 #include "target/register.h"
+#include "command.h"
 
 /* The register cache is statically allocated. */
 #define RISCV_MAX_HARTS 1024
@@ -89,9 +90,6 @@ typedef struct {
 	struct command_context *cmd_ctx;
 	void *version_specific;
 
-	/* The hart that the RTOS thinks is currently being debugged. */
-	int rtos_hartid;
-
 	/* The hart that is currently being debugged.  Note that this is
 	 * different than the hartid that the RTOS is expected to use.  This
 	 * one will change all the time, it's more of a global argument to
@@ -100,21 +98,21 @@ typedef struct {
 
 	/* OpenOCD's register cache points into here. This is not per-hart because
 	 * we just invalidate the entire cache when we change which hart is
-	 * selected. */
-	uint64_t reg_cache_values[RISCV_MAX_REGISTERS];
+	 * selected. Use an array of 8 uint8_t per register. */
+	uint8_t reg_cache_values[RISCV_MAX_REGISTERS][8];
 
 	/* Single buffer that contains all register names, instead of calling
 	 * malloc for each register. Needs to be freed when reg_list is freed. */
 	char *reg_names;
 
 	/* It's possible that each core has a different supported ISA set. */
-	int xlen[RISCV_MAX_HARTS];
-	riscv_reg_t misa[RISCV_MAX_HARTS];
+	int xlen;
+	riscv_reg_t misa;
 	/* Cached value of vlenb. 0 if vlenb is not readable for some reason. */
-	unsigned vlenb[RISCV_MAX_HARTS];
+	unsigned vlenb;
 
 	/* The number of triggers per hart. */
-	unsigned trigger_count[RISCV_MAX_HARTS];
+	unsigned trigger_count;
 
 	/* For each physical trigger, contains -1 if the hwbp is available, or the
 	 * unique_id of the breakpoint/watchpoint that is using it.
@@ -123,7 +121,7 @@ typedef struct {
 	int trigger_unique_id[RISCV_MAX_HWBPS];
 
 	/* The number of entries in the debug buffer. */
-	int debug_buffer_size[RISCV_MAX_HARTS];
+	int debug_buffer_size;
 
 	/* This avoids invalidating the register cache too often. */
 	bool registers_initialized;
@@ -144,10 +142,8 @@ typedef struct {
 
 	/* Helper functions that target the various RISC-V debug spec
 	 * implementations. */
-	int (*get_register)(struct target *target,
-		riscv_reg_t *value, int hid, int rid);
-	int (*set_register)(struct target *target, int hartid, int regid,
-			uint64_t value);
+	int (*get_register)(struct target *target, riscv_reg_t *value, int regid);
+	int (*set_register)(struct target *target, int regid, uint64_t value);
 	int (*get_register_buf)(struct target *target, uint8_t *buf, int regno);
 	int (*set_register_buf)(struct target *target, int regno,
 			const uint8_t *buf);
@@ -175,16 +171,14 @@ typedef struct {
 	void (*fill_dmi_read_u64)(struct target *target, char *buf, int a);
 	void (*fill_dmi_nop_u64)(struct target *target, char *buf);
 
-	int (*authdata_read)(struct target *target, uint32_t *value);
-	int (*authdata_write)(struct target *target, uint32_t value);
+	int (*authdata_read)(struct target *target, uint32_t *value, unsigned index);
+	int (*authdata_write)(struct target *target, uint32_t value, unsigned index);
 
 	int (*dmi_read)(struct target *target, uint32_t *value, uint32_t address);
 	int (*dmi_write)(struct target *target, uint32_t address, uint32_t value);
 
 	int (*test_sba_config_reg)(struct target *target, target_addr_t legal_address,
 			uint32_t num_words, target_addr_t illegal_address, bool run_sbbusyerror_test);
-
-	int (*test_compliance)(struct target *target);
 
 	int (*sample_memory)(struct target *target,
 						 riscv_sample_buf_t *buf,
@@ -197,6 +191,8 @@ typedef struct {
 	/* How many harts are attached to the DM that this target is attached to? */
 	int (*hart_count)(struct target *target);
 	unsigned (*data_bits)(struct target *target);
+
+	COMMAND_HELPER((*print_info), struct target *target);
 
 	/* Storage for vector register types. */
 	struct reg_data_type_vector vector_uint8;
@@ -237,6 +233,9 @@ typedef struct {
 	riscv_sample_config_t sample_config;
 	riscv_sample_buf_t sample_buf;
 } riscv_info_t;
+
+COMMAND_HELPER(riscv_print_info_line, const char *section, const char *key,
+			   unsigned value);
 
 typedef struct {
 	uint8_t tunneled_dr_width;
@@ -327,44 +326,30 @@ void riscv_info_init(struct target *target, riscv_info_t *r);
  * then the only hart. */
 int riscv_step_rtos_hart(struct target *target);
 
-bool riscv_supports_extension(struct target *target, int hartid, char letter);
+bool riscv_supports_extension(struct target *target, char letter);
 
 /* Returns XLEN for the given (or current) hart. */
 unsigned riscv_xlen(const struct target *target);
-int riscv_xlen_of_hart(const struct target *target, int hartid);
-
-bool riscv_rtos_enabled(const struct target *target);
+int riscv_xlen_of_hart(const struct target *target);
 
 /* Sets the current hart, which is the hart that will actually be used when
  * issuing debug commands. */
 int riscv_set_current_hartid(struct target *target, int hartid);
+int riscv_select_current_hart(struct target *target);
 int riscv_current_hartid(const struct target *target);
 
 /*** Support functions for the RISC-V 'RTOS', which provides multihart support
  * without requiring multiple targets.  */
 
-/* When using the RTOS to debug, this selects the hart that is currently being
- * debugged.  This doesn't propagate to the hardware. */
-void riscv_set_all_rtos_harts(struct target *target);
-void riscv_set_rtos_hartid(struct target *target, int hartid);
-
 /* Lists the number of harts in the system, which are assumed to be
  * consecutive and start with mhartid=0. */
 int riscv_count_harts(struct target *target);
 
-/* Returns TRUE if the target has the given register on the given hart.  */
-bool riscv_has_register(struct target *target, int hartid, int regid);
-
 /** Set register, updating the cache. */
 int riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
-/** Set register, updating the cache. */
-int riscv_set_register_on_hart(struct target *target, int hid, enum gdb_regno rid, uint64_t v);
 /** Get register, from the cache if it's in there. */
 int riscv_get_register(struct target *target, riscv_reg_t *value,
 		enum gdb_regno r);
-/** Get register, from the cache if it's in there. */
-int riscv_get_register_on_hart(struct target *target, riscv_reg_t *value,
-		int hartid, enum gdb_regno regid);
 
 /* Checks the state of the current hart -- "is_halted" checks the actual
  * on-device register. */
@@ -386,9 +371,6 @@ int riscv_dmi_write_u64_bits(struct target *target);
 
 /* Invalidates the register cache. */
 void riscv_invalidate_register_cache(struct target *target);
-
-/* Returns TRUE when a hart is enabled in this target. */
-bool riscv_hart_enabled(struct target *target, int hartid);
 
 int riscv_enumerate_triggers(struct target *target);
 

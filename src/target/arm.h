@@ -60,6 +60,15 @@ enum arm_core_type {
 	ARM_CORE_TYPE_M_PROFILE,
 };
 
+/** ARM Architecture specifying the version and the profile */
+enum arm_arch {
+	ARM_ARCH_UNKNOWN,
+	ARM_ARCH_V4,
+	ARM_ARCH_V6M,
+	ARM_ARCH_V7M,
+	ARM_ARCH_V8M,
+};
+
 /**
  * Represent state of an ARM core.
  *
@@ -191,14 +200,8 @@ struct arm {
 	/** Record the current core state: ARM, Thumb, or otherwise. */
 	enum arm_state core_state;
 
-	/** Flag reporting unavailability of the BKPT instruction. */
-	bool is_armv4;
-
-	/** Flag reporting armv6m based core. */
-	bool is_armv6m;
-
-	/** Flag reporting armv8m based core. */
-	bool is_armv8m;
+	/** ARM architecture version */
+	enum arm_arch arch;
 
 	/** Floating point or VFP version, 0 if disabled. */
 	int arm_vfp_version;
@@ -228,13 +231,13 @@ struct arm {
 	/** Read coprocessor register.  */
 	int (*mrc)(struct target *target, int cpnum,
 			uint32_t op1, uint32_t op2,
-			uint32_t CRn, uint32_t CRm,
+			uint32_t crn, uint32_t crm,
 			uint32_t *value);
 
 	/** Write coprocessor register.  */
 	int (*mcr)(struct target *target, int cpnum,
 			uint32_t op1, uint32_t op2,
-			uint32_t CRn, uint32_t CRm,
+			uint32_t crn, uint32_t crm,
 			uint32_t value);
 
 	void *arch_info;
@@ -249,13 +252,13 @@ struct arm {
 /** Convert target handle to generic ARM target state handle. */
 static inline struct arm *target_to_arm(struct target *target)
 {
-	assert(target != NULL);
+	assert(target);
 	return target->arch_info;
 }
 
 static inline bool is_arm(struct arm *arm)
 {
-	assert(arm != NULL);
+	assert(arm);
 	return arm->common_magic == ARM_COMMON_MAGIC;
 }
 

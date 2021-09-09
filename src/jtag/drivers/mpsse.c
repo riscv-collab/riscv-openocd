@@ -22,6 +22,7 @@
 
 #include "mpsse.h"
 #include "helper/log.h"
+#include "helper/replacements.h"
 #include "helper/time_support.h"
 #include <libusb.h>
 
@@ -62,8 +63,8 @@
 #define SIO_RESET_PURGE_TX 2
 
 struct mpsse_ctx {
-	libusb_context *usb_ctx;
-	libusb_device_handle *usb_dev;
+	struct libusb_context *usb_ctx;
+	struct libusb_device_handle *usb_dev;
 	unsigned int usb_write_timeout;
 	unsigned int usb_read_timeout;
 	uint8_t in_ep;
@@ -85,7 +86,7 @@ struct mpsse_ctx {
 };
 
 /* Returns true if the string descriptor indexed by str_index in device matches string */
-static bool string_descriptor_equal(libusb_device_handle *device, uint8_t str_index,
+static bool string_descriptor_equal(struct libusb_device_handle *device, uint8_t str_index,
 	const char *string)
 {
 	int retval;
@@ -99,7 +100,7 @@ static bool string_descriptor_equal(libusb_device_handle *device, uint8_t str_in
 	return strncmp(string, desc_string, sizeof(desc_string)) == 0;
 }
 
-static bool device_location_equal(libusb_device *device, const char *location)
+static bool device_location_equal(struct libusb_device *device, const char *location)
 {
 	bool result = false;
 #ifdef HAVE_LIBUSB_GET_PORT_NUMBERS
@@ -118,7 +119,7 @@ static bool device_location_equal(libusb_device *device, const char *location)
 	LOG_DEBUG("device path has %i steps", path_len);
 
 	ptr = strtok(loc, "-:");
-	if (ptr == NULL) {
+	if (!ptr) {
 		LOG_DEBUG("no ':' in path");
 		goto done;
 	}
@@ -130,7 +131,7 @@ static bool device_location_equal(libusb_device *device, const char *location)
 	path_step = 0;
 	while (path_step < 7) {
 		ptr = strtok(NULL, ".,");
-		if (ptr == NULL) {
+		if (!ptr) {
 			LOG_DEBUG("no more tokens in path at step %i", path_step);
 			break;
 		}
@@ -161,7 +162,7 @@ static bool device_location_equal(libusb_device *device, const char *location)
 static bool open_matching_device(struct mpsse_ctx *ctx, const uint16_t *vid, const uint16_t *pid,
 	const char *product, const char *serial, const char *location)
 {
-	libusb_device **list;
+	struct libusb_device **list;
 	struct libusb_device_descriptor desc;
 	struct libusb_config_descriptor *config0;
 	int err;
@@ -171,7 +172,7 @@ static bool open_matching_device(struct mpsse_ctx *ctx, const uint16_t *vid, con
 		LOG_ERROR("libusb_get_device_list() failed with %s", libusb_error_name(cnt));
 
 	for (ssize_t i = 0; i < cnt; i++) {
-		libusb_device *device = list[i];
+		struct libusb_device *device = list[i];
 
 		err = libusb_get_device_descriptor(device, &desc);
 		if (err != LIBUSB_SUCCESS) {
@@ -944,12 +945,12 @@ error_check:
 		retval = ERROR_OK;
 	}
 
+	if (retval != ERROR_OK)
+		mpsse_purge(ctx);
+
 	libusb_free_transfer(write_transfer);
 	if (read_transfer)
 		libusb_free_transfer(read_transfer);
-
-	if (retval != ERROR_OK)
-		mpsse_purge(ctx);
 
 	return retval;
 }

@@ -18,6 +18,7 @@
 #ifndef OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_INCLUDE_H
 #define OPENOCD_JTAG_DRIVERS_VERSALOON_VERSALOON_INCLUDE_H
 
+#include "helper/system.h"
 /* This file is used to include different header and macros */
 /* according to different platform */
 #include <jtag/interface.h>
@@ -26,7 +27,6 @@
 #define PARAM_CHECK							1
 
 #define sleep_ms(ms)						jtag_sleep((ms) * 1000)
-#define dimof(arr)							(sizeof(arr) / sizeof((arr)[0]))
 #define TO_STR(name)						#name
 
 #define RESULT								int
