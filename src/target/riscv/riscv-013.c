@@ -1021,8 +1021,7 @@ static int examine_progbuf(struct target *target)
 		return ERROR_OK;
 	}
 
-	uint64_t s0;
-	if (register_read_direct(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	struct riscv_program program;
@@ -1037,9 +1036,6 @@ static int examine_progbuf(struct target *target)
 	riscv_program_init(&program, target);
 	riscv_program_insert(&program, sw(S0, S0, 0));
 	int result = riscv_program_exec(&program, target);
-
-	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
-		return ERROR_FAIL;
 
 	if (result != ERROR_OK) {
 		/* This program might have failed if the program buffer is not
@@ -1314,8 +1310,7 @@ static int register_write_direct(struct target *target, unsigned number,
 	struct riscv_program program;
 	riscv_program_init(&program, target);
 
-	uint64_t s0;
-	if (register_read_direct(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	uint64_t mstatus;
@@ -1387,10 +1382,6 @@ static int register_write_direct(struct target *target, unsigned number,
 		scratch_release(target, &scratch);
 
 	if (cleanup_after_register_access(target, mstatus, number) != ERROR_OK)
-		return ERROR_FAIL;
-
-	/* Restore S0. */
-	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	return exec_out;
@@ -3774,10 +3765,9 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 	 */
 
 	int result = ERROR_OK;
-	uint64_t s0, s1;
-	if (register_read_direct(target, &s0, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
-	if (register_read_direct(target, &s1, GDB_REGNO_S1) != ERROR_OK)
+	if (riscv_save_register(target, GDB_REGNO_S1) != ERROR_OK)
 		return ERROR_FAIL;
 
 	/* Write the program (store, increment) */
@@ -3924,11 +3914,6 @@ static int write_memory_progbuf(struct target *target, target_addr_t address,
 
 error:
 	dmi_write(target, DM_ABSTRACTAUTO, 0);
-
-	if (register_write_direct(target, GDB_REGNO_S1, s1) != ERROR_OK)
-		return ERROR_FAIL;
-	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK)
-		return ERROR_FAIL;
 
 	/* Restore MSTATUS */
 	if (mstatus != mstatus_old)
