@@ -353,6 +353,8 @@ int riscv_get_register(struct target *target, riscv_reg_t *value,
 /** Read the register into the cache, and mark it dirty so it will be restored
  * before resuming. */
 int riscv_save_register(struct target *target, enum gdb_regno regid);
+/** Write all dirty registers to the target. */
+int riscv_flush_registers(struct target *target);
 
 /* Checks the state of the current hart -- "is_halted" checks the actual
  * on-device register. */
