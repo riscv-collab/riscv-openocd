@@ -1346,9 +1346,6 @@ static int register_write_direct(struct target *target, unsigned number,
 		riscv_program_insert(&program, vsetvli(ZERO, S0, value));
 
 	} else {
-		if (register_write_direct(target, GDB_REGNO_S0, value) != ERROR_OK)
-			return ERROR_FAIL;
-
 		if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
 			if (riscv_supports_extension(target, 'D'))
 				riscv_program_insert(&program, fmv_d_x(number - GDB_REGNO_FPR0, S0));
@@ -1369,6 +1366,8 @@ static int register_write_direct(struct target *target, unsigned number,
 			LOG_ERROR("Unsupported register (enum gdb_regno)(%d)", number);
 			return ERROR_FAIL;
 		}
+		if (register_write_direct(target, GDB_REGNO_S0, value) != ERROR_OK)
+			return ERROR_FAIL;
 	}
 
 	int exec_out = riscv_program_exec(&program, target);
