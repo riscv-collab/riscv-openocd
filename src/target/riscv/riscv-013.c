@@ -1704,6 +1704,18 @@ static int examine(struct target *target)
 	else
 		r->xlen = 32;
 
+	/* Save s0 and s1. The register cache hasn't be initialized yet so we
+	 * need to take care of this manually. */
+	uint64_t s0, s1;
+	if (register_read_direct(target, &s0, GDB_REGNO_S0) != ERROR_OK) {
+		LOG_ERROR("Fatal: Failed to read s0 from hart %d.", r->current_hartid);
+		return ERROR_FAIL;
+	}
+	if (register_read_direct(target, &s1, GDB_REGNO_S1) != ERROR_OK) {
+		LOG_ERROR("Fatal: Failed to read s1 from hart %d.", r->current_hartid);
+		return ERROR_FAIL;
+	}
+
 	if (register_read_direct(target, &r->misa, GDB_REGNO_MISA)) {
 		LOG_ERROR("Fatal: Failed to read MISA from hart %d.", r->current_hartid);
 		return ERROR_FAIL;
@@ -1722,6 +1734,16 @@ static int examine(struct target *target)
 		* really slow simulators. */
 	LOG_DEBUG(" hart %d: XLEN=%d, misa=0x%" PRIx64, r->current_hartid, r->xlen,
 			r->misa);
+
+	/* Restore s0 and s1. */
+	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK) {
+		LOG_ERROR("Fatal: Failed to write s0 back to hart %d.", r->current_hartid);
+		return ERROR_FAIL;
+	}
+	if (register_write_direct(target, GDB_REGNO_S1, s1) != ERROR_OK) {
+		LOG_ERROR("Fatal: Failed to write s1 back to hart %d.", r->current_hartid);
+		return ERROR_FAIL;
+	}
 
 	if (!halted)
 		riscv013_step_or_resume_current_hart(target, false, false);

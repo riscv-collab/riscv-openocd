@@ -3644,7 +3644,7 @@ int riscv_save_register(struct target *target, enum gdb_regno regid)
 {
 	riscv_reg_t value;
 	if (!target->reg_cache) {
-		LOG_ERROR("TODO: Properly save %s", gdb_regno_name(regid));
+		assert(!target_was_examined(target));
 		return ERROR_OK;
 	}
 
