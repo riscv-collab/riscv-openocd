@@ -4769,7 +4769,8 @@ static int riscv013_step_or_resume_current_hart(struct target *target,
 		return ERROR_FAIL;
 	}
 
-	riscv_flush_registers(target);
+	if (riscv_flush_registers(target) != ERROR_OK)
+		return ERROR_FAIL;
 
 	/* Issue the resume command, and then wait for the current hart to resume. */
 	uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE | DM_DMCONTROL_RESUMEREQ;
