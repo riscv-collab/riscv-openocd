@@ -863,8 +863,8 @@ static uint32_t access_register_command(struct target *target, uint32_t number,
 			command = set_field(command, AC_ACCESS_REGISTER_AARSIZE, 3);
 			break;
 		default:
-			LOG_ERROR("%d-bit register %s not supported.", size,
-					gdb_regno_name(number));
+			LOG_ERROR("[%s] %d-bit register %s not supported.",
+					target_name(target), size, gdb_regno_name(number));
 			assert(0);
 	}
 
@@ -1546,8 +1546,8 @@ static int examine(struct target *target)
 		return ERROR_FAIL;
 	}
 	if (get_field(dtmcontrol, DTM_DTMCS_VERSION) != 1) {
-		LOG_ERROR("Unsupported DTM version %d. (dtmcontrol=0x%x)",
-				get_field(dtmcontrol, DTM_DTMCS_VERSION), dtmcontrol);
+		LOG_ERROR("[%s] Unsupported DTM version %d. (dtmcontrol=0x%x)",
+				target_name(target), get_field(dtmcontrol, DTM_DTMCS_VERSION), dtmcontrol);
 		return ERROR_FAIL;
 	}
 
@@ -1685,7 +1685,8 @@ static int examine(struct target *target)
 	bool halted = riscv_is_halted(target);
 	if (!halted) {
 		if (riscv013_halt_go(target) != ERROR_OK) {
-			LOG_ERROR("Fatal: Hart %d failed to halt during examine()", r->current_hartid);
+			LOG_ERROR("[%s] Fatal: Hart %d failed to halt during examine()",
+					target_name(target), r->current_hartid);
 			return ERROR_FAIL;
 		}
 	}
@@ -4193,9 +4194,9 @@ static int riscv013_halt_go(struct target *target)
 		if (dmi_read(target, &dmcontrol, DM_DMCONTROL) != ERROR_OK)
 			return ERROR_FAIL;
 
-		LOG_ERROR("unable to halt hart %d", r->current_hartid);
-		LOG_ERROR("  dmcontrol=0x%08x", dmcontrol);
-		LOG_ERROR("  dmstatus =0x%08x", dmstatus);
+		LOG_ERROR("[%s] unable to halt hart %d", target_name(target), r->current_hartid);
+		LOG_ERROR("[%s]   dmcontrol=0x%08x", target_name(target), dmcontrol);
+		LOG_ERROR("[%s]   dmstatus =0x%08x", target_name(target), dmstatus);
 		return ERROR_FAIL;
 	}
 

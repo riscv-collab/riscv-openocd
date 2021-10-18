@@ -751,6 +751,7 @@ int target_examine_one(struct target *target)
 		return retval;
 	}
 
+	LOG_USER("[%s] Target successfully examined.", target_name(target));
 	target_set_examined(target);
 	target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_END);
 
@@ -3021,9 +3022,6 @@ static int handle_target(void *priv)
 			is_jtag_poll_safe() && target;
 			target = target->next) {
 
-		if (!target_was_examined(target))
-			continue;
-
 		if (!target->tap->enabled)
 			continue;
 
@@ -3051,14 +3049,11 @@ static int handle_target(void *priv)
 				target_call_event_callbacks(target, TARGET_EVENT_GDB_HALT);
 			}
 			if (target->backoff.times > 0) {
-				LOG_USER("Polling target %s failed, trying to reexamine", target_name(target));
+				LOG_DEBUG("Polling target %s failed, trying to reexamine", target_name(target));
 				target_reset_examined(target);
 				retval = target_examine_one(target);
-				/* Target examination could have failed due to unstable connection,
-				 * but we set the examined flag anyway to repoll it later */
 				if (retval != ERROR_OK) {
-					target_set_examined(target);
-					LOG_USER("Examination failed, GDB will be halted. Polling again in %dms",
+					LOG_DEBUG("Examination failed, GDB will be halted. Polling again in %dms",
 						 target->backoff.times * polling_interval);
 					return retval;
 				}
