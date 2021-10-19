@@ -4195,9 +4195,8 @@ static int riscv013_halt_go(struct target *target)
 		if (dmi_read(target, &dmcontrol, DM_DMCONTROL) != ERROR_OK)
 			return ERROR_FAIL;
 
-		LOG_ERROR("[%s] unable to halt hart %d", target_name(target), r->current_hartid);
-		LOG_ERROR("[%s]   dmcontrol=0x%08x", target_name(target), dmcontrol);
-		LOG_ERROR("[%s]   dmstatus =0x%08x", target_name(target), dmstatus);
+		LOG_ERROR("[%s] Unable to halt hart %d. dmcontrol=0x%08x, dmstatus=0x%08x",
+				  target_name(target), r->current_hartid, dmcontrol, dmstatus);
 		return ERROR_FAIL;
 	}
 
