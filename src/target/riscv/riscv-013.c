@@ -652,10 +652,10 @@ static int dmi_op(struct target *target, uint32_t *data_in,
 	int result = dmi_op_timeout(target, data_in, dmi_busy_encountered, dmi_op,
 			address, data_out, riscv_command_timeout_sec, exec, ensure_success);
 	if (result == ERROR_TIMEOUT_REACHED) {
-		LOG_ERROR("DMI operation didn't complete in %d seconds. The target is "
+		LOG_ERROR("[%s] DMI operation didn't complete in %d seconds. The target is "
 				"either really slow or broken. You could increase the "
 				"timeout with riscv set_command_timeout_sec.",
-				riscv_command_timeout_sec);
+				target_name(target), riscv_command_timeout_sec);
 		return ERROR_FAIL;
 	}
 	return result;
@@ -1628,7 +1628,8 @@ static int examine(struct target *target)
 	info->datacount = get_field(abstractcs, DM_ABSTRACTCS_DATACOUNT);
 	info->progbufsize = get_field(abstractcs, DM_ABSTRACTCS_PROGBUFSIZE);
 
-	LOG_INFO("datacount=%d progbufsize=%d", info->datacount, info->progbufsize);
+	LOG_INFO("[%s] datacount=%d progbufsize=%d", target_name(target),
+			info->datacount, info->progbufsize);
 
 	RISCV_INFO(r);
 	r->impebreak = get_field(dmstatus, DM_DMSTATUS_IMPEBREAK);
@@ -1728,7 +1729,7 @@ static int examine(struct target *target)
 		return ERROR_FAIL;
 
 	/* Display this as early as possible to help people who are using
-		* really slow simulators. */
+	 * really slow simulators. */
 	LOG_DEBUG(" hart %d: XLEN=%d, misa=0x%" PRIx64, r->current_hartid, r->xlen,
 			r->misa);
 
