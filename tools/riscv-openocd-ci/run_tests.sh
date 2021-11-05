@@ -21,8 +21,4 @@ git --no-pager log --no-walk --pretty=short
 # Use slightly more jobs than CPUs. Observed that this still speeds up the testing.
 cd debug
 JOBS=$(($(nproc) + 2))
-
-# Temporary: Run the testing 10 times to have higher chance of catching intermittent failures
-for i in {1..5}; do
-	make -k -j$JOBS all || true
-done
+make -k -j$JOBS all || true
