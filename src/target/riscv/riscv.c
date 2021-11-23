@@ -1189,6 +1189,7 @@ int riscv_flush_registers(struct target *target)
 	return ERROR_OK;
 }
 
+/* Convert: RISC-V hart's halt reason --> OpenOCD's generic debug reason */
 int set_debug_reason(struct target *target, enum riscv_halt_reason halt_reason)
 {
 	switch (halt_reason) {
