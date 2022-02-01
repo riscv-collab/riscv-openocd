@@ -789,10 +789,34 @@ static int rtos_try_next(struct target *target)
 	return 1;
 }
 
-int rtos_update_threads(struct target *target)
+static struct rtos * rtos_of_target(struct target *target)
 {
 	if ((target->rtos) && (target->rtos->type))
+	{
+	   return target->rtos;
+	}
+	else if (target->smp)
+	{
+	   // find target in SMP group that has ->rtos and ->rtos->type non-zero
+	   struct target_list *cur = target->head;
+	   while (cur) {
+	      if (cur->target->rtos && cur->target->rtos->type)
+		 return cur->target->rtos;
+	      cur = cur->next;
+	   }
+	}
+	return NULL;
+}
+
+int rtos_update_threads(struct target *target)
+{
+/*   
+	if ((target->rtos) && (target->rtos->type))
 		target->rtos->type->update_threads(target->rtos);
+*/
+	struct rtos *rtos = rtos_of_target(target);
+	if (rtos)
+		rtos->type->update_threads(rtos);	   
 	return ERROR_OK;
 }
 
