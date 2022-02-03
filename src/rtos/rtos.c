@@ -797,7 +797,7 @@ struct rtos *rtos_of_target(struct target *target)
 		Otherwise NULL return means that no associated non-zero rtos field could be found. */
 
 	struct target_list *pos;
-   
+
 	if ((target->rtos) && (target->rtos->type))
 		return target->rtos;
 
@@ -812,7 +812,7 @@ int rtos_update_threads(struct target *target)
 {
 	struct rtos *rtos = rtos_of_target(target);
 	if (rtos)
-		rtos->type->update_threads(rtos);	   
+		rtos->type->update_threads(rtos);
 	return ERROR_OK;
 }
 
