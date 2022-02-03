@@ -795,8 +795,8 @@ struct rtos *rtos_of_target(struct target *target)
 	/* Primarily consider the rtos field of the target itself, secondarily consider
 		rtos field SMP leader target, then consider rtos field of any other target in the SMP group.
 		Otherwise NULL return means that no associated non-zero rtos field could be found. */
-   
-	struct target_list *pos;   
+
+	struct target_list *pos;
    
 	if ((target->rtos) && (target->rtos->type))
 		return target->rtos;
