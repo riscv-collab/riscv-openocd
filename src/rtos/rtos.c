@@ -810,10 +810,6 @@ struct rtos *rtos_of_target(struct target *target)
 
 int rtos_update_threads(struct target *target)
 {
-/*   
-	if ((target->rtos) && (target->rtos->type))
-		target->rtos->type->update_threads(target->rtos);
-*/
 	struct rtos *rtos = rtos_of_target(target);
 	if (rtos)
 		rtos->type->update_threads(rtos);	   
