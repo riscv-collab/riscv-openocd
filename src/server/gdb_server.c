@@ -780,7 +780,7 @@ static void gdb_signal_reply(struct target *target, struct connection *connectio
 		struct target *ct;
 		struct rtos *rtos;
 
-		rtos = rtos_of_target(target);		
+		rtos = rtos_of_target(target);
 		if (rtos) {
 			rtos->current_threadid = rtos->current_thread;
 			rtos->gdb_target_for_threadid(connection, rtos->current_threadid, &ct);

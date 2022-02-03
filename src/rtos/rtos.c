@@ -789,7 +789,7 @@ static int rtos_try_next(struct target *target)
 	return 1;
 }
 
-struct rtos * rtos_of_target(struct target *target)
+struct rtos *rtos_of_target(struct target *target)
 {
 	if ((target->rtos) && (target->rtos->type))
 	{
