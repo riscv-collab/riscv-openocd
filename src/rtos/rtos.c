@@ -791,20 +791,15 @@ static int rtos_try_next(struct target *target)
 
 struct rtos *rtos_of_target(struct target *target)
 {
+	/* Primarily consider the rtos field of the target itself, and secondarily consider
+		rtos field of SMP leader target (if present) */
+   
 	if ((target->rtos) && (target->rtos->type))
-	{
-	   return target->rtos;
-	}
-	else if (target->smp)
-	{
-	   // find target in SMP group that has ->rtos and ->rtos->type non-zero
-	   struct target_list *cur = target->head;
-	   while (cur) {
-	      if (cur->target->rtos && cur->target->rtos->type)
-		 return cur->target->rtos;
-	      cur = cur->next;
-	   }
-	}
+		return target->rtos;
+
+	if ((target->smp) && (target->head) && (target->head->target->rtos) && (target->head->target->rtos->type))
+		return target->head->target->rtos;
+
 	return NULL;
 }
 
