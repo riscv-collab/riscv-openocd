@@ -10424,6 +10424,11 @@ tunneled DR scan consists of:
 
 @end deffn
 
+@deffn {Command} {riscv set_maskisr} [@option{off}|@option{steponly}]
+Selects whether interrupts will be disabled when single stepping. The default configuration is
+@option{off}.
+@end deffn
+
 @deffn {Command} {riscv set_ebreakm} on|off
 Control dcsr.ebreakm. When on (default), M-mode ebreak instructions trap to
 OpenOCD. When off, they generate a breakpoint exception handled internally.
