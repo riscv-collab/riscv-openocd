@@ -2350,7 +2350,7 @@ int riscv_openocd_poll(struct target *target)
 }
 
 int riscv_openocd_step(struct target *target, int current,
-		target_addr_t address, int handle_breakpoints)
+	target_addr_t address, int handle_breakpoints)
 {
 	LOG_DEBUG("stepping rtos hart");
 
@@ -2361,38 +2361,48 @@ int riscv_openocd_step(struct target *target, int current,
 	if (disable_triggers(target, trigger_state) != ERROR_OK)
 		return ERROR_FAIL;
 
+	bool success = true;
 	uint64_t current_mstatus;
 	RISCV_INFO(info);
+
 	if (info->isrmask_mode == RISCV_ISRMASK_STEPONLY) {
 		/* Disable Interrupts before stepping. */
 		uint64_t irq_disabled_mask = MSTATUS_MIE | MSTATUS_HIE | MSTATUS_SIE | MSTATUS_UIE;
-		if (riscv_interrupts_disable(target, irq_disabled_mask, &current_mstatus) != ERROR_OK)
-			return ERROR_FAIL;
+		if (riscv_interrupts_disable(target, irq_disabled_mask,
+				&current_mstatus) != ERROR_OK) {
+			success = false;
+			LOG_ERROR("unable to disable interrupts");
+			goto _exit;
+		}
 	}
 
-	int out = riscv_step_rtos_hart(target);
-	if (out != ERROR_OK) {
+	if (riscv_step_rtos_hart(target) != ERROR_OK) {
+		success = false;
 		LOG_ERROR("unable to step rtos hart");
-		return out;
-	}
-
-	if (info->isrmask_mode == RISCV_ISRMASK_STEPONLY) {
-		if (riscv_interrupts_restore(target, current_mstatus) != ERROR_OK)
-			return ERROR_FAIL;
 	}
 
 	register_cache_invalidate(target->reg_cache);
 
-	if (enable_triggers(target, trigger_state) != ERROR_OK)
-		return ERROR_FAIL;
+	if (info->isrmask_mode == RISCV_ISRMASK_STEPONLY)
+		if (riscv_interrupts_restore(target, current_mstatus) != ERROR_OK) {
+			success = false;
+			LOG_ERROR("unable to restore interrupts");
+		}
 
-	target->state = TARGET_RUNNING;
-	target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
-	target->state = TARGET_HALTED;
-	target->debug_reason = DBG_REASON_SINGLESTEP;
-	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
+_exit:
+	if (enable_triggers(target, trigger_state) != ERROR_OK) {
+		success = false;
+		LOG_ERROR("unable to enable triggers");
+	}
 
-	return out;
+	if (success) {
+		target->state = TARGET_RUNNING;
+		target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
+		target->state = TARGET_HALTED;
+		target->debug_reason = DBG_REASON_SINGLESTEP;
+		target_call_event_callbacks(target, TARGET_EVENT_HALTED);
+	}
+	return success ? ERROR_OK : ERROR_FAIL;
 }
 
 /* Command Handlers */
@@ -2956,7 +2966,7 @@ COMMAND_HANDLER(riscv_set_maskisr)
 		n = jim_nvp_value2name_simple(nvp_maskisr_modes, info->isrmask_mode);
 		command_print(CMD, "riscv interrupt mask %s", n->name);
 	}
-	
+
 	return ERROR_OK;
 }
 
