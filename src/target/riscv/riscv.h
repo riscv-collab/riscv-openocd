@@ -150,6 +150,10 @@ typedef struct {
 	int (*resume_go)(struct target *target);
 	int (*step_current_hart)(struct target *target);
 	int (*on_halt)(struct target *target);
+
+	/* Indicates that target was reset.*/
+	int (*on_reset)(struct target *target);
+
 	/* Get this target as ready as possible to resume, without actually
 	 * resuming. */
 	int (*resume_prep)(struct target *target);
