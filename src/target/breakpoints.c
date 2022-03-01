@@ -222,6 +222,7 @@ int breakpoint_add(struct target *target,
 		struct target_list *head;
 
 		if (type == BKPT_SOFT) {
+			head = list_first_entry(target->smp_targets, struct target_list, lh);
 			struct target *curr = head->target;
 			if (target->rtos)
 				curr = rtos_swbp_target(target, address, length, type);
