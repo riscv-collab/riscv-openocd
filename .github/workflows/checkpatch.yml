@@ -1,6 +1,6 @@
 on: pull_request
 
-name: Check Code Style
+name: Check Code Style (checkpatch)
 
 jobs:
   check:
@@ -16,6 +16,9 @@ jobs:
       - run: sudo apt-get install patchutils
       - name: Run checkpatch
         run: |
-            git diff -U20 HEAD~40 | \
-                    filterdiff -x "a/src/jtag/drivers/libjaylink/*" -x "a/tools/git2cl/*" | \
-                    ./tools/scripts/checkpatch.pl --no-signoff -
+            git diff -U20 HEAD~40 \
+            | filterdiff \
+                -x "a/src/jtag/drivers/libjaylink/*" \
+                -x "a/tools/git2cl/*" \
+                -x "a/.github/*" \
+            | ./tools/scripts/checkpatch.pl --no-signoff -
