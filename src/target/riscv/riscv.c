@@ -451,8 +451,12 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 	select_idcode.num_bits = target->tap->ir_length;
 
 	if (bscan_tunnel_ir_width != 0) {
-		assert(target->tap->ir_length >= 6);
-		uint32_t ir_user4_raw = bscan_tunnel_ir_id != 0 ? bscan_tunnel_ir_id : 0x23 << (target->tap->ir_length - 6);
+		uint32_t ir_user4_raw = bscan_tunnel_ir_id;
+		/* Provide a default value which target some Xilinx FPGA USER4 IR */
+		if (ir_user4_raw == 0) {
+			assert(target->tap->ir_length >= 6);
+			ir_user4_raw = 0x23 << (target->tap->ir_length - 6);
+		}
 		ir_user4[0] = (uint8_t)ir_user4_raw;
 		ir_user4[1] = (uint8_t)(ir_user4_raw >>= 8);
 		ir_user4[2] = (uint8_t)(ir_user4_raw >>= 8);
