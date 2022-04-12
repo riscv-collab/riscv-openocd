@@ -10494,7 +10494,7 @@ tunneled DR scan consists of:
 
 @deffn {Command} {riscv set_bscan_tunnel_ir} value
 Allows the use_bscan_tunnel feature to target non Xilinx device by
-specifing the JTAG TAP IR used to access the bscan tunnel.
+specifying the JTAG TAP IR used to access the bscan tunnel.
 @end deffn
 
 @deffn {Command} {riscv set_maskisr} [@option{off}|@option{steponly}]
