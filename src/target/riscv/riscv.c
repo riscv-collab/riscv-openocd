@@ -710,7 +710,7 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 		int result = riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1);
 		if (result != ERROR_OK)
 			return result;
-		int type = get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
+		int type = get_field(tdata1, CSR_MCONTROL_TYPE(riscv_xlen(target)));
 
 		result = ERROR_OK;
 		switch (type) {
@@ -3929,7 +3929,7 @@ int riscv_enumerate_triggers(struct target *target)
 		if (result != ERROR_OK)
 			return result;
 
-		int type = get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
+		int type = get_field(tdata1, CSR_MCONTROL_TYPE(riscv_xlen(target)));
 		if (type == 0)
 			break;
 		switch (type) {
