@@ -1509,14 +1509,16 @@ typedef enum {
 } grouptype_t;
 static int set_group(struct target *target, bool *supported, unsigned group, grouptype_t grouptype)
 {
-	uint32_t write = set_field(DM_DMCS2_HGWRITE, DM_DMCS2_GROUP, group);
-	write = set_field(write, DM_DMCS2_GROUPTYPE, (grouptype == HALTGROUP) ? 1 : 0);
-	if (dmi_write(target, DM_DMCS2, write) != ERROR_OK)
+	uint32_t write_val = DM_DMCS2_HGWRITE;
+	assert(group <= 31);
+	write_val = set_field(write_val, DM_DMCS2_GROUP, group);
+	write_val = set_field(write_val, DM_DMCS2_GROUPTYPE, (grouptype == HALTGROUP) ? 1 : 0);
+	if (dmi_write(target, DM_DMCS2, write_val) != ERROR_OK)
 		return ERROR_FAIL;
-	uint32_t read;
-	if (dmi_read(target, &read, DM_DMCS2) != ERROR_OK)
+	uint32_t read_val;
+	if (dmi_read(target, &read_val, DM_DMCS2) != ERROR_OK)
 		return ERROR_FAIL;
-	*supported = get_field(read, DM_DMCS2_GROUP) == group;
+	*supported = get_field(read_val, DM_DMCS2_GROUP) == group;
 	return ERROR_OK;
 }
 
