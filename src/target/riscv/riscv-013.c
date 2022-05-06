@@ -1510,7 +1510,7 @@ typedef enum {
 static int set_group(struct target *target, bool *supported, unsigned group, grouptype_t grouptype)
 {
 	uint32_t write = set_field(DM_DMCS2_HGWRITE, DM_DMCS2_GROUP, group);
-	write = set_field(write, DM_DMCS2_GROUPTYPE, 1);
+	write = set_field(write, DM_DMCS2_GROUPTYPE, (grouptype == HALTGROUP) ? 1 : 0);
 	if (dmi_write(target, DM_DMCS2, write) != ERROR_OK)
 		return ERROR_FAIL;
 	uint32_t read;
