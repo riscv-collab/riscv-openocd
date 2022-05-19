@@ -597,28 +597,28 @@ static int maybe_add_trigger_t2(struct target *target,
 	RISCV_INFO(r);
 
 	/* tselect is already set */
-	if (tdata1 & (MCONTROL_EXECUTE | MCONTROL_STORE | MCONTROL_LOAD)) {
+	if (tdata1 & (CSR_MCONTROL_EXECUTE | CSR_MCONTROL_STORE | CSR_MCONTROL_LOAD)) {
 		/* Trigger is already in use, presumably by user code. */
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	/* address/data match trigger */
-	tdata1 |= MCONTROL_DMODE(riscv_xlen(target));
+	tdata1 |= CSR_MCONTROL_DMODE(riscv_xlen(target));
 	tdata1 = set_field(tdata1, MCONTROL_ACTION,
 			MCONTROL_ACTION_DEBUG_MODE);
-	tdata1 = set_field(tdata1, MCONTROL_MATCH, MCONTROL_MATCH_EQUAL);
-	tdata1 |= MCONTROL_M;
+	tdata1 = set_field(tdata1, CSR_MCONTROL_MATCH, CSR_MCONTROL_MATCH_EQUAL);
+	tdata1 |= CSR_MCONTROL_M;
 	if (r->misa & (1 << ('S' - 'A')))
-		tdata1 |= MCONTROL_S;
+		tdata1 |= CSR_MCONTROL_S;
 	if (r->misa & (1 << ('U' - 'A')))
-		tdata1 |= MCONTROL_U;
+		tdata1 |= CSR_MCONTROL_U;
 
 	if (trigger->execute)
-		tdata1 |= MCONTROL_EXECUTE;
+		tdata1 |= CSR_MCONTROL_EXECUTE;
 	if (trigger->read)
-		tdata1 |= MCONTROL_LOAD;
+		tdata1 |= CSR_MCONTROL_LOAD;
 	if (trigger->write)
-		tdata1 |= MCONTROL_STORE;
+		tdata1 |= CSR_MCONTROL_STORE;
 
 	riscv_set_register(target, GDB_REGNO_TDATA1, tdata1);
 
@@ -653,10 +653,10 @@ static int maybe_add_trigger_t6(struct target *target,
 	}
 
 	/* address/data match trigger */
-	tdata1 |= MCONTROL_DMODE(riscv_xlen(target));
+	tdata1 |= CSR_MCONTROL6_DMODE(riscv_xlen(target));
 	tdata1 = set_field(tdata1, CSR_MCONTROL6_ACTION,
 			MCONTROL_ACTION_DEBUG_MODE);
-	tdata1 = set_field(tdata1, CSR_MCONTROL6_MATCH, MCONTROL_MATCH_EQUAL);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_MATCH, CSR_MCONTROL6_MATCH_EQUAL);
 	tdata1 |= CSR_MCONTROL6_M;
 	if (r->misa & (1 << ('H' - 'A')))
 		tdata1 |= CSR_MCONTROL6_VS | CSR_MCONTROL6_VU;
@@ -715,7 +715,7 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 		int result = riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1);
 		if (result != ERROR_OK)
 			return result;
-		int type = get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
+		int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
 
 		result = ERROR_OK;
 		switch (type) {
@@ -1046,7 +1046,7 @@ static int riscv_hit_trigger_hit_bit(struct target *target, uint32_t *unique_id)
 		uint64_t tdata1;
 		if (riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1) != ERROR_OK)
 			return ERROR_FAIL;
-		int type = get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
+		int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
 
 		uint64_t hit_mask = 0;
 		switch (type) {
@@ -1447,7 +1447,7 @@ static int disable_triggers(struct target *target, riscv_reg_t *state)
 			riscv_reg_t tdata1;
 			if (riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1) != ERROR_OK)
 				return ERROR_FAIL;
-			if (tdata1 & MCONTROL_DMODE(riscv_xlen(target))) {
+			if (tdata1 & CSR_TDATA1_DMODE(riscv_xlen(target))) {
 				state[t] = tdata1;
 				if (riscv_set_register(target, GDB_REGNO_TDATA1, 0) != ERROR_OK)
 					return ERROR_FAIL;
@@ -4036,7 +4036,7 @@ int riscv_enumerate_triggers(struct target *target)
 		if (result != ERROR_OK)
 			return result;
 
-		int type = get_field(tdata1, MCONTROL_TYPE(riscv_xlen(target)));
+		int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
 		if (type == 0)
 			break;
 		switch (type) {
@@ -4046,11 +4046,11 @@ int riscv_enumerate_triggers(struct target *target)
 				riscv_set_register(target, GDB_REGNO_TDATA1, 0);
 				break;
 			case 2:
-				if (tdata1 & MCONTROL_DMODE(riscv_xlen(target)))
+				if (tdata1 & CSR_MCONTROL_DMODE(riscv_xlen(target)))
 					riscv_set_register(target, GDB_REGNO_TDATA1, 0);
 				break;
 			case 6:
-				if (tdata1 & MCONTROL_DMODE(riscv_xlen(target)))
+				if (tdata1 & CSR_MCONTROL6_DMODE(riscv_xlen(target)))
 					riscv_set_register(target, GDB_REGNO_TDATA1, 0);
 				break;
 		}
