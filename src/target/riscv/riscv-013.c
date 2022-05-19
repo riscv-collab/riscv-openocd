@@ -2562,9 +2562,9 @@ static int modify_privilege(struct target *target, uint64_t *mstatus, uint64_t *
 		*mstatus_old = *mstatus;
 
 		/* If we come from m-mode with mprv set, we want to keep mpp */
-		if (get_field(dcsr, DCSR_PRV) < 3) {
+		if (get_field(dcsr, CSR_DCSR_PRV) < 3) {
 			/* MPP = PRIV */
-			*mstatus = set_field(*mstatus, MSTATUS_MPP, get_field(dcsr, DCSR_PRV));
+			*mstatus = set_field(*mstatus, MSTATUS_MPP, get_field(dcsr, CSR_DCSR_PRV));
 
 			/* MPRV = 1 */
 			*mstatus = set_field(*mstatus, MSTATUS_MPRV, 1);

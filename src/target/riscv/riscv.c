@@ -528,7 +528,7 @@ static int maybe_add_trigger_t2(struct target *target,
 
 	/* address/data match trigger */
 	tdata1 |= CSR_MCONTROL_DMODE(riscv_xlen(target));
-	tdata1 = set_field(tdata1, MCONTROL_ACTION,
+	tdata1 = set_field(tdata1, CSR_MCONTROL_ACTION,
 			MCONTROL_ACTION_DEBUG_MODE);
 	tdata1 = set_field(tdata1, CSR_MCONTROL_MATCH, CSR_MCONTROL_MATCH_EQUAL);
 	tdata1 |= CSR_MCONTROL_M;
