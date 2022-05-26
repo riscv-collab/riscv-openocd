@@ -1751,3 +1751,30 @@ const struct flash_driver stm32f1x_flash = {
 	.info = get_stm32x_info,
 	.free_driver_priv = default_flash_free_driver_priv,
 };
+
+static const struct command_registration gd32vf103_command_handlers[] = {
+	{
+		.name = "gd32vf103",
+		.mode = COMMAND_ANY,
+		.help = "gd32vf103 flash command group(reuse stm32f1x)",
+		.usage = "",
+		.chain = stm32f1x_exec_command_handlers,
+	},
+	COMMAND_REGISTRATION_DONE
+};
+
+const struct flash_driver gd32vf103_flash = {
+	.name = "gd32vf103",
+	.commands = gd32vf103_command_handlers,
+	.flash_bank_command = stm32x_flash_bank_command,
+	.erase = stm32x_erase,
+	.protect = stm32x_protect,
+	.write = stm32x_write,
+	.read = default_flash_read,
+	.probe = stm32x_probe,
+	.auto_probe = stm32x_auto_probe,
+	.erase_check = default_flash_blank_check,
+	.protect_check = stm32x_protect_check,
+	.info = get_stm32x_info,
+	.free_driver_priv = default_flash_free_driver_priv,
+};
