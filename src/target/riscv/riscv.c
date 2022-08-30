@@ -544,6 +544,37 @@ static int maybe_add_trigger_t2(struct target *target,
 	if (trigger->write)
 		tdata1 |= CSR_MCONTROL_STORE;
 
+	if (trigger->execute == false) {
+		/* set size for watchpoint */
+		const unsigned stab[] = {
+			0, /* 0 bits  0 bytes */
+			1, /* 8 bits  1 bytes */
+			2, /* 16bits  2 bytes */
+			0, /* 24bits  3 bytes */
+			3, /* 32bits  4 bytes */
+			0, /* 40bits  5 bytes */
+			4, /* 48bits  6 bytes */
+			0, /* 56bits  7 bytes */
+			5, /* 64bits  8 bytes */
+			0, /* 72bits  9 bytes */
+			6, /* 80bits  10bytes */
+			0, /* 88bits  11bytes */
+			7, /* 96bits  12bytes */
+			0, /* 104bits 13bytes */
+			8, /* 112bits 14bytes */
+			0, /* 120bits 15bytes */
+			9, /* 128bits 16bytes */
+		};
+		unsigned size = trigger->length > 16 ? 0 : stab[trigger->length];
+		if (size == 0) {
+			LOG_DEBUG("Trigger doesn't support watchpoint "
+				"with a length of %u bytes", trigger->length);
+			return ERROR_FAIL;
+		}
+		tdata1 = set_field(tdata1, CSR_MCONTROL_SIZEHI, (size >> 2) & 0x3);
+		tdata1 = set_field(tdata1, CSR_MCONTROL_SIZELO, (size >> 0) & 0x3);
+	}
+
 	riscv_set_register(target, GDB_REGNO_TDATA1, tdata1);
 
 	uint64_t tdata1_rb;
