@@ -695,6 +695,13 @@
  * \FcsrMcontrolTiming of 1 matching as well.
  */
 /*
+ * This field contains the 2 high bits of the access size. The low bits come
+ * from \FcsrMcontrolSizelo.
+ */
+#define CSR_MCONTROL_SIZEHI_OFFSET          0x15
+#define CSR_MCONTROL_SIZEHI_LENGTH          2
+#define CSR_MCONTROL_SIZEHI                 0x600000
+/*
  * This field contains the 2 low bits of the access size. The high bits come
  * from \FcsrMcontrolSizehi. The combined value is interpreted as follows:
  */
@@ -706,47 +713,47 @@
  * The behavior is only well-defined if $|select|=0$, or if the access
  * size is XLEN.
  */
-#define CSR_MCONTROL_SIZELO_ANY             0
+#define CSR_MCONTROL_SIZE_ANY               0
 /*
  * 8bit: The trigger will only match against 8-bit memory accesses.
  */
-#define CSR_MCONTROL_SIZELO_8BIT            1
+#define CSR_MCONTROL_SIZE_8BIT              1
 /*
  * 16bit: The trigger will only match against 16-bit memory accesses or
  * execution of 16-bit instructions.
  */
-#define CSR_MCONTROL_SIZELO_16BIT           2
+#define CSR_MCONTROL_SIZE_16BIT             2
 /*
  * 32bit: The trigger will only match against 32-bit memory accesses or
  * execution of 32-bit instructions.
  */
-#define CSR_MCONTROL_SIZELO_32BIT           3
+#define CSR_MCONTROL_SIZE_32BIT             3
 /*
  * 48bit: The trigger will only match against execution of 48-bit instructions.
  */
-#define CSR_MCONTROL_SIZELO_48BIT           4
+#define CSR_MCONTROL_SIZE_48BIT             4
 /*
  * 64bit: The trigger will only match against 64-bit memory accesses or
  * execution of 64-bit instructions.
  */
-#define CSR_MCONTROL_SIZELO_64BIT           5
+#define CSR_MCONTROL_SIZE_64BIT             5
 /*
  * 80bit: The trigger will only match against execution of 80-bit instructions.
  */
-#define CSR_MCONTROL_SIZELO_80BIT           6
+#define CSR_MCONTROL_SIZE_80BIT             6
 /*
  * 96bit: The trigger will only match against execution of 96-bit instructions.
  */
-#define CSR_MCONTROL_SIZELO_96BIT           7
+#define CSR_MCONTROL_SIZE_96BIT             7
 /*
  * 112bit: The trigger will only match against execution of 112-bit instructions.
  */
-#define CSR_MCONTROL_SIZELO_112BIT          8
+#define CSR_MCONTROL_SIZE_112BIT            8
 /*
  * 128bit: The trigger will only match against 128-bit memory accesses or
  * execution of 128-bit instructions.
  */
-#define CSR_MCONTROL_SIZELO_128BIT          9
+#define CSR_MCONTROL_SIZE_128BIT            9
 /*
  * An implementation must support the value of 0, but all other values
  * are optional. When an implementation supports address triggers
