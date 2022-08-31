@@ -1,0 +1,321 @@
+load_lib "lib_response.exp"
+load_lib "lib_elf_ripper.exp"
+load_lib "lib_abi_compat.exp"
+load_lib "lib_test.exp"
+
+proc ocd_test_pass {} {
+  global ocd_test_name
+  pass $ocd_test_name
+}
+
+proc ocd_test_fail {} {
+  global ocd_test_name
+  fail $ocd_test_name
+}
+
+proc ocd_test_untested {} {
+  global ocd_test_name
+  untested $ocd_test_name
+}
+
+proc ocd_test_unresolved {} {
+  global ocd_test_name
+  unresolved $ocd_test_name
+}
+
+proc ocd_test_unsupported {} {
+  global ocd_test_name
+  unsupported $ocd_test_name
+}
+
+proc ocd_test_xfail {} {
+  global ocd_test_name
+  xfail $ocd_test_name
+}
+
+proc ocd_compile_executable { src_name outputname } {
+  global srcdir
+  global subdir
+
+  set result [target_compile \
+    "$srcdir/$subdir/$src_name" \
+    "$outputname" \
+    "executable" \
+    [subst { debug additional_flags=-Xlinker additional_flags=-Map=$outputname.map }] \
+  ]
+  if {![string match $result ""]} {
+    error "could not compile executable ($src_name->$outputname): $result"
+  }
+  describe_program "$outputname"
+  return $result
+}
+
+proc ocd_target_info_check {} {
+  set error_detected 0
+  foreach property [list \
+    cpu,xlen \
+    cpu,cores_num \
+    cpu,has_floats \
+    cpu,has_doubles \
+    env,preferred_timeout \
+    env,resume_timeout \
+    env,exec_timeout \
+  ] {
+    if {[target_info $property] == ""} {
+      perror "target definition does not have $property set"
+      set error_detected 1
+    }
+  }
+
+  if {$error_detected} {
+    set target_name [target_info name]
+    perror "currently selected target <$target_name> is not configured properly, aborting"
+    exit 1
+  }
+}
+
+proc ocd_resume_timeout {} {
+  return [target_info env,resume_timeout]
+}
+
+proc ocd_exec_timeout {} {
+  return [target_info env,exec_timeout]
+}
+
+proc ocd_is_legacy {} {
+  global OPENOCD_VARIANT
+  return [string match $OPENOCD_VARIANT "legacy"]
+}
+
+proc ocd_check_platform_requirements {} {
+  if {[ocd_is_legacy]} {
+    if {[expr [target_info cpu,xlen] == 64]} {
+      return 0
+    }
+  }
+  return 1
+}
+
+proc ocd_init {test_file_name} {
+  global ENABLE_EXP_INTERNAL
+  global timeout
+
+  exp_internal $ENABLE_EXP_INTERNAL
+  match_max -d 1000000
+  #puts [target_info name]
+  #puts [board_info target name]
+  #puts [board_info target sim,options]
+  #puts [target_info sim,options]
+  verbose "/// ocd_init \\\\\\" 1
+
+  global OPENOCD
+  global OPENOCD_VARIANT
+  global ocd_test_name
+  global default_bin_prefix
+  global openocd_instance_spawn_id
+
+  set preferred_timeout [target_info env,preferred_timeout]
+  set timeout $preferred_timeout
+
+  ocd_target_info_check
+
+  set OPENOCD_VARIANT "latest"
+  spawn $OPENOCD "--version"
+  expect {
+    -re "Open On-Chip Debugger \[0-9.\]+" {
+      if {[regexp "Open On-Chip Debugger 0.10.0" $expect_out(buffer)]} {
+        set OPENOCD_VARIANT "legacy"
+        build_backward_compat
+      } else {
+        build_forward_compat
+      }
+      verbose "reported OpenOCD version: $expect_out(buffer)" 2
+      verbose "selected OpenOCD variant: $OPENOCD_VARIANT" 1
+    }
+    eof {
+      perror "could not identify openocd variant (unexpected EOF)"
+    }
+    timeout {
+      perror "could not identify openocd variant (unexpected TIMEOUT)"
+    }
+  }
+  # TODO: we should not call close if eof is observed
+  close
+  wait
+
+  set ocd_test_name [file rootname [file tail $test_file_name]]
+  # format is ${board_name}_${test_name}
+  set default_bin_prefix "[target_info name]_${ocd_test_name}"
+
+  set openocd_args [target_info openocd,flags]
+  #set openocd_args "$openocd_log $openocd_args"
+  verbose "spawning openocd: $OPENOCD $openocd_args" 2
+  spawn $OPENOCD {*}$openocd_args
+
+  expect {
+    "Examined RISC-V core; found" {
+      set openocd_instance_spawn_id $spawn_id
+      verbose "openocd launched successfully" 2
+    }
+    eof {
+      perror "could not properly spawn openocd (unexpected EOF)"
+    }
+    timeout  {
+      perror "openocd does not report active RISCV cores"
+    }
+  }
+  # TODO: we may want to do extra cleanup if timeout is observed
+  sleep [ocd_exec_timeout]
+  #set openocd_log "-c \"log_output ${ocd_test_name}_openocd.log\" "
+  verbose "\\\\\\ ocd_init ///\n   _______" 1
+}
+
+proc ocd_finish {} {
+  ocd_disconnect
+  verbose "/// ocd_finish \\\\\\" 1
+
+  global ocd_test_name
+  global openocd_instance_spawn_id
+
+  if {[info exists ocd_test_name]} {
+    unset ocd_test_name
+  }
+
+  if {![info exists openocd_instance_spawn_id]} {
+    perror "unexpected tool_finish (no openocd session is active)"
+    return
+  }
+
+  verbose "about to kill openocd instance" 2
+  exec kill -s SIGINT [exp_pid -i $openocd_instance_spawn_id ]
+  # wait a little bit to allow for a clean termination
+  sleep [ocd_exec_timeout]
+  exec kill -s SIGKILL [exp_pid -i $openocd_instance_spawn_id ]
+
+  verbose "kill issued. waiting..." 2
+  wait -i $openocd_instance_spawn_id
+
+  verbose "wait done. openocd process is reaped" 2
+  unset openocd_instance_spawn_id
+
+  verbose "\\\\\\ ocd_finish ///\n   _______" 1
+}
+
+proc ocd_internal_error { msg } {
+  perror $msg
+  ocd_disconnect
+  error $msg
+}
+
+proc ocd_internal_send_command {msg} {
+  global ocd_client_spawn_id
+  if {![info exists ocd_client_spawn_id]} {
+    ocd_internal_error "trying to send <$msg> without connection"
+  }
+  verbose ">>>> capture { $msg }" 2
+  send "capture { $msg }\x1a"
+}
+
+proc ocd_run_command {msg} {
+  ocd_internal_send_command $msg
+  expect {
+    \x1a {
+      return $expect_out(buffer)
+    }
+    eof {
+      ocd_internal_error "unexpected EOF while waiting results of <$msg>"
+    }
+    timeout {
+      ocd_internal_error "unexpected timeout while waiting results of <$msg>"
+    }
+  }
+}
+
+proc ocd_connect {} {
+  global spawn_id
+  global ocd_client_spawn_id
+  global openocd_instance_spawn_id
+  global ocd_test_name
+  global OPENOCD_LOG_LEVEL
+
+  if {![info exists openocd_instance_spawn_id]} {
+    ocd_internal_error "OpenOCD: no active OpenOCD instance is found"
+  }
+
+  if {[info exists ocd_client_spawn_id]} {
+    ocd_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported"
+  }
+
+  #set stty_init "-echo -isig -icanon"
+  # we use raw to avoid translation of \x1a to ^D
+  # -echo just disables echoing of sent symbols
+  set stty_init "raw -echo"
+  spawn nc localhost 6666
+  set ocd_client_spawn_id $spawn_id
+  unset stty_init
+
+  ocd_internal_send_command "echo \"Hi there!\""
+  expect {
+    "Hi there!\n\x1a" {
+      verbose "OpenOCD: connection established, all is good" 1
+    }
+    eof {
+      ocd_internal_error "OpenOCD: unexpected EOF while expecting acknowledge"
+    }
+    timeout {
+      ocd_internal_error "OpenOCD: could not recieve acknowledge"
+    }
+  }
+
+  ocd_internal_send_command "targets"
+  expect {
+    \x1a {
+      verbose "OpenOCD: targets list received" 1
+    }
+    eof {
+      ocd_internal_error "OpenOCD: could not recieve targets list from OpenOCD"
+    }
+    timeout {
+      ocd_internal_error "OpenOCD: unexpected timeout while waiting for initial targets listing"
+    }
+  }
+
+  set board_name [board_info target name]
+  set log_commands [subst [join {
+    "log_output \"openocd_${board_name}_${ocd_test_name}.log\" ;" \
+    "debug_level $OPENOCD_LOG_LEVEL" \
+  } " "]]
+
+  ocd_internal_send_command $log_commands
+  expect {
+    -re "debug_level:.*\n\x1a" {
+      verbose "OpenOCD: debug level <$OPENOCD_LOG_LEVEL> is set" 1
+    }
+    eof {
+      ocd_internal_error "OpenOCD: could not set the desired debug_level"
+    }
+    timeout {
+      ocd_internal_error "OpenOCD: unexpected timeout while setting debug_level"
+    }
+  }
+
+  return
+}
+
+proc ocd_disconnect { } {
+  global ocd_client_spawn_id
+
+  if {![info exists ocd_client_spawn_id]} {
+    return
+  }
+
+  verbose "Disconnecting from OpenOCD" 1
+  close -i $ocd_client_spawn_id
+  verbose "OpenOCD connection closed, reaping the process" 1
+
+  wait -i $ocd_client_spawn_id
+  verbose "OpenOCD connection is dead, farewell!" 1
+
+  unset ocd_client_spawn_id
+}
+

@@ -1,0 +1,181 @@
+proc ocdtlb_addr_add { base_address increment } {
+  return [format 0x%x [expr {$base_address + $increment}]]
+}
+
+proc ocdtlb_compare_equal { left right } {
+  set llen [llength $left]
+  set rlen [llength $right]
+  if {[expr {$llen != $rlen} ]} {
+    error "length($left) != length($right)"
+  }
+  foreach l $left r $right {
+    if { [expr { $l != $r} ] } { return 0 }
+  }
+  return 1
+}
+
+proc ocdtlb_expect_equal { left right } {
+  if { [ ocdtlb_compare_equal $left $right ] } { return }
+  error "$left != $right"
+}
+
+proc ocdtlb_compare_equal_hex { left right } {
+  set scanned_left {}
+  set scanned_right {}
+  foreach li $left {
+    scan $li %x l
+    lappend scanned_left $l
+  }
+  foreach ri $right {
+    scan $ri %x r
+    lappend scanned_right $r
+  }
+  return [ocdtlb_compare_equal $scanned_left $scanned_right]
+}
+
+proc ocdtlb_expect_equal_hex { left right } {
+  if { [ ocdtlb_compare_equal_hex $left $right ]} { return }
+  error "$left != $right"
+}
+
+proc ocdtlb_rsp_get { response {what value} } {
+  if {![response_is_success $response]} {
+    error "can not get value from failed response: $response"
+  }
+  if {![dict exists $response $what]} {
+    error "$what does not exists in: $response"
+  }
+  return [dict get $response $what]
+}
+
+proc ocdtlb_do_get_target_status {} {
+  set response [ocdtlb_run_expect "targets"]
+
+  set active_idx [ocdtlb_rsp_get $response active_idx]
+  set states     [ocdtlb_rsp_get $response states]
+  set active_state [lindex $states $active_idx]
+  return $active_state
+}
+
+proc ocdtlb_do_expect_halted {} {
+  set active_state [ocdtlb_do_get_target_status]
+  if {![string match $active_state "halted"]} {
+    error "$active_state is not halted"
+  }
+  return
+}
+
+proc ocdtlb_do_expect_running {} {
+  set active_state [ocdtlb_do_get_target_status]
+  if {![string match $active_state "running"]} {
+    error "$active_state is not running"
+  }
+  return
+}
+
+# TODO: rename to do_expect
+proc ocdtlb_do_byte_read_compare { base_addr expected_values } {
+  set addr $base_addr
+  foreach expected_byte $expected_values {
+    set response [ocdtlb_run_expect "mdb $addr"]
+    set read_value [dict get $response data]
+    if { [expr { $expected_byte != $read_value}] } {
+      error "$expected_byte != $read_value at @$addr"
+    }
+    set addr [ocdtlb_addr_add $addr 1]
+  }
+}
+
+proc octdlb_wait_resume { {scale 1} } {
+  set resume_timeout [ocd_resume_timeout]
+  set scaled_timeout [expr $resume_timeout * $scale]
+  verbose "resume wait for $scaled_timeout seconds" 3
+  sleep $scaled_timeout
+}
+
+# NOTE: this function always does at least one step
+proc ocdtlb_do_expect_step_untill { end_address iteration_limit } {
+  set count 0
+  while 1 {
+    ocdtlb_run_expect "step"
+    set cur_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+    if { [ocdtlb_compare_equal_hex $cur_pc $end_address]} {
+      return
+    }
+    incr count
+    if { [expr { $count > $iteration_limit } ] } {
+      error "could not reach $end_address, tried $count steps"
+    }
+  }
+}
+
+proc ocdtlb_run_expect_raw {command parser_name {expect_op_fail 0}} {
+  verbose "cmd: ${command}" 1
+  # TODO: maybe we should catch here
+  if { [catch {ocd_run_command $command} report ] } {
+    error $report
+  }
+
+  if { [catch { $parser_name $report } parsed] } {
+    error $parsed
+  }
+
+  verbose "PARSED:\n$parsed\n" 3
+  if { ($expect_op_fail == 0) } {
+    if {![response_is_success $parsed]} {
+      error "unexpected response failure"
+    }
+  } else {
+    if {![response_is_op_failure $parsed]} {
+      error "expecting op_failure"
+    }
+  }
+  return $parsed
+}
+
+proc ocdtlb_run_expect {command {expect_op_fail 0} } {
+  set pruned_cmd [string trim $command]
+  if {[llength [split $pruned_cmd "\n"]] != 1} {
+    error "multiline commands are not supported ($command)"
+  }
+  # We do not support commands that have ';' inside
+  if {[llength [split $pruned_cmd ";"]] != 1} {
+    error "possible multi-command is not supported ($command), use _raw call"
+  }
+  set parser parse_none
+  switch -nocase -regexp -- $pruned_cmd {
+    {^targets +[^ ]+$}      { set parser parse_targets_set }
+    {^targets$}             { set parser parse_targets_listing }
+    {^halt$}                { set parser parse_halt }
+    {^resume$}              { set parser parse_resume }
+    {^reset +[^ ]+$}        { set parser parse_reset }
+    {^reset$}               { set parser parse_reset }
+    {^load_image +[^ ]+}    { set parser parse_load_image }
+    {^read_memory +[^ ]+}   { set parser parse_memory_read_response }
+    {^write_memory +[^ ]+}  { set parser parse_memory_write_response }
+    {^set_reg +[^ ]+}       { set parser parse_reg_set }
+    {^reg +[^ ]+ +[^ ]+$}   { set parser parse_reg_set }
+    {^reg +[^ ]+$}          { set parser parse_reg_fetch }
+    {^reg$}                 { set parser parse_regfile_listing }
+    {^step +[^ ]+$}         { set parser parse_step }
+    {^step$}                { set parser parse_step }
+    {^mdb +[^ ]+}           { set parser parse_memd_response }
+    {^mdh +[^ ]+}           { set parser parse_memd_response }
+    {^mdw +[^ ]+}           { set parser parse_memd_response }
+    {^mdd +[^ ]+}           { set parser parse_memd_response }
+    {^mwb +[^ ]+}           { set parser parse_memw_response }
+    {^mwh +[^ ]+}           { set parser parse_memw_response }
+    {^mww +[^ ]+}           { set parser parse_memw_response }
+    {^mwd +[^ ]+}           { set parser parse_memw_response }
+    {^bp$}                  { set parser parse_bp_listing }
+    {^bp +[^ ]+}            { set parser parse_bp }
+    {^rbp +[^ ]+}           { set parser parse_rbp }
+    {^wp$}                  { set parser parse_wp_listing }
+    {^wp +[^ ]+ +[0-9]}     { set parser parse_wp_set }
+    {^rwp +[^ ]+}           { set parser parse_wp_clear }
+    default {
+      error "could not select parser for ($command), consider using *_raw call"
+    }
+  }
+  return [ocdtlb_run_expect_raw $command $parser $expect_op_fail]
+}

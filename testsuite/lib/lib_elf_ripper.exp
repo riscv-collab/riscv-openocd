@@ -1,0 +1,33 @@
+proc describe_program { elf_filename } {
+  global program_info
+  verbose "riscv64-unknown-elf-readelf -s $elf_filename" 1
+  if {[catch {spawn riscv64-unknown-elf-readelf -s "$elf_filename"} result]} {
+    error $result
+  }
+  set symtab ""
+  # just wait for eof so we now we have all the output
+  expect {
+    eof {
+      set symtab $expect_out(buffer)
+    }
+  }
+  # TODO: test error-handling
+  wait
+
+  if {[info exists program_info]} {
+    array unset program_info
+  }
+
+  verbose "symtab:\n$symtab" 2
+  foreach line [split $symtab "\n"] {
+    if { ![regexp "^\[ \]*\[0-9\]+: +\(\[0-9a-fA-F\]+\).* +GLOBAL +DEFAULT +1 +\(\[^ \r]+\)" $line \
+          m address global_lbl] } { continue }
+
+    set trimmed_addr [string trimleft $address "0"]
+    if {$trimmed_addr eq ""} {
+      set trimmed_addr 0
+    }
+    set program_info($global_lbl) "0x$trimmed_addr"
+  }
+}
+

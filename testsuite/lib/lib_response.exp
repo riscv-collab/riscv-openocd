@@ -1,0 +1,356 @@
+# indicates that the requested operartion completed successfully
+set INTERNAL_SUCCESS_STATUS   "great_success"
+# indicates that the requested operation has failed
+set INTERNAL_OPFAIL_STATUS    "miserable_failure"
+# indicates that we could not recognize response
+set INTERNAL_PARSEFAIL_STATUS "parsing_failure"
+
+proc parse_none { report } {
+  global INTERNAL_SUCCESS_STATUS
+  return [dict create \
+    type "none" \
+    status $INTERNAL_SUCCESS_STATUS \
+    dbg_str "\n$report" \
+  ]
+}
+
+proc internal_make_parsed_response { type status raw_string extra_fields } {
+  set kv_pairs [list type $type status $status dbg_str "\n**$raw_string**"]
+  lappend kv_pairs {*}$extra_fields
+  return [dict create {*}$kv_pairs]
+}
+
+proc internal_parse_success { type raw_string extra } {
+  global INTERNAL_SUCCESS_STATUS
+  return [internal_make_parsed_response \
+          $type $INTERNAL_SUCCESS_STATUS $raw_string \
+          $extra]
+}
+
+proc internal_parse_op_failure { type raw_string extra } {
+  global INTERNAL_OPFAIL_STATUS
+  return [internal_make_parsed_response \
+          $type $INTERNAL_OPFAIL_STATUS $raw_string \
+          $extra]
+}
+
+proc internal_parse_error { type raw_string extra } {
+  global INTERNAL_PARSEFAIL_STATUS
+  return [internal_make_parsed_response \
+          $type $INTERNAL_PARSEFAIL_STATUS $raw_string \
+          $extra]
+}
+
+proc internal_parse_empty_on_success { type response } {
+  set prunned_response [string trim $response "\n\r\t\x1a"]
+  if {[string length $prunned_response] > 0} {
+    return [internal_parse_op_failure $type $response {}]
+  }
+  return [internal_parse_success $type $response {}]
+}
+
+proc response_is_op_failure { response } {
+  global INTERNAL_OPFAIL_STATUS
+  return [string match [dict get $response status] $INTERNAL_OPFAIL_STATUS]
+}
+
+proc response_is_success { response } {
+  global INTERNAL_SUCCESS_STATUS
+  return [string match [dict get $response status] $INTERNAL_SUCCESS_STATUS]
+}
+
+proc parse_load_image { report } {
+  set TYPE "load_image"
+  if {[regexp {invalid ELF file, only 32bits files are supported} $report]} {
+    return [internal_parse_op_failure $TYPE $report {}]
+  }
+  # 8220 bytes written at address 0x80000000
+  #downloaded 8220 bytes in 0.529391s (15.163 KiB/s
+  if {[regexp {downloaded +[0-9]+ bytes in} $report]} {
+    return [internal_parse_success $TYPE $report {}]
+  }
+  return [internal_parse_op_failure $TYPE $report {}]
+}
+
+proc parse_targets_listing { report } {
+  set TYPE "targets_listing"
+
+  set all_lines [split [string trim $report "\n\r\t\x1a"] "\n"]
+
+  if {[llength $all_lines] < 3} {
+    return [internal_parse_op_failure $TYPE $report {}]
+  }
+
+  set header      [lindex $all_lines 0]
+  set pretty_line [lindex $all_lines 1]
+  set targets     [lreplace $all_lines 0 1]
+  if {![regexp {TargetName +Type +Endian +TapName +State} $header]} {
+    return [internal_parse_op_failure $TYPE $report {}]
+  }
+  if {![regexp {^[ -]+$} $pretty_line]} {
+    return [internal_parse_op_failure $TYPE $report {}]
+  }
+  set targets_num 0
+  set active_target 0
+  set fetched_targets { }
+  set fetched_states { }
+  foreach line $targets {
+    #0* riscv.cpu riscv  little riscv.cpu running
+    if {![regexp {^[ ]?([0-9]+)([*]?) +([^ ]+) +([^ ]+) +([^ ]+) +([^ ]+) +([^ ]+)} $line \
+          m num active name type endian tapname state]} {
+      return [internal_parse_op_failure $TYPE $report {}]
+    }
+    if {[string match $active "*"]} {
+      set active_target $num
+    }
+    incr targets_num
+    lappend fetched_targets $tapname
+    lappend fetched_states  $state
+  }
+
+  return [internal_parse_success $TYPE $report \
+          [list targets_num $targets_num active_idx $active_target \
+           targets $fetched_targets states $fetched_states]]
+}
+
+proc parse_targets_set { report } {
+  set TYPE "targets_set"
+  if { [regexp {as target identifier, not '([0-9]+)'} $report] } {
+    return [internal_parse_success $TYPE $report {}]
+  }
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_halt { report } {
+  set TYPE "halt"
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+# assume always success (for now_
+proc parse_reset { report } {
+  set TYPE "reset"
+  global INTERNAL_SUCCESS_STATUS
+  return [dict create \
+    type $TYPE \
+    status $INTERNAL_SUCCESS_STATUS \
+    dbg_str "\n$report" \
+  ]
+}
+
+proc parse_resume { report } {
+  set TYPE "resume"
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_reg_set { report } {
+  set TYPE "reg_set"
+  # Note: for simplicity any error is treated as op_failure
+  if {[regexp "not found in current target" $report]} {
+    return [internal_parse_op_failure $TYPE $report {}]
+  }
+  # reg sets echoes result
+  # pc (/64): 0x0000000008000002
+  if {[regexp {[^ ]+ +[(][/][0-9]+[)][:] +0x[0-9a-fA-F]+} $report]} {
+    return [internal_parse_success $TYPE $report {}]
+  }
+
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+# { name , size, value }
+proc parse_reg_fetch { report } {
+  set TYPE "reg"
+  if {[regexp "not found in current target" $report]} {
+    return [internal_parse_op_failure $TYPE $report {}]
+  }
+  set line [split [string trim $report "\n\r\t\x1a"] "\n"]
+  if { [llength $line] != 1 } {
+    return [internal_parse_error $TYPE $report {}]
+  }
+  set line [lindex $line 0]
+  #            reg_name        (/len):         0x0000000000001000"
+  if {[regexp {^([^ ]+) +[(]/([0-9]+)[)]: +(0x)?([0-9a-fA-F]+)$} \
+      $line m name rlen dummy value]} {
+    return [internal_parse_success $TYPE $report \
+           [list name $name size $rlen value 0x$value]]
+  }
+  return [internal_parse_error $TYPE $report {}]
+}
+
+proc parse_regfile_listing { report } {
+  set TYPE "reg-all"
+  set all_lines [split [string trim $report "\n\r\t\x1a"] "\n"]
+
+  if {[llength $all_lines] < 2} {
+    return [internal_parse_op_failure $TYPE $report {}]
+  }
+
+  set header        [lindex $all_lines 0]
+  set registers     [lreplace $all_lines 0 0]
+  if {![regexp {[=]+ +RISC-V Registers} $header]} {
+    return [internal_parse_op_failure $TYPE $report {}]
+  }
+  set found_num  {}
+  set found_name {}
+  set found_size {}
+  set found_vals {}
+  foreach line $registers {
+    # TODO: we should catch a situation when register is not available
+    # Note: better test on real HW
+    #(0) zero (/64): 0x0000000000000000
+    if {![regexp {[(]([0-9]+)[)] +([^ ]+) +[(][/]([0-9]+)[)](: 0x)?([0-9a-fA-F]+)?} $line \
+          m num name size dummy value]} {
+      return [internal_parse_op_failure $TYPE $report {}]
+    }
+    lappend found_num   $num
+    lappend found_name  $name
+    lappend found_size  $size
+    lappend found_value $value
+  }
+  return [internal_parse_success $TYPE $report \
+          [list found_num $found_num found_name $found_name \
+           found_size $found_size found_value $found_value \
+           missing_num {} missing_name {}]]
+}
+
+
+proc parse_memory_read_response { report } {
+  set TYPE "read_mem"
+  if {[regexp "Failed to read memory" $report]} {
+    return [internal_parse_op_failure $TYPE $report \
+           [list base_addr "n/a" data "n/a" ]]
+  }
+  set line [split [string trim $report "\n\r\t\x1a"] "\n"]
+  if { [llength $line] != 1 } {
+    return [internal_parse_error $TYPE $report {}]
+  }
+  set data_list {}
+  foreach ln $line {
+    foreach num_value [split $ln " "] {
+      lappend data_list $num_value
+    }
+  }
+  return [internal_parse_success $TYPE $report \
+         [list data $data_list ]]
+}
+
+proc parse_memory_write_response { report } {
+  set TYPE "write_mem"
+  if {[regexp "Failed to write memory" $report]} {
+    return [internal_parse_op_failure $TYPE $report \
+           [list base_addr "n/a" data "n/a" ]]
+  }
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_dump_image_response { report } {
+  set TYPE "dump_image"
+  error "not implemented"
+}
+
+proc parse_memw_response { report } {
+  set TYPE "memw"
+  if {[regexp "Failed to write memory" $report]} {
+    return [internal_parse_op_failure $TYPE $report \
+           [list base_addr "n/a" data "n/a" ]]
+  }
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_memd_response { report } {
+  set TYPE "memd"
+  if {[regexp "Failed to read memory" $report]} {
+    return [internal_parse_op_failure $TYPE $report \
+           [list base_addr "n/a" data "n/a" ]]
+  }
+  if {[regexp "Unsupported size:" $report]} {
+    return [internal_parse_op_failure $TYPE $report \
+           [list base_addr "n/a" data "n/a" ]]
+  }
+  # TODO: make sure that we process errors too
+  set data_list {}
+  foreach line [split $report "\n"] {
+    set line [string trim $line "\n\r\t\x1a"]
+    if {[string length $line] == 0} { continue }
+    set mem_fields [split $line ":"]
+    if { [llength $mem_fields] != 2 } {
+      return [internal_parse_error $TYPE $report {}]
+    }
+
+    set address [string trim [lindex $mem_fields 0]]
+    set data [string trim [lindex $mem_fields 1]]
+
+    if {![info exists primary_address]} { set primary_address $address }
+    foreach num_value [split $data " "] { lappend data_list 0x$num_value }
+  }
+
+  if {![info exists primary_address]} {
+    return [internal_parse_error $TYPE $report {}]
+  }
+
+  return [internal_parse_success $TYPE $report \
+         [list base_addr $primary_address data $data_list ]]
+}
+
+proc parse_rbp { report } {
+  set TYPE "rbp"
+  if {[regexp "no breakpoint at address" $report]} {
+    return [internal_parse_op_failure $TYPE $report \
+           [list base_addr "n/a" data "n/a" ]]
+  }
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_bp { report } {
+  set TYPE "bp"
+  if {[regexp "can't add breakpoint" $report]} {
+    return [internal_parse_op_failure $TYPE $report \
+           [list base_addr "n/a" data "n/a" ]]
+  }
+  if {[regexp "breakpoint set at" $report]} {
+    return [internal_parse_success $TYPE $report {}]
+  }
+  return [internal_parse_error $TYPE $report {}]
+}
+
+proc parse_bp_listing { report } {
+  set TYPE "bp-list"
+  error "bp_listing parsing is not implemented"
+  return [internal_parse_error $TYPE $report {}]
+}
+
+proc parse_wp_listing { report } {
+  set TYPE "wp-list"
+  # Example:
+  # address: 0x80000010, len: 0x00000004, r/w/a: 2, value: 0x00000000, mask: 0xffffffff
+  # TODO: proper analysis of response is not implemented
+  if {[regexp {address: +[^ ]+, len: +[^ ]+, +r/w/a: +} $report]} {
+    return [internal_parse_success $TYPE $report {}]
+  }
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_wp_set { report } {
+  set TYPE "wp-set"
+  # openocd can enumerate triggers during step command
+  if {[regexp {Found [0-9]+ triggers} $report]} {
+    # TODO: actually, we should just drop these from the output
+    return [internal_parse_success $TYPE $report {}]
+  }
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_wp_clear { report } {
+  set TYPE "rwp"
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_step { report } {
+  set TYPE "step"
+  # openocd can enumerate triggers during step command
+  if {[regexp {Found [0-9]+ triggers} $report]} {
+    return [internal_parse_success $TYPE $report {}]
+  }
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+

@@ -1,0 +1,41 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+set xlen64 [expr [target_info cpu,xlen] == 64]
+
+ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+
+# created by compile executable
+set ENTRY_ADDR $program_info(_entry)
+set END_ADDR $program_info(end)
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+ocdtlb_run_expect "bp $END_ADDR 4"
+ocdtlb_run_expect "resume"
+
+octdlb_wait_resume
+
+set response [ocdtlb_run_expect "targets"]
+
+set active_idx [dict get $response active_idx]
+set states     [dict get $response states]
+set active_state [lindex $states $active_idx]
+
+if {![string match $active_state "halted"]} {
+  ocd_test_fail
+}
+
+set response_pc [ocdtlb_run_expect "reg pc"]
+set current_pc  [ocdtlb_rsp_get $response_pc]
+
+if {[expr { $current_pc == $END_ADDR}]} {
+  ocd_test_pass
+} else {
+  ocd_test_fail
+}
+

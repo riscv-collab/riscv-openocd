@@ -1,0 +1,18 @@
+load_board_description "baremetal-fpga-common"
+
+set TGT_ARCH "rv32gc"
+add_board_info cpu,xlen 32
+set_board_info cpu,cores_num 1
+set_board_info cpu,has_floats 1
+set_board_info cpu,has_doubles 1
+set_board_info cpu,reset_vector 0xffffff00
+
+add_board_info cflags   "-march=$TGT_ARCH"
+add_board_info cflags   "-mabi=ilp32d"
+
+set_board_info ldscript "-T$testsuitedir/lib/support/scr4.ld"
+
+set_board_info openocd,flags [subst [join [list \
+ "-f ${OPENOCD_ROOT}/share/openocd/scripts/interface/ftdi/digilent-hs2_fixed.cfg" \
+ "-f ${OPENOCD_ROOT}/share/openocd/scripts/target/syntacore_riscv.cfg" \
+] " "]]

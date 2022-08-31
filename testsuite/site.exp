@@ -1,0 +1,47 @@
+set target_triplet     "riscv64-unknown-elf"
+
+set CC_FOR_TARGET      "riscv64-unknown-elf-gcc"
+
+#TODO: looks like unused
+set LDFLAGS_FOR_TARGET ""
+set CFLAGS_FOR_TARGET  ""
+
+set SPIKE_SIM "spike"
+
+set OPENOCD_ROOT $env(OPENOCD_ROOT)
+
+set OPENOCD "${OPENOCD_ROOT}/bin/openocd"
+set OPENOCD_LOG_LEVEL 2
+# enables exp_internal . That is enables internal debug of expect
+set ENABLE_EXP_INTERNAL 0
+
+set RUN_OCD_INTERNAL_ON_HW 0
+set RUN_FAULTS_TESTS_ON_HW 1
+# some tests cause HW to misbehave. We have an option to disable those
+set RUN_DANGEROUS_TESTS_ON_HW 1
+
+set SPIKE_BITBANG 7777
+
+# NOTE: environment queries below are not conventional, but should work
+# fine for OpenOCD testing
+puts "Checking for testsuite requirements..."
+if {[auto_execok $CC_FOR_TARGET] == ""} {
+  puts "ERROR: could not find target compiler ($CC_FOR_TARGET), check your PATH"
+  exit 1
+}
+if {[auto_execok $OPENOCD] == ""} {
+  puts "ERROR: could not find openocd binary at $OPENOCD"
+  puts "   check your OPENOCD_ROOT ($OPENOCD_ROOT) is specified correctly"
+  exit 1
+}
+
+if {[auto_execok $SPIKE_SIM] == ""} {
+  puts "WARNING: could not detect $SPIKE_SIM simulator in PATH"
+} else {
+  set target_list {
+    spike_dmp6a0_32
+    spike_dmp6a32_32
+    spike_dmp6a0_64
+  }
+}
+

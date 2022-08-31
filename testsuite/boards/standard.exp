@@ -1,0 +1,6 @@
+set_board_info ldflags "-nostdlib -nostartfiles"
+
+set_board_info cflags "-nostdlib -nostartfiles"
+
+set_board_info mathlib ""
+

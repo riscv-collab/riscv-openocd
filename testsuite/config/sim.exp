@@ -1,0 +1,62 @@
+proc compile_boot_code { output_name } {
+  global testsuitedir
+  set boot_source "$testsuitedir/lib/support/boot.S"
+  return [target_compile $boot_source "$output_name" "executable" {}]
+}
+
+proc ${board}_initialization_abort { msg } {
+  perror $msg
+  error "could not initialize simulator board"
+}
+
+proc ${board}_init { name } {
+  global SPIKE_SIM
+  global spike_board_spawn_id
+
+  verbose "opening board $name" 1
+  if {[info exists spike_board_spawn_id]} {
+    ${name}_initialization_abort "unexepcted board id detected"
+  }
+  set boot_binary boot_$name.bin
+  if  { [compile_boot_code $boot_binary] != "" } {
+    ${name}_initialization_abort "could not compile boot binary"
+  }
+  verbose "boot code compiled successfully" 2
+
+  set sim_args [join [list [board_info target sim,options] $boot_binary] ""]
+  verbose "running spike: $SPIKE_SIM $sim_args" 1
+
+  spawn $SPIKE_SIM {*}$sim_args
+  expect {
+    "Listening for remote bitbang connection on port" {
+      verbose "spike launched successfully" 1
+      set spike_board_spawn_id $spawn_id
+    }
+    eof {
+      ${name}_initialization_abort "could not initialize spike for $name board"
+    }
+    timeout {
+      ${name}_initialization_abort "no acknowledge from $name board"
+    }
+  }
+}
+
+proc ${board}_close { name } {
+  global spike_board_spawn_id
+
+  verbose "closing board $name" 1
+
+  if {![info exists spike_board_spawn_id]} {
+    ${name}_initialization_abort "could not detect active board"
+  }
+
+  verbose "killing spike board for $name" 2
+  exec kill -9 [exp_pid -i $spike_board_spawn_id]
+
+  verbose "board is killed, reaping..." 2
+  wait -i $spike_board_spawn_id
+  unset spike_board_spawn_id
+
+  verbose "spike board $name is closed, bye!" 1
+}
+

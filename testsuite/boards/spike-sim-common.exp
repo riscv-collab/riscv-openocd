@@ -1,0 +1,26 @@
+proc get_default_memory_map {} {
+  global board
+  puts "Getting default memory map for $board"
+  return "-m0x80000000:0xa00000"
+}
+
+# this will cause config/sim.exp to be loaded at a later stage
+load_generic_config "sim"
+
+load_base_board_description "basic-sim"
+
+set_board_info env,preferred_timeout 5
+set_board_info env,resume_timeout 0.05
+set_board_info env,exec_timeout 0.05
+
+set_board_info cpu,reset_vector 0x1000
+
+set_board_info sim $SPIKE_SIM
+set_board_info openocd,flags [subst [join { \
+ "-c \"gdb_port disabled ; telnet_port disabled ; \"" \
+ "-c \"gdb_port disabled ; telnet_port disabled ; \"" \
+ "-c \"interface remote_bitbang ; remote_bitbang_host 127.0.0.1 ;" \
+ "remote_bitbang_port $SPIKE_BITBANG\"" \
+ "-f $testsuitedir/lib/support/spike.cfg" \
+} " "]]
+
