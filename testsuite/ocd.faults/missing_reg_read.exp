@@ -1,0 +1,44 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+if {!$RUN_FAULTS_TESTS_ON_HW} {
+  if {[target_info sim] == ""} { return [ocd_test_unsupported] }
+}
+
+ocd_compile_executable "missing_reg_faults.S" "$default_bin_prefix.exe"
+
+# created by compile executable
+set ENTRY_ADDR $program_info(_entry)
+set MAIN_ADDR $program_info(main)
+set END_ADDR $program_info(end)
+
+ocd_connect
+
+ocdtlb_run_expect "halt"
+ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+ocdtlb_run_expect "resume"
+
+octdlb_wait_resume
+
+ocdtlb_run_expect "halt"
+
+set expect_op_failure 1
+ocdtlb_run_expect "reg wobble" $expect_op_failure
+
+# now check that the target is still responsive
+
+set STEP_LIMIT 100
+ocdtlb_do_expect_step_untill $MAIN_ADDR $STEP_LIMIT
+
+ocdtlb_do_expect_step_untill $END_ADDR $STEP_LIMIT
+set reg_prev [ocdtlb_rsp_get [ocdtlb_run_expect "reg $GPR(1)"]]
+
+ocdtlb_do_expect_step_untill $END_ADDR $STEP_LIMIT
+set reg_cur [ocdtlb_rsp_get [ocdtlb_run_expect "reg $GPR(1)"]]
+
+if {[expr ($reg_cur - $reg_prev) == 1]} {
+  ocd_test_pass
+} else {
+  ocd_test_fail
+}
+

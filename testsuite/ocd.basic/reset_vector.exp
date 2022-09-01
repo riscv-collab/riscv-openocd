@@ -1,0 +1,16 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+set response [ocdtlb_run_expect "reg pc"]
+set expected_pc [target_info cpu,reset_vector]
+
+if { [expr { $expected_pc == [dict get $response value] }] } {
+  ocd_test_pass
+} else {
+  ocd_test_fail
+}
+

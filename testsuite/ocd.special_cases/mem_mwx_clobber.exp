@@ -1,0 +1,49 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+
+# created by compile executable
+set ENTRY_ADDR $program_info(_entry)
+set WORK_ADDR $program_info(work_area_start)
+set END_ADDR $program_info(end)
+set xlen64 [expr [target_info cpu,xlen] == 64]
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+
+ocdtlb_run_expect "bp $END_ADDR 4"
+ocdtlb_run_expect "resume"
+
+octdlb_wait_resume
+
+ocdtlb_do_expect_halted
+
+ocdtlb_run_expect "mwb $WORK_ADDR 3"
+ocdtlb_run_expect "mwh $WORK_ADDR 2"
+ocdtlb_run_expect "mww $WORK_ADDR 1"
+
+if {$xlen64} {
+  ocdtlb_run_expect "mwd $WORK_ADDR 0"
+}
+
+for {set i 1} {$i < 32} {incr i} {
+
+  set reg_name $GPR($i)
+  set value [ocdtlb_rsp_get [ocdtlb_run_expect "reg $reg_name"]]
+
+  if {$xlen64} {
+    set expected [expr 2 << [expr ($i - 1) * 2] ]
+  } else {
+    set expected [expr 1 << [expr ($i - 1)]]
+  }
+
+  verbose "$reg_name / $value \\/ $expected" 1
+  ocdtlb_expect_equal $expected $value
+}
+
+ocd_test_pass

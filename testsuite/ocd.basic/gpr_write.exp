@@ -1,0 +1,39 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+set xlen64 [expr [target_info cpu,xlen] == 64]
+
+ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+
+# created by compile executable
+set MAIN_ADDR $program_info(main)
+set END_ADDR $program_info(end)
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+set prev 1
+set values(0) 0
+for {set i 1} {$i < 32} {incr i} {
+  if {$xlen64} {
+    set values($i) [expr ($prev | (1 << (2 * $i)))]
+  } else {
+    set values($i) [expr ($prev | (1 << $i))]
+  }
+
+  set prev $values($i)
+  ocdtlb_run_expect "reg $GPR($i) $values($i)"
+}
+
+# NOTE: END_ADDR has an unconditional branch
+ocdtlb_run_expect "reg pc $END_ADDR"
+ocdtlb_run_expect "step"
+
+for {set i 0} {$i < 32} {incr i} {
+  set value [ocdtlb_rsp_get [ocdtlb_run_expect "reg $GPR($i)"]]
+  ocdtlb_expect_equal $values($i) $value
+}
+
+ocd_test_pass
+

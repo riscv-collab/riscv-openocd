@@ -1,0 +1,30 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+set xlen64 [expr [target_info cpu,xlen] == 64]
+
+ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+
+# created by compile executable
+set MEM_ADDR $program_info(work_area_start)
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+ocdtlb_run_expect "mwb $MEM_ADDR 42"
+ocdtlb_do_byte_read_compare $MEM_ADDR [list 42]
+
+ocdtlb_run_expect "mwh $MEM_ADDR 0xbad0"
+ocdtlb_do_byte_read_compare $MEM_ADDR [list 0xd0 0xba]
+
+ocdtlb_run_expect "mww $MEM_ADDR 0xfffafbfc"
+ocdtlb_do_byte_read_compare $MEM_ADDR [list 0xfc 0xfb 0xfa 0xff]
+
+if {$xlen64} {
+  ocdtlb_run_expect "mwd $MEM_ADDR 0xC00010FFB0BAB0BA"
+  ocdtlb_do_byte_read_compare $MEM_ADDR [list 0xba 0xb0 0xba 0xb0 0xff 0x10 0x00 0xc0]
+}
+
+ocd_test_pass
+

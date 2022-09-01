@@ -1,0 +1,39 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+if {[ocd_is_legacy]} { return [ocd_test_unsupported] }
+
+set xlen64 [expr [target_info cpu,xlen] == 64]
+if {!$xlen64} {
+  return [ocd_test_unsupported]
+}
+
+ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+
+set MEM_ADDR $program_info(work_area_start)
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+set expected_data1(64) {0xdeadbabe00baddad}
+set expected_data2(64) {0xdeadbabe00baddad 0xfeedbabedadc0def}
+
+set width 64
+
+set response [ocdtlb_run_expect "read_memory $MEM_ADDR $width 1"]
+set data [ocdtlb_rsp_get $response data]
+if {![ocdtlb_compare_equal_hex $data $expected_data1($width)]} {
+  verbose "$data != $expected_data1($width)" 1
+  return [ocd_test_xfail]
+}
+
+set response [ocdtlb_run_expect "read_memory $MEM_ADDR $width 2"]
+set data [ocdtlb_rsp_get $response data]
+if {![ocdtlb_compare_equal_hex $data $expected_data2($width)]} {
+  verbose "$data != $expected_data1($width)" 1
+  return [ocd_test_xfail]
+}
+
+return [ocd_test_pass]

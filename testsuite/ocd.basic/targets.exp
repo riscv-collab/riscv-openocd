@@ -1,0 +1,11 @@
+ocd_connect
+
+set response [ocdtlb_run_expect "targets"]
+set expected_num [target_info cpu,cores_num]
+
+if { [expr { $expected_num == [dict get $response targets_num] }] } {
+  ocd_test_pass
+} else {
+  ocd_test_fail
+}
+

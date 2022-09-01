@@ -1,0 +1,36 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+set xlen64 [expr [target_info cpu,xlen] == 64]
+
+ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+
+# created by compile executable
+set MEM_ADDR $program_info(mdd_test_data)
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+set response [ocdtlb_run_expect "mdb $MEM_ADDR"]
+set bytes [dict get $response data]
+ocdtlb_expect_equal $bytes [list 0xad]
+
+set response [ocdtlb_run_expect "mdh $MEM_ADDR"]
+set bytes [dict get $response data]
+ocdtlb_expect_equal $bytes [list 0xddad]
+
+set response [ocdtlb_run_expect "mdw $MEM_ADDR"]
+set bytes [dict get $response data]
+ocdtlb_expect_equal $bytes [list 0x00baddad]
+
+if {$xlen64} {
+  set response [ocdtlb_run_expect "mdd $MEM_ADDR"]
+  set bytes [dict get $response data]
+  ocdtlb_expect_equal $bytes [list 0xdeadbabe00baddad]
+}
+
+ocd_test_pass
+

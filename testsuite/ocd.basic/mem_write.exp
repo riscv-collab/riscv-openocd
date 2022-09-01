@@ -1,0 +1,63 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+if {[ocd_is_legacy]} { return [ocd_test_unsupported] }
+
+set xlen64 [expr [target_info cpu,xlen] == 64]
+
+ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+
+# created by compile executable
+set MEM_ADDR $program_info(work_area_start)
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+# original data
+set expected_data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 8"] data]
+ocdtlb_expect_equal_hex $expected_data \
+                        { 0xad 0xdd 0xba 0x00 0xbe 0xba 0xad 0xde }
+
+# write_memory address width data
+ocdtlb_run_expect "write_memory $MEM_ADDR 8 1"
+set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 8"] data]
+set expected_data [lreplace $expected_data 0 0 1]
+ocdtlb_expect_equal_hex $expected_data $data
+
+ocdtlb_run_expect "write_memory $MEM_ADDR 16 0xb00b"
+set expected_data [lreplace $expected_data 0 0 0xb]
+set expected_data [lreplace $expected_data 1 1 0xb0]
+set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 8"] data]
+ocdtlb_expect_equal_hex $expected_data $data
+
+ocdtlb_run_expect "write_memory $MEM_ADDR 32 0xbebebebe"
+set expected_data [lreplace $expected_data 0 0 0xbe]
+set expected_data [lreplace $expected_data 1 1 0xbe]
+set expected_data [lreplace $expected_data 2 2 0xbe]
+set expected_data [lreplace $expected_data 3 3 0xbe]
+set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 8"] data]
+ocdtlb_expect_equal_hex $expected_data $data
+
+ocdtlb_run_expect "write_memory $MEM_ADDR 8 { 2 1 }"
+set expected_data [lreplace $expected_data 0 0 2]
+set expected_data [lreplace $expected_data 1 1 1]
+set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 8"] data]
+ocdtlb_expect_equal_hex $expected_data $data
+
+ocdtlb_run_expect "write_memory $MEM_ADDR 16 { 0xb00b 0xba }"
+set expected_data [lreplace $expected_data 0 0 0x0b]
+set expected_data [lreplace $expected_data 1 1 0xb0]
+set expected_data [lreplace $expected_data 2 2 0xba]
+set expected_data [lreplace $expected_data 3 3 0]
+set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 8"] data]
+ocdtlb_expect_equal_hex $expected_data $data
+
+ocdtlb_run_expect "write_memory $MEM_ADDR 32 { 0xbebebebe 0xafbd1111 } "
+set expected_data { 0xbe 0xbe 0xbe 0xbe 0x11 0x11 0xbd 0xaf }
+set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 8"] data]
+ocdtlb_expect_equal_hex $expected_data $data
+
+return [ocd_test_pass]
+
