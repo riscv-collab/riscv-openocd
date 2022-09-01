@@ -42,8 +42,8 @@ distributed with the testsuite.
 * gdb with RISC-V support
 * openocd binaries with RISC-V support
 * spike simulator
-* except package
-* dejagnu distribution
+* except package (5.45.4)
+* dejagnu distribution (1.6.3)
 * netcat (nc).
 
 # Overall architecture
