@@ -42,6 +42,7 @@ if {[auto_execok $SPIKE_SIM] == ""} {
     spike_dmp6a0_32
     spike_dmp6a32_32
     spike_dmp6a0_64
+    spike_dmp6a64_64
   }
 }
 
