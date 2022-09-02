@@ -1,6 +1,9 @@
-proc get_default_memory_map {} {
-  global board
-  puts "Getting default memory map for $board"
+# NOTE: currently, this function is not used
+# however, once working areas are implemented it is expected that this
+# function shall produce memory maps conforming to the desired configuration
+# of the board.
+# custom congigurations could even override this function
+proc get_spike_memory_map {} {
   return "-m0x80000000:0xa00000"
 }
 
@@ -18,9 +21,9 @@ set_board_info cpu,reset_vector 0x1000
 set_board_info sim $SPIKE_SIM
 set_board_info openocd,flags [subst [join { \
  "-c \"gdb_port disabled ; telnet_port disabled ; \"" \
- "-c \"gdb_port disabled ; telnet_port disabled ; \"" \
  "-c \"interface remote_bitbang ; remote_bitbang_host 127.0.0.1 ;" \
  "remote_bitbang_port $SPIKE_BITBANG\"" \
- "-f $testsuitedir/lib/support/spike.cfg" \
+ "-f $testsuitedir/boards/support/ocd/spike_default.cfg" \
 } " "]]
 
+set_board_info ldscript "-T$testsuitedir/boards/support/ldscripts/spike.ld"

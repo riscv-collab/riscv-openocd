@@ -1,6 +1,6 @@
 proc compile_boot_code { output_name } {
   global testsuitedir
-  set boot_source "$testsuitedir/lib/support/boot.S"
+  set boot_source "$testsuitedir/boards/support/sim/spike_boot.S"
   return [target_compile $boot_source "$output_name" "executable" {}]
 }
 
@@ -17,13 +17,13 @@ proc ${board}_init { name } {
   if {[info exists spike_board_spawn_id]} {
     ${name}_initialization_abort "unexepcted board id detected"
   }
-  set boot_binary boot_$name.bin
+  set boot_binary boot_$name.elf
   if  { [compile_boot_code $boot_binary] != "" } {
     ${name}_initialization_abort "could not compile boot binary"
   }
   verbose "boot code compiled successfully" 2
 
-  set sim_args [join [list [board_info target sim,options] $boot_binary] ""]
+  set sim_args [join [list [board_info target sim,options] $boot_binary] " "]
   verbose "running spike: $SPIKE_SIM $sim_args" 1
 
   spawn $SPIKE_SIM {*}$sim_args

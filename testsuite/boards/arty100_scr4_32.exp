@@ -10,7 +10,7 @@ set_board_info cpu,reset_vector 0xffffff00
 add_board_info cflags   "-march=$TGT_ARCH"
 add_board_info cflags   "-mabi=ilp32d"
 
-set_board_info ldscript "-T$testsuitedir/lib/support/scr4.ld"
+set_board_info ldscript "-T$testsuitedir/boards/support/ldscripts/scr4.ld"
 
 set_board_info openocd,flags [subst [join [list \
  "-f ${OPENOCD_ROOT}/share/openocd/scripts/interface/ftdi/digilent-hs2_fixed.cfg" \

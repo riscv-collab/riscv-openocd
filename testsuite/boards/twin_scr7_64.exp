@@ -9,10 +9,10 @@ set_board_info cpu,reset_vector 0xffffffffffffff00
 
 add_board_info cflags   "-march=$TGT_ARCH"
 
-set_board_info ldscript "-T$testsuitedir/lib/support/scr7.ld"
+set_board_info ldscript "-T$testsuitedir/boards/support/ldscripts/scr7.ld"
 
 set_board_info openocd,flags [subst [join [list \
  "-s ${OPENOCD_ROOT}/share/openocd/scripts" \
  "-f ${OPENOCD_ROOT}/share/openocd/scripts/interface/ftdi/digilent-hs2_fixed.cfg" \
- "-f ${OPENOCD_ROOT}/share/openocd/scripts/target/syntacore_riscv_single.cfg" \
+ "-f ${OPENOCD_ROOT}/share/openocd/scripts/target/syntacore_riscv.cfg" \
 ] " "]]
