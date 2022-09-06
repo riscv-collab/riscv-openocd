@@ -57,6 +57,7 @@ proc ocd_target_info_check {} {
     cpu,cores_num \
     cpu,has_floats \
     cpu,has_doubles \
+    memory,has_high_pa \
     env,preferred_timeout \
     env,resume_timeout \
     env,exec_timeout \

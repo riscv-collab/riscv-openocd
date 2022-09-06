@@ -6,6 +6,7 @@ set_board_info cpu,cores_num 1
 set_board_info cpu,has_floats 1
 set_board_info cpu,has_doubles 1
 set_board_info cpu,reset_vector 0xffffff00
+set_board_info memory,has_high_pa 0
 
 add_board_info cflags   "-march=$TGT_ARCH"
 add_board_info cflags   "-mabi=ilp32d"
