@@ -1,3 +1,8 @@
+proc ocdtlb_get_tmp_prefix {id} {
+  global default_bin_prefix
+  return "${default_bin_prefix}_$id"
+}
+
 proc ocdtlb_addr_add { base_address increment } {
   return [format 0x%x [expr {$base_address + $increment}]]
 }
@@ -151,6 +156,7 @@ proc ocdtlb_run_expect {command {expect_op_fail 0} } {
     {^reset +[^ ]+$}        { set parser parse_reset }
     {^reset$}               { set parser parse_reset }
     {^load_image +[^ ]+}    { set parser parse_load_image }
+    {^dump_image +[^ ]+}    { set parser parse_dump_image }
     {^read_memory +[^ ]+}   { set parser parse_memory_read_response }
     {^write_memory +[^ ]+}  { set parser parse_memory_write_response }
     {^set_reg +[^ ]+}       { set parser parse_reg_set }

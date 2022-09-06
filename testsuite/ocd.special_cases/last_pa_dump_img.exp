@@ -1,0 +1,43 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+if {[expr [target_info cpu,xlen] != 64]} { return [ocd_test_unsupported] }
+if {![target_info memory,has_high_pa]} { return [ocd_test_unsupported] }
+
+# This test generates data, writes it via mwb, dumps it via dump_image in such
+# a way that the right non-inclusive border is 2^64 and then compares file
+# with data
+
+ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+
+ocd_connect
+
+ocdtlb_run_expect "reset halt"
+
+set end_addr "0xffffffffffffffff"
+set size 10
+set start_addr [expr ($end_addr - $size) + 1]
+
+proc write_data {start_addr size} {
+  set data {}
+  for {set i 1} {$i <= $size} {incr i} {
+    lappend data $i
+    set address [expr ($start_addr - 1) + $i]
+    ocdtlb_run_expect "mwb $address $i"
+  }
+  return $data
+}
+
+set data [write_data $start_addr $size]
+set image [ocdtlb_get_tmp_prefix "dump"].img
+ocdtlb_run_expect "dump_image $image $start_addr $size"
+
+proc load_from_file {image} {
+  set fp [open $image r]
+  set bindata [read $fp]
+  close $fp
+  binary scan $bindata c* data
+  return $data
+}
+
+ocdtlb_expect_equal $data [load_from_file $image]
+
+ocd_test_pass

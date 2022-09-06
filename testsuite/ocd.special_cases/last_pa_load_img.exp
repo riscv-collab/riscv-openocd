@@ -1,0 +1,45 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+if {[expr [target_info cpu,xlen] != 64]} { return [ocd_test_unsupported] }
+if {![target_info memory,has_high_pa]} { return [ocd_test_unsupported] }
+
+# This test generates a binary file and then loads it via load_image, in such a
+# way that the right non-inclusive border is 2^64
+
+ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+
+ocd_connect
+
+ocdtlb_run_expect "reset halt"
+
+set end_addr "0xffffffffffffffff"
+set size 100
+set start_addr [expr ($end_addr - $size) + 1]
+
+ocdtlb_run_expect "mwb $start_addr $size 0"
+set response [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $start_addr $size"] data]
+ocdtlb_expect_equal $response [lrepeat $size 0]
+
+proc generate_data {size} {
+  set data {}
+  for {set i 1} {$i <= $size} {incr i} {
+    lappend data $i
+  }
+  return $data
+}
+
+proc dump_to_file {data} {
+  set image [ocdtlb_get_tmp_prefix "load"].img
+  set fp [open $image w]
+  fconfigure $fp -translation binary
+  puts -nonewline $fp [binary format c* $data]
+  close $fp
+  return $image
+}
+
+set data [generate_data $size]
+set image [dump_to_file $data]
+ocdtlb_run_expect "load_image $image $start_addr"
+set response [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $start_addr $size"] data]
+ocdtlb_expect_equal $response $data
+
+ocd_test_pass

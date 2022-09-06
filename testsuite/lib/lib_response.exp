@@ -243,9 +243,13 @@ proc parse_memory_write_response { report } {
   return [internal_parse_empty_on_success $TYPE $report]
 }
 
-proc parse_dump_image_response { report } {
+proc parse_dump_image { report } {
   set TYPE "dump_image"
-  error "not implemented"
+  # dumped 10 bytes in 0.053718s (0.182 KiB/s)
+  if {[regexp {dumped +[0-9]+ bytes in} $report]} {
+    return [internal_parse_success $TYPE $report {}]
+  }
+  return [internal_parse_op_failure $TYPE $report {}]
 }
 
 proc parse_memw_response { report } {
