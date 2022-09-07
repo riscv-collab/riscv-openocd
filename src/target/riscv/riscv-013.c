@@ -1385,6 +1385,10 @@ static int register_write_direct(struct target *target, unsigned number,
 /** Actually read registers from the target right now. */
 static int register_read_direct(struct target *target, uint64_t *value, uint32_t number)
 {
+	uint64_t mstatus;
+	if (prep_for_register_access(target, &mstatus, number) != ERROR_OK)
+		return ERROR_FAIL;
+
 	int result = register_read_abstract(target, value, number,
 			register_size(target, number));
 
@@ -1401,10 +1405,6 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 			return ERROR_FAIL;
 
 		/* Write program to move data into s0. */
-
-		uint64_t mstatus;
-		if (prep_for_register_access(target, &mstatus, number) != ERROR_OK)
-			return ERROR_FAIL;
 
 		if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
 			if (riscv_supports_extension(target, 'D')
@@ -1449,10 +1449,10 @@ static int register_read_direct(struct target *target, uint64_t *value, uint32_t
 			if (register_read_direct(target, value, GDB_REGNO_S0) != ERROR_OK)
 				return ERROR_FAIL;
 		}
-
-		if (cleanup_after_register_access(target, mstatus, number) != ERROR_OK)
-			return ERROR_FAIL;
 	}
+
+	if (cleanup_after_register_access(target, mstatus, number) != ERROR_OK)
+		return ERROR_FAIL;
 
 	if (result == ERROR_OK) {
 		LOG_DEBUG("{%d} %s = 0x%" PRIx64, riscv_current_hartid(target),
