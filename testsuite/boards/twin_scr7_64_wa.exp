@@ -1,13 +1,13 @@
 load_board_description "baremetal-fpga-common"
 
-set_board_cpu scr4
+set_board_cpu scr7
 
 set_board_info memory,has_high_pa 0
-set_board_info memory,ocd_work_area 0
+set_board_info memory,ocd_work_area 1
 
-set_board_info ldscript "-T${testsuitedir}/boards/support/ldscripts/scr4.ld"
+set_board_info ldscript "-T${testsuitedir}/boards/support/ldscripts/scr7.ld"
 
 set_board_info openocd,flags [list \
  -f ${OPENOCD_ROOT}/share/openocd/scripts/interface/ftdi/digilent-hs2_fixed.cfg \
- -f ${testsuitedir}/boards/support/ocd/syntacore_riscv.cfg \
+ -f ${testsuitedir}/boards/support/ocd/syntacore_riscv_WA.cfg \
 ]

@@ -39,11 +39,11 @@ if {[auto_execok $SPIKE_SIM] == ""} {
   puts "WARNING: could not detect $SPIKE_SIM simulator in PATH"
 } else {
   set target_list {
-    spike_dmp6a0_32
-    spike_dmp6a32_32
-    spike_dmp6a0_64
-    spike_dmp6a64_64
-    spike_dmp6a0_64_with_high_pa
+    spike32_dmp6a0
+    spike32_dmp6a32
+    spike64_dmp6a0
+    spike64_dmp6a0_with_high_pa
+    spike64_dmp6a64
   }
 }
 

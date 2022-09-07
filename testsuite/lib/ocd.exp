@@ -58,6 +58,7 @@ proc ocd_target_info_check {} {
     cpu,has_floats \
     cpu,has_doubles \
     memory,has_high_pa \
+    memory,ocd_work_area \
     env,preferred_timeout \
     env,resume_timeout \
     env,exec_timeout \
@@ -149,7 +150,6 @@ proc ocd_init {test_file_name} {
   set default_bin_prefix "[target_info name]_${ocd_test_name}"
 
   set openocd_args [target_info openocd,flags]
-  #set openocd_args "$openocd_log $openocd_args"
   verbose "spawning openocd: $OPENOCD $openocd_args" 2
   spawn $OPENOCD {*}$openocd_args
 

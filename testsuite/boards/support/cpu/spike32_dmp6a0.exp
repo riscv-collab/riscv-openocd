@@ -1,0 +1,14 @@
+set TGT_ARCH "rv32gc"
+
+set_board_info cpu,xlen 32
+set_board_info cpu,cores_num 1
+set_board_info cpu,has_floats 1
+set_board_info cpu,has_doubles 1
+
+add_board_info cflags   -march=$TGT_ARCH
+add_board_info cflags   -mabi=ilp32d
+
+add_board_info sim,options --isa=$TGT_ARCH
+add_board_info sim,options --dm-progsize=6
+add_board_info sim,options --dm-sba=0
+add_board_info sim,options --dm-abstract-rti=0

@@ -1,4 +1,3 @@
-boards/spike-sim-common.exp: lib/support/spike.cfg is not customizable
 boards/spike_* : lib/support/ld.ld double-check customization
 boards/twin_scr7_64.exp: lidscript, flags - configs hard-coded
 

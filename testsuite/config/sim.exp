@@ -9,6 +9,17 @@ proc ${board}_initialization_abort { msg } {
   error "could not initialize simulator board"
 }
 
+proc spike_get_target_memory_map {} {
+  set primary_region "0x80000000:0xa00000"
+  if { [target_info memory,has_high_pa]} {
+    set primary_region "0x80000000:0xffffffff80000000"
+  }
+  if { [target_info memory,ocd_work_area]} {
+    return "-m0x3ff0000:0x10000,$primary_region"
+  }
+  return "-m$primary_region"
+}
+
 proc ${board}_init { name } {
   global SPIKE_SIM
   global spike_board_spawn_id
@@ -23,9 +34,11 @@ proc ${board}_init { name } {
   }
   verbose "boot code compiled successfully" 2
 
-  set sim_args [join [list [board_info target sim,options] $boot_binary] " "]
-  verbose "running spike: $SPIKE_SIM $sim_args" 1
+  set sim_args [list {*}[target_info sim,options] \
+                     [spike_get_target_memory_map] \
+                     $boot_binary]
 
+  verbose "running spike: $SPIKE_SIM $sim_args" 1
   spawn $SPIKE_SIM {*}$sim_args
   expect {
     "Listening for remote bitbang connection on port" {
