@@ -4110,11 +4110,7 @@ static int riscv013_select_current_hart(struct target *target)
 	if (r->current_hartid == dm->current_hartid)
 		return ERROR_OK;
 
-	uint32_t dmcontrol;
-	/* TODO: can't we just "dmcontrol = DMI_DMACTIVE"? */
-	if (dmi_read(target, &dmcontrol, DM_DMCONTROL) != ERROR_OK)
-		return ERROR_FAIL;
-	dmcontrol = set_hartsel(dmcontrol, r->current_hartid);
+	uint32_t dmcontrol = set_hartsel(DM_DMCONTROL_DMACTIVE, r->current_hartid);
 	int result = dmi_write(target, DM_DMCONTROL, dmcontrol);
 	dm->current_hartid = r->current_hartid;
 	return result;
