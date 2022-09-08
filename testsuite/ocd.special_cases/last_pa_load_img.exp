@@ -15,9 +15,9 @@ set end_addr "0xffffffffffffffff"
 set size 100
 set start_addr [expr ($end_addr - $size) + 1]
 
-ocdtlb_run_expect "mwb $start_addr $size 0"
+ocdtlb_run_expect "mwb $start_addr 0xbe $size"
 set response [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $start_addr $size"] data]
-ocdtlb_expect_equal $response [lrepeat $size 0]
+ocdtlb_expect_equal $response [lrepeat $size 0xbe]
 
 proc generate_data {size} {
   set data {}
