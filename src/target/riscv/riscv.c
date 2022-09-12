@@ -4704,6 +4704,9 @@ int riscv_init_registers(struct target *target)
 				r->exist = false;
 			}
 
+			// Syntacore-specific code
+			// r->exist = riscv_syntactore_has_csr(csr_number, target);
+
 			switch (csr_number) {
 				case CSR_FFLAGS:
 				case CSR_FRM:
@@ -4814,6 +4817,10 @@ int riscv_init_registers(struct target *target)
 						riscv_supports_extension(target, 'U');
 					break;
 			}
+
+			// Syntacore-specific code
+			if (riscv_syntacore_csr_force_default_disabled(csr_number))
+				r->exist = false;
 
 			if (!r->exist && !list_empty(&info->expose_csr)) {
 				range_list_t *entry;

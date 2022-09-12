@@ -13,4 +13,5 @@ noinst_LTLIBRARIES += %D%/libriscv.la
        %D%/riscv-011.c \
        %D%/riscv-013.c \
        %D%/riscv.c \
+       %D%/riscv_syntacore.c \
        %D%/riscv_semihosting.c
