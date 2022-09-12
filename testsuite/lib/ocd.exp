@@ -63,6 +63,7 @@ proc ocd_target_info_check {} {
     memory,reset_vector \
     memory,has_high_pa \
     memory,ocd_work_area \
+    openocd,hwtheads \
     openocd,extra_csr \
     env,preferred_timeout \
     env,resume_timeout \
@@ -159,7 +160,7 @@ proc ocd_init {test_file_name} {
   spawn $OPENOCD {*}$openocd_args
 
   expect {
-    "Examined RISC-V core; found" {
+    -re "Listening on port \[0-9\]+ for tcl connections" {
       set openocd_instance_spawn_id $spawn_id
       verbose "openocd launched successfully" 2
     }
@@ -170,6 +171,7 @@ proc ocd_init {test_file_name} {
       perror "openocd does not report active RISCV cores"
     }
   }
+
   # TODO: we may want to do extra cleanup if timeout is observed
   sleep [ocd_exec_timeout]
   #set openocd_log "-c \"log_output ${ocd_test_name}_openocd.log\" "

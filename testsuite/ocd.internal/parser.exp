@@ -45,8 +45,13 @@ set target_no_fp [expr [target_info cpu,has_floats] == 0]
 ocdtlb_run_expect_raw "targets"    parse_targets_listing
 ocdtlb_run_expect     "targets"
 
-ocdtlb_run_expect_raw "targets riscv.cpu"  parse_targets_set
-ocdtlb_run_expect     "targets riscv.cpu"
+if {[expr {[target_info cpu,cores_num] == 1}]} {
+  ocdtlb_run_expect_raw "targets riscv.cpu"  parse_targets_set
+  ocdtlb_run_expect     "targets riscv.cpu"
+} else {
+  ocdtlb_run_expect_raw "targets riscv.cpu1"  parse_targets_set
+  ocdtlb_run_expect     "targets riscv.cpu1"
+}
 
 ocdtlb_run_expect_raw "targets 0"  parse_targets_set
 ocdtlb_run_expect     "targets 0"

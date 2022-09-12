@@ -43,9 +43,13 @@ if {[auto_execok $SPIKE_SIM] == ""} {
     spike32_dmp6a32
     spike32_dmp6a0_extra_CSR
     spike64_dmp6a0
-    spike64_dmp6a64
     spike64_dmp6a0_with_high_pa
     spike64_dmp6a0_extra_CSR
+    spike64_dmp6a64
+    spike64mcore4_rthw0_dmp6a0
+    spike64mcore4_rthw4_dmp6a0
+    spike64smp4_rthw1_dmp6a0
+    spike64smp4_rthw4_dmp6a0
   }
 }
 

@@ -1,0 +1,20 @@
+set TGT_ARCH "rv64gc"
+set CORES_NUM 4
+
+set_board_info cpu,xlen 64
+set_board_info cpu,cores_num $CORES_NUM
+set_board_info cpu,has_floats 1
+set_board_info cpu,has_doubles 1
+set_board_info cpu,has_u_mode 1
+set_board_info cpu,has_s_mode 1
+set_board_info cpu,has_h_ext 0
+
+add_board_info cflags   -march=$TGT_ARCH
+add_board_info cflags   -mabi=lp64d
+
+add_board_info sim,options --isa=$TGT_ARCH
+add_board_info sim,options --dm-progsize=6
+add_board_info sim,options --dm-sba=0
+add_board_info sim,options --dm-abstract-rti=0
+
+add_board_info sim,options -p$CORES_NUM
