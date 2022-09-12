@@ -118,6 +118,9 @@ typedef struct {
 	/* The number of triggers per hart. */
 	unsigned int trigger_count;
 
+	/* record the type of each trigger */
+	unsigned int trigger_type[RISCV_MAX_TRIGGERS];
+
 	/* For each physical trigger, contains -1 if the hwbp is available, or the
 	 * unique_id of the breakpoint/watchpoint that is using it.
 	 * Note that in RTOS mode the triggers are the same across all harts the

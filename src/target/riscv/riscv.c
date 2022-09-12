@@ -462,9 +462,74 @@ static void trigger_from_breakpoint(struct trigger *trigger,
 	trigger->unique_id = breakpoint->unique_id;
 }
 
-static int maybe_add_trigger_t1(struct target *target,
-		struct trigger *trigger, uint64_t tdata1)
+static bool match_napot_checker(struct trigger *trigger, riscv_reg_t *tdata2)
 {
+	riscv_reg_t addr = trigger->address;
+	riscv_reg_t size = trigger->length;
+	if (size > 1 &&
+		(size & (size - 1)) == 0 &&
+		(addr & (size - 1)) == 0) {
+		if (tdata2)
+			*tdata2 = addr | ((size - 1) >> 1);
+		return true;
+	}
+	return false;
+}
+
+static int find_trigger(struct target *target, int type, bool chained, int *idx)
+{
+	RISCV_INFO(r);
+
+	int found;
+	int cnt = 0;
+	int num = chained ? 2 : 1;
+
+	for (unsigned i = 0; i < r->trigger_count; i++) {
+		if (r->trigger_unique_id[i] == -1) {
+			int t = r->trigger_type[i];
+			if (type == t) {
+				found = (++cnt == num);
+				if (found) {
+					if (idx)
+						*idx = i - (num - 1);
+					return ERROR_OK;
+				}
+				continue;
+			}
+		}
+		cnt = 0;
+	}
+
+	return ERROR_FAIL;
+}
+
+static int set_trigger(struct target *target, int idx, riscv_reg_t tdata1, riscv_reg_t tdata2)
+{
+	riscv_reg_t tdata1_rb;
+	if (riscv_set_register(target, GDB_REGNO_TSELECT, idx) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_set_register(target, GDB_REGNO_TDATA1, tdata1) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_get_register(target, &tdata1_rb, GDB_REGNO_TDATA1) != ERROR_OK)
+		return ERROR_FAIL;
+	if (tdata1 != tdata1_rb) {
+		LOG_DEBUG("Trigger doesn't support what we need; After writing 0x%"
+			PRIx64 " to tdata1 it contains 0x%" PRIx64,
+			tdata1, tdata1_rb);
+		riscv_set_register(target, GDB_REGNO_TDATA1, 0);
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+	LOG_DEBUG("tdata1=0x%" PRIx64, tdata1_rb);
+	if (riscv_set_register(target, GDB_REGNO_TDATA2, tdata2) != ERROR_OK)
+		return ERROR_FAIL;
+	return ERROR_OK;
+}
+
+static int maybe_add_trigger_t1(struct target *target, struct trigger *trigger)
+{
+	int idx, ret;
+	riscv_reg_t tdata1, tdata2;
+
 	RISCV_INFO(r);
 
 	const uint32_t bpcontrol_x = 1<<0;
@@ -477,203 +542,227 @@ static int maybe_add_trigger_t1(struct target *target,
 	const uint32_t bpcontrol_bpmatch = 0xf << 7;
 	const uint32_t bpcontrol_bpaction = 0xff << 11;
 
+	ret = find_trigger(target, CSR_TDATA1_TYPE_LEGACY, false, &idx);
+	if (ret != ERROR_OK)
+		return ret;
+
+	if (riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1) != ERROR_OK)
+		return ERROR_FAIL;
 	if (tdata1 & (bpcontrol_r | bpcontrol_w | bpcontrol_x)) {
 		/* Trigger is already in use, presumably by user code. */
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
+	tdata1 = 0;
 	tdata1 = set_field(tdata1, bpcontrol_r, trigger->read);
 	tdata1 = set_field(tdata1, bpcontrol_w, trigger->write);
 	tdata1 = set_field(tdata1, bpcontrol_x, trigger->execute);
-	tdata1 = set_field(tdata1, bpcontrol_u,
-			!!(r->misa & BIT('U' - 'A')));
-	tdata1 = set_field(tdata1, bpcontrol_s,
-			!!(r->misa & BIT('S' - 'A')));
-	tdata1 = set_field(tdata1, bpcontrol_h,
-			!!(r->misa & BIT('H' - 'A')));
-	tdata1 |= bpcontrol_m;
-	tdata1 = set_field(tdata1, bpcontrol_bpmatch, 0); /* exact match */
+	tdata1 = set_field(tdata1, bpcontrol_u, !!(r->misa & BIT('U' - 'A')));
+	tdata1 = set_field(tdata1, bpcontrol_s, !!(r->misa & BIT('S' - 'A')));
+	tdata1 = set_field(tdata1, bpcontrol_h, !!(r->misa & BIT('H' - 'A')));
+	tdata1 = set_field(tdata1, bpcontrol_m, 1);
 	tdata1 = set_field(tdata1, bpcontrol_bpaction, 0); /* cause bp exception */
-
-	riscv_set_register(target, GDB_REGNO_TDATA1, tdata1);
-
-	riscv_reg_t tdata1_rb;
-	if (riscv_get_register(target, &tdata1_rb, GDB_REGNO_TDATA1) != ERROR_OK)
-		return ERROR_FAIL;
-	LOG_DEBUG("tdata1=0x%" PRIx64, tdata1_rb);
-
-	if (tdata1 != tdata1_rb) {
-		LOG_DEBUG("Trigger doesn't support what we need; After writing 0x%"
-				PRIx64 " to tdata1 it contains 0x%" PRIx64,
-				tdata1, tdata1_rb);
-		riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	}
-
-	riscv_set_register(target, GDB_REGNO_TDATA2, trigger->address);
-
+	tdata1 = set_field(tdata1, bpcontrol_bpmatch, 0); /* exact match */
+	tdata2 = trigger->address;
+	ret = set_trigger(target, idx, tdata1, tdata2);
+	if (ret != ERROR_OK)
+		return ret;
+	r->trigger_unique_id[idx] = trigger->unique_id;
 	return ERROR_OK;
 }
 
-static int maybe_add_trigger_t2(struct target *target,
-		struct trigger *trigger, uint64_t tdata1)
+static int maybe_add_trigger_t2(struct target *target, struct trigger *trigger)
 {
+	int idx, ret;
+	riscv_reg_t tdata1, tdata2;
+
 	RISCV_INFO(r);
 
-	/* tselect is already set */
-	if (tdata1 & (CSR_MCONTROL_EXECUTE | CSR_MCONTROL_STORE | CSR_MCONTROL_LOAD)) {
-		/* Trigger is already in use, presumably by user code. */
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	}
+	tdata1 = 0;
+	tdata1 = set_field(tdata1, CSR_MCONTROL_TYPE(riscv_xlen(target)), 2);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_DMODE(riscv_xlen(target)), 1);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_ACTION, CSR_MCONTROL_ACTION_DEBUG_MODE);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_M, 1);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_S, !!(r->misa & (1 << ('S' - 'A'))));
+	tdata1 = set_field(tdata1, CSR_MCONTROL_U, !!(r->misa & (1 << ('U' - 'A'))));
+	tdata1 = set_field(tdata1, CSR_MCONTROL_EXECUTE, trigger->execute);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_LOAD, trigger->read);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_STORE, trigger->write);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_SIZELO, CSR_MCONTROL_SIZELO_ANY & 3);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_SIZEHI, (CSR_MCONTROL_SIZELO_ANY >> 2) & 3);
 
-	/* address/data match trigger */
-	tdata1 |= CSR_MCONTROL_DMODE(riscv_xlen(target));
-	tdata1 = set_field(tdata1, CSR_MCONTROL_ACTION,
-			CSR_MCONTROL_ACTION_DEBUG_MODE);
+	if (trigger->execute || trigger->length == 1)
+		goto MATCH_EQUAL;
+	if (!match_napot_checker(trigger, &tdata2))
+		goto MATCH_GE_LT;
+
+	ret = find_trigger(target, CSR_TDATA1_TYPE_MCONTROL, false, &idx);
+	if (ret != ERROR_OK)
+		return ret;
+	tdata1 = set_field(tdata1, CSR_MCONTROL_MATCH, CSR_MCONTROL_MATCH_NAPOT);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_CHAIN, CSR_MCONTROL_CHAIN_DISABLED);
+	ret = set_trigger(target, idx, tdata1, tdata2);
+	if (ret != ERROR_OK) {
+		if (ret == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			goto MATCH_GE_LT; /* Fallback to chained MATCH using GT and LE */
+		return ret;
+	}
+	r->trigger_unique_id[idx] = trigger->unique_id;
+	return ERROR_OK;
+
+MATCH_GE_LT:
+	ret = find_trigger(target, CSR_TDATA1_TYPE_MCONTROL, true, &idx);
+	if (ret != ERROR_OK)
+		return ret;
+	tdata1 = set_field(tdata1, CSR_MCONTROL_MATCH, CSR_MCONTROL_MATCH_GE);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_CHAIN, CSR_MCONTROL_CHAIN_ENABLED);
+	tdata2 = trigger->address;
+	ret = set_trigger(target, idx, tdata1, tdata2);
+	if (ret != ERROR_OK) {
+		if (ret == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			goto MATCH_EQUAL; /* Fallback to EQUAL MATCH */
+		return ret;
+	}
+	tdata1 = set_field(tdata1, CSR_MCONTROL_MATCH, CSR_MCONTROL_MATCH_LT);
+	tdata1 = set_field(tdata1, CSR_MCONTROL_CHAIN, CSR_MCONTROL_CHAIN_DISABLED);
+	tdata2 = trigger->address + trigger->length;
+	ret = set_trigger(target, idx + 1, tdata1, tdata2);
+	if (ret != ERROR_OK) {
+		set_trigger(target, idx, 0, 0); /* Undo the setting of the previous trigger*/
+		if (ret == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			goto MATCH_EQUAL; /* Fallback to EQUAL MATCH */
+		return ret;
+	}
+	r->trigger_unique_id[idx] = trigger->unique_id;
+	r->trigger_unique_id[idx + 1] = trigger->unique_id;
+	return ERROR_OK;
+
+MATCH_EQUAL:
+	ret = find_trigger(target, CSR_TDATA1_TYPE_MCONTROL, false, &idx);
+	if (ret != ERROR_OK)
+		return ret;
 	tdata1 = set_field(tdata1, CSR_MCONTROL_MATCH, CSR_MCONTROL_MATCH_EQUAL);
-	tdata1 |= CSR_MCONTROL_M;
-	if (r->misa & (1 << ('S' - 'A')))
-		tdata1 |= CSR_MCONTROL_S;
-	if (r->misa & (1 << ('U' - 'A')))
-		tdata1 |= CSR_MCONTROL_U;
-
-	if (trigger->execute)
-		tdata1 |= CSR_MCONTROL_EXECUTE;
-	if (trigger->read)
-		tdata1 |= CSR_MCONTROL_LOAD;
-	if (trigger->write)
-		tdata1 |= CSR_MCONTROL_STORE;
-
-	riscv_set_register(target, GDB_REGNO_TDATA1, tdata1);
-
-	uint64_t tdata1_rb;
-	int result = riscv_get_register(target, &tdata1_rb, GDB_REGNO_TDATA1);
-	if (result != ERROR_OK)
-		return result;
-	LOG_DEBUG("tdata1=0x%" PRIx64, tdata1_rb);
-
-	if (tdata1 != tdata1_rb) {
-		LOG_DEBUG("Trigger doesn't support what we need; After writing 0x%"
-				PRIx64 " to tdata1 it contains 0x%" PRIx64,
-				tdata1, tdata1_rb);
-		riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	if (trigger->length == 1) {
+		tdata1 = set_field(tdata1, CSR_MCONTROL_SIZELO, CSR_MCONTROL_SIZELO_8BIT & 3);
+		tdata1 = set_field(tdata1, CSR_MCONTROL_SIZEHI, (CSR_MCONTROL_SIZELO_8BIT >> 2) & 3);
 	}
-
-	riscv_set_register(target, GDB_REGNO_TDATA2, trigger->address);
-
+	tdata1 = set_field(tdata1, CSR_MCONTROL_CHAIN, CSR_MCONTROL_CHAIN_DISABLED);
+	tdata2 = trigger->address;
+	ret = set_trigger(target, idx, tdata1, tdata2);
+	if (ret != ERROR_OK)
+		return ret;
+	r->trigger_unique_id[idx] = trigger->unique_id;
 	return ERROR_OK;
 }
 
-static int maybe_add_trigger_t6(struct target *target,
-		struct trigger *trigger, uint64_t tdata1)
+static int maybe_add_trigger_t6(struct target *target, struct trigger *trigger)
 {
+	int idx, ret;
+	riscv_reg_t tdata1, tdata2;
+
 	RISCV_INFO(r);
 
-	/* tselect is already set */
-	if (tdata1 & (CSR_MCONTROL6_EXECUTE | CSR_MCONTROL6_STORE | CSR_MCONTROL6_LOAD)) {
-		/* Trigger is already in use, presumably by user code. */
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	}
+	tdata1 = 0;
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_TYPE(riscv_xlen(target)), 6);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_DMODE(riscv_xlen(target)), 1);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_ACTION, CSR_MCONTROL6_ACTION_DEBUG_MODE);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_M, 1);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_S, !!(r->misa & (1 << ('S' - 'A'))));
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_U, !!(r->misa & (1 << ('U' - 'A'))));
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_EXECUTE, trigger->execute);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_LOAD, trigger->read);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_STORE, trigger->write);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_SIZE, CSR_MCONTROL6_SIZE_ANY);
 
-	/* address/data match trigger */
-	tdata1 |= CSR_MCONTROL6_DMODE(riscv_xlen(target));
-	tdata1 = set_field(tdata1, CSR_MCONTROL6_ACTION,
-			CSR_MCONTROL6_ACTION_DEBUG_MODE);
+	if (trigger->execute || trigger->length == 1)
+		goto MATCH_EQUAL;
+	if (!match_napot_checker(trigger, &tdata2))
+		goto MATCH_GE_LT;
+
+	ret = find_trigger(target, CSR_TDATA1_TYPE_MCONTROL6, false, &idx);
+	if (ret != ERROR_OK)
+		return ret;
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_MATCH, CSR_MCONTROL6_MATCH_NAPOT);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_CHAIN, CSR_MCONTROL6_CHAIN_DISABLED);
+	ret = set_trigger(target, idx, tdata1, tdata2);
+	if (ret != ERROR_OK) {
+		if (ret == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			goto MATCH_GE_LT; /* Fallback to chained MATCH using GT and LE */
+		return ret;
+	}
+	r->trigger_unique_id[idx] = trigger->unique_id;
+	return ERROR_OK;
+
+MATCH_GE_LT:
+	ret = find_trigger(target, CSR_TDATA1_TYPE_MCONTROL6, true, &idx);
+	if (ret != ERROR_OK)
+		return ret;
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_MATCH, CSR_MCONTROL6_MATCH_GE);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_CHAIN, CSR_MCONTROL6_CHAIN_ENABLED);
+	tdata2 = trigger->address;
+	ret = set_trigger(target, idx, tdata1, tdata2);
+	if (ret != ERROR_OK) {
+		if (ret == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			goto MATCH_EQUAL; /* Fallback to EQUAL MATCH */
+		return ret;
+	}
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_MATCH, CSR_MCONTROL6_MATCH_LT);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_CHAIN, CSR_MCONTROL6_CHAIN_DISABLED);
+	tdata2 = trigger->address + trigger->length;
+	ret = set_trigger(target, idx + 1, tdata1, tdata2);
+	if (ret != ERROR_OK) {
+		set_trigger(target, idx, 0, 0); /* Undo the setting of the previous trigger*/
+		if (ret == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			goto MATCH_EQUAL; /* Fallback to EQUAL MATCH */
+		return ret;
+	}
+	r->trigger_unique_id[idx] = trigger->unique_id;
+	r->trigger_unique_id[idx + 1] = trigger->unique_id;
+	return ERROR_OK;
+
+MATCH_EQUAL:
+	ret = find_trigger(target, CSR_TDATA1_TYPE_MCONTROL6, false, &idx);
+	if (ret != ERROR_OK)
+		return ret;
 	tdata1 = set_field(tdata1, CSR_MCONTROL6_MATCH, CSR_MCONTROL6_MATCH_EQUAL);
-	tdata1 |= CSR_MCONTROL6_M;
-	if (r->misa & (1 << ('H' - 'A')))
-		tdata1 |= CSR_MCONTROL6_VS | CSR_MCONTROL6_VU;
-	if (r->misa & (1 << ('S' - 'A')))
-		tdata1 |= CSR_MCONTROL6_S;
-	if (r->misa & (1 << ('U' - 'A')))
-		tdata1 |= CSR_MCONTROL6_U;
-
-	if (trigger->execute)
-		tdata1 |= CSR_MCONTROL6_EXECUTE;
-	if (trigger->read)
-		tdata1 |= CSR_MCONTROL6_LOAD;
-	if (trigger->write)
-		tdata1 |= CSR_MCONTROL6_STORE;
-
-	riscv_set_register(target, GDB_REGNO_TDATA1, tdata1);
-
-	uint64_t tdata1_rb;
-	int result = riscv_get_register(target, &tdata1_rb, GDB_REGNO_TDATA1);
-	if (result != ERROR_OK)
-		return result;
-	LOG_DEBUG("tdata1=0x%" PRIx64, tdata1_rb);
-
-	if (tdata1 != tdata1_rb) {
-		LOG_DEBUG("Trigger doesn't support what we need; After writing 0x%"
-				PRIx64 " to tdata1 it contains 0x%" PRIx64,
-				tdata1, tdata1_rb);
-		riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	}
-
-	riscv_set_register(target, GDB_REGNO_TDATA2, trigger->address);
-
+	if (trigger->length == 1)
+		tdata1 = set_field(tdata1, CSR_MCONTROL6_SIZE, CSR_MCONTROL6_SIZE_8BIT);
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_CHAIN, CSR_MCONTROL6_CHAIN_DISABLED);
+	tdata2 = trigger->address;
+	ret = set_trigger(target, idx, tdata1, tdata2);
+	if (ret != ERROR_OK)
+		return ret;
+	r->trigger_unique_id[idx] = trigger->unique_id;
 	return ERROR_OK;
 }
 
 static int add_trigger(struct target *target, struct trigger *trigger)
 {
-	RISCV_INFO(r);
+	int ret;
+	riscv_reg_t tselect;
 
 	if (riscv_enumerate_triggers(target) != ERROR_OK)
 		return ERROR_FAIL;
 
-	riscv_reg_t tselect;
-	if (riscv_get_register(target, &tselect, GDB_REGNO_TSELECT) != ERROR_OK)
-		return ERROR_FAIL;
+	int result = riscv_get_register(target, &tselect, GDB_REGNO_TSELECT);
+	if (result != ERROR_OK)
+		return result;
 
-	unsigned int i;
-	for (i = 0; i < r->trigger_count; i++) {
-		if (r->trigger_unique_id[i] != -1)
-			continue;
-
-		riscv_set_register(target, GDB_REGNO_TSELECT, i);
-
-		uint64_t tdata1;
-		int result = riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1);
-		if (result != ERROR_OK)
-			return result;
-		int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
-
-		result = ERROR_OK;
-		switch (type) {
-			case 1:
-				result = maybe_add_trigger_t1(target, trigger, tdata1);
-				break;
-			case 2:
-				result = maybe_add_trigger_t2(target, trigger, tdata1);
-				break;
-			case 6:
-				result = maybe_add_trigger_t6(target, trigger, tdata1);
-				break;
-			default:
-				LOG_DEBUG("trigger %d has unknown type %d", i, type);
-				continue;
-		}
-
-		if (result != ERROR_OK)
-			continue;
-
-		LOG_DEBUG("[%d] Using trigger %d (type %d) for bp %d", target->coreid,
-				i, type, trigger->unique_id);
-		r->trigger_unique_id[i] = trigger->unique_id;
-		break;
-	}
+	do {
+		ret = maybe_add_trigger_t1(target, trigger);
+		if (ret == ERROR_OK)
+			break;
+		ret = maybe_add_trigger_t2(target, trigger);
+		if (ret == ERROR_OK)
+			break;
+		ret = maybe_add_trigger_t6(target, trigger);
+		if (ret == ERROR_OK)
+			break;
+	} while (0);
 
 	riscv_set_register(target, GDB_REGNO_TSELECT, tselect);
 
-	if (i >= r->trigger_count) {
-		LOG_ERROR("Couldn't find an available hardware trigger.");
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	}
-
-	return ERROR_OK;
+	return ret;
 }
 
 /**
@@ -849,27 +938,30 @@ static int remove_trigger(struct target *target, struct trigger *trigger)
 	if (riscv_enumerate_triggers(target) != ERROR_OK)
 		return ERROR_FAIL;
 
-	unsigned int i;
-	for (i = 0; i < r->trigger_count; i++) {
-		if (r->trigger_unique_id[i] == trigger->unique_id)
-			break;
-	}
-	if (i >= r->trigger_count) {
-		LOG_ERROR("Couldn't find the hardware resources used by hardware "
-				"trigger.");
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	}
-	LOG_DEBUG("[%d] Stop using resource %d for bp %d", target->coreid, i,
-			trigger->unique_id);
-
 	riscv_reg_t tselect;
 	int result = riscv_get_register(target, &tselect, GDB_REGNO_TSELECT);
 	if (result != ERROR_OK)
 		return result;
-	riscv_set_register(target, GDB_REGNO_TSELECT, i);
-	riscv_set_register(target, GDB_REGNO_TDATA1, 0);
+
+	unsigned int i;
+	bool done = false;
+	for (i = 0; i < r->trigger_count; i++) {
+		if (r->trigger_unique_id[i] == trigger->unique_id) {
+			riscv_set_register(target, GDB_REGNO_TSELECT, i);
+			riscv_set_register(target, GDB_REGNO_TDATA1, 0);
+			r->trigger_unique_id[i] = -1;
+			LOG_TARGET_DEBUG(target, "Stop using resource %d for bp %d",
+				i, trigger->unique_id);
+			done = true;
+		}
+	}
+	if (!done) {
+		LOG_ERROR("Couldn't find the hardware resources used by hardware "
+				"trigger.");
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+
 	riscv_set_register(target, GDB_REGNO_TSELECT, tselect);
-	r->trigger_unique_id[i] = -1;
 
 	return ERROR_OK;
 }
@@ -3959,6 +4051,7 @@ int riscv_enumerate_triggers(struct target *target)
 			return result;
 
 		int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
+		r->trigger_type[t] = type;
 		if (type == 0)
 			break;
 		switch (type) {
