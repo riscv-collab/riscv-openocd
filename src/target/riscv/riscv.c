@@ -4809,6 +4809,10 @@ int riscv_init_registers(struct target *target)
 				case CSR_VLENB:
 					r->exist = riscv_supports_extension(target, 'V');
 					break;
+				case CSR_MCOUNTEREN:
+					r->exist = riscv_supports_extension(target, 'S') ||
+						riscv_supports_extension(target, 'U');
+					break;
 			}
 
 			if (!r->exist && !list_empty(&info->expose_csr)) {
