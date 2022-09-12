@@ -57,6 +57,10 @@ proc ocd_target_info_check {} {
     cpu,cores_num \
     cpu,has_floats \
     cpu,has_doubles \
+    cpu,has_u_mode \
+    cpu,has_s_mode \
+    cpu,has_h_ext \
+    cpu,reset_vector \
     memory,has_high_pa \
     memory,ocd_work_area \
     env,preferred_timeout \
