@@ -82,12 +82,17 @@ proc ocd_target_info_check {} {
   }
 }
 
+proc ocd_scaled_timeout_value { per_core_timeout } {
+  set cores_num [target_info cpu,cores_num]
+  return [expr { $cores_num * $per_core_timeout} ]
+}
+
 proc ocd_resume_timeout {} {
-  return [target_info env,resume_timeout]
+  return [ocd_scaled_timeout_value [target_info env,resume_timeout]]
 }
 
 proc ocd_exec_timeout {} {
-  return [target_info env,exec_timeout]
+  return [ocd_scaled_timeout_value [target_info env,exec_timeout]]
 }
 
 proc ocd_is_legacy {} {
