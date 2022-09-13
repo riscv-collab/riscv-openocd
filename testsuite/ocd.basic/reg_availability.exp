@@ -8,19 +8,11 @@ proc check_reg_availability {reg_name tgt_reg_list check_type} {
   verbose "testing for <$reg_name> - $check_type" 1
   switch -exact $check_type {
     MUST_BE_AVAILABLE {
-      if {[lsearch -exact $tgt_reg_list $reg_name] >= 0} {
-        verbose "$reg_name is found in tgt_reg_list - OK"
-      } else {
-        error "$reg_name is NOT found in tgt_reg_list"
-      }
+      ocdtlb_expect_present $tgt_reg_list $reg_name
       ocdtlb_run_expect "reg $reg_name" $EXPECT_SUCCESS
     }
     MUST_BE_ABSENT {
-      if {[lsearch -exact $tgt_reg_list $reg_name] >= 0} {
-        error "$reg_name is unexpectedly found in tgt_reg_list"
-      } else {
-        verbose "$reg_name is NOT found in tgt_reg_list - OK"
-      }
+      ocdtlb_expect_missing $tgt_reg_list $reg_name
       ocdtlb_run_expect "reg $reg_name" $EXPECT_FAILURE
     }
     default {
