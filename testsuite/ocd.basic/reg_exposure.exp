@@ -1,0 +1,43 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+ocd_connect
+
+ocdtlb_run_expect "reset halt"
+
+set rs [ocdtlb_run_expect "reg"]
+
+set found_registers [ocdtlb_rsp_get $rs found_name]
+
+if {[target_info openocd,extra_csr]} {
+  set EXTRA_CSR_PRESENT EXPECT_PRESENT
+  set EXTRA_CSR_ACCESS  ACCESS_SUCCESS
+} else {
+  set EXTRA_CSR_PRESENT EXPECT_ABSENT
+  set EXTRA_CSR_ACCESS  ACCESS_FAIL
+}
+
+# name, present_status, access_attempt
+set EXPOSED_CSR [list \
+  tselect $EXTRA_CSR_PRESENT $EXTRA_CSR_ACCESS \
+  tdata1  $EXTRA_CSR_PRESENT $EXTRA_CSR_ACCESS \
+  csr2048 $EXTRA_CSR_PRESENT ACCESS_FAIL       \
+]
+
+foreach {reg_name is_present expected_access} $EXPOSED_CSR {
+  verbose "checking $reg_name: $is_present/$expected_access" 1
+  if {[string match $is_present EXPECT_PRESENT]} {
+    ocdtlb_expect_present $found_registers $reg_name
+  } else {
+    ocdtlb_expect_missing $found_registers $reg_name
+  }
+
+  if {[string match $expected_access ACCESS_SUCCESS]} {
+    ocdtlb_run_expect "reg $reg_name"
+  } else {
+    if {![catch ocdtlb_run_expect "reg $reg_name"]} {
+      error "undexpected ACCESS_SUCCESS for $reg_name read"
+    }
+  }
+}
+
+return [ocd_test_pass]

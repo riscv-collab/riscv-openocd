@@ -1,3 +1,15 @@
+proc ocdtlb_expect_present {where what} {
+  if {[lsearch -exact $where $what] == -1} {
+    error "$what NOT found"
+  }
+}
+
+proc ocdtlb_expect_missing {where what} {
+  if {[lsearch -exact $where $what] >= 0} {
+    error "$what is unexpectedly present"
+  }
+}
+
 proc ocdtlb_get_tmp_prefix {id} {
   global default_bin_prefix
   return "${default_bin_prefix}_$id"
