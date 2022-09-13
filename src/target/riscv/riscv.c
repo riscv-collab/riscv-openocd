@@ -3782,11 +3782,14 @@ int riscv_get_register(struct target *target, riscv_reg_t *value,
 	keep_alive();
 
 	struct reg *reg = &target->reg_cache->reg_list[regid];
+/* FIXME: Disabled for syntacore due to compatibility reasons (see previous commit)*/
+#if 0
 	if (!reg->exist) {
 		LOG_DEBUG("[%s] %s does not exist.",
 				  target_name(target), gdb_regno_name(regid));
 		return ERROR_FAIL;
 	}
+#endif
 
 	if (reg && reg->valid) {
 		*value = buf_get_u64(reg->value, 0, reg->size);
@@ -4705,7 +4708,7 @@ int riscv_init_registers(struct target *target)
 			}
 
 			// Syntacore-specific code
-			// r->exist = riscv_syntactore_has_csr(csr_number, target);
+			r->exist = riscv_syntactore_has_csr(csr_number, target);
 
 			switch (csr_number) {
 				case CSR_FFLAGS:
