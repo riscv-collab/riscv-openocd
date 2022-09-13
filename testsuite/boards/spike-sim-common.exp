@@ -7,7 +7,7 @@ set_board_info env,preferred_timeout 5
 set_board_info env,resume_timeout 0.05
 set_board_info env,exec_timeout 0.05
 
-set_board_info cpu,reset_vector 0x1000
+set_board_info memory,reset_vector 0x1000
 
 set_board_info sim $SPIKE_SIM
 add_board_info sim,options --rbb-port=$SPIKE_BITBANG
