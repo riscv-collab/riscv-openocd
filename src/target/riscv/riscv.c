@@ -4829,6 +4829,10 @@ int riscv_init_registers(struct target *target)
 				range_list_t *entry;
 				list_for_each_entry(entry, &info->expose_csr, list)
 					if ((entry->low <= csr_number) && (csr_number <= entry->high)) {
+						// Syntacore-specific code
+						if (riscv_syntacore_csr_expose_and_rename(r, csr_number, entry))
+							break;
+
 						if (entry->name) {
 							*reg_name = 0;
 							r->name = entry->name;
