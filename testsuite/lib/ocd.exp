@@ -63,6 +63,7 @@ proc ocd_target_info_check {} {
     memory,reset_vector \
     memory,has_high_pa \
     memory,ocd_work_area \
+    openocd,extra_csr \
     env,preferred_timeout \
     env,resume_timeout \
     env,exec_timeout \
