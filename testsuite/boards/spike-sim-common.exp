@@ -18,8 +18,8 @@ proc ocd_flags_for_spike { cfg_name } {
   global testsuitedir
   global SPIKE_BITBANG
   return [list \
-    -c "gdb_port disabled ; telnet_port disabled" \
-    -c "interface remote_bitbang" \
+    -c "telnet_port disabled" \
+    -c "adapter driver remote_bitbang" \
     -c "remote_bitbang host 127.0.0.1 ; remote_bitbang port $SPIKE_BITBANG" \
     -f "$testsuitedir/boards/support/ocd/$cfg_name" \
   ]

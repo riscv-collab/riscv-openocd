@@ -358,3 +358,80 @@ proc parse_step { report } {
   return [internal_parse_empty_on_success $TYPE $report]
 }
 
+
+proc parse_gdb_info_threads { report } {
+  #   Id   Target Id ...  Frame
+  #  * 1  Thread 1 "riscv.cpu0" (Name: riscv.cpu0, state: debug-request) 0x0000000080000000 in ?? ()
+  #   ...
+  #(gdb)
+  set TYPE "gdb_info_threads"
+  set rlines [split $report "\t\n"]
+
+  if {[llength $rlines] < 3} {
+    return [internal_parse_error $TYPE $report {info "too few lines"}]
+  }
+  if {[string match [lindex $rlines end] "(gdb)"]} {
+    return [internal_parse_error $TYPE $report {info "missing prompt"} ]
+  }
+  set rlines [lreplace $rlines end end]
+  # Id   Target Id Frame
+  if {![regexp { Id +Target Id +Frame} [lindex $rlines 0]]} {
+    return [internal_parse_error $TYPE $report {info "missing header"} ]
+  }
+  set rlines [lreplace $rlines 0 0]
+
+  set active_thread none
+  set threads_num 0
+  set fetched_threads {}
+  set fetched_addr {}
+  set fetched_types {}
+  #  * 1  Thread 1 "riscv.cpu0" (Name: riscv.cpu0, state: debug-request) 0x0000000080000000 in ?? ()
+  foreach line $rlines {
+    if {![regexp {([*]?) +([0-9]+) +(Thread +[0-9]+|Remote target) +.* (0x[0-9a-fA-F]+) in } $line \
+          m main num type address]} {
+      return [internal_parse_op_failure $TYPE $report {info "could not get thread descr"}]
+    }
+    if {[string match $main "*"]} {
+      set active_thread $threads_num
+    }
+    if {[string first "Thread" $type] == 0} {
+      lappend fetched_types "thread"
+    } elseif {[string first "Remote" $type] == 0} {
+      lappend fetched_types "remote"
+    }
+    incr threads_num
+    lappend fetched_addr $address
+    lappend fetched_threads $num
+  }
+  return [internal_parse_success $TYPE $report \
+          [list threads_num $threads_num active_idx $active_thread \
+           threads $fetched_threads types $fetched_types pc $fetched_addr]]
+}
+
+proc parse_gdb_info_reg { report } {
+  set TYPE "gdb_info_reg"
+
+  set reg_names {}
+  set values {}
+  set rlines [split $report "\t\n"]
+  if {[string match [lindex $rlines end] "(gdb)"]} {
+    return [internal_parse_error $TYPE $report {info "missing prompt"} ]
+  }
+  set rlines [lreplace $rlines end end]
+  foreach line $rlines {
+    if {![regexp {([^ ]+) +(0x)?([0-9a-fA-F]+) +(0x)?([0-9a-fA-F]+)} $line \
+          m reg_name dummy reg_num dummy2 value]} {
+      return [internal_parse_op_failure $TYPE $report {info "could not get thread descr"}]
+    }
+    lappend reg_names $reg_name
+    if { $dummy2 eq "" } {
+      scan $value %d val
+    } else {
+      scan $dummy2$value %x val
+    }
+    lappend values $val
+  }
+  return [internal_parse_success $TYPE $report \
+          [list reg_names $reg_names values $values]]
+}
+

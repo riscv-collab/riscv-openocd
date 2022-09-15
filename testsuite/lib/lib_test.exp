@@ -55,6 +55,14 @@ proc ocdtlb_expect_equal_hex { left right } {
   error "$left != $right"
 }
 
+proc ocdtlb_unique_list {list} {
+  set dict {}
+  foreach item $list {
+    dict set dict $item ""
+  }
+  dict keys $dict
+}
+
 proc ocdtlb_rsp_get { response {what value} } {
   if {![response_is_success $response]} {
     error "can not get value from failed response: $response"

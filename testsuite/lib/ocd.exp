@@ -33,15 +33,23 @@ proc ocd_test_xfail {} {
   xfail $ocd_test_name
 }
 
-proc ocd_compile_executable { src_name outputname } {
+proc ocd_compile_executable { src_name outputname { extra_flags {} } } {
   global srcdir
   global subdir
 
+  set additional_flags [list \
+    debug \
+    additional_flags=-Xlinker \
+    additional_flags=-Map=$outputname.map \
+  ]
+  foreach add_flag $extra_flags {
+    lappend additional_flags additional_flags=$add_flag
+  }
   set result [target_compile \
     "$srcdir/$subdir/$src_name" \
     "$outputname" \
     "executable" \
-    [subst { debug additional_flags=-Xlinker additional_flags=-Map=$outputname.map }] \
+    $additional_flags \
   ]
   if {![string match $result ""]} {
     error "could not compile executable ($src_name->$outputname): $result"
@@ -123,6 +131,8 @@ proc ocd_init {test_file_name} {
 
   global OPENOCD
   global OPENOCD_VARIANT
+  global OCD_PORT_TCLRPC
+  global OCD_PORT_GDBSRV
   global ocd_test_name
   global default_bin_prefix
   global openocd_instance_spawn_id
@@ -164,17 +174,31 @@ proc ocd_init {test_file_name} {
   verbose "spawning openocd: $OPENOCD $openocd_args" 2
   spawn $OPENOCD {*}$openocd_args
 
+  set TCL_SERVER_ACTIVE 0
   expect {
-    -re "Listening on port \[0-9\]+ for tcl connections" {
-      set openocd_instance_spawn_id $spawn_id
-      verbose "openocd launched successfully" 2
+    -re "Listening on port $OCD_PORT_TCLRPC for tcl connections" {
+      verbose "openocd TCL/RPC server launched successfully" 2
+      set TCL_SERVER_ACTIVE 1
     }
-    eof {
-      perror "could not properly spawn openocd (unexpected EOF)"
+    eof { perror "unexpected EOF while waiting initial ack from TCL/RPC server" }
+    timeout  { perror "could not get initial ack from TCL/RPC server" }
+  }
+
+  set GDB_SERVER_ACTIVE 0
+  expect {
+    -re "Listening on port $OCD_PORT_GDBSRV for gdb connections" {
+      verbose "openocd GDB server launched successfully" 2
+      set GDB_SERVER_ACTIVE 1
     }
-    timeout  {
-      perror "openocd does not report active RISCV cores"
-    }
+    eof { perror "unexpected EOF while waiting initial ack from GDB server" }
+    timeout  { perror "could not get initial ack from GDB server" }
+  }
+
+  if {[expr {$TCL_SERVER_ACTIVE && $GDB_SERVER_ACTIVE}]} {
+    verbose "openocd is up and running" 1
+    set openocd_instance_spawn_id $spawn_id
+  } else {
+    perror "something went wrong during openocd initialization"
   }
 
   # TODO: we may want to do extra cleanup if timeout is observed
@@ -222,8 +246,12 @@ proc ocd_internal_error { msg } {
 
 proc ocd_internal_send_command {msg} {
   global ocd_client_spawn_id
+  global ocd_client_type
   if {![info exists ocd_client_spawn_id]} {
-    ocd_internal_error "trying to send <$msg> without connection"
+    ocd_internal_error "trying to send <$msg> without tclrpc connection"
+  }
+  if {![string match $ocd_client_type "tclrpc"]} {
+    ocd_internal_error "expecting tclrpc client type, detected: <$ocd_client_type>"
   }
   verbose ">>>> capture { $msg }" 2
   send "capture { $msg }\x1a"
@@ -236,19 +264,86 @@ proc ocd_run_command {msg} {
       return $expect_out(buffer)
     }
     eof {
-      ocd_internal_error "unexpected EOF while waiting results of <$msg>"
+      ocd_internal_error "tclrpc: unexpected EOF while waiting results of <$msg>"
     }
     timeout {
-      ocd_internal_error "unexpected timeout while waiting results of <$msg>"
+      ocd_internal_error "tclrpc: unexpected timeout while waiting results of <$msg>"
     }
   }
+}
+
+proc gdb_run_command {msg} {
+  global ocd_client_spawn_id
+  global ocd_client_type
+
+  if {![info exists ocd_client_spawn_id]} {
+    ocd_internal_error "trying to send <$msg> without gdb connection"
+  }
+  if {![string match $ocd_client_type "gdb"]} {
+    ocd_internal_error "expecting gdb client type, detected: <$ocd_client_type>"
+  }
+
+  verbose "sending gdb command: $msg" 3
+  send "$msg\n"
+
+  expect {
+    -re {\n\(gdb\)[ ]} {
+      return $expect_out(buffer)
+    }
+    eof {
+      ocd_internal_error "gdb: unexpected EOF while waiting results of <$msg>"
+    }
+    timeout {
+      ocd_internal_error "gdb: unexpected timeout while waiting results of <$msg>"
+    }
+  }
+}
+
+proc ocd_gdb_connect {} {
+  global spawn_id
+  global ocd_client_spawn_id
+  global ocd_client_type
+  global GDB_BIN
+  global OCD_PORT_GDBSRV
+  global openocd_instance_spawn_id
+
+  if {![info exists openocd_instance_spawn_id]} {
+    ocd_internal_error "OpenOCD: no active OpenOCD instance is found"
+  }
+
+  if {[info exists ocd_client_spawn_id]} {
+    ocd_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported"
+  }
+
+  set stty_init "-echo"
+  spawn $GDB_BIN
+  unset stty_init
+
+  set ocd_client_spawn_id $spawn_id
+  set ocd_client_type "gdb"
+
+  expect {
+    -re {\n\(gdb\)[ ]} {
+      verbose "GDB: got initial prompt" 1
+    }
+    eof {
+      ocd_internal_error "GDB: unexpected EOF while waiting for prompt"
+    }
+    timeout {
+      ocd_internal_error "GDB: could not get initial prompt"
+    }
+  }
+  send "set height 0\nset style enabled off\n"
+  gdb_run_command "target remote :$OCD_PORT_GDBSRV"
 }
 
 proc ocd_connect {} {
   global spawn_id
   global ocd_client_spawn_id
+  global ocd_client_type
   global openocd_instance_spawn_id
   global ocd_test_name
+  global OCD_PORT_TCLRPC
   global OPENOCD_LOG_LEVEL
 
   if {![info exists openocd_instance_spawn_id]} {
@@ -263,8 +358,9 @@ proc ocd_connect {} {
   # we use raw to avoid translation of \x1a to ^D
   # -echo just disables echoing of sent symbols
   set stty_init "raw -echo"
-  spawn nc localhost 6666
+  spawn nc localhost $OCD_PORT_TCLRPC
   set ocd_client_spawn_id $spawn_id
+  set ocd_client_type "tclrpc"
   unset stty_init
 
   ocd_internal_send_command "echo \"Hi there!\""
@@ -330,5 +426,6 @@ proc ocd_disconnect { } {
   verbose "OpenOCD connection is dead, farewell!" 1
 
   unset ocd_client_spawn_id
+
 }
 

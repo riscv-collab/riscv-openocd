@@ -9,6 +9,7 @@ set CFLAGS_FOR_TARGET  ""
 set SPIKE_SIM "spike"
 
 set OPENOCD_ROOT $env(OPENOCD_ROOT)
+set GDB_BIN riscv64-unknown-elf-gdb
 
 set OPENOCD "${OPENOCD_ROOT}/bin/openocd"
 set OPENOCD_LOG_LEVEL 2
@@ -22,6 +23,9 @@ set RUN_DANGEROUS_TESTS_ON_HW 1
 
 set SPIKE_BITBANG 7777
 
+set OCD_PORT_TCLRPC 6666
+set OCD_PORT_GDBSRV 3333
+
 # NOTE: environment queries below are not conventional, but should work
 # fine for OpenOCD testing
 puts "Checking for testsuite requirements..."
@@ -33,6 +37,10 @@ if {[auto_execok $OPENOCD] == ""} {
   puts "ERROR: could not find openocd binary at $OPENOCD"
   puts "   check your OPENOCD_ROOT ($OPENOCD_ROOT) is specified correctly"
   exit 1
+}
+
+if {[auto_execok $GDB_BIN]== "" } {
+  puts "WARNING: could not detect GDB in current PATH, gdb tests likely fail"
 }
 
 if {[auto_execok $SPIKE_SIM] == ""} {
