@@ -4725,7 +4725,10 @@ static int target_jim_read_memory(Jim_Interp *interp, int argc,
 				break;
 			}
 
-			char value_buf[11];
+			// maximum number of hexadecimal characters needed to print 64-bit number
+			// is (64 / 4) = 16 + we need terminating null and 2 charactes for "0x"
+			// prefix. This results in 19 characters for the buffer.
+			char value_buf[19];
 			snprintf(value_buf, sizeof(value_buf), "0x%" PRIx64, v);
 
 			Jim_ListAppendElement(interp, result_list,
