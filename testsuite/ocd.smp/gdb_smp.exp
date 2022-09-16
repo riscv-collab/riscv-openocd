@@ -14,14 +14,21 @@ ocd_gdb_connect
 set threads_info [parse_gdb_info_threads [gdb_run_command "info threads"]]
 verbose $threads_info 1
 
-if {![target_info openocd,hwtheads]} {
+if {![target_info openocd,smp_target]} {
   if {[ocdtlb_rsp_get $threads_info threads_num] != 1} {
     perror "non-hwthread target should have only 1 thread"
     return [ocd_test_fail]
   }
-  if {[lindex [ocdtlb_rsp_get $threads_info types] 0] != "remote"} {
-    perror "unexpected thread type"
-    return [ocd_test_fail]
+  if {[target_info openocd,hwthreads]} {
+    if {[lindex [ocdtlb_rsp_get $threads_info types] 0] != "thread"} {
+      perror "unexpected thread type"
+      return [ocd_test_fail]
+    }
+  } else {
+    if {[lindex [ocdtlb_rsp_get $threads_info types] 0] != "remote"} {
+      perror "unexpected thread type"
+      return [ocd_test_fail]
+    }
   }
   return [ocd_test_pass]
 }

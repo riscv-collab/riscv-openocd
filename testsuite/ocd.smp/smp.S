@@ -1,5 +1,6 @@
 .global _entry
 .global sync_object
+.global slave_loop
 .global master_loop
 .global rendezvous_point
 

@@ -6,5 +6,6 @@ set_board_info memory,has_high_pa 0
 set_board_info memory,ocd_work_area 0
 
 set_board_info openocd,extra_csr 1
-set_board_info openocd,hwtheads 0
+set_board_info openocd,hwthreads 0
+set_board_info openocd,smp_target 0
 set_board_info openocd,flags [ocd_flags_for_spike spike_extra_CSR.cfg]

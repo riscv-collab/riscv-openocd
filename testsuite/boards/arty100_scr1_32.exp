@@ -9,7 +9,8 @@ set_board_info memory,reset_vector 0xffffff00
 set_board_info ldscript "-T${testsuitedir}/boards/support/ldscripts/scr1.ld"
 
 set_board_info openocd,extra_csr 0
-set_board_info openocd,hwtheads 0
+set_board_info openocd,hwthreads 0
+set_board_info openocd,smp_target 0
 set_board_info openocd,flags [list \
  -f ${OPENOCD_ROOT}/share/openocd/scripts/interface/ftdi/digilent-hs2_fixed.cfg \
  -f ${testsuitedir}/boards/support/ocd/syntacore_riscv.cfg \

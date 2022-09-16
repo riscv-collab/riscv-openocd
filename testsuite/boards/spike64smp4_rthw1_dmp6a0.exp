@@ -6,5 +6,6 @@ set_board_info memory,has_high_pa 0
 set_board_info memory,ocd_work_area 0
 
 set_board_info openocd,extra_csr 0
-set_board_info openocd,hwtheads 1
+set_board_info openocd,hwthreads 1
+set_board_info openocd,smp_target 1
 set_board_info openocd,flags [ocd_flags_for_spike spike_smp4_rtoshw1.cfg]
