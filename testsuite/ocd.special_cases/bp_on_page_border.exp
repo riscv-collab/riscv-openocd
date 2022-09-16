@@ -1,9 +1,0 @@
-if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
-
-ocd_compile_executable "special.S" "$default_bin_prefix.exe"
-
-return [ocd_test_untested]
-
-ocd_connect
-
-ocd_test_pass
