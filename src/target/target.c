@@ -6436,16 +6436,31 @@ static int jim_target_names(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 	return JIM_OK;
 }
 
+static struct target_list *
+__attribute__((warn_unused_result))
+create_target_list_node(Jim_Obj *const name) {
+	int len;
+	const char *targetname = Jim_GetString(name, &len);
+	struct target *target = get_target(targetname);
+	LOG_DEBUG("%s ", targetname);
+	if (!target)
+		return NULL;
+
+	struct target_list *new = malloc(sizeof(struct target_list));
+	if (!new) {
+		LOG_ERROR("Out of memory");
+		return new;
+	}
+
+	new->target = target;
+	return new;
+}
+
 static int jim_target_smp(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 {
-	int i;
-	const char *targetname;
-	int retval, len;
+	int retval = 0;
 	static int smp_group = 1;
-	struct target *target = NULL;
-	struct target_list *head, *new;
 
-	retval = 0;
 	LOG_DEBUG("%d", argc);
 	/* argv[1] = target to associate in smp
 	 * argv[2] = target to associate in smp
@@ -6459,27 +6474,24 @@ static int jim_target_smp(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 	}
 	INIT_LIST_HEAD(lh);
 
-	for (i = 1; i < argc; i++) {
-
-		targetname = Jim_GetString(argv[i], &len);
-		target = get_target(targetname);
-		LOG_DEBUG("%s ", targetname);
-		if (target) {
-			new = malloc(sizeof(struct target_list));
-			new->target = target;
+	for (int i = 1; i < argc; i++) {
+		struct target_list *new = create_target_list_node(argv[i]);
+		if (new)
 			list_add_tail(&new->lh, lh);
-		}
 	}
 	/*  now parse the list of cpu and put the target in smp mode*/
-	foreach_smp_target(head, lh) {
-		target = head->target;
+	struct target_list *curr;
+	foreach_smp_target(curr, lh) {
+		struct target *target = curr->target;
 		target->smp = smp_group;
 		target->smp_targets = lh;
 	}
 	smp_group++;
 
-	if (target && target->rtos)
-		retval = rtos_smp_init(head->target);
+	struct target_list *first =
+		list_first_entry_or_null(lh, typeof(*first), lh);
+	if (first && first->target && first->target->rtos)
+		retval = rtos_smp_init(first->target);
 
 	return retval;
 }
