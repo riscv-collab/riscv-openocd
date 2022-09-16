@@ -58,8 +58,14 @@ array unset front
 array unset back
 
 if {$xlen64} {
-  # TODO:  we need mem_read64 to pass
-  note "we need mem_read64 to be fixed, tentatively mark as pass"
+  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 64 1024"]
+  set data64 [ocdtlb_rsp_get $rs data]
+  set front(0) [lindex $data64 0]
+  set front(1) [lindex $data64 1]
+  ocdtlb_expect_equal_hex [list $front(0) $front(1)] { 0xafafafafbbbbeeee 0xdeadbabedeadbabe }
+  set back(0) [lindex $data64 1023]
+  set back(1) [lindex $data64 1022]
+  ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0xcdcdcdcd8899aabb 0x80ff00ff80ff00ff}
 }
 
 ocd_test_pass

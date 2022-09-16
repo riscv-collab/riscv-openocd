@@ -26,14 +26,14 @@ set response [ocdtlb_run_expect "read_memory $MEM_ADDR $width 1"]
 set data [ocdtlb_rsp_get $response data]
 if {![ocdtlb_compare_equal_hex $data $expected_data1($width)]} {
   verbose "$data != $expected_data1($width)" 1
-  return [ocd_test_xfail]
+  return [ocd_test_fail]
 }
 
 set response [ocdtlb_run_expect "read_memory $MEM_ADDR $width 2"]
 set data [ocdtlb_rsp_get $response data]
 if {![ocdtlb_compare_equal_hex $data $expected_data2($width)]} {
   verbose "$data != $expected_data1($width)" 1
-  return [ocd_test_xfail]
+  return [ocd_test_fail]
 }
 
 return [ocd_test_pass]
