@@ -47,6 +47,19 @@ static int tcl_input(struct connection *connection);
 static int tcl_output(struct connection *connection, const void *buf, ssize_t len);
 static int tcl_closed(struct connection *connection);
 
+static int tcl_command_callback(struct command_context *cmd_ctx, const char *buf)
+{
+	struct connection *connection = cmd_ctx->output_handler_priv;
+	return tcl_output(connection, buf, strlen(buf));
+}
+
+static void tcl_log_callback(void *priv, const char *file, unsigned line,
+							 const char *function, const char *string)
+{
+	struct connection *con = priv;
+	tcl_output(con, string, strlen(string));
+}
+
 static int tcl_target_callback_event_handler(struct target *target,
 		enum target_event event, void *priv)
 {
@@ -164,21 +177,20 @@ static int tcl_new_connection(struct connection *connection)
 	/* store the connection object on cmd_ctx so we can access it from command handlers */
 	connection->cmd_ctx->output_handler_priv = connection;
 
+	command_set_output_handler(connection->cmd_ctx, tcl_command_callback, connection);
 	target_register_event_callback(tcl_target_callback_event_handler, connection);
 	target_register_reset_callback(tcl_target_callback_reset_handler, connection);
 	target_register_trace_callback(tcl_target_callback_trace_handler, connection);
+	log_add_callback(tcl_log_callback, connection);
 
 	return ERROR_OK;
 }
 
 static int tcl_input(struct connection *connection)
 {
-	Jim_Interp *interp = (Jim_Interp *)connection->cmd_ctx->interp;
 	int retval;
 	int i;
 	ssize_t rlen;
-	const char *result;
-	int reslen;
 	struct tcl_connection *tclc;
 	unsigned char in[256];
 	char *tc_line_new;
@@ -242,10 +254,6 @@ static int tcl_input(struct connection *connection)
 		} else {
 			tclc->tc_line[tclc->tc_lineoffset-1] = '\0';
 			command_run_line(connection->cmd_ctx, tclc->tc_line);
-			result = Jim_GetString(Jim_GetResult(interp), &reslen);
-			retval = tcl_output(connection, result, reslen);
-			if (retval != ERROR_OK)
-				return retval;
 			/* Always output ctrl-z as end of line to allow multiline results */
 			tcl_output(connection, "\x1a", 1);
 		}
@@ -272,6 +280,7 @@ static int tcl_closed(struct connection *connection)
 	target_unregister_event_callback(tcl_target_callback_event_handler, connection);
 	target_unregister_reset_callback(tcl_target_callback_reset_handler, connection);
 	target_unregister_trace_callback(tcl_target_callback_trace_handler, connection);
+	log_remove_callback(tcl_log_callback, connection);
 
 	return ERROR_OK;
 }
