@@ -387,7 +387,7 @@ proc parse_gdb_info_threads { report } {
   set fetched_types {}
   #  * 1  Thread 1 "riscv.cpu0" (Name: riscv.cpu0, state: debug-request) 0x0000000080000000 in ?? ()
   foreach line $rlines {
-    if {![regexp {([*]?) +([0-9]+) +(Thread +[0-9]+|Remote target) +.* (0x[0-9a-fA-F]+) in } $line \
+    if {![regexp {([*]?)\s+([0-9]+)\s+(Thread\s+[0-9]+|Remote target)\s+.*\s(0x[0-9a-fA-F]+) in } $line \
           m main num type address]} {
       return [internal_parse_op_failure $TYPE $report {info "could not get thread descr"}]
     }
@@ -413,15 +413,16 @@ proc parse_gdb_info_reg { report } {
 
   set reg_names {}
   set values {}
-  set rlines [split $report "\t\n"]
+  set rlines [split $report "\n"]
   if {[string match [lindex $rlines end] "(gdb)"]} {
     return [internal_parse_error $TYPE $report {info "missing prompt"} ]
   }
   set rlines [lreplace $rlines end end]
   foreach line $rlines {
-    if {![regexp {([^ ]+) +(0x)?([0-9a-fA-F]+) +(0x)?([0-9a-fA-F]+)} $line \
+    if {![regexp {([^ ]+)\s+(0x)?([0-9a-fA-F]+)\s+(0x)?([0-9a-fA-F]+)} $line \
           m reg_name dummy reg_num dummy2 value]} {
-      return [internal_parse_op_failure $TYPE $report {info "could not get thread descr"}]
+      return [internal_parse_op_failure $TYPE $report \
+              [list info "could not match reg record at "]]
     }
     lappend reg_names $reg_name
     if { $dummy2 eq "" } {

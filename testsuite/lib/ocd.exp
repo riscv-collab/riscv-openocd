@@ -277,6 +277,9 @@ proc ocd_run_command {msg} {
   }
 }
 
+proc gdb_get_prompt_pattern {} {
+  return ".*\\(gdb\\)\\s$"
+}
 proc gdb_run_command {msg} {
   global ocd_client_spawn_id
   global ocd_client_type
@@ -292,8 +295,8 @@ proc gdb_run_command {msg} {
   send "$msg\n"
 
   expect {
-    -re {\n\(gdb\)[ ]} {
-      return $expect_out(buffer)
+    -re [gdb_get_prompt_pattern] {
+      return  $expect_out(buffer)
     }
     eof {
       ocd_internal_error "gdb: unexpected EOF while waiting results of <$msg>"
@@ -328,7 +331,7 @@ proc ocd_gdb_connect {} {
   set ocd_client_type "gdb"
 
   expect {
-    -re {\n\(gdb\)[ ]} {
+    -re [gdb_get_prompt_pattern] {
       verbose "GDB: got initial prompt" 1
     }
     eof {
@@ -338,7 +341,8 @@ proc ocd_gdb_connect {} {
       ocd_internal_error "GDB: could not get initial prompt"
     }
   }
-  send "set height 0\nset style enabled off\n"
+  gdb_run_command "set height 0"
+  gdb_run_command "set style enabled off"
   gdb_run_command "target remote :$OCD_PORT_GDBSRV"
 }
 
