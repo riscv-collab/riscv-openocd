@@ -243,6 +243,8 @@ typedef struct {
 
 	/* Track when we were last asked to do something substantial. */
 	int64_t last_activity;
+
+	bool use_abi_regnames;
 } riscv_info_t;
 
 COMMAND_HELPER(riscv_print_info_line, const char *section, const char *key,
@@ -418,8 +420,10 @@ int riscv_write_by_any_size(struct target *target, target_addr_t address, uint32
 int riscv_interrupts_disable(struct target *target, uint64_t ie_mask, uint64_t *old_mstatus);
 int riscv_interrupts_restore(struct target *target, uint64_t old_mstatus);
 
-bool riscv_syntactore_has_csr(unsigned csr_number, struct target *target);
+bool riscv_syntacore_has_csr(unsigned csr_number, struct target *target);
 bool riscv_syntacore_csr_force_default_disabled(unsigned csr_number);
 bool riscv_syntacore_csr_expose_and_rename(struct reg *r,
 		unsigned csr_number, const range_list_t *entry);
+const char *riscv_syntacore_get_legacy_gpr_name_by_gdb_regno(enum gdb_regno number);
+const char *riscv_syntacore_get_legacy_fpr_name_by_gdb_regno(enum gdb_regno number);
 #endif

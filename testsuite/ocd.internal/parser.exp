@@ -93,8 +93,8 @@ ocdtlb_run_expect     "reg 0"
 ocdtlb_run_expect_raw "reg"          parse_regfile_listing
 ocdtlb_run_expect     "reg"
 
-ocdtlb_run_expect_raw "reg ft0"      parse_reg_fetch $target_no_fp
-ocdtlb_run_expect     "reg ft0"      $target_no_fp
+ocdtlb_run_expect_raw "reg $FPR(0)"      parse_reg_fetch $target_no_fp
+ocdtlb_run_expect     "reg $FPR(0)"      $target_no_fp
 
 ocdtlb_run_expect_raw "reg WOBBLE"   parse_reg_fetch $expect_failure
 ocdtlb_run_expect     "reg WOBBLE"   $expect_failure

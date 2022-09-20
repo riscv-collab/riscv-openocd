@@ -151,7 +151,11 @@ proc ocd_init {test_file_name} {
         set OPENOCD_VARIANT "legacy"
         build_backward_compat
       } else {
-        build_forward_compat
+        if {[target_info openocd,abi_regnames]} {
+            build_forward_compat
+        } else {
+            build_backward_compat
+        }
       }
       verbose "reported OpenOCD version: $expect_out(buffer)" 2
       verbose "selected OpenOCD variant: $OPENOCD_VARIANT" 1

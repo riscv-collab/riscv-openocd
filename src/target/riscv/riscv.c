@@ -3201,6 +3201,8 @@ COMMAND_HANDLER(handle_info)
 	return 0;
 }
 
+extern const struct command_registration riscv_syntacore_command_handlers[];
+
 static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "dump_sample_buf",
@@ -3414,6 +3416,13 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.usage = "on|off",
 		.help = "Control dcsr.ebreaku. When off, U-mode ebreak instructions "
 			"don't trap to OpenOCD. Defaults to on."
+	},
+	{
+		.name = "syntacore",
+		.mode = COMMAND_ANY,
+		.help = "RISC-V Syntacore Command Group",
+		.usage = "",
+		.chain = riscv_syntacore_command_handlers
 	},
 	COMMAND_REGISTRATION_DONE
 };
@@ -4565,6 +4574,9 @@ int riscv_init_registers(struct target *target)
 					r->name = "t6";
 					break;
 			}
+			if (!info->use_abi_regnames && !(r->name =
+					riscv_syntacore_get_legacy_gpr_name_by_gdb_regno(number)))
+						return ERROR_FAIL;
 			r->group = "general";
 			r->feature = &feature_cpu;
 		} else if (number == GDB_REGNO_PC) {
@@ -4684,6 +4696,9 @@ int riscv_init_registers(struct target *target)
 					r->name = "ft11";
 					break;
 			}
+			if (!info->use_abi_regnames && !(r->name =
+					riscv_syntacore_get_legacy_fpr_name_by_gdb_regno(number)))
+						return ERROR_FAIL;
 			r->group = "float";
 			r->feature = &feature_fpu;
 		} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
@@ -4708,7 +4723,7 @@ int riscv_init_registers(struct target *target)
 			}
 
 			// Syntacore-specific code
-			r->exist = riscv_syntactore_has_csr(csr_number, target);
+			r->exist = riscv_syntacore_has_csr(csr_number, target);
 
 			switch (csr_number) {
 				case CSR_FFLAGS:

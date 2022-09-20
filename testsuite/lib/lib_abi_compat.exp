@@ -115,5 +115,3 @@ proc build_backward_compat {} {
 
 build_canonical_map
 build_abi_map
-build_forward_compat
-
