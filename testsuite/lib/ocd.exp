@@ -73,6 +73,7 @@ proc ocd_target_info_check {} {
     memory,ocd_work_area \
     openocd,hwthreads \
     openocd,extra_csr \
+    openocd,abi_regnames \
     env,preferred_timeout \
     env,resume_timeout \
     env,exec_timeout \
