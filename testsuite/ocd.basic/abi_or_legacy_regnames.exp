@@ -1,0 +1,15 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+ocd_connect
+
+ocdtlb_run_expect "reset halt"
+
+if {[target_info openocd,abi_regnames]} {
+  ocdtlb_run_expect "reg zero"
+  ocdtlb_run_expect "reg ft0"
+} else {
+  ocdtlb_run_expect "reg x0"
+  ocdtlb_run_expect "reg f0"
+}
+
+ocd_test_pass

@@ -1,0 +1,12 @@
+load_board_description "spike-sim-common"
+
+set_board_cpu spike64_dmp6a0
+
+set_board_info memory,has_high_pa 0
+set_board_info memory,ocd_work_area 0
+
+set_board_info openocd,extra_csr 0
+set_board_info openocd,hwthreads 0
+set_board_info openocd,smp_target 0
+set_board_info openocd,abi_regnames 1
+set_board_info openocd,flags [ocd_flags_for_spike spike_abi_regnames.cfg]
