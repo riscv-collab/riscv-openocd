@@ -1,0 +1,47 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+if {![target_info cpu,has_floats]} { return [ocd_test_unsupported] }
+
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+  global FPR
+
+  set xlen64 [expr [target_info cpu,xlen] == 64]
+
+  ocd_compile_executable "fpr_rw_basic.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set END_ADDR $program_info(end)
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  set prev 1
+  set values(0) 0
+  for {set i 1} {$i < 32} {incr i} {
+    if {$xlen64} {
+      set values($i) [expr ($prev | (1 << (2 * $i)))]
+    } else {
+      set values($i) [expr ($prev | (1 << $i))]
+    }
+
+    set prev $values($i)
+    ocdtlb_run_expect "reg $FPR($i) $values($i)"
+  }
+
+  # NOTE: END_ADDR has an unconditional branch
+  ocdtlb_run_expect "reg pc $END_ADDR"
+  ocdtlb_run_expect "step"
+
+  for {set i 0} {$i < 32} {incr i} {
+    set value [ocdtlb_rsp_get [ocdtlb_run_expect "reg $FPR($i)"]]
+    ocdtlb_expect_equal $values($i) $value
+  }
+
+  ocd_test_pass
+}
+
+return [run_test]

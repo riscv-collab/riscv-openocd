@@ -1,0 +1,45 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+if {![target_info cpu,has_floats]} { return [ocd_test_unsupported] }
+
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+  global FPR
+
+  ocd_compile_executable "fpr_rw_basic.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set END_ADDR $program_info(end)
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "bp $END_ADDR 4"
+  ocdtlb_run_expect "resume"
+
+  octdlb_wait_resume
+
+  ocdtlb_do_expect_halted
+
+  set prev 1
+  set values(0) 0
+  if {[target_info cpu,has_floats]} {
+    for {set i 0} {$i < 32} {incr i} {
+      set expected [expr $i + 1.0]
+      set fpr [ocdtlb_rsp_get [ocdtlb_run_expect "reg $FPR($i)"]]
+      binary scan [binary format i $fpr] f flt
+
+      ocdtlb_expect_equal $expected $flt
+    }
+  }
+
+  ocd_test_pass
+}
+
+return [run_test]
