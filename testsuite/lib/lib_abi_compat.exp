@@ -86,6 +86,8 @@ proc build_forward_compat {} {
   global ARF_names
   dict for {canonical_name abi_name} $ARF_names {
     global $canonical_name
+    global $abi_name
+    set $abi_name $abi_name
     set $canonical_name $abi_name
   }
   global GPR
@@ -101,6 +103,8 @@ proc build_backward_compat {} {
   global ARF_names
   dict for {canonical_name abi_name} $ARF_names {
     global $abi_name
+    global $canonical_name
+    set $canonical_name $canonical_name
     set $abi_name $canonical_name
   }
   global GPR

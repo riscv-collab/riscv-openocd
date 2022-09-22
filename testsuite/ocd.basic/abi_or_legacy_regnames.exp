@@ -1,15 +1,83 @@
 if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
 
-ocd_connect
+# this test just checks availability of registers. Exact values are checked in
+# (gpr|fpr)_(read|write) tests
+proc run_test {} {
+  global GPR
+  global FPR
+  set GPR_ABI_NAMES [list       \
+    zero ra sp gp tp t0 t1 t2   \
+      fp s1 a0 a1 a2 a3 a4 a5   \
+      a6 a7 s2 s3 s4 s5 s6 s7   \
+      s8 s9 s10 s11 t3 t4 t5 t6 \
+  ]
+  set GPR_CANONICAL_NAMES [list     \
+    x0  x1  x2  x3  x4  x5  x6  x7  \
+    x8  x9  x10 x11 x12 x13 x14 x15 \
+    x16 x17 x18 x19 x20 x21 x22 x23 \
+    x24 x25 x26 x27 x28 x29 x30 x31 \
+  ]
 
-ocdtlb_run_expect "reset halt"
+  set FPR_ABI_NAMES [list               \
+    ft0 ft1 ft2 ft3 ft4 ft5 ft6 ft7     \
+    fs0 fs1 fa0 fa1 fa2 fa3 fa4 fa5     \
+    fa6 fa7 fs2 fs3 fs4 fs5 fs6 fs7     \
+    fs8 fs9 fs10 fs11 ft8 ft9 ft10 ft11 \
+  ]
 
-if {[target_info openocd,abi_regnames]} {
-  ocdtlb_run_expect "reg zero"
-  ocdtlb_run_expect "reg ft0"
-} else {
-  ocdtlb_run_expect "reg x0"
-  ocdtlb_run_expect "reg f0"
+  set FPR_CANONICAL_NAMES [list     \
+    f0   f1  f2  f3  f4  f5  f6  f7 \
+    f8   f9 f10 f11 f12 f13 f14 f15 \
+    f16 f17 f18 f19 f20 f21 f22 f23 \
+    f24 f25 f26 f27 f28 f29 f30 f31 \
+  ]
+
+  set GPR_NAMES $GPR_CANONICAL_NAMES
+  set FPR_NAMES $FPR_CANONICAL_NAMES
+  set GPR_MISSING $GPR_ABI_NAMES
+  set FPR_MISSING $FPR_ABI_NAMES
+
+  if {[target_info openocd,abi_regnames]} {
+    set GPR_NAMES $GPR_ABI_NAMES
+    set FPR_NAMES $FPR_ABI_NAMES
+    set GPR_MISSING $GPR_CANONICAL_NAMES
+    set FPR_MISSING $FPR_CANONICAL_NAMES
+  }
+
+  ocd_connect
+  ocdtlb_run_expect "reset halt"
+
+  set gpr_idx 0
+  foreach name $GPR_NAMES {
+    if {![string match $name $GPR($gpr_idx)]} {
+      error "unexpected name $GPR($gpr_idx) in GPR array, expected $name at $gpr_idx"
+    }
+    ocdtlb_run_expect "reg $name"
+    incr gpr_idx
+  }
+  foreach name $GPR_MISSING {
+    set EXPECT_FAILURE 1
+    ocdtlb_run_expect "reg $name" $EXPECT_FAILURE
+  }
+
+  if {![target_info cpu,has_floats]} {
+    return [ocd_test_pass]
+  }
+
+  set fpr_idx 0
+  foreach name $FPR_NAMES {
+    if {![string match $name $FPR($fpr_idx)]} {
+      error "unexpected name $FPR($fpr_idx) in FPR array, expected $name at $fpr_idx"
+    }
+    ocdtlb_run_expect "reg $name"
+    incr fpr_idx
+  }
+  foreach name $FPR_MISSING {
+    set EXPECT_FAILURE 1
+    ocdtlb_run_expect "reg $name" $EXPECT_FAILURE
+  }
+
+  return [ocd_test_pass]
 }
 
-ocd_test_pass
+return [run_test]
