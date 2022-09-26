@@ -1616,7 +1616,7 @@ static int target_init_one(struct command_context *cmd_ctx,
 	return ERROR_OK;
 }
 
-static int target_init(struct command_context *cmd_ctx)
+static int target_init(struct command_context *cmd_ctx, bool resethalt)
 {
 	struct target *target;
 	int retval;
@@ -1625,6 +1625,7 @@ static int target_init(struct command_context *cmd_ctx)
 		retval = target_init_one(cmd_ctx, target);
 		if (retval != ERROR_OK)
 			return retval;
+		target->resethalt_during_init = resethalt;
 	}
 
 	if (!all_targets)
@@ -1645,9 +1646,16 @@ static int target_init(struct command_context *cmd_ctx)
 COMMAND_HANDLER(handle_target_init_command)
 {
 	int retval;
+	bool resethalt = false;
 
-	if (CMD_ARGC != 0)
+	if (CMD_ARGC > 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (CMD_ARGC == 1) {
+		if(0 == strcmp("resethalt", CMD_ARGV[0])) {
+			resethalt = true;
+		}
+	}
 
 	static bool target_initialized;
 	if (target_initialized) {
@@ -1669,7 +1677,7 @@ COMMAND_HANDLER(handle_target_init_command)
 		return retval;
 
 	LOG_DEBUG("Initializing targets...");
-	return target_init(CMD_CTX);
+	return target_init(CMD_CTX, resethalt);
 }
 
 int target_register_event_callback(int (*callback)(struct target *target,
@@ -6497,7 +6505,7 @@ static const struct command_registration target_subcommand_handlers[] = {
 		.mode = COMMAND_CONFIG,
 		.handler = handle_target_init_command,
 		.help = "initialize targets",
-		.usage = "",
+		.usage = "[resethalt]",
 	},
 	{
 		.name = "create",

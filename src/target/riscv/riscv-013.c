@@ -1579,6 +1579,13 @@ static int examine(struct target *target)
 		riscv013_invalidate_cached_debug_buffer(target);
 	}
 
+	if (target->resethalt_during_init) {
+		dmi_write(target, DM_DMCONTROL, DM_DMCONTROL_SETRESETHALTREQ | DM_DMCONTROL_DMACTIVE);
+		dmi_write(target, DM_DMCONTROL, DM_DMCONTROL_NDMRESET | DM_DMCONTROL_DMACTIVE);
+		dmi_write(target, DM_DMCONTROL, DM_DMCONTROL_DMACTIVE);
+		dmi_write(target, DM_DMCONTROL, DM_DMCONTROL_CLRRESETHALTREQ | DM_DMCONTROL_DMACTIVE);
+	}
+
 	dmi_write(target, DM_DMCONTROL, DM_DMCONTROL_HARTSELLO |
 			DM_DMCONTROL_HARTSELHI | DM_DMCONTROL_DMACTIVE |
 			DM_DMCONTROL_HASEL);
