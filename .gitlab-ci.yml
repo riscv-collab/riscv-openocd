@@ -1,0 +1,19 @@
+variables:
+  GIT_STRATEGY: clone
+  ARTIFACTORY_API_KEY: $CICD_TOOLS_SC_ARTIFACTORY_API_KEY
+  BUILD_TYPE: Release
+  COMMON_BUILD_DIR: /home/ci_user/build
+  BUILD_DIR: $COMMON_BUILD_DIR/$BUILD_TYPE
+  INSTALL_DIR: $BUILD_DIR/install
+
+main-job:
+
+  tags:
+    - ci
+
+  script:
+    - sudo chown -R ci_user .
+    - make container -f .ci/makefile
+    - make in_docker TARGET=config -f .ci/makefile
+    - make in_docker TARGET=build -f .ci/makefile
+    - make in_docker TARGET=test -f .ci/makefile
