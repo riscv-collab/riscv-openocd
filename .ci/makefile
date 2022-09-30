@@ -93,7 +93,7 @@ endif
 		--env KEEP_CI_USER_SUDO="$(DOCKER_KEEP_CI_USER_SUDO)" \
 		--env CI_UID="$$(id --user)" --env CI_GID="$$(id --group)" \
 		--env "TERM=xterm-256color" \
-		--user $(DOCKER_CONTAINER_USER) \
+		--user root \
 		--name $(DOCKER_CONTAINER_NAME) \
 		--mount type=bind,source="$$(dirname $(CI_MK_DIR))",target=/home/repo \
 		--mount type=bind,source="$$(realpath $(COMMON_BUILD_DIR))",target=/home/build \
@@ -121,6 +121,7 @@ in_docker: $(DOCKER_CONTAINER)
 		--env CLANG_FORMAT_OUTPUT="$(CLANG_FORMAT_OUTPUT)" \
 		--env CLANG_TIDY_OUTPUT="$(CLANG_TIDY_OUTPUT)" \
 		\
+		--env CI_UID="$$(id --user)" --env CI_GID="$$(id --group)" \
 		--user $(DOCKER_CONTAINER_USER) \
 		$(DOCKER_CONTAINER_NAME) \
 		bash -c '$(DOCKER_COMMAND)'
