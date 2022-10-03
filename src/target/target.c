@@ -589,8 +589,14 @@ int target_halt(struct target *target)
 	int retval;
 	/* We can't poll until after examine */
 	if (!target_was_examined(target)) {
-		LOG_ERROR("Target not examined yet");
-		return ERROR_FAIL;
+		/* Try to examine the target right now, in case the target we're
+		 * talking to didn't examine correctly during `init`. */
+		LOG_TARGET_INFO(target, "Try to examine unexamined target in target_halt().");
+		target_examine();
+		if (!target_was_examined(target)) {
+			LOG_ERROR("Target not examined yet");
+			return ERROR_FAIL;
+		}
 	}
 
 	retval = target->type->halt(target);
