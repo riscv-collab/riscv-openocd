@@ -5,6 +5,7 @@ CI_MK_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 PROJECT_NAME := OpenOCD
 
+TARGET_BOARD ?=
 BUILD_TYPE ?= Release
 
 ifndef COMMON_BUILD_DIR
@@ -108,6 +109,7 @@ container: $(DOCKER_CONTAINER)
 .PHONY: in_docker
 in_docker: $(DOCKER_CONTAINER)
 	docker exec \
+		--env TARGET_BOARD="$(TARGET_BOARD)" \
 		--env PRESET="$(PRESET)" \
 		--env COMMON_BUILD_DIR=/home/build \
 		--env NAS_USER="$(NAS_USR)" \

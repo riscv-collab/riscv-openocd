@@ -91,6 +91,18 @@ ExternalProject_Add(openocd
 
 add_custom_target(test_dir ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory TestRun)
+
+set(TGT_BOARD "")
+if(DEFINED ENV{TARGET_BOARD})
+  set(TGT_BOARD $ENV{TARGET_BOARD})
+endif()
+
+if ("${TGT_BOARD}" STREQUAL "")
+  set(TARGET_BOARD_CMDLINE "")
+else()
+  set(TARGET_BOARD_CMDLINE "--target_board=${TGT_BOARD}")
+endif()
+
 add_custom_target(OpenOCDTest
   WORKING_DIRECTORY TestRun
   COMMAND
@@ -99,6 +111,7 @@ add_custom_target(OpenOCDTest
         DEJAGNU=${OPENOCD_SOURCES}/testsuite/site.exp
     ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
         --src_dir=${OPENOCD_SOURCES}/testsuite
+        ${TARGET_BOARD_CMDLINE}
         --tool=ocd
   DEPENDS openocd dejagnu spike test_dir
 )
