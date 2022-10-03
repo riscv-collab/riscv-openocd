@@ -68,7 +68,7 @@ DOCKER_REGISTRY ?= nexus.dev.syntacore.com:8091
 DOCKER_CONTAINER_NAME ?= $(PROJECT_NAME)_container
 
 DOCKER_KEEP_CI_USER_SUDO := true
-DOCKER_IMAGE_TAG := sc/docker_cpp:1.0.8
+DOCKER_IMAGE_TAG := sc/docker_cpp:1.0.10
 DOCKER_CONTAINER := $(COMMON_BUILD_DIR)/$(DOCKER_CONTAINER_NAME)
 DOCKER_CONTAINER_USER != [[ "$(DOCKER_ADMIN)" != "true" ]] && echo "ci_user" || echo "root"
 DOCKER_CONTAINER_USER_HOME != [[ "$(DOCKER_CONTAINER_USER)" != "root" ]] && echo "/home/$(DOCKER_CONTAINER_USER)" || echo "/root"
