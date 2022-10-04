@@ -6,10 +6,23 @@ set CC_FOR_TARGET      "riscv64-unknown-elf-gcc"
 set LDFLAGS_FOR_TARGET ""
 set CFLAGS_FOR_TARGET  ""
 
-set SPIKE_SIM "spike"
+if {![info exist OPENOCD_ROOT]} {
+  set OPENOCD_ROOT $env(OPENOCD_ROOT)
+} else {
+  verbose "using OPENOCD_ROOT from local config: $OPENOCD_ROOT" 1
+}
 
-set OPENOCD_ROOT $env(OPENOCD_ROOT)
-set GDB_BIN riscv64-unknown-elf-gdb
+if {![info exist SPIKE_SIM]} {
+  set SPIKE_SIM "spike"
+} else {
+  verbose "using SPIKE_SIM from local config: $SPIKE_SIM" 1
+}
+
+if {![info exist GDB_BIN]} {
+  set GDB_BIN riscv64-unknown-elf-gdb
+} else {
+  verbose "using GDB_BIN from local config: $GDB_BIN" 1
+}
 
 set OPENOCD "${OPENOCD_ROOT}/bin/openocd"
 set OPENOCD_LOG_LEVEL 2
