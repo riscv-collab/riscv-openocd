@@ -1,0 +1,34 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+
+# created by compile executable
+set ENTRY_ADDR $program_info(_entry)
+set MAIN_ADDR $program_info(main)
+set END_ADDR $program_info(end)
+set xlen64 [expr [target_info cpu,xlen] == 64]
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+
+ocdtlb_run_expect "bp $END_ADDR 4"
+ocdtlb_run_expect "resume"
+
+octdlb_wait_resume
+
+set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+ocdtlb_expect_equal $current_pc $END_ADDR
+
+ocdtlb_run_expect "step"
+set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+ocdtlb_expect_equal $current_pc $MAIN_ADDR
+
+ocdtlb_run_expect "rbp all"
+
+return [ocd_test_pass]
+
