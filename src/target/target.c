@@ -591,10 +591,10 @@ int target_halt(struct target *target)
 	if (!target_was_examined(target)) {
 		/* Try to examine the target right now, in case the target we're
 		 * talking to didn't examine correctly during `init`. */
-		LOG_TARGET_INFO(target, "Try to examine unexamined target in target_halt().");
+		LOG_TARGET_INFO(target, "Trying to examine unexamined target before halt attempt.");
 		target_examine();
 		if (!target_was_examined(target)) {
-			LOG_ERROR("Target not examined yet");
+			LOG_TARGET_ERROR(target, "Re-examination before halt failed. Target not examined yet.");
 			return ERROR_FAIL;
 		}
 	}
