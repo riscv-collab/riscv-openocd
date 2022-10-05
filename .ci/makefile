@@ -110,8 +110,8 @@ in_docker: $(DOCKER_CONTAINER)
 	docker exec \
 		--env PRESET="$(PRESET)" \
 		--env COMMON_BUILD_DIR=/home/build \
-		--env NAS_USER="$(NAS_USER)" \
-		--env NAS_PASS="$(NAS_PASS)" \
+		--env NAS_USER="$(NAS_USR)" \
+		--env NAS_PASS="$(NAS_PSW)" \
 		--env BUILD_TYPE="$(BUILD_TYPE)" \
 		\
 		--env PARALLEL="$(PARALLEL)" \

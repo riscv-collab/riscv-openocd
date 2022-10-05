@@ -5,6 +5,8 @@ variables:
   COMMON_BUILD_DIR: /home/ci_user/build
   BUILD_DIR: $COMMON_BUILD_DIR/$BUILD_TYPE
   INSTALL_DIR: $BUILD_DIR/install
+  NAS_USR: $NAS_USER
+  NAS_PSW: $NAS_PASS
 
 main-job:
 
