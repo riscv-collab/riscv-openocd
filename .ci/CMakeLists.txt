@@ -99,12 +99,16 @@ endif()
 
 if ("${TGT_BOARD}" STREQUAL "")
   set(TARGET_BOARD_CMDLINE "")
+  set(LOGS_DIR "SUMMARY")
 else()
   set(TARGET_BOARD_CMDLINE "--target_board=${TGT_BOARD}")
+  set(LOGS_DIR "SUMMARY_${TGT_BOARD}")
 endif()
 
 add_custom_target(OpenOCDTest
   WORKING_DIRECTORY TestRun
+  COMMAND
+    mkdir -p ${LOGS_DIR}
   COMMAND
     env PATH="${CMAKE_BINARY_DIR}/ToolChain/sc-gcc-src/bin:${CMAKE_BINARY_DIR}/install_spike/bin:$ENV{PATH}"
         OPENOCD_ROOT=${CMAKE_BINARY_DIR}/install_openocd
@@ -113,5 +117,6 @@ add_custom_target(OpenOCDTest
         --src_dir=${OPENOCD_SOURCES}/testsuite
         ${TARGET_BOARD_CMDLINE}
         --tool=ocd
+        --outdir=${LOGS_DIR}
   DEPENDS openocd dejagnu spike test_dir
 )
