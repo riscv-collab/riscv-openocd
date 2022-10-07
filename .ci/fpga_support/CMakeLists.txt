@@ -7,7 +7,8 @@ set(ARTY_BITSTREAM_FTP_STORAGE 192.168.1.100/pub/exchange/ot-sc/arty-a7-100t)
 set(ARTY100_BOARDS
   arty100_scr1_32:scr1_\#18494.rar
   arty100_scr3_32:rv32_single_scr3_tcm_ipic_hiperf.rar
-  arty100_scr4_32:rv32_single_scr4_tcm_l1_ipic_hiperf_256MB.tar.gz
+  arty100_scr4_32_imcaf:rv32_single_scr4_tcm_l1_ipic_hiperf_256MB_wo_D.tar.gz
+  arty100_scr4_32_imcafd:rv32_single_scr4_tcm_l1_ipic_hiperf_256MB.tar.gz
 )
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/BoardInit)

@@ -33,7 +33,10 @@ pipeline {
         axes {
           axis {
             name 'BOARD'
-            values 'arty100_scr1_32', 'arty100_scr3_32', 'arty100_scr4_32'
+            values 'arty100_scr1_32',
+                   'arty100_scr3_32',
+                   'arty100_scr4_32_imcaf',
+                   'arty100_scr4_32_imcafd'
           }
         }
         stages {
