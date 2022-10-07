@@ -1,0 +1,75 @@
+#!/usr/bin/expect
+
+set BITSTREAM_FILE [lindex $argv 0]
+
+set XILINX_UTILITY djtgcfg
+if {[auto_execok $XILINX_UTILITY] == "" } {
+  error "could not detect $XILINX_UTILITY"
+}
+
+puts "trying to enum devices..."
+
+proc enumerate_devices {} {
+  global XILINX_UTILITY
+  spawn "$XILINX_UTILITY" enum
+  expect {
+    "ERROR: DmgrSetNetworkEnumTimeout failed, erc = 3090" {
+      error "could not scan devices"
+    }
+    -re {Found [0-9]+ device} {
+      puts stderr "$expect_out(buffer)"
+      puts "success"
+    }
+    eof {
+      puts stderr "$expect_out(buffer)"
+      error "unexpected EOF while enumerating devices"
+    }
+    timeout {
+      puts stderr "$expect_out(buffer)"
+      error "unexpected timeout during device enumeration"
+    }
+  }
+}
+
+proc remove_shm_from_tmp {} {
+  puts "trying to implement a known workaround (/tmp/digilent* cleanup)"
+  log_user 0
+  spawn sudo -k -- find /tmp/ -maxdepth 1 -type f -name digilent* -delete
+  expect {
+     -re { password for .*: } {
+      send "$::env(SUDO_PSW)\r"
+      expect eof
+      puts stderr "$expect_out(buffer)"
+    }
+    eof {
+      puts stderr "$expect_out(buffer)"
+      error "unexpected EOF (waiting for sudo)"
+    }
+    timeout {
+      puts stderr "$expect_out(buffer)"
+      error "unexpected timeout (waiting for sudo)"
+    }
+  }
+}
+
+if { [catch {enumerate_devices} err] } {
+  puts stderr "could not enumerate device $err, trying a workaround"
+  remove_shm_from_tmp
+  enumerate_devices
+}
+
+set timeout 30
+spawn "$XILINX_UTILITY" -d Arty -i 0 -f "$BITSTREAM_FILE" prog
+expect {
+  "Programming succeeded." {
+    puts "bitstream instantiated!"
+  }
+  eof {
+    puts stderr "$expect_out(buffer)"
+    error "unexpected EOF (waiting for device programming)"
+  }
+  timeout {
+    puts stderr "$expect_out(buffer)"
+    error "unexpected timeout (waiting for device programming)"
+  }
+}

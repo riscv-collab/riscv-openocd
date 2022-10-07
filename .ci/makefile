@@ -11,6 +11,7 @@ BUILD_TYPE ?= Release
 ifndef COMMON_BUILD_DIR
 $(error COMMON_BUILD_DIR is not set)
 endif
+HOST_CONFIGURATION_DIRECTORY = $(COMMON_BUILD_DIR)/host_tools
 
 BUILD_DIR = $(COMMON_BUILD_DIR)/$(BUILD_TYPE)
 BUILD_TARGET ?= test
@@ -38,6 +39,11 @@ build: config
 .PHONY: test
 test: build
 	cmake --build $(COMMON_BUILD_DIR) --target OpenOCDTest
+
+.PHONY: prepare_board
+prepare_board:
+	cmake -S .ci/fpga_support -B $(HOST_CONFIGURATION_DIRECTORY) -G "Unix Makefiles"
+	cmake --build $(HOST_CONFIGURATION_DIRECTORY) --target board_${TARGET_BOARD}
 
 
 .PHONY: install
@@ -132,5 +138,4 @@ in_docker: $(DOCKER_CONTAINER)
 clean_docker:
 	docker container ls --quiet --all --filter name='^/$(DOCKER_CONTAINER_NAME)_' | ifne xargs docker stop
 	docker container ls --quiet --all --filter name='^/$(DOCKER_CONTAINER_NAME)_' | ifne xargs docker rm
-
 
