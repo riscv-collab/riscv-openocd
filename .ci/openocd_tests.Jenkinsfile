@@ -10,6 +10,7 @@ pipeline {
     SUDO_PSW = "${NAS_PSW}"
     // needed by docker CI scipts
     COMMON_BUILD_DIR = "$WD/build"
+    DOCKER_CONTAINER_NAME = "OpenOCD_CI_CONTAINER"
   }
   stages {
     stage('CleanWorkspaceAndCheckout') {
