@@ -29,6 +29,9 @@ proc run_test {} {
     }
 
     set prev $values($i)
+  }
+
+  for {set i 0} {$i < 32} {incr i} {
     ocdtlb_run_expect "reg $FPR($i) $values($i)"
   }
 

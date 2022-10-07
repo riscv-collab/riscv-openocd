@@ -26,7 +26,6 @@ set ALWAYS_AVAILABLE_REGS [list \
     instret \
     marchid \
     mcause \
-    mcounteren \
     mcycle \
     mepc \
     mhartid \
