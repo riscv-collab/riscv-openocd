@@ -1,5 +1,8 @@
 pipeline {
   agent { label 'zalman' }
+  options {
+    skipDefaultCheckout(true)
+  }
   environment {
     WD = "${WORKSPACE}/${BUILD_TAG}"
     // in addition NAS_PSW and NAS_USR variables are defined
@@ -9,6 +12,12 @@ pipeline {
     COMMON_BUILD_DIR = "$WD/build"
   }
   stages {
+    stage('CleanWorkspaceAndCheckout') {
+      steps {
+        cleanWs()
+        checkout scm
+      }
+    }
     stage('Build') {
       steps {
         echo "Building project"
