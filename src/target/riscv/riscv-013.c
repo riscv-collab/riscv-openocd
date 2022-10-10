@@ -2452,7 +2452,10 @@ static int deassert_reset(struct target *target)
 				return ERROR_FAIL;
 			}
 		}
-		target->state = TARGET_HALTED;
+		if (target->reset_halt)
+			target->state = TARGET_HALTED;
+		else
+			target->state = TARGET_RUNNING;
 		target->debug_reason = DBG_REASON_DBGRQ;
 
 		if (get_field(dmstatus, DM_DMSTATUS_ALLHAVERESET)) {
