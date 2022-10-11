@@ -129,6 +129,8 @@ typedef enum {
 	YNM_NO
 } yes_no_maybe_t;
 
+#define HART_INDEX_MULTIPLE	-1
+
 typedef struct {
 	struct list_head list;
 	int abs_chain_position;
@@ -140,8 +142,7 @@ typedef struct {
 	/* Targets that are connected to this DM. */
 	struct list_head target_list;
 	/* Contains the ID of the hart that is currently selected by this DM.
-	 * If multiple harts are selected this is meaningless, this is -1.
-	 */
+	 * If multiple harts are selected this is HART_INDEX_MULTIPLE. */
 	int current_hartid;
 
 	bool hasel_supported;
@@ -258,7 +259,7 @@ dm013_info_t *get_dm(struct target *target)
 		if (!dm)
 			return NULL;
 		dm->abs_chain_position = abs_chain_position;
-		dm->current_hartid = -1;
+		dm->current_hartid = 0;
 		dm->hart_count = -1;
 		INIT_LIST_HEAD(&dm->target_list);
 		list_add(&dm->list, &dm_list);
@@ -290,7 +291,7 @@ static uint32_t set_dmcontrol_hartsel(uint32_t initial, int hart_index)
 		uint32_t index_hi = hart_index >> DM_DMCONTROL_HARTSELLO_LENGTH;
 		assert(index_hi < (1 << DM_DMCONTROL_HARTSELHI_LENGTH));
 		initial = set_field(initial, DM_DMCONTROL_HARTSELHI, index_hi);
-	} else if (hart_index < 0) {
+	} else if (hart_index == HART_INDEX_MULTIPLE) {
 		initial = set_field(initial, DM_DMCONTROL_HASEL, DM_DMCONTROL_HASEL_MULTIPLE);
 		/* TODO: https://github.com/riscv/riscv-openocd/issues/748 */
 		initial = set_field(initial, DM_DMCONTROL_HARTSELLO, 0);
@@ -4186,7 +4187,7 @@ static int select_prepped_harts(struct target *target)
 		return dm013_select_hart(target, selected_index);
 	}
 
-	if (dm013_select_hart(target, -1) != ERROR_OK)
+	if (dm013_select_hart(target, HART_INDEX_MULTIPLE) != ERROR_OK)
 		return ERROR_FAIL;
 
 	for (unsigned i = 0; i < hawindow_count; i++) {
@@ -4238,7 +4239,7 @@ static int riscv013_halt_go(struct target *target)
 	dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HALTREQ, 0);
 	dmi_write(target, DM_DMCONTROL, dmcontrol);
 
-	if (dm->current_hartid < 0) {
+	if (dm->current_hartid == HART_INDEX_MULTIPLE) {
 		target_list_t *entry;
 		list_for_each_entry(entry, &dm->target_list, list) {
 			struct target *t = entry->target;
