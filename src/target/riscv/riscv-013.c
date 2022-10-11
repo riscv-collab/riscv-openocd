@@ -283,6 +283,7 @@ dm013_info_t *get_dm(struct target *target)
 
 static uint32_t set_hartsel(uint32_t initial, int index)
 {
+	/* Use the provided dmcontrol value but clear HARTSEL & HASEL fields */
 	initial &= ~DM_DMCONTROL_HASEL;
 	initial &= ~DM_DMCONTROL_HARTSELLO;
 	initial &= ~DM_DMCONTROL_HARTSELHI;
