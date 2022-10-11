@@ -283,19 +283,18 @@ dm013_info_t *get_dm(struct target *target)
 
 static uint32_t set_dmcontrol_hartsel(uint32_t initial, int hart_index)
 {
-	/* Use the provided dmcontrol value but clear HARTSEL & HASEL fields */
-	initial &= ~DM_DMCONTROL_HASEL;
-	initial &= ~DM_DMCONTROL_HARTSELLO;
-	initial &= ~DM_DMCONTROL_HARTSELHI;
-
-	if (hart_index > 0) {
+	if (hart_index >= 0) {
+		initial = set_field(initial, DM_DMCONTROL_HASEL, DM_DMCONTROL_HASEL_SINGLE);
 		uint32_t index_lo = hart_index & ((1 << DM_DMCONTROL_HARTSELLO_LENGTH) - 1);
-		initial |= index_lo << DM_DMCONTROL_HARTSELLO_OFFSET;
+		initial = set_field(initial, DM_DMCONTROL_HARTSELLO, index_lo);
 		uint32_t index_hi = hart_index >> DM_DMCONTROL_HARTSELLO_LENGTH;
-		assert(index_hi < 1 << DM_DMCONTROL_HARTSELHI_LENGTH);
-		initial |= index_hi << DM_DMCONTROL_HARTSELHI_OFFSET;
+		assert(index_hi < (1 << DM_DMCONTROL_HARTSELHI_LENGTH));
+		initial = set_field(initial, DM_DMCONTROL_HARTSELHI, index_hi);
 	} else if (hart_index < 0) {
-		initial |= DM_DMCONTROL_HASEL;
+		initial = set_field(initial, DM_DMCONTROL_HASEL, DM_DMCONTROL_HASEL_MULTIPLE);
+		/* TODO: https://github.com/riscv/riscv-openocd/issues/748 */
+		initial = set_field(initial, DM_DMCONTROL_HARTSELLO, 0);
+		initial = set_field(initial, DM_DMCONTROL_HARTSELHI, 0);
 	}
 
 	return initial;
