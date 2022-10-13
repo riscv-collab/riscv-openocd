@@ -488,12 +488,15 @@ static int find_trigger(struct target *target, int type, bool chained, int *idx)
 		if (r->trigger_unique_id[i] == -1) {
 			int t = r->trigger_type[i];
 			if (type == t) {
-				found = (++cnt == num);
-				if (found) {
+				num_found++;
+				bool done = (num_required == num_found);
+				if (done) {
+					/* Found num_required consecutive free triggers - success, done. */
 					if (idx)
 						*idx = i - (num - 1);
 					return ERROR_OK;
 				}
+				/* Found a trigger but need more consecutive ones */
 				continue;
 			}
 		}
