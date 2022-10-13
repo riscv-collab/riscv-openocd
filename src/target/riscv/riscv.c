@@ -462,7 +462,7 @@ static void trigger_from_breakpoint(struct trigger *trigger,
 	trigger->unique_id = breakpoint->unique_id;
 }
 
-static bool match_napot_checker(struct trigger *trigger, riscv_reg_t *tdata2)
+static bool can_use_napot_match(struct trigger *trigger, riscv_reg_t *tdata2)
 {
 	riscv_reg_t addr = trigger->address;
 	riscv_reg_t size = trigger->length;
