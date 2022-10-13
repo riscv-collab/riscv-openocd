@@ -500,6 +500,8 @@ static int find_trigger(struct target *target, int type, bool chained, int *idx)
 				continue;
 			}
 		}
+		/* Trigger already occupied or incompatible type. 
+		 * Reset the counter of found consecutive triggers */
 		cnt = 0;
 	}
 
