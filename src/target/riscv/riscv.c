@@ -467,7 +467,7 @@ static bool can_use_napot_match(struct trigger *trigger, riscv_reg_t *tdata2)
 	riscv_reg_t addr = trigger->address;
 	riscv_reg_t size = trigger->length;
 	bool sizePowerOf2 = (size & (size - 1)) == 0;
-	bool addrAligned = (addr & (size - 1)) == 0;	
+	bool addrAligned = (addr & (size - 1)) == 0;
 	if (size > 1 && sizePowerOf2 && addrAligned) {
 		if (tdata2)
 			*tdata2 = addr | ((size - 1) >> 1);
@@ -498,7 +498,7 @@ static int find_trigger(struct target *target, int type, bool chained, int *idx)
 				continue;
 			}
 		}
-		/* Trigger already occupied or incompatible type. 
+		/* Trigger already occupied or incompatible type.
 		 * Reset the counter of found consecutive triggers */
 		num_found = 0;
 	}
