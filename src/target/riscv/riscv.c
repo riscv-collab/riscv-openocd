@@ -481,8 +481,8 @@ static int find_trigger(struct target *target, int type, bool chained, int *idx)
 	RISCV_INFO(r);
 
 	int found;
-	int cnt = 0;
-	int num = chained ? 2 : 1;
+	unsigned int num_found = 0;
+	unsigned int num_required = chained ? 2 : 1;
 
 	for (unsigned i = 0; i < r->trigger_count; i++) {
 		if (r->trigger_unique_id[i] == -1) {
