@@ -943,9 +943,8 @@ static int remove_trigger(struct target *target, struct trigger *trigger)
 	if (result != ERROR_OK)
 		return result;
 
-	unsigned int i;
 	bool done = false;
-	for (i = 0; i < r->trigger_count; i++) {
+	for (unsigned int i = 0; i < r->trigger_count; i++) {
 		if (r->trigger_unique_id[i] == trigger->unique_id) {
 			riscv_set_register(target, GDB_REGNO_TSELECT, i);
 			riscv_set_register(target, GDB_REGNO_TDATA1, 0);
