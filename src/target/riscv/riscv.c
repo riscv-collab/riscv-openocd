@@ -485,8 +485,7 @@ static int find_trigger(struct target *target, int type, bool chained, int *idx)
 
 	for (unsigned i = 0; i < r->trigger_count; i++) {
 		if (r->trigger_unique_id[i] == -1) {
-			int t = r->trigger_type[i];
-			if (type == t) {
+			if (r->trigger_tinfo[i] & (1 << type)) {
 				num_found++;
 				bool done = (num_required == num_found);
 				if (done) {
@@ -3994,7 +3993,6 @@ int riscv_enumerate_triggers(struct target *target)
 			return result;
 
 		int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
-		r->trigger_type[t] = type;
 		if (type == 0)
 			break;
 		switch (type) {
@@ -4012,6 +4010,13 @@ int riscv_enumerate_triggers(struct target *target)
 					riscv_set_register(target, GDB_REGNO_TDATA1, 0);
 				break;
 		}
+
+		uint64_t tinfo;
+		result = riscv_get_register(target, &tinfo, GDB_REGNO_TINFO);
+		if (result == ERROR_OK)
+			r->trigger_tinfo[t] = tinfo;
+		else
+			r->trigger_tinfo[t] = 1 << type;
 	}
 
 	riscv_set_register(target, GDB_REGNO_TSELECT, tselect);
