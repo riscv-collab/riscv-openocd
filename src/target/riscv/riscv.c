@@ -466,9 +466,9 @@ static bool match_napot_checker(struct trigger *trigger, riscv_reg_t *tdata2)
 {
 	riscv_reg_t addr = trigger->address;
 	riscv_reg_t size = trigger->length;
-	if (size > 1 &&
-		(size & (size - 1)) == 0 &&
-		(addr & (size - 1)) == 0) {
+	bool sizePowerOf2 = (size & (size - 1)) == 0;
+	bool addrAligned = (addr & (size - 1)) == 0;	
+	if (size > 1 && sizePowerOf2 && addrAligned) {
 		if (tdata2)
 			*tdata2 = addr | ((size - 1) >> 1);
 		return true;
