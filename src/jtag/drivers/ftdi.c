@@ -85,7 +85,7 @@
 /* FTDI access library includes */
 #include "mpsse.h"
 
-#if BUILD_FTDI_OSCAN1 == 1
+#if BUILD_FTDI_CJTAG == 1
 #define DO_CLOCK_DATA clock_data
 #define DO_CLOCK_TMS_CS clock_tms_cs
 #define DO_CLOCK_TMS_CS_OUT clock_tms_cs_out
@@ -105,21 +105,24 @@ static uint8_t ftdi_jtag_mode = JTAG_MODE;
 
 static bool swd_mode;
 
-#if BUILD_FTDI_OSCAN1 == 1
+#if BUILD_FTDI_CJTAG == 1
+#define ESCAPE_SEQ_OAC_BIT2 28
+
+static void cjtag_reset_online_activate(void);
+
 /*
-  The cJTAG 2-wire OSCAN1 protocol, in lieu of 4-wire JTAG, is a configuration option
+  The cJTAG 2-wire OScan1 protocol, in lieu of 4-wire JTAG, is a configuration option
   for some SoCs. An FTDI-based adapter that can be configured to appropriately drive
-  the bidirectional pin TMSC is able to drive OSCAN1 protocol.  For example, an Olimex
+  the bidirectional pin TMSC is able to drive OScan1 protocol.  For example, an Olimex
   ARM-USB-TINY-H with the ARM-JTAG-SWD adapter, connected to a cJTAG-enabled
   target board is such a topology.  A TCK cycle with TMS=1/TDI=N translates to a TMSC
   output of N, and a TCK cycle with TMS=0 translates to a TMSC input from the target back
-  to the adapter/probe.  The OSCAN1 protocol uses 3 TCK cycles to generate the data flow
-  that is equivalent to that of a single TCK cycle in 4-wire JTAG. The OSCAN1-related
+  to the adapter/probe.  The OScan1 protocol uses 3 TCK cycles to generate the data flow
+  that is equivalent to that of a single TCK cycle in 4-wire JTAG. The OScan1-related
   code in this module translates IR/DR scan commanads and JTAG state traversal commands
-  to the two-wire clocking and signaling of OSCAN1 protocol, if placed into oscan1 mode
+  to the two-wire clocking and signaling of OScan1 protocol, if placed into OScan1 mode
   during initialization.
 */
-static void oscan1_reset_online_activate(void);
 static void oscan1_mpsse_clock_data(struct mpsse_ctx *ctx, const uint8_t *out, unsigned out_offset, uint8_t *in,
 				    unsigned in_offset, unsigned length, uint8_t mode);
 static void oscan1_mpsse_clock_tms_cs(struct mpsse_ctx *ctx, const uint8_t *out, unsigned out_offset, uint8_t *in,
@@ -128,6 +131,11 @@ static void oscan1_mpsse_clock_tms_cs_out(struct mpsse_ctx *ctx, const uint8_t *
 					  unsigned length, bool tdi, uint8_t mode);
 
 static bool oscan1_mode;
+
+/*
+  The cJTAG 4-wire JScan3 allows to use standard JTAG protocol with cJTAG hardware
+*/
+static bool jscan3_mode;
 #endif
 
 #define MAX_USB_IDS 8
@@ -275,7 +283,7 @@ static int ftdi_get_signal(const struct signal *s, uint16_t *value_out)
 	return ERROR_OK;
 }
 
-#if BUILD_FTDI_OSCAN1 == 1
+#if BUILD_FTDI_CJTAG == 1
 static void clock_data(struct mpsse_ctx *ctx, const uint8_t *out, unsigned out_offset, uint8_t *in,
 		     unsigned in_offset, unsigned length, uint8_t mode)
 {
@@ -668,19 +676,20 @@ static void ftdi_execute_stableclocks(struct jtag_command *cmd)
 static void ftdi_execute_command(struct jtag_command *cmd)
 {
 	switch (cmd->type) {
+#if BUILD_FTDI_CJTAG == 1
 		case JTAG_RESET:
-#if BUILD_FTDI_OSCAN1 == 1
-			oscan1_reset_online_activate(); /* put the target back into OSCAN1 mode */
-#endif
+			if (cmd->cmd.reset->trst)
+				cjtag_reset_online_activate(); /* put the target (back) into selected cJTAG mode */
 			break;
+#endif
 		case JTAG_RUNTEST:
 			ftdi_execute_runtest(cmd);
 			break;
 		case JTAG_TLR_RESET:
-			ftdi_execute_statemove(cmd);
-#if BUILD_FTDI_OSCAN1 == 1
-			oscan1_reset_online_activate(); /* put the target back into OSCAN1 mode */
+#if BUILD_FTDI_CJTAG == 1
+			cjtag_reset_online_activate(); /* put the target (back) into selected cJTAG mode */
 #endif
+			ftdi_execute_statemove(cmd);
 			break;
 		case JTAG_PATHMOVE:
 			ftdi_execute_pathmove(cmd);
@@ -759,16 +768,20 @@ static int ftdi_initialize(void)
 		/* A dummy SWD_EN would have zero mask */
 		if (sig->data_mask)
 			ftdi_set_signal(sig, '1');
-#if BUILD_FTDI_OSCAN1 == 1
-	} else if (oscan1_mode) {
+#if BUILD_FTDI_CJTAG == 1
+	} else if (oscan1_mode || jscan3_mode) {
 		struct signal *sig = find_signal_by_name("JTAG_SEL");
 		if (!sig) {
-			LOG_ERROR("OSCAN1 mode is active but JTAG_SEL signal is not defined");
+			LOG_ERROR("A cJTAG mode is active but JTAG_SEL signal is not defined");
 			return ERROR_JTAG_INIT_FAILED;
 		}
 		/* A dummy JTAG_SEL would have zero mask */
 		if (sig->data_mask)
 			ftdi_set_signal(sig, '0');
+		else if (jscan3_mode) {
+			LOG_ERROR("In JScan3 mode JTAG_SEL signal cannot be dummy, data mask needed");
+			return ERROR_JTAG_INIT_FAILED;
+		}
 #endif
 	}
 
@@ -801,12 +814,14 @@ static int ftdi_quit(void)
 	return ERROR_OK;
 }
 
-#if BUILD_FTDI_OSCAN1 == 1
+#if BUILD_FTDI_CJTAG == 1
 static void oscan1_mpsse_clock_data(struct mpsse_ctx *ctx, const uint8_t *out, unsigned out_offset, uint8_t *in,
 		     unsigned in_offset, unsigned length, uint8_t mode)
 {
 	static const uint8_t zero;
 	static const uint8_t one = 1;
+
+	struct signal *tmsc_en = find_signal_by_name("TMSC_EN");
 
 	LOG_DEBUG_IO("oscan1_mpsse_clock_data: %sout %d bits", in ? "in" : "", length);
 
@@ -814,7 +829,7 @@ static void oscan1_mpsse_clock_data(struct mpsse_ctx *ctx, const uint8_t *out, u
 		int bitnum;
 		uint8_t bit;
 
-		/* OSCAN1 uses 3 separate clocks */
+		/* OScan1 uses 3 separate clocks */
 
 		/* drive TMSC to the *negation* of the desired TDI value */
 		bitnum = out_offset + i;
@@ -833,8 +848,14 @@ static void oscan1_mpsse_clock_data(struct mpsse_ctx *ctx, const uint8_t *out, u
 			mpsse_clock_tms_cs_out(mpsse_ctx, &one, 0, 1, false, mode);
 		}
 
+		if (tmsc_en)
+			ftdi_set_signal(tmsc_en, '0'); /* put TMSC in high impedance */
+
 		/* drive another TCK without driving TMSC (TDO cycle) */
 		mpsse_clock_tms_cs(mpsse_ctx, &zero, 0, in, in_offset+i, 1, false, mode);
+
+		if (tmsc_en)
+			ftdi_set_signal(tmsc_en, '1'); /* drive again TMSC */
 	}
 }
 
@@ -845,6 +866,8 @@ static void oscan1_mpsse_clock_tms_cs(struct mpsse_ctx *ctx, const uint8_t *out,
 	static const uint8_t zero;
 	static const uint8_t one = 1;
 
+	struct signal *tmsc_en = find_signal_by_name("TMSC_EN");
+
 	LOG_DEBUG_IO("oscan1_mpsse_clock_tms_cs: %sout %d bits, tdi=%d", in ? "in" : "", length, tdi);
 
 	for (unsigned i = 0; i < length; i++) {
@@ -852,7 +875,7 @@ static void oscan1_mpsse_clock_tms_cs(struct mpsse_ctx *ctx, const uint8_t *out,
 		uint8_t tmsbit;
 		uint8_t tdibit;
 
-		/* OSCAN1 uses 3 separate clocks */
+		/* OScan1 uses 3 separate clocks */
 
 		/* drive TMSC to the *negation* of the desired TDI value */
 		tdibit = tdi ? 0 : 1;
@@ -871,8 +894,14 @@ static void oscan1_mpsse_clock_tms_cs(struct mpsse_ctx *ctx, const uint8_t *out,
 			mpsse_clock_tms_cs_out(mpsse_ctx, &one, 0, 1, (tmsbit != 0), mode);
 		}
 
+		if (tmsc_en)
+			ftdi_set_signal(tmsc_en, '0'); /* put TMSC in high impedance */
+
 		/* drive another TCK without driving TMSC (TDO cycle) */
 		mpsse_clock_tms_cs(mpsse_ctx, &zero, 0, in, in_offset+i, 1, false, mode);
+
+		if (tmsc_en)
+			ftdi_set_signal(tmsc_en, '1'); /* drive again TMSC */
 	}
 }
 
@@ -884,7 +913,7 @@ static void oscan1_mpsse_clock_tms_cs_out(struct mpsse_ctx *ctx, const uint8_t *
 }
 
 
-static void oscan1_set_tck_tms_tdi(struct signal *tck, char tckvalue, struct signal *tms,
+static void cjtag_set_tck_tms_tdi(struct signal *tck, char tckvalue, struct signal *tms,
 				   char tmsvalue, struct signal *tdi, char tdivalue)
 {
 	ftdi_set_signal(tms, tmsvalue);
@@ -892,133 +921,139 @@ static void oscan1_set_tck_tms_tdi(struct signal *tck, char tckvalue, struct sig
 	ftdi_set_signal(tck, tckvalue);
 }
 
-static void oscan1_reset_online_activate(void)
+static void cjtag_reset_online_activate(void)
 {
-	/* After TAP reset, the OSCAN1-to-JTAG adapter is in offline and
-	non-activated state.  Escape sequences are needed to bring
-	the TAP online and activated into OSCAN1 mode. */
+	/* After TAP reset, the cJTAG-to-JTAG adapter is in offline and
+	non-activated state. Escape sequences are needed to bring the
+	TAP online and activated into the desired working mode. */
 
 	struct signal *tck = find_signal_by_name("TCK");
 	struct signal *tdi = find_signal_by_name("TDI");
 	struct signal *tms = find_signal_by_name("TMS");
 	struct signal *tdo = find_signal_by_name("TDO");
+	struct signal *tmsc_en = find_signal_by_name("TMSC_EN");
 	uint16_t tdovalue;
 
-	static const struct {
-	  int8_t tck;
-	  int8_t tms;
-	  int8_t tdi;
+	static struct {
+		int8_t tck;
+		int8_t tms;
+		int8_t tdi;
 	} sequence[] = {
-	  /* TCK=0, TMS=1, TDI=0 (drive TMSC to 0 baseline) */
-	  {'0', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (drive TMSC to 0 baseline) */
+		{'0', '1', '0'},
 
-	  /* Drive cJTAG escape sequence for TAP reset - 8 TMSC edges */
-	  /* TCK=1, TMS=1, TDI=0 (rising edge of TCK with TMSC still 0) */
-	  {'1', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
-	  {'1', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
-	  {'1', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
-	  {'1', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
-	  {'1', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
-	  {'1', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
-	  {'1', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
-	  {'1', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK with TMSC still 0) */
-	  {'0', '1', '0'},
+		/* Drive cJTAG escape sequence for TAP reset - 8 TMSC edges */
+		/* TCK=1, TMS=1, TDI=0 (rising edge of TCK with TMSC still 0) */
+		{'1', '1', '0'},
+		/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+		{'1', '1', '1'},
+		/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+		{'1', '1', '0'},
+		/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+		{'1', '1', '1'},
+		/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+		{'1', '1', '0'},
+		/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+		{'1', '1', '1'},
+		/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+		{'1', '1', '0'},
+		/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+		{'1', '1', '1'},
+		/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK with TMSC still 0) */
+		{'0', '1', '0'},
 
-	  /* 3 TCK pulses for padding */
-	  /* TCK=1, TMS=1, TDI=0 (drive rising TCK edge) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (drive falling TCK edge) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (drive rising TCK edge) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (drive falling TCK edge) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (drive rising TCK edge) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (drive falling TCK edge) */
-	  {'0', '1', '0'},
+		/* 3 TCK pulses for padding */
+		/* TCK=1, TMS=1, TDI=0 (drive rising TCK edge) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (drive falling TCK edge) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (drive rising TCK edge) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (drive falling TCK edge) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (drive rising TCK edge) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (drive falling TCK edge) */
+		{'0', '1', '0'},
 
-	  /* Drive cJTAG escape sequence for SELECT */
-	  /* TCK=1, TMS=1, TDI=0 (rising edge of TCK with TMSC still 0, TAP reset that was just setup occurs here too) */
-	  {'1', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
-	  {'1', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
-	  {'1', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
-	  {'1', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
-	  {'1', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
-	  {'1', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK with TMSC still 0) */
-	  {'0', '1', '0'},
+		/* Drive cJTAG escape sequence for SELECT */
+		/* TCK=1, TMS=1, TDI=0 (rising edge of TCK with TMSC still 0, TAP reset that was just setup occurs here too) */
+		{'1', '1', '0'},
+		/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+		{'1', '1', '1'},
+		/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+		{'1', '1', '0'},
+		/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+		{'1', '1', '1'},
+		/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+		{'1', '1', '0'},
+		/* TCK=1, TMS=1, TDI=1 (drive rising TMSC edge) */
+		{'1', '1', '1'},
+		/* TCK=1, TMS=1, TDI=0 (drive falling TMSC edge) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK with TMSC still 0) */
+		{'0', '1', '0'},
 
-	  /* Drive cJTAG escape sequence for activation */
-	  /* TCK=1, TMS=1, TDI=0 (rising edge TCK with TMSC still 0... online mode activated... also OAC bit0==0) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (rising edge TCK... OAC bit1==0) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=1 (falling edge TCK) */
-	  {'0', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=1 (rising edge TCK... OAC bit2==1) */
-	  {'1', '1', '1'},
-	  /* TCK=0, TMS=1, TDI=1 (falling edge TCK, TMSC stays high) */
-	  {'0', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=1 (rising edge TCK... OAC bit3==1) */
-	  {'1', '1', '1'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (rising edge TCK... EC bit0==0) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (rising edge TCK... EC bit1==0) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (rising edge TCK... EC bit2==0) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=1 (falling edge TCK) */
-	  {'0', '1', '1'},
-	  /* TCK=1, TMS=1, TDI=1 (rising edge TCK... EC bit3==1) */
-	  {'1', '1', '1'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit0==0) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit1==0) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit2==0) */
-	  {'1', '1', '0'},
-	  /* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
-	  {'0', '1', '0'},
-	  /* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit3==0) */
-	  {'1', '1', '0'},
+		/* Drive cJTAG escape sequence for OScan1 activation -- OAC = 1100 -> 2 wires -- */
+		/* TCK=1, TMS=1, TDI=0 (rising edge TCK with TMSC still 0... online mode activated... also OAC bit0==0) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (rising edge TCK... OAC bit1==0) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=1 (falling edge TCK) */
+		{'0', '1', '1'},
+		/* TCK=1, TMS=1, TDI=1 (rising edge TCK... OAC bit2==1) */
+		{'1', '1', '1'},
+		/* TCK=0, TMS=1, TDI=1 (falling edge TCK, TMSC stays high) */
+		{'0', '1', '1'},
+		/* TCK=1, TMS=1, TDI=1 (rising edge TCK... OAC bit3==1) */
+		{'1', '1', '1'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (rising edge TCK... EC bit0==0) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (rising edge TCK... EC bit1==0) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (rising edge TCK... EC bit2==0) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=1 (falling edge TCK) */
+		{'0', '1', '1'},
+		/* TCK=1, TMS=1, TDI=1 (rising edge TCK... EC bit3==1) */
+		{'1', '1', '1'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit0==0) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit1==0) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit2==0) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+		{'0', '1', '0'},
+		/* TCK=1, TMS=1, TDI=0 (rising edge TCK... CP bit3==0) */
+		{'1', '1', '0'},
+		/* TCK=0, TMS=1, TDI=0 (falling edge TCK) */
+		{'0', '1', '0'},
 	};
 
+	if (!oscan1_mode && !jscan3_mode)
+		return; /* Nothing to do */
 
-	if (!oscan1_mode)
+	if (oscan1_mode && jscan3_mode) {
+		LOG_ERROR("Both oscan1_mode and jscan3_mode are \"on\". At most one of them can be enabled.");
 		return;
-
+	}
 
 	if (!tck) {
 		LOG_ERROR("Can't run cJTAG online/activate escape sequences: TCK signal is not defined");
@@ -1040,14 +1075,28 @@ static void oscan1_reset_online_activate(void)
 		return;
 	}
 
+	if (jscan3_mode) {
+		/* Update the sequence above to enable JScan3 instead of OScan1 */
+		sequence[ESCAPE_SEQ_OAC_BIT2].tdi = '0';
+		sequence[ESCAPE_SEQ_OAC_BIT2+1].tdi = '0';
+	}
+
+	/* if defined TMSC_EN, replace tms with it */
+	if (tmsc_en)
+		tms = tmsc_en;
+
 	/* Send the sequence to the adapter */
 	for (size_t i = 0; i < sizeof(sequence)/sizeof(sequence[0]); i++)
-		oscan1_set_tck_tms_tdi(tck, sequence[i].tck, tms, sequence[i].tms, tdi, sequence[i].tdi);
+		cjtag_set_tck_tms_tdi(tck, sequence[i].tck, tms, sequence[i].tms, tdi, sequence[i].tdi);
+
+	/* If JScan3 mode, configure cJTAG adapter to 4-wire */
+	if (jscan3_mode)
+		ftdi_set_signal(find_signal_by_name("JTAG_SEL"), '1');
 
 	ftdi_get_signal(tdo, &tdovalue);  /* Just to force a flush */
 }
 
-#endif /* #if BUILD_FTDI_OSCAN1 == 1 */
+#endif /* #if BUILD_FTDI_CJTAG == 1 */
 
 COMMAND_HANDLER(ftdi_handle_device_desc_command)
 {
@@ -1260,7 +1309,7 @@ COMMAND_HANDLER(ftdi_handle_tdo_sample_edge_command)
 	return ERROR_OK;
 }
 
-#if BUILD_FTDI_OSCAN1 == 1
+#if BUILD_FTDI_CJTAG == 1
 COMMAND_HANDLER(ftdi_handle_oscan1_mode_command)
 {
 	if (CMD_ARGC > 1)
@@ -1270,6 +1319,18 @@ COMMAND_HANDLER(ftdi_handle_oscan1_mode_command)
 		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], oscan1_mode);
 
 	command_print(CMD, "oscan1 mode: %s.", oscan1_mode ? "on" : "off");
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(ftdi_handle_jscan3_mode_command)
+{
+	if (CMD_ARGC > 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (CMD_ARGC == 1)
+		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], jscan3_mode);
+
+	command_print(CMD, "jscan3 mode: %s.", jscan3_mode ? "on" : "off");
 	return ERROR_OK;
 }
 #endif
@@ -1335,12 +1396,19 @@ static const struct command_registration ftdi_subcommand_handlers[] = {
 			"allow signalling speed increase)",
 		.usage = "(rising|falling)",
 	},
-#if BUILD_FTDI_OSCAN1 == 1
+#if BUILD_FTDI_CJTAG == 1
 	{
 		.name = "oscan1_mode",
 		.handler = &ftdi_handle_oscan1_mode_command,
 		.mode = COMMAND_ANY,
-		.help = "set to 'on' to use OSCAN1 mode for signaling, otherwise 'off' (default is 'off')",
+		.help = "set to 'on' to use OScan1 mode for signaling, otherwise 'off' (default is 'off')",
+		.usage = "(on|off)",
+	},
+	{
+		.name = "jscan3_mode",
+		.handler = &ftdi_handle_jscan3_mode_command,
+		.mode = COMMAND_ANY,
+		.help = "set to 'on' to use JScan3 mode for signaling, otherwise 'off' (default is 'off')",
 		.usage = "(on|off)",
 	},
 #endif
