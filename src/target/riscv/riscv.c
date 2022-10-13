@@ -2289,7 +2289,7 @@ int riscv_openocd_poll(struct target *target)
 int riscv_openocd_step(struct target *target, int current,
 	target_addr_t address, int handle_breakpoints)
 {
-	LOG_DEBUG("stepping hart");
+	LOG_TARGET_DEBUG(target, "stepping hart");
 
 	if (!current) {
 		if (riscv_set_register(target, GDB_REGNO_PC, address) != ERROR_OK)
@@ -2348,7 +2348,7 @@ _exit:
 
 	if (breakpoint && (riscv_add_breakpoint(target, breakpoint) != ERROR_OK)) {
 		success = false;
-		LOG_ERROR("unable to restore the disabled breakpoint");
+		LOG_TARGET_ERROR(target, "unable to restore the disabled breakpoint");
 	}
 
 	if (success) {
