@@ -480,7 +480,6 @@ static int find_trigger(struct target *target, int type, bool chained, int *idx)
 {
 	RISCV_INFO(r);
 
-	int found;
 	unsigned int num_found = 0;
 	unsigned int num_required = chained ? 2 : 1;
 
@@ -493,7 +492,7 @@ static int find_trigger(struct target *target, int type, bool chained, int *idx)
 				if (done) {
 					/* Found num_required consecutive free triggers - success, done. */
 					if (idx)
-						*idx = i - (num - 1);
+						*idx = i - (num_required - 1);
 					return ERROR_OK;
 				}
 				/* Found a trigger but need more consecutive ones */
@@ -502,7 +501,7 @@ static int find_trigger(struct target *target, int type, bool chained, int *idx)
 		}
 		/* Trigger already occupied or incompatible type. 
 		 * Reset the counter of found consecutive triggers */
-		cnt = 0;
+		num_found = 0;
 	}
 
 	return ERROR_FAIL;
@@ -598,7 +597,7 @@ static int maybe_add_trigger_t2(struct target *target, struct trigger *trigger)
 
 	if (trigger->execute || trigger->length == 1)
 		goto MATCH_EQUAL;
-	if (!match_napot_checker(trigger, &tdata2))
+	if (!can_use_napot_match(trigger, &tdata2))
 		goto MATCH_GE_LT;
 
 	ret = find_trigger(target, CSR_TDATA1_TYPE_MCONTROL, false, &idx);
@@ -681,7 +680,7 @@ static int maybe_add_trigger_t6(struct target *target, struct trigger *trigger)
 
 	if (trigger->execute || trigger->length == 1)
 		goto MATCH_EQUAL;
-	if (!match_napot_checker(trigger, &tdata2))
+	if (!can_use_napot_match(trigger, &tdata2))
 		goto MATCH_GE_LT;
 
 	ret = find_trigger(target, CSR_TDATA1_TYPE_MCONTROL6, false, &idx);
