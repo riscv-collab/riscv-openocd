@@ -3987,36 +3987,42 @@ int riscv_enumerate_triggers(struct target *target)
 		tselect_rb &= ~(1ULL << (riscv_xlen(target) - 1));
 		if (tselect_rb != t)
 			break;
-		uint64_t tdata1;
-		result = riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1);
-		if (result != ERROR_OK)
-			return result;
-
-		int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
-		if (type == 0)
-			break;
-		switch (type) {
-			case 1:
-				/* On these older cores we don't support software using
-					* triggers. */
-				riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-				break;
-			case 2:
-				if (tdata1 & CSR_MCONTROL_DMODE(riscv_xlen(target)))
-					riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-				break;
-			case 6:
-				if (tdata1 & CSR_MCONTROL6_DMODE(riscv_xlen(target)))
-					riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-				break;
-		}
 
 		uint64_t tinfo;
 		result = riscv_get_register(target, &tinfo, GDB_REGNO_TINFO);
-		if (result == ERROR_OK)
+		if (result == ERROR_OK) {
+			/* tinfo == 0 invalid tinfo
+			 * tinfo == 1 trigger doesn’t exist */
+			if (tinfo == 0 || tinfo == 1)
+				break;
 			r->trigger_tinfo[t] = tinfo;
-		else
+		} else {
+			uint64_t tdata1;
+			result = riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1);
+			if (result != ERROR_OK)
+				return result;
+
+			int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
+			if (type == 0)
+				break;
+			switch (type) {
+				case 1:
+					/* On these older cores we don't support software using
+						* triggers. */
+					riscv_set_register(target, GDB_REGNO_TDATA1, 0);
+					break;
+				case 2:
+					if (tdata1 & CSR_MCONTROL_DMODE(riscv_xlen(target)))
+						riscv_set_register(target, GDB_REGNO_TDATA1, 0);
+					break;
+				case 6:
+					if (tdata1 & CSR_MCONTROL6_DMODE(riscv_xlen(target)))
+						riscv_set_register(target, GDB_REGNO_TDATA1, 0);
+					break;
+			}
 			r->trigger_tinfo[t] = 1 << type;
+		}
+		LOG_TARGET_DEBUG(target, "Trigger %u: supported types (mask) = 0x%08x", t, r->trigger_tinfo[t]);
 	}
 
 	riscv_set_register(target, GDB_REGNO_TSELECT, tselect);
