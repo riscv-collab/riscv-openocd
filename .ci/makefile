@@ -27,9 +27,11 @@ all: \
 	build \
 	test \
 
-.PHONY: config
-config:
+configure:
 	./bootstrap
+
+.PHONY: config
+config: configure
 	cmake -S .ci -B $(COMMON_BUILD_DIR) -G "Unix Makefiles"
 
 .PHONY: build
@@ -126,8 +128,6 @@ in_docker: $(DOCKER_CONTAINER)
 		--env VERBOSE="$(VERBOSE)" \
 		\
 		--env COMMIT="$(COMMIT)" \
-		--env CLANG_FORMAT_OUTPUT="$(CLANG_FORMAT_OUTPUT)" \
-		--env CLANG_TIDY_OUTPUT="$(CLANG_TIDY_OUTPUT)" \
 		\
 		--env CI_UID="$$(id --user)" --env CI_GID="$$(id --group)" \
 		--user $(DOCKER_CONTAINER_USER) \
