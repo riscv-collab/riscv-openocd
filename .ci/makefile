@@ -36,7 +36,7 @@ config: configure
 
 .PHONY: build
 build: config
-	cmake --build $(COMMON_BUILD_DIR) --parallel $(PARALLEL)
+	cmake --build $(COMMON_BUILD_DIR) --target openocd --parallel $(PARALLEL)
 
 .PHONY: test
 test: build
@@ -51,10 +51,8 @@ prepare_board:
 .PHONY: install
 install:
 
-
 .PHONY: test_install
 test_install:
-
 
 .PHONY: package_name
 package_name:
