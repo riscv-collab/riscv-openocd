@@ -38,13 +38,14 @@ ExternalProject_Add(spike
     --prefix=${CMAKE_BINARY_DIR}/install_spike
 )
 
+set(OPENOCD_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_openocd/openocd)
 get_filename_component(OPENOCD_SOURCES ${CMAKE_CURRENT_SOURCE_DIR} PATH)
 ExternalProject_Add(openocd
   PREFIX OpenOCDBuild
   SOURCE_DIR ${OPENOCD_SOURCES}
   CONFIGURE_COMMAND
     ${OPENOCD_SOURCES}/configure
-    --prefix=${CMAKE_BINARY_DIR}/install_openocd
+    --prefix=${OPENOCD_INSTALL_PATH}
     --enable-rshim
     --enable-ftdi
     --enable-ftdi-oscan1
@@ -111,7 +112,7 @@ add_custom_target(OpenOCDTest
     mkdir -p ${LOGS_DIR}
   COMMAND
     env PATH="${CMAKE_BINARY_DIR}/ToolChain/sc-gcc-src/bin:${CMAKE_BINARY_DIR}/install_spike/bin:$ENV{PATH}"
-        OPENOCD_ROOT=${CMAKE_BINARY_DIR}/install_openocd
+        OPENOCD_ROOT=${OPENOCD_INSTALL_PATH}
         DEJAGNU=${OPENOCD_SOURCES}/testsuite/site.exp
     ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
         --src_dir=${OPENOCD_SOURCES}/testsuite
@@ -119,4 +120,11 @@ add_custom_target(OpenOCDTest
         --tool=ocd
         --outdir=${LOGS_DIR}
   DEPENDS openocd dejagnu spike test_dir
+)
+
+get_filename_component(OPENOCD_INSTALL_PARENT ${OPENOCD_INSTALL_PATH} PATH)
+add_custom_target(OpenOCDPackage
+  WORKING_DIRECTORY ${OPENOCD_INSTALL_PARENT}
+  COMMAND tar -czvf openocd.tar.gz openocd
+  DEPENDS openocd
 )

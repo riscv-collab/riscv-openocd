@@ -52,10 +52,9 @@ test_install:
 .PHONY: package_name
 package_name:
 
-
 .PHONY: package
-package:
-
+package: config
+	cmake --build "$(COMMON_BUILD_DIR)" --target OpenOCDPackage
 
 .PHONY: clean
 clean:
@@ -121,6 +120,7 @@ in_docker: $(DOCKER_CONTAINER)
 		--env COMMON_BUILD_DIR=/home/build \
 		--env NAS_USER="$(NAS_USR)" \
 		--env NAS_PASS="$(NAS_PSW)" \
+		--env ARTIFACTORY_API_KEY="$(ARTIFACTORY_API_KEY)" \
 		--env BUILD_TYPE="$(BUILD_TYPE)" \
 		\
 		--env PARALLEL="$(PARALLEL)" \

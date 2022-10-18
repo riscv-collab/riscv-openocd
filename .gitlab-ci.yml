@@ -3,8 +3,7 @@ variables:
   ARTIFACTORY_API_KEY: $CICD_TOOLS_SC_ARTIFACTORY_API_KEY
   BUILD_TYPE: Release
   COMMON_BUILD_DIR: /home/ci_user/build
-  BUILD_DIR: $COMMON_BUILD_DIR/$BUILD_TYPE
-  INSTALL_DIR: $BUILD_DIR/install
+  INSTALL_DIR: $COMMON_BUILD_DIR/install_openocd
   NAS_USR: $NAS_USER
   NAS_PSW: $NAS_PASS
 
@@ -19,3 +18,5 @@ main-job:
     - make in_docker TARGET=config -f .ci/makefile
     - make in_docker TARGET=build -f .ci/makefile
     - make in_docker TARGET=test -f .ci/makefile
+    - make in_docker TARGET=package -f .ci/makefile
+    - SKIP_ARCHIVATION=true ./.ci/utils/upload_artifact.sh $INSTALL_DIR/openocd.tar.gz
