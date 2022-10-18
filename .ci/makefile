@@ -40,12 +40,7 @@ build: config
 
 .PHONY: test
 test: build
-	cmake --build $(COMMON_BUILD_DIR) --target OpenOCDTest
-
-.PHONY: prepare_board
-prepare_board:
-	cmake -S .ci/fpga_support -B $(HOST_CONFIGURATION_DIRECTORY) -G "Unix Makefiles"
-	cmake --build $(HOST_CONFIGURATION_DIRECTORY) --target board_${TARGET_BOARD}
+	cmake --build $(COMMON_BUILD_DIR) --target OpenOCDTest --parallel $(PARALLEL)
 
 
 .PHONY: install
@@ -65,6 +60,12 @@ package:
 .PHONY: clean
 clean:
 	cmake --build "$(COMMON_BUILD_DIR)" --target clean $(VERBOSE_OPTION)
+
+.PHONY: prepare_board
+prepare_board:
+	cmake -S .ci/fpga_support -B $(HOST_CONFIGURATION_DIRECTORY) -G "Unix Makefiles"
+	cmake --build $(HOST_CONFIGURATION_DIRECTORY) --target board_${TARGET_BOARD}
+
 
 ###################### docker support ######################
 TARGET ?=
