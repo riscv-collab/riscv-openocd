@@ -1,0 +1,22 @@
+#!/usr/bin/expect
+
+set STAND_NAME [lindex $argv 0]
+set PLATFORM [lindex $argv 1]
+
+set timeout 120
+spawn [pwd]/fpga.sh set $STAND_NAME $PLATFORM
+
+expect {
+  "Setting Platform complete!" {
+    puts "bitstream instantiated!"
+  }
+  eof {
+    puts stderr "$expect_out(buffer)"
+    error "unexpected EOF (waiting for device programming)"
+  }
+  timeout {
+    puts stderr "$expect_out(buffer)"
+    error "unexpected timeout (waiting for device programming)"
+  }
+}
+

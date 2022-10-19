@@ -11,6 +11,13 @@ set(ARTY100_BOARDS
   arty100_scr4_32_imcafd:rv32_single_scr4_tcm_l1_ipic_hiperf_256MB.tar.gz
 )
 
+set(TWIN_BOARDS
+  twin_scr7_64:rv64_cluster_scr7_eval
+  twin_scr7_64_mcore4:rv64_cluster_scr7_eval
+  twin_scr7_64_smp4:rv64_cluster_scr7_eval
+  twin_scr7_64_wa:rv64_cluster_scr7_eval
+)
+
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/BoardInit)
 
 foreach(board ${ARTY100_BOARDS})
@@ -30,5 +37,21 @@ foreach(board ${ARTY100_BOARDS})
     COMMAND
         ${CMAKE_CURRENT_SOURCE_DIR}/scripts/arty_inst.exp
         ${BITSTREAM}.bitstream.bit
+  )
+endforeach()
+
+foreach(board ${TWIN_BOARDS})
+  string(REGEX MATCHALL "([^:]+)" M ${board})
+
+  list(GET M 0 BOARD_NAME)
+  list(GET M 1 BITSTREAM)
+  message("Configuring board-init for board<${BOARD_NAME}>, "
+          "with bitstream: <${BITSTREAM}>")
+
+  add_custom_target(board_${BOARD_NAME}
+    WORKING_DIRECTORY /home/stand/fpga-runner-stand
+    COMMAND
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/runner_inst.exp
+        twin ${BITSTREAM}
   )
 endforeach()
