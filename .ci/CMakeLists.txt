@@ -11,10 +11,11 @@ set(FETCHCONTENT_QUIET FALSE)
 set(NAS_USER $ENV{NAS_USER})
 set(NAS_PASS $ENV{NAS_PASS})
 
-set(GCC_VERSION riscv-gcc-12.1.1-g02aeca3-220922T1838-g4bf3bb1)
-set(DISTRIB_PATH pub/Distrib/sc-ide/ci_artifacts/IDE/22_09_22_370)
+set(SYNTACORE_NAS_SERVER nas.dev.syntacore.com)
+set(GCC_VERSION 2022.09-Ubuntu18-riscv-gcc-12.1.1-g02aeca3-220927T2007-g061b664)
+set(DISTRIB_PATH pub/Distrib/sc-ide/gcc)
 FetchContent_Declare(sc-gcc
-  URL ftp://${NAS_USER}:${NAS_PASS}@192.168.1.100/${DISTRIB_PATH}/${GCC_VERSION}.tar.gz
+  URL ftp://${NAS_USER}:${NAS_PASS}@${SYNTACORE_NAS_SERVER}/${DISTRIB_PATH}/${GCC_VERSION}.tar.gz
 )
 FetchContent_MakeAvailable(sc-gcc)
 

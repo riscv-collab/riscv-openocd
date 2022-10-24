@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(FpgaSupport)
 
-set(ARTY_BITSTREAM_FTP_STORAGE 192.168.1.100/pub/exchange/ot-sc/arty-a7-100t)
+set(ARTY_BITSTREAM_FTP_STORAGE ${SYNTACORE_NAS_SERVER}/pub/exchange/ot-sc/arty-a7-100t)
 
 set(ARTY100_BOARDS
   arty100_scr1_32:scr1_\#18494.rar
