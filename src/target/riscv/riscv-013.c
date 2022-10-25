@@ -1293,6 +1293,10 @@ static int register_write_direct(struct target *target, unsigned number,
 	LOG_DEBUG("{%d} %s <- 0x%" PRIx64, riscv_current_hartid(target),
 			gdb_regno_name(number), value);
 
+	uint64_t mstatus;
+	if (prep_for_register_access(target, &mstatus, number) != ERROR_OK)
+		return ERROR_FAIL;
+
 	int result = register_write_abstract(target, number, value,
 			register_size(target, number));
 	if (result == ERROR_OK || !has_sufficient_progbuf(target, 2) ||
@@ -1303,10 +1307,6 @@ static int register_write_direct(struct target *target, unsigned number,
 	riscv_program_init(&program, target);
 
 	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
-		return ERROR_FAIL;
-
-	uint64_t mstatus;
-	if (prep_for_register_access(target, &mstatus, number) != ERROR_OK)
 		return ERROR_FAIL;
 
 	scratch_mem_t scratch;
