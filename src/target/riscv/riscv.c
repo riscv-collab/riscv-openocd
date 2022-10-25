@@ -527,6 +527,7 @@ static int maybe_add_trigger_t2(struct target *target,
 	}
 
 	/* address/data match trigger */
+	tdata1 = set_field(tdata1, CSR_MCONTROL_TYPE(riscv_xlen(target)), 2);
 	tdata1 |= CSR_MCONTROL_DMODE(riscv_xlen(target));
 	tdata1 = set_field(tdata1, CSR_MCONTROL_ACTION,
 			CSR_MCONTROL_ACTION_DEBUG_MODE);
@@ -577,6 +578,7 @@ static int maybe_add_trigger_t6(struct target *target,
 	}
 
 	/* address/data match trigger */
+	tdata1 = set_field(tdata1, CSR_MCONTROL6_TYPE(riscv_xlen(target)), 6);
 	tdata1 |= CSR_MCONTROL6_DMODE(riscv_xlen(target));
 	tdata1 = set_field(tdata1, CSR_MCONTROL6_ACTION,
 			CSR_MCONTROL6_ACTION_DEBUG_MODE);
@@ -650,6 +652,12 @@ static int add_trigger(struct target *target, struct trigger *trigger)
 				result = maybe_add_trigger_t2(target, trigger, tdata1);
 				break;
 			case 6:
+				result = maybe_add_trigger_t6(target, trigger, tdata1);
+				break;
+			case 15:
+				result = maybe_add_trigger_t2(target, trigger, tdata1);
+				if (result == ERROR_OK)
+					break;
 				result = maybe_add_trigger_t6(target, trigger, tdata1);
 				break;
 			default:
