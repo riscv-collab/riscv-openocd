@@ -130,6 +130,7 @@ typedef enum {
 } yes_no_maybe_t;
 
 #define HART_INDEX_MULTIPLE	-1
+#define HART_INDEX_DIRTY	-2
 
 typedef struct {
 	struct list_head list;
@@ -1599,6 +1600,7 @@ static int examine(struct target *target)
 	dmi_write(target, DM_DMCONTROL, DM_DMCONTROL_HARTSELLO |
 			DM_DMCONTROL_HARTSELHI | DM_DMCONTROL_DMACTIVE |
 			DM_DMCONTROL_HASEL);
+	dm->current_hartid = HART_INDEX_DIRTY;
 	uint32_t dmcontrol;
 	if (dmi_read(target, &dmcontrol, DM_DMCONTROL) != ERROR_OK)
 		return ERROR_FAIL;
