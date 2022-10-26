@@ -1,3 +1,8 @@
+default:
+  tags:
+    - ci
+  interruptible: true
+
 variables:
   GIT_STRATEGY: clone
   ARTIFACTORY_API_KEY: $CICD_TOOLS_SC_ARTIFACTORY_API_KEY
@@ -8,10 +13,6 @@ variables:
   NAS_PSW: $NAS_PASS
 
 main-job:
-
-  tags:
-    - ci
-
   script:
     - sudo chown -R ci_user .
     - make container -f .ci/makefile
