@@ -10,8 +10,8 @@ set(FETCHCONTENT_QUIET FALSE)
 
 set(NAS_USER $ENV{NAS_USER})
 set(NAS_PASS $ENV{NAS_PASS})
+set(SYNTACORE_NAS_SERVER $ENV{SYNTACORE_NAS_SERVER})
 
-set(SYNTACORE_NAS_SERVER nas.dev.syntacore.com)
 set(GCC_VERSION 2022.09-Ubuntu18-riscv-gcc-12.1.1-g02aeca3-220927T2007-g061b664)
 set(DISTRIB_PATH pub/Distrib/sc-ide/gcc)
 FetchContent_Declare(sc-gcc

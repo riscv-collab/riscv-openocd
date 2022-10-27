@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(FpgaSupport)
 
+set(SYNTACORE_NAS_SERVER $ENV{SYNTACORE_NAS_SERVER})
 set(ARTY_BITSTREAM_FTP_STORAGE ${SYNTACORE_NAS_SERVER}/pub/exchange/ot-sc/arty-a7-100t)
 
 set(ARTY100_BOARDS

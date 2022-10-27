@@ -8,6 +8,8 @@ PROJECT_NAME := OpenOCD
 TARGET_BOARD ?=
 BUILD_TYPE ?= Release
 
+export SYNTACORE_NAS_SERVER = nas.dev.syntacore.com
+
 ifndef COMMON_BUILD_DIR
 $(error COMMON_BUILD_DIR is not set)
 endif
