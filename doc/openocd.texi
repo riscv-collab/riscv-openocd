@@ -8712,6 +8712,14 @@ The other options will not work on all systems.
 @end itemize
 @end deffn
 
+@deffn {Command} {examine}
+Usually the target is examined during @command{init}, but some targets cannot be
+examined that early. (For instance, a target may be powered down until a
+different target releases it to run.) If this is the case, @command{examine} can
+be used to try to examine the target again after some extra setup has been
+performed.
+@end deffn
+
 @deffn {Command} {soft_reset_halt}
 Requesting target halt and executing a soft reset. This is often used
 when a target cannot be reset and halted. The target, after reset is

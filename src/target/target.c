@@ -3328,6 +3328,22 @@ COMMAND_HANDLER(handle_halt_command)
 	return CALL_COMMAND_HANDLER(handle_wait_halt_command);
 }
 
+COMMAND_HANDLER(handle_examine_command)
+{
+	LOG_DEBUG("-");
+
+	if (CMD_ARGC != 0) {
+		LOG_ERROR("The examine command takes no arguments.");
+		return ERROR_FAIL;
+	}
+
+	int retval = target_examine();
+	if (retval != ERROR_OK)
+		return retval;
+
+	return retval;
+}
+
 COMMAND_HANDLER(handle_soft_reset_halt_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
@@ -6937,6 +6953,14 @@ nextw:
 }
 
 static const struct command_registration target_exec_command_handlers[] = {
+	{
+		.name = "examine",
+		.handler = handle_examine_command,
+		.mode = COMMAND_EXEC,
+		.help = "Examine the target, which can be useful if the target could"
+			"not be examined during init.",
+		.usage = "",
+	},
 	{
 		.name = "fast_load_image",
 		.handler = handle_fast_load_image_command,
