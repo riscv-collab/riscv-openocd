@@ -28,6 +28,7 @@ ExternalProject_Add(dejagnu
     --prefix=${CMAKE_BINARY_DIR}/install_dejagnu
 )
 
+set(SPIKE_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_spike)
 ExternalProject_Add(spike
   PREFIX SpikeBuild
   SOURCE_DIR SpikeSources
@@ -36,10 +37,13 @@ ExternalProject_Add(spike
   GIT_TAG sc/main
   CONFIGURE_COMMAND
     ${CMAKE_BINARY_DIR}/SpikeSources/configure
-    --prefix=${CMAKE_BINARY_DIR}/install_spike
+    --prefix=${SPIKE_INSTALL_PATH}
 )
 
 set(OPENOCD_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_openocd/openocd)
+
+configure_file(local_init.exp.in local_init.exp)
+
 get_filename_component(OPENOCD_SOURCES ${CMAKE_CURRENT_SOURCE_DIR} PATH)
 ExternalProject_Add(openocd
   PREFIX OpenOCDBuild
@@ -91,9 +95,6 @@ ExternalProject_Add(openocd
     #--with-capstone
 )
 
-add_custom_target(test_dir ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory TestRun)
-
 set(TGT_BOARD "")
 if(DEFINED ENV{TARGET_BOARD})
   set(TGT_BOARD $ENV{TARGET_BOARD})
@@ -107,19 +108,20 @@ else()
   set(LOGS_DIR "SUMMARY_${TGT_BOARD}")
 endif()
 
+add_custom_target(test_dir ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory TestRun)
 add_custom_target(OpenOCDTest
   WORKING_DIRECTORY TestRun
   COMMAND
     mkdir -p ${LOGS_DIR}
   COMMAND
-    env PATH="${CMAKE_BINARY_DIR}/ToolChain/sc-gcc-src/bin:${CMAKE_BINARY_DIR}/install_spike/bin:$ENV{PATH}"
-        OPENOCD_ROOT=${OPENOCD_INSTALL_PATH}
         DEJAGNU=${OPENOCD_SOURCES}/testsuite/site.exp
     ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
         --src_dir=${OPENOCD_SOURCES}/testsuite
         ${TARGET_BOARD_CMDLINE}
         --tool=ocd
         --outdir=${LOGS_DIR}
+        --local_init ${CMAKE_BINARY_DIR}/local_init.exp
   DEPENDS openocd dejagnu spike test_dir
 )
 

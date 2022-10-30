@@ -11,11 +11,9 @@ expect {
     puts "bitstream instantiated!"
   }
   eof {
-    puts stderr "$expect_out(buffer)"
     error "unexpected EOF (waiting for device programming)"
   }
   timeout {
-    puts stderr "$expect_out(buffer)"
     error "unexpected timeout (waiting for device programming)"
   }
 }

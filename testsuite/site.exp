@@ -1,7 +1,5 @@
 set target_triplet     "riscv64-unknown-elf"
 
-set CC_FOR_TARGET      "riscv64-unknown-elf-gcc"
-
 #TODO: looks like unused
 set LDFLAGS_FOR_TARGET ""
 set CFLAGS_FOR_TARGET  ""
@@ -24,6 +22,12 @@ if {![info exist GDB_BIN]} {
   verbose "using GDB_BIN from local config: $GDB_BIN" 1
 }
 
+if {![info exists CC_FOR_TARGET]} {
+  CC_FOR_TARGET riscv64-unknown-elf-gcc
+} else {
+  verbose "using CC_FOR_TARGET from local config: $CC_FOR_TARGET" 1
+}
+
 set OPENOCD "${OPENOCD_ROOT}/bin/openocd"
 set OPENOCD_LOG_LEVEL 2
 # enables exp_internal . That is enables internal debug of expect
@@ -42,18 +46,25 @@ set OCD_PORT_GDBSRV 3333
 # NOTE: environment queries below are not conventional, but should work
 # fine for OpenOCD testing
 puts "Checking for testsuite requirements..."
-if {[auto_execok $CC_FOR_TARGET] == ""} {
-  puts "ERROR: could not find target compiler ($CC_FOR_TARGET), check your PATH"
-  exit 1
-}
 if {[auto_execok $OPENOCD] == ""} {
   puts "ERROR: could not find openocd binary at $OPENOCD"
   puts "   check your OPENOCD_ROOT ($OPENOCD_ROOT) is specified correctly"
   exit 1
 }
 
+if {[auto_execok $CC_FOR_TARGET] == ""} {
+  puts "ERROR: could not find target compiler ($CC_FOR_TARGET), check your PATH"
+  exit 1
+} else {
+  puts "WARNING: PATH is modified to contain the location of the compiler"
+  # NOTE: this may require some special handling since this call won't work
+  # on windows. However we don't care since the infrastructure is Linux-only
+  set ::env(PATH) "$::env(PATH):[file dirname [auto_execok $CC_FOR_TARGET]]"
+}
+
 if {[auto_execok $GDB_BIN]== "" } {
-  puts "WARNING: could not detect GDB in current PATH, gdb tests likely fail"
+  puts "ERROR: could not find GDB for target ($GDB_BIN), check your PATH"
+  exit 1
 }
 
 if {[auto_execok $SPIKE_SIM] == ""} {
