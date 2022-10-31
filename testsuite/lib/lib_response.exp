@@ -422,7 +422,7 @@ proc parse_gdb_info_reg { report } {
     if {![regexp {([^ ]+)\s+(0x)?([0-9a-fA-F]+)\s+(0x)?([0-9a-fA-F]+)} $line \
           m reg_name dummy reg_num dummy2 value]} {
       return [internal_parse_op_failure $TYPE $report \
-              [list info "could not match reg record at "]]
+              [list info "could not match reg record at $line"]]
     }
     lappend reg_names $reg_name
     if { $dummy2 eq "" } {
