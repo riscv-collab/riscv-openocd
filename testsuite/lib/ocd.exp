@@ -244,7 +244,6 @@ proc ocd_finish {} {
 }
 
 proc ocd_internal_error { msg } {
-  perror $msg
   ocd_disconnect
   error $msg
 }
