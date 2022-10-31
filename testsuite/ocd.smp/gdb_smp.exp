@@ -40,7 +40,16 @@ if {[ocdtlb_rsp_get $threads_info threads_num] != $NUM_CORES} {
 set load_result [gdb_run_command "load $default_bin_prefix.exe"]
 
 gdb_run_command "b *$END_ADDRESS"
-gdb_run_command "continue"
+
+if {[target_info name] == "twin_scr7_64_smp4"} {
+  setup_kfail openocd_EMBARGO/19207 "*-*-*"
+  set perror_threshold 2
+}
+# TODO: once bug is fixed we should remove the catch statement
+if {[catch {gdb_run_command "continue"} err]} {
+  perror $err
+  return [ocd_test_fail]
+}
 
 set x1_values {}
 

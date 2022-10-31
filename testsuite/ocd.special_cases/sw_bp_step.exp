@@ -26,7 +26,16 @@ ocdtlb_expect_equal $current_pc $END_ADDR
 
 ocdtlb_run_expect "step"
 set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
-ocdtlb_expect_equal $current_pc $MAIN_ADDR
+
+if {[target_info name] == "twin_scr7_64_smp4"} {
+  setup_kfail openocd_EMBARGO/19141 "*-*-*"
+  set perror_threshold 2
+}
+# TODO: remove catch statement once the bug is fixed
+if {[catch {ocdtlb_expect_equal $current_pc $MAIN_ADDR} err]} {
+  perror $err
+  return [ocd_test_fail]
+}
 
 ocdtlb_run_expect "rbp all"
 
