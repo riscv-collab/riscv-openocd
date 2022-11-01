@@ -45,6 +45,7 @@ pipeline {
            charset: 'UTF-8',
            mimeType: 'text/html',
            subject: 'OpenOCD nightly failure',
+           cc: 'konstantin.vladimirov@syntacore.com,evgeniy.naydanov@syntacore.com',
            to: 'anatoly.parshintsev@syntacore.com'
     }
   }
