@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 function process_report {
   input=$1
   build_number=$(xmlstarlet sel -t -m "/workflowRun/number" -v . "$input")

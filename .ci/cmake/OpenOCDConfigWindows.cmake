@@ -1,0 +1,32 @@
+
+set(OPENOCD_CONFIGURE_OPTIONS
+  --disable-werror
+  --enable-riscv
+  --enable-aice
+  --enable-amtjtagaccel
+  --enable-armjtagew
+  --enable-cmsis-dap
+  --enable-ftdi
+  --enable-gw16012
+  --enable-jlink
+  --enable-jtag_vpi
+  --enable-opendous
+  --enable-openjtag_ftdi
+  --enable-osbdm
+  --enable-legacy-ft2232_libftdi
+  --enable-parport
+  --disable-parport-ppdev
+  --enable-parport-giveio
+  --enable-presto_libftdi
+  --enable-remote-bitbang
+  --enable-rlink
+  --enable-stlink
+  --enable-ti-icdi
+  --enable-ulink
+  --enable-usb-blaster-2
+  --enable-usb_blaster_libftdi
+  --enable-usbprog
+  --enable-vsllink
+  --enable-target64
+)
+

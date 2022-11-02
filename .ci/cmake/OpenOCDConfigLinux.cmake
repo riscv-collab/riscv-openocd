@@ -1,0 +1,46 @@
+
+set(OPENOCD_CONFIGURE_OPTIONS
+  --enable-rshim
+  --enable-ftdi
+  --enable-ftdi-oscan1
+  --enable-stlink
+  --enable-ti-icdi
+  --enable-ulink
+  --enable-usb-blaster-2
+  --enable-ft232r
+  --enable-vsllink
+  --enable-xds110
+  --enable-cmsis-dap-v2
+  --enable-osbdm
+  --enable-opendous
+  --enable-armjtagew
+  --enable-rlink
+  --enable-usbprog
+  --enable-cmsis-dap
+  --enable-nulink
+  --enable-kitprog
+  --enable-usb-blaster
+  --enable-presto
+  --enable-openjtag
+  --enable-buspirate
+  --enable-jlink
+  --enable-aice
+  --enable-parport
+  --disable-parport-ppdev
+  --enable-jtag_vpi
+  --enable-vdebug
+  --enable-jtag_dpi
+  --enable-amtjtagaccel
+  --enable-bcm2835gpio
+  --enable-imx_gpio
+  --enable-ep93xx
+  --enable-at91rm9200
+  --enable-gw16012
+  --enable-sysfsgpio
+  --enable-xlnx-pcie-xvc
+  --enable-remote-bitbang
+  # Capstone is disabled, since 0.11 has the support only for arm and aarch64
+  #--with-capstone
+)
+
+

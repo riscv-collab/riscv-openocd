@@ -8,7 +8,11 @@ PROJECT_NAME := OpenOCD
 TARGET_BOARD ?=
 BUILD_TYPE ?= Release
 
-export SYNTACORE_NAS_SERVER = nas.dev.syntacore.com
+DOWNLOAD_DEPENDENCIES_FROM_ARTIFACTORY ?= false
+SYNTACORE_NAS_SERVER ?= nas.dev.syntacore.com
+
+export DOWNLOAD_DEPENDENCIES_FROM_ARTIFACTORY
+export SYNTACORE_NAS_SERVER
 
 ifndef COMMON_BUILD_DIR
 $(error COMMON_BUILD_DIR is not set)
@@ -32,18 +36,30 @@ all: \
 configure:
 	./bootstrap
 
-.PHONY: config
-config: configure
-	cmake -S .ci -B $(COMMON_BUILD_DIR) -G "Unix Makefiles"
+.PHONY: config_linux
+config_linux: configure
+	cmake -S .ci -B $(COMMON_BUILD_DIR)/linux   -G "Unix Makefiles"
+
+.PHONY: config_windows
+config_windows: configure
+	cmake -S .ci -B $(COMMON_BUILD_DIR)/windows -G "Unix Makefiles" \
+		--toolchain cmake/ToolchainMingw.cmake
+
+.PHONY: build_linux
+build_linux: config_linux
+	cmake --build $(COMMON_BUILD_DIR)/linux --target openocd --parallel $(PARALLEL)
+
+.PHONY: build_windows
+build_windows: config_windows
+	cmake --build $(COMMON_BUILD_DIR)/windows --target openocd --parallel $(PARALLEL)
 
 .PHONY: build
-build: config
-	cmake --build $(COMMON_BUILD_DIR) --target openocd --parallel $(PARALLEL)
+build: build_linux build_windows
+
 
 .PHONY: test
 test: build
-	cmake --build $(COMMON_BUILD_DIR) --target OpenOCDTest --parallel $(PARALLEL)
-
+	cmake --build $(COMMON_BUILD_DIR)/linux --target OpenOCDTest --parallel $(PARALLEL)
 
 .PHONY: install
 install:
@@ -55,8 +71,9 @@ test_install:
 package_name:
 
 .PHONY: package
-package: config
-	cmake --build "$(COMMON_BUILD_DIR)" --target OpenOCDPackage
+package: build
+	cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDPackage
+	cmake --build "$(COMMON_BUILD_DIR)/windows" --target OpenOCDPackage
 
 .PHONY: clean
 clean:
@@ -80,7 +97,7 @@ DOCKER_USER ?= $(shell id --user --name)
 DOCKER_UID != id --user $(DOCKER_USER)
 DOCKER_USER_HOME != [[ "$(DOCKER_USER)" != "root" ]] && echo "/home/$(DOCKER_USER)" || echo "/root"
 
-DOCKER_IMAGE_TAG := sc/docker_cpp:1.1.5
+DOCKER_IMAGE_TAG := sc/docker_cpp:1.1.6
 DOCKER_CONTAINER := $(COMMON_BUILD_DIR)/$(DOCKER_CONTAINER_NAME)
 DOCKER_COMMAND != [[ ! -z '$(COMMAND)' ]] && echo '$$(COMMAND)' || echo 'make $$(TARGET) -f .ci/makefile'
 
@@ -123,6 +140,8 @@ in_docker: $(DOCKER_CONTAINER)
 		--env COMMON_BUILD_DIR="$(COMMON_BUILD_DIR)" \
 		--env NAS_USER="$(NAS_USR)" \
 		--env NAS_PASS="$(NAS_PSW)" \
+		--env SYNTACORE_NAS_SERVER="$(SYNTACORE_NAS_SERVER)" \
+		--env DOWNLOAD_DEPENDENCIES_FROM_ARTIFACTORY="$(DOWNLOAD_DEPENDENCIES_FROM_ARTIFACTORY)" \
 		--env ARTIFACTORY_API_KEY="$(ARTIFACTORY_API_KEY)" \
 		--env BUILD_TYPE="$(BUILD_TYPE)" \
 		\
