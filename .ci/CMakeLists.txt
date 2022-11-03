@@ -33,7 +33,7 @@ ExternalProject_Add(spike
   PREFIX SpikeBuild
   SOURCE_DIR SpikeSources
   GIT_SHALLOW True
-  GIT_REPOSITORY http://${NAS_USER}:${NAS_PASS}@gitlab.dev.syntacore.com/ar-sc/riscv-isa-sim
+  GIT_REPOSITORY http://${NAS_USER}:${NAS_PASS}@gitlab.dev.syntacore.com/simulators/riscv-isa-sim
   GIT_TAG sc/main
   CONFIGURE_COMMAND
     ${CMAKE_BINARY_DIR}/SpikeSources/configure
