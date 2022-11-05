@@ -71,16 +71,17 @@ prepare_board:
 ###################### docker support ######################
 TARGET ?=
 COMMAND ?=
-DOCKER_ADMIN ?= false
 DOCKER_CACHE ?= $$HOME/.cache
 DOCKER_REGISTRY ?= nexus.dev.syntacore.com:8091
 DOCKER_CONTAINER_NAME ?= $(PROJECT_NAME)_container
 
-DOCKER_KEEP_CI_USER_SUDO := true
-DOCKER_IMAGE_TAG := sc/docker_cpp:1.0.10
+KEEP_SUDO := true
+DOCKER_USER ?= $(shell id --user --name)
+DOCKER_UID != id --user $(DOCKER_USER)
+DOCKER_USER_HOME != [[ "$(DOCKER_USER)" != "root" ]] && echo "/home/$(DOCKER_USER)" || echo "/root"
+
+DOCKER_IMAGE_TAG := sc/docker_cpp:1.1.5
 DOCKER_CONTAINER := $(COMMON_BUILD_DIR)/$(DOCKER_CONTAINER_NAME)
-DOCKER_CONTAINER_USER != [[ "$(DOCKER_ADMIN)" != "true" ]] && echo "ci_user" || echo "root"
-DOCKER_CONTAINER_USER_HOME != [[ "$(DOCKER_CONTAINER_USER)" != "root" ]] && echo "/home/$(DOCKER_CONTAINER_USER)" || echo "/root"
 DOCKER_COMMAND != [[ ! -z '$(COMMAND)' ]] && echo '$$(COMMAND)' || echo 'make $$(TARGET) -f .ci/makefile'
 
 
@@ -89,6 +90,7 @@ IF_DOCKERD_UP := command -v docker &> /dev/null && docker image ls &> /dev/null
 DOCKER_CONTAINER_ID != $(IF_DOCKERD_UP) && docker container ls --quiet --all --filter name=^/$(DOCKER_CONTAINER_NAME)$
 DOCKER_CONTAINER_STATE != $(IF_DOCKERD_UP) && docker container ls --format {{.State}} --all --filter name=^/$(DOCKER_CONTAINER_NAME)$
 DOCKER_CONTAINER_RUN_STATUS != [[ "$(DOCKER_CONTAINER_STATE)" != "running" ]] && echo "$(DOCKER_CONTAINER)_not_running"
+
 .PHONY: $(DOCKER_CONTAINER)_not_running
 $(DOCKER_CONTAINER): $(DOCKER_CONTAINER_RUN_STATUS)
 ifneq ($(DOCKER_CONTAINER_ID),)
@@ -99,14 +101,13 @@ endif
 	find "$(COMMON_BUILD_DIR)" -type d -empty
 	docker run --interactive --tty --detach \
 		--privileged \
-		--env KEEP_CI_USER_SUDO="$(DOCKER_KEEP_CI_USER_SUDO)" \
-		--env CI_UID="$$(id --user)" --env CI_GID="$$(id --group)" \
+		--env KEEP_SUDO="$(KEEP_SUDO)" \
+		--env USER_ID="$(DOCKER_UID)" --env USER_NAME="$(DOCKER_USER)" \
 		--env "TERM=xterm-256color" \
-		--user root \
 		--name $(DOCKER_CONTAINER_NAME) \
-		--mount type=bind,source="$$(dirname $(CI_MK_DIR))",target=/home/repo \
-		--mount type=bind,source="$$(realpath $(COMMON_BUILD_DIR))",target=/home/build \
-		--mount type=bind,source="$$(realpath $(DOCKER_CACHE))",target=$(DOCKER_CONTAINER_USER_HOME)/.cache \
+		--mount type=bind,source="$$(pwd)",target="$$(pwd)" \
+		--mount type=bind,source="$(COMMON_BUILD_DIR)",target="$(COMMON_BUILD_DIR)" \
+		--workdir "$$(pwd)" \
 		$(DOCKER_REGISTRY)/$(DOCKER_IMAGE_TAG)
 	sleep 1
 	touch $@
@@ -119,7 +120,7 @@ in_docker: $(DOCKER_CONTAINER)
 	docker exec \
 		--env TARGET_BOARD="$(TARGET_BOARD)" \
 		--env PRESET="$(PRESET)" \
-		--env COMMON_BUILD_DIR=/home/build \
+		--env COMMON_BUILD_DIR="$(COMMON_BUILD_DIR)" \
 		--env NAS_USER="$(NAS_USR)" \
 		--env NAS_PASS="$(NAS_PSW)" \
 		--env ARTIFACTORY_API_KEY="$(ARTIFACTORY_API_KEY)" \
@@ -130,8 +131,7 @@ in_docker: $(DOCKER_CONTAINER)
 		\
 		--env COMMIT="$(COMMIT)" \
 		\
-		--env CI_UID="$$(id --user)" --env CI_GID="$$(id --group)" \
-		--user $(DOCKER_CONTAINER_USER) \
+		--user $(DOCKER_USER) \
 		$(DOCKER_CONTAINER_NAME) \
 		bash -c '$(DOCKER_COMMAND)'
 
