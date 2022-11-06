@@ -7,8 +7,8 @@ pipeline {
     JENKINS_CONTROLLER="http://jenkins.dev.syntacore.com"
     USR="ie-sc"
     PASS="1"
-    ZALMAN_NIGHTLY="${JENKINS_CONTROLLER}/job/Tools/job/openocd_nightly_twin/lastBuild/api/xml"
-    TWIN_NIGHTLY="${JENKINS_CONTROLLER}/job/Tools/job/openocd_nightly_zalman/lastBuild/api/xml"
+    ZALMAN_NIGHTLY="${JENKINS_CONTROLLER}/job/Tools/job/openocd_nightly_zalman/lastBuild/api/xml"
+    TWIN_NIGHTLY="${JENKINS_CONTROLLER}/job/Tools/job/openocd_nightly_twin/lastBuild/api/xml"
   }
   stages {
     stage('CleanWorkspaceAndCheckout') {
