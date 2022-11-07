@@ -2,6 +2,7 @@ pipeline {
   agent { label 'twin_server' }
   options {
     skipDefaultCheckout(true)
+    timestamps()
   }
   environment {
     WD = "${WORKSPACE}/${BUILD_TAG}"

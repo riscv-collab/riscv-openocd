@@ -2,6 +2,7 @@ pipeline {
   agent { label 'zalman' }
   options {
     skipDefaultCheckout(true)
+    timestamps()
   }
   environment {
     WD = "${WORKSPACE}/${BUILD_TAG}"
