@@ -8,6 +8,7 @@ pipeline {
     WD = "${WORKSPACE}/${BUILD_TAG}"
     // in addition NAS_PSW and NAS_USR variables are defined
     NAS = credentials('GitlabJenkins')
+    DOCKER = credentials('docker-images-nexus')
     SUDO_PSW = "${NAS_PSW}"
     // needed by docker CI scipts
     COMMON_BUILD_DIR = "$WD/build"
@@ -16,6 +17,7 @@ pipeline {
   stages {
     stage('CleanWorkspaceAndCheckout') {
       steps {
+        sh "docker login -u ${DOCKER_USR} -p ${DOCKER_PSW} nexus.dev.syntacore.com:8091"
         cleanWs()
         checkout scm
       }
