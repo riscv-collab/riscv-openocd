@@ -97,7 +97,7 @@ DOCKER_USER ?= $(shell id --user --name)
 DOCKER_UID != id --user $(DOCKER_USER)
 DOCKER_USER_HOME != [[ "$(DOCKER_USER)" != "root" ]] && echo "/home/$(DOCKER_USER)" || echo "/root"
 
-DOCKER_IMAGE_TAG := sc/docker_cpp:1.1.6
+DOCKER_IMAGE_TAG := sc/docker_cpp:1.1.7
 DOCKER_CONTAINER := $(COMMON_BUILD_DIR)/$(DOCKER_CONTAINER_NAME)
 DOCKER_COMMAND != [[ ! -z '$(COMMAND)' ]] && echo '$$(COMMAND)' || echo 'make $$(TARGET) -f .ci/makefile'
 
