@@ -19,7 +19,9 @@ pipeline {
       steps {
         sh "docker login -u ${DOCKER_USR} -p ${DOCKER_PSW} nexus.dev.syntacore.com:8091"
         cleanWs()
-        checkout scm
+        dir ("$WD") {
+          checkout scm
+        }
       }
     }
     stage('Build') {
@@ -27,7 +29,7 @@ pipeline {
         echo "Building project"
         dir ("$WD") {
           sh 'printenv'
-          sh 'make in_docker TARGET=build -f ${WORKSPACE}/.ci/makefile'
+          sh 'make in_docker TARGET=build -f ${WD}/.ci/makefile'
         }
       }
     }
@@ -48,15 +50,15 @@ pipeline {
             stages {
               stage('BoardPrepare') {
                 steps {
-                  dir ("$WORKSPACE") {
-                    sh 'make prepare_board -f ${WORKSPACE}/.ci/makefile TARGET_BOARD=${BOARD}'
+                  dir ("$WD") {
+                    sh 'make prepare_board -f ${WD}/.ci/makefile TARGET_BOARD=${BOARD}'
                   }
                 }
               }
               stage('BoardTest') {
                 steps {
                   dir ("$WD") {
-                    sh 'make in_docker -f ${WORKSPACE}/.ci/makefile TARGET=test TARGET_BOARD=${BOARD}'
+                    sh 'make in_docker -f ${WD}/.ci/makefile TARGET=test TARGET_BOARD=${BOARD}'
                   }
                 }
               }
@@ -68,7 +70,7 @@ pipeline {
   }
   post {
     always {
-      sh 'make clean_docker -f ${WORKSPACE}/.ci/makefile'
+      sh 'make clean_docker -f ${WD}/.ci/makefile'
     }
   }
 }
