@@ -69,7 +69,7 @@ add_custom_target(OpenOCDTest
   COMMAND
     mkdir -p ${LOGS_DIR}
   COMMAND
-        DEJAGNU=${OPENOCD_SOURCES}/testsuite/site.exp
+    env DEJAGNU=${OPENOCD_SOURCES}/testsuite/site.exp
     ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
         --src_dir=${OPENOCD_SOURCES}/testsuite
         ${TARGET_BOARD_CMDLINE}
