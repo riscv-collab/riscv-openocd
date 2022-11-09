@@ -36,6 +36,7 @@ ExternalProject_Add(dejagnu
 )
 
 set(SPIKE_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_spike)
+# TODO: move this to manifest
 ExternalProject_Add(spike
   PREFIX SpikeBuild
   SOURCE_DIR SpikeSources
@@ -80,6 +81,7 @@ add_custom_target(OpenOCDTest
 )
 
 find_package(Python COMPONENTS Interpreter REQUIRED)
+# TODO: move this to manifest
 set(RISCV_TESTS_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTests)
 ExternalProject_Add(riscv_tests
   SOURCE_DIR ${RISCV_TESTS_SOURCE_DIR}
