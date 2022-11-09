@@ -32,6 +32,7 @@ all: \
 	config \
 	build \
 	test \
+	riscv-tests-debug \
 
 configure:
 	./bootstrap
@@ -60,6 +61,10 @@ build: build_linux build_windows
 .PHONY: test
 test: build
 	cmake --build $(COMMON_BUILD_DIR)/linux --target OpenOCDTest --parallel $(PARALLEL)
+
+.PHONY: riscv-tests-debug
+riscv-tests-debug: build
+	cmake --build $(COMMON_BUILD_DIR)/linux --target RISCVTestsDebug --parallel $(PARALLEL)
 
 .PHONY: install
 install:

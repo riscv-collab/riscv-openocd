@@ -1,0 +1,48 @@
+diff --git a/debug/targets/RISC-V/spike-1.cfg b/debug/targets/RISC-V/spike-1.cfg
+index 5f11b08..5d5c5ab 100644
+--- a/debug/targets/RISC-V/spike-1.cfg
++++ b/debug/targets/RISC-V/spike-1.cfg
+@@ -21,6 +21,7 @@ gdb_report_register_access_error enable
+ # Expose an unimplemented CSR so we can test non-existent register access
+ # behavior.
+ riscv expose_csrs 2288
++riscv expose_csrs 1952
+ riscv expose_custom 1,12345-12348
+ 
+ init
+diff --git a/debug/targets/RISC-V/spike-2-hwthread.cfg b/debug/targets/RISC-V/spike-2-hwthread.cfg
+index dc60ced..a1f5672 100644
+--- a/debug/targets/RISC-V/spike-2-hwthread.cfg
++++ b/debug/targets/RISC-V/spike-2-hwthread.cfg
+@@ -22,6 +22,7 @@ gdb_report_register_access_error enable
+ foreach t [target names] {
+     targets $t
+     riscv expose_csrs 2288
++    riscv expose_csrs 1952
+     riscv expose_custom 1,12345-12348
+ }
+ 
+diff --git a/debug/targets/RISC-V/spike-2.cfg b/debug/targets/RISC-V/spike-2.cfg
+index 640fba9..1d46d7e 100644
+--- a/debug/targets/RISC-V/spike-2.cfg
++++ b/debug/targets/RISC-V/spike-2.cfg
+@@ -21,6 +21,7 @@ gdb_report_register_access_error enable
+ foreach t [target names] {
+     targets $t
+     riscv expose_csrs 2288
++    riscv expose_csrs 1952
+     riscv expose_custom 1,12345-12348
+ }
+ 
+diff --git a/debug/targets/RISC-V/spike-multi.cfg b/debug/targets/RISC-V/spike-multi.cfg
+index ef6dfc6..bdcc22f 100644
+--- a/debug/targets/RISC-V/spike-multi.cfg
++++ b/debug/targets/RISC-V/spike-multi.cfg
+@@ -26,6 +26,7 @@ gdb_report_register_access_error enable
+ foreach t [target names] {
+     targets $t
+     riscv expose_csrs 2288
++    riscv expose_csrs 1952
+     riscv expose_custom 1,12345-12348
+ }
+ 

@@ -78,3 +78,47 @@ add_custom_target(OpenOCDTest
         --local_init ${CMAKE_BINARY_DIR}/local_init.exp
   DEPENDS openocd dejagnu spike test_dir
 )
+
+find_package(Python COMPONENTS Interpreter REQUIRED)
+set(RISCV_TESTS_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTests)
+ExternalProject_Add(riscv_tests
+  SOURCE_DIR ${RISCV_TESTS_SOURCE_DIR}
+  GIT_REPOSITORY https://github.com/riscv-software-src/riscv-tests.git
+  GIT_TAG 0d690752517d82e6ce823ea20d2f4d95f535728f
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ""
+  INSTALL_COMMAND ""
+  # TODO: Remove the patch command.
+  # Currently, it is required because Syntacore OpenOCD does not expose most
+  # CSR by default (including tselect needed for some tests)
+  PATCH_COMMAND
+       git checkout debug/targets/RISC-V
+    && git apply ${CMAKE_CURRENT_SOURCE_DIR}/riscv_tests_patches/expose-tselect.patch
+)
+
+set(RISCV_TESTS_RUN_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTestsRun)
+add_custom_target(riscv_tests_run_dir ALL
+  COMMAND
+    ${CMAKE_COMMAND} -E make_directory ${RISCV_TESTS_RUN_DIR}
+  COMMAND
+    ${CMAKE_COMMAND} -E copy_directory
+      ${RISCV_TESTS_SOURCE_DIR}/debug/bin
+      ${RISCV_TESTS_RUN_DIR}/bin
+  DEPENDS riscv_tests
+)
+
+set(RISCV_LOGS_DIRNAME "${RISCV_TESTS_RUN_DIR}/logs")
+add_custom_target(RISCVTestsDebug
+  WORKING_DIRECTORY ${RISCV_TESTS_RUN_DIR}
+  COMMAND
+    mkdir -p ${RISCV_LOGS_DIRNAME}
+  COMMAND
+    env LOGS=${RISCV_LOGS_DIRNAME}
+        GCC=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gcc
+        GDB=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gdb
+        SIM=${SPIKE_INSTALL_PATH}/bin/spike
+        OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
+        ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils/run-riscv-debug-tests.sh
+  DEPENDS openocd spike riscv_tests_run_dir
+)

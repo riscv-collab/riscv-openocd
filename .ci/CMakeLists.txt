@@ -40,7 +40,6 @@ include(cmake/DeclareDepsBuild.cmake)
 set(DEPENDENCIES_INSTALL_PATH ${CMAKE_BINARY_DIR}/dependencies_install)
 declare_build_dependencies(openocd_deps)
 
-
 set(OPENOCD_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_openocd/openocd)
 
 # windows and linux have different set of features

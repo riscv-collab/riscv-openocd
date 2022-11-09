@@ -17,6 +17,7 @@ main-job:
     - make container -f .ci/makefile
     - make in_docker TARGET=build -f .ci/makefile
     - make in_docker TARGET=test -f .ci/makefile
+    - make in_docker TARGET=riscv-tests-debug -f .ci/makefile
     - make in_docker TARGET=package -f .ci/makefile
     - SKIP_ARCHIVATION=true ./.ci/utils/upload_artifact.sh
         $COMMON_BUILD_DIR/linux/install_openocd/linux_openocd.tar.gz
