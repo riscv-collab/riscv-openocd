@@ -99,28 +99,56 @@ ExternalProject_Add(riscv_tests
 )
 
 set(RISCV_TESTS_RUN_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTestsRun)
+set(RISCV_TESTS_LOGS_DIRNAME "${RISCV_TESTS_RUN_DIR}/logs")
 add_custom_target(riscv_tests_run_dir ALL
   COMMAND
     ${CMAKE_COMMAND} -E make_directory ${RISCV_TESTS_RUN_DIR}
   COMMAND
-    ${CMAKE_COMMAND} -E copy_directory
-      ${RISCV_TESTS_SOURCE_DIR}/debug/bin
-      ${RISCV_TESTS_RUN_DIR}/bin
+    ${CMAKE_COMMAND} -E make_directory ${RISCV_TESTS_LOGS_DIRNAME}
   DEPENDS riscv_tests
 )
 
-set(RISCV_LOGS_DIRNAME "${RISCV_TESTS_RUN_DIR}/logs")
+list(APPEND RISCV_TESTS_DEBUG_TARGETS_LIST
+  spike32
+  spike32-2
+  spike32-2-hwthread
+  spike64
+  spike64-2
+  spike64-2-hwthread
+)
+
 add_custom_target(RISCVTestsDebug
   WORKING_DIRECTORY ${RISCV_TESTS_RUN_DIR}
-  COMMAND
-    mkdir -p ${RISCV_LOGS_DIRNAME}
-  COMMAND
-    env LOGS=${RISCV_LOGS_DIRNAME}
-        GCC=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gcc
-        GDB=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gdb
-        SIM=${SPIKE_INSTALL_PATH}/bin/spike
-        OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
-        ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
-    ${CMAKE_CURRENT_SOURCE_DIR}/utils/run-riscv-debug-tests.sh
-  DEPENDS openocd spike riscv_tests_run_dir
+  DEPENDS riscv_tests_run_dir
 )
+function(add_riscv_test_debug_run_for_target target)
+  set(TARGET_NAME riscv_tests_debug_${target})
+  set(WD_TARGET_NAME ${TARGET_NAME}_work_dir)
+  set(WD_RELATIVE_PATH ${RISCV_TESTS_RUN_DIR}/WD_${target})
+
+  add_custom_target(${WD_TARGET_NAME} ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${WD_RELATIVE_PATH}
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${RISCV_TESTS_SOURCE_DIR}/debug/bin
+            ${WD_RELATIVE_PATH}/bin
+    DEPENDS riscv_tests_run_dir)
+
+  add_custom_target(${TARGET_NAME}
+    WORKING_DIRECTORY ${WD_RELATIVE_PATH}
+    COMMAND
+      env LOGS=${RISCV_TESTS_LOGS_DIRNAME}
+          GCC=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gcc
+          GDB=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gdb
+          SIM=${SPIKE_INSTALL_PATH}/bin/spike
+          OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
+          ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
+          TGT=${target}
+      ${CMAKE_CURRENT_SOURCE_DIR}/utils/run-riscv-debug-tests.sh
+      DEPENDS openocd spike ${WD_TARGET_NAME}
+  )
+  add_dependencies(RISCVTestsDebug ${TARGET_NAME})
+endfunction()
+
+foreach(tgt ${RISCV_TESTS_DEBUG_TARGETS_LIST})
+  add_riscv_test_debug_run_for_target(${tgt})
+endforeach()

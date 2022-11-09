@@ -4,36 +4,22 @@
 #set -o pipefail
 #set -o nounset
 
-platforms=(
-  spike32 \
-  spike32-2 \
-  spike32-2-hwthread \
-  spike64 \
-  spike64-2 \
-  spike64-2-hwthread \
-)
-
-failures=()
-
 RESULT="SUCCESS"
-for platform in ${platforms[@]}
-do
-  mkdir -p ${LOGS}/${platform}
 
-  ${ROOT}/gdbserver.py ${ROOT}/targets/RISC-V/${platform}.py  \
-    --logs "${LOGS}/${platform}" \
-    --print-failures             \
-    --gcc "${GCC}"               \
-    --gdb "${GDB}"               \
-    --sim_cmd "${SIM}"           \
-    --server_cmd "${OCD}" | tee "${LOGS}/${platform}.log"
+mkdir -p ${LOGS}/${TGT}
 
-  TEST_STATUS=${PIPESTATUS[0]}
-  if [[ $TEST_STATUS -ne 0 ]]; then
-    failures+=("${platform}")
-    RESULT="FAILURE"
-  fi
-done
+${ROOT}/gdbserver.py ${ROOT}/targets/RISC-V/${TGT}.py  \
+  --logs "${LOGS}/${TGT}" \
+  --print-failures             \
+  --gcc "${GCC}"               \
+  --gdb "${GDB}"               \
+  --sim_cmd "${SIM}"           \
+  --server_cmd "${OCD}" | tee "${LOGS}/${TGT}.log"
+
+TEST_STATUS=${PIPESTATUS[0]}
+if [[ $TEST_STATUS -ne 0 ]]; then
+  RESULT="FAILURE"
+fi
 
 
 if [ "$RESULT" == "FAILURE" ]; then
