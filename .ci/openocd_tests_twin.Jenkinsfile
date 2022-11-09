@@ -45,21 +45,12 @@ pipeline {
           }
         }
         stages {
-          stage('LockBoard') {
-            options { lock( 'lock-board' ) }
-            stages {
-              stage('BoardPrepare') {
-                steps {
-                  dir ("$WD") {
-                    sh 'make prepare_board -f ${WD}/.ci/makefile TARGET_BOARD=${BOARD}'
-                  }
-                }
-              }
-              stage('BoardTest') {
-                steps {
-                  dir ("$WD") {
-                    sh 'make in_docker -f ${WD}/.ci/makefile TARGET=test TARGET_BOARD=${BOARD}'
-                  }
+          stage('RunTests') {
+            steps {
+              lock (resource: "lock-fpga-on-twin") {
+                dir ("$WD") {
+                  sh 'make prepare_board -f ${WD}/.ci/makefile TARGET_BOARD=${BOARD}'
+                  sh 'make in_docker -f ${WD}/.ci/makefile TARGET=test TARGET_BOARD=${BOARD}'
                 }
               }
             }
