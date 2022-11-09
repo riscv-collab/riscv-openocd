@@ -2250,8 +2250,8 @@ static int sample_memory_bus_v1(struct target *target,
 
 		uint32_t sbcs_read = riscv_batch_get_dmi_read_data(batch, sbcs_read_index);
 		if (get_field(sbcs_read, DM_SBCS_SBBUSYERROR)) {
-				/* Discard this batch when we encounter "busy error" state on the System Bus level.
-				 * We'll try next time with a larger System Bus read delay. */
+			/* Discard this batch when we encounter "busy error" state on the System Bus level.
+			 * We'll try next time with a larger System Bus read delay. */
 			info->bus_master_read_delay += info->bus_master_read_delay / 10 + 1;
 			dmi_write(target, DM_SBCS, sbcs_read | DM_SBCS_SBBUSYERROR | DM_SBCS_SBERROR);
 			riscv_batch_free(batch);
