@@ -12,7 +12,10 @@ set_board_info openocd,extra_csr 0
 set_board_info openocd,hwthreads 0
 set_board_info openocd,smp_target 0
 set_board_info openocd,abi_regnames 0
-set_board_info openocd,flags [list \
+
+set_board_info openocd,interface_flags [list \
  -f ${OPENOCD_ROOT}/share/openocd/scripts/interface/ftdi/olimex-arm-usb-ocd-h.cfg \
+]
+set_board_info openocd,target_flags [list \
  -f ${testsuitedir}/boards/support/ocd/syntacore_riscv.cfg \
 ]

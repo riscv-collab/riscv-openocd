@@ -227,7 +227,10 @@ proc ocd_init {test_file_name} {
   # format is ${board_name}_${test_name}
   set default_bin_prefix "[target_info name]_${ocd_test_name}"
 
-  set openocd_args [target_info openocd,flags]
+  set openocd_args [concat \
+    [target_info openocd,interface_flags] \
+    [target_info openocd,target_flags] \
+  ]
   verbose "spawning openocd: $OPENOCD $openocd_args" 2
   spawn $OPENOCD {*}$openocd_args
 

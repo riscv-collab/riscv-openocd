@@ -14,13 +14,16 @@ add_board_info sim,options --rbb-port=$SPIKE_BITBANG
 
 set_board_info ldscript "-T$testsuitedir/boards/support/ldscripts/spike.ld"
 
-proc ocd_flags_for_spike { cfg_name } {
+set_board_info openocd,interface_flags [list \
+  -c "telnet_port disabled" \
+  -c "adapter driver remote_bitbang" \
+  -c "remote_bitbang host 127.0.0.1" \
+  -c "remote_bitbang port $SPIKE_BITBANG" \
+]
+
+proc target_ocd_flags_for_spike { cfg_name } {
   global testsuitedir
-  global SPIKE_BITBANG
   return [list \
-    -c "telnet_port disabled" \
-    -c "adapter driver remote_bitbang" \
-    -c "remote_bitbang host 127.0.0.1 ; remote_bitbang port $SPIKE_BITBANG" \
     -f "$testsuitedir/boards/support/ocd/$cfg_name" \
   ]
 }

@@ -9,4 +9,5 @@ set_board_info openocd,extra_csr 0
 set_board_info openocd,hwthreads 0
 set_board_info openocd,smp_target 0
 set_board_info openocd,abi_regnames 0
-set_board_info openocd,flags [ocd_flags_for_spike spike_default.cfg]
+
+set_board_info openocd,target_flags [target_ocd_flags_for_spike spike_default.cfg]
