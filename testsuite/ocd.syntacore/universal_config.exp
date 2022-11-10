@@ -1,0 +1,49 @@
+# disconnect and kill the default openocd
+ocd_finish
+
+proc ocd_launch_script { tcl_script } {
+  global OPENOCD
+  global OPENOCD_ROOT
+  global srcdir
+  global subdir
+  # TODO: env is unused for now
+  set openocd_adapter_flags [target_info openocd,interface_flags]
+
+  set target_cfg_flags [list \
+    -f ${OPENOCD_ROOT}/share/openocd/scripts/target/syntacore_target.cfg \
+  ]
+
+  set test_script_flags [list \
+   -f $srcdir/$subdir/$tcl_script \
+  ]
+
+  set cmd [concat \
+    [list $OPENOCD] \
+    [list -d2] \
+    $openocd_adapter_flags \
+    $target_cfg_flags \
+    [list -f $srcdir/$subdir/common_test_init.tcl] \
+    $test_script_flags
+  ]
+
+  set NCORES [target_info cpu,cores_num]
+  set ::env(NCORES) $NCORES
+  if { [target_info sim] eq "" } {
+    set ::env(IS_SIM) 0
+  } else {
+    set ::env(IS_SIM) 1
+  }
+
+  print $cmd
+  eval exec -ignorestderr $cmd
+}
+
+ocd_launch_script not_testable.tcl
+ocd_launch_script chipname_test.tcl
+ocd_launch_script harts_num_test.tcl
+ocd_launch_script hooks_test.tcl
+ocd_launch_script work_area_enable.tcl
+ocd_launch_script work_area_disable.tcl
+ocd_launch_script reset_config_test.tcl
+ocd_launch_script reset_config_test2.tcl
+ocd_launch_script defaults.tcl
