@@ -127,9 +127,9 @@ endif
 		--env USER_ID="$(DOCKER_UID)" --env USER_NAME="$(DOCKER_USER)" \
 		--env "TERM=xterm-256color" \
 		--name $(DOCKER_CONTAINER_NAME) \
-		--mount type=bind,source="$$(pwd)",target="$$(pwd)" \
-		--mount type=bind,source="$(COMMON_BUILD_DIR)",target="$(COMMON_BUILD_DIR)" \
-		--workdir "$$(pwd)" \
+		--mount type=bind,source="$$(dirname $(CI_MK_DIR))",target=/home/repo \
+		--mount type=bind,source="$$(realpath $(COMMON_BUILD_DIR))",target=/home/build \
+		--workdir "/home/repo" \
 		$(DOCKER_REGISTRY)/$(DOCKER_IMAGE_TAG)
 	sleep 1
 	touch $@
@@ -142,7 +142,7 @@ in_docker: $(DOCKER_CONTAINER)
 	docker exec \
 		--env TARGET_BOARD="$(TARGET_BOARD)" \
 		--env PRESET="$(PRESET)" \
-		--env COMMON_BUILD_DIR="$(COMMON_BUILD_DIR)" \
+		--env COMMON_BUILD_DIR="/home/build" \
 		--env NAS_USER="$(NAS_USR)" \
 		--env NAS_PASS="$(NAS_PSW)" \
 		--env SYNTACORE_NAS_SERVER="$(SYNTACORE_NAS_SERVER)" \
