@@ -6,6 +6,7 @@ proc ocd_launch_script { tcl_script } {
   global OPENOCD_ROOT
   global srcdir
   global subdir
+  global default_bin_prefix
   # TODO: env is unused for now
   set openocd_adapter_flags [target_info openocd,interface_flags]
 
@@ -19,12 +20,12 @@ proc ocd_launch_script { tcl_script } {
 
   set cmd [concat \
     [list $OPENOCD] \
-    [list -d2] \
     $openocd_adapter_flags \
     $target_cfg_flags \
     [list -f $srcdir/$subdir/common_test_init.tcl] \
-    $test_script_flags
+    $test_script_flags \
   ]
+  # [list -d2]
 
   set NCORES [target_info cpu,cores_num]
   set ::env(NCORES) $NCORES
@@ -34,8 +35,8 @@ proc ocd_launch_script { tcl_script } {
     set ::env(IS_SIM) 1
   }
 
-  print $cmd
-  eval exec -ignorestderr $cmd
+  verbose $cmd 1
+  eval exec -ignorestderr $cmd 2>> ${default_bin_prefix}_${tcl_script}.log
 }
 
 ocd_launch_script not_testable.tcl
