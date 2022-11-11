@@ -25,15 +25,34 @@ proc sc_target_configuration_hook {tgt} {
   incr target_conf_count
 }
 
+set targets_ready_count 0
+proc sc_targets_ready_hook { tgts } {
+  global NCORES
+  global targets_ready_count
+
+  echo $tgts
+
+  if { [llength $tgts] != $NCORES } {
+      echo "ERROR: unexpected number of targets reported"
+      shutdown error
+  }
+  incr targets_ready_count
+}
+
 init
 
-if { $target_conf_count != $NCORES } {
-  echo "ERROR: unexpected number of calls to target_conf_hook: $target_conf_count"
+if { $pre_tap_count != 1 } {
+  echo "ERROR: unexpected number of calls to sc_pre_tap_hook: $pre_tap_count"
   shutdown error
 }
 
-if { $pre_tap_count != 1 } {
-  echo "ERROR: unexpected number of calls to pre_tap_hook: $pre_tap_count"
+if { $target_conf_count != $NCORES } {
+  echo "ERROR: unexpected number of calls to sc_target_configuration_hook: $target_conf_count"
+  shutdown error
+}
+
+if { $targets_ready_count != 1 } {
+  echo "ERROR: unexpected number of calls to sc_targets_ready_hook: $targets_ready_count"
   shutdown error
 }
 
