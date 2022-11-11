@@ -9,7 +9,10 @@ sc_target_config adapter_speed 1
 sc_target_config adapter_srst_pulse_width 777
 sc_target_config adapter_srst_delay 42
 
-sc_target_config ftdi_tdo_sample_edge falling
+# NOTE: if the selected driver is not ftdi, setting this option is an error
+if { [adapter driver] == "ftdi" } {
+ sc_target_config ftdi_tdo_sample_edge falling
+}
 
 init
 
