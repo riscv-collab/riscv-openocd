@@ -10,25 +10,25 @@ ProcessorCount(CPU_COUNT)
 set(DEPENDENCIES_LOCATION ${CMAKE_BINARY_DIR}/dependencies)
 
 if (NOT DEPENDENCIES_DOWNLOADED)
- execute_process(
-   COMMAND ${CMAKE_COMMAND} -E make_directory ${DEPENDENCIES_LOCATION})
- execute_process(
-   COMMAND
-      ${CMAKE_CURRENT_SOURCE_DIR}/utils/fetch_dependencies.py
-      ${CMAKE_CURRENT_SOURCE_DIR}/product_dependencies.yaml
-   TIMEOUT 60
-   WORKING_DIRECTORY ${DEPENDENCIES_LOCATION}
-   RESULT_VARIABLE DOWNLOAD_STATUS
- )
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${DEPENDENCIES_LOCATION})
+  execute_process(
+    COMMAND
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils/fetch_dependencies.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/product_dependencies.yaml
+    TIMEOUT 60
+    WORKING_DIRECTORY ${DEPENDENCIES_LOCATION}
+    RESULT_VARIABLE DOWNLOAD_STATUS
+  )
 
- if (${DOWNLOAD_STATUS})
-   message(FATAL_ERROR "could not download dependencies")
- endif()
- message("DOWNLOAD SUCCEDED")
+  if(DOWNLOAD_STATUS AND NOT DOWNLOAD_STATUS EQUAL 0)
+    message(FATAL_ERROR "could not download dependencies: ${DOWNLOAD_STATUS}")
+  endif()
 
- set(DEPENDENCIES_DOWNLOADED TRUE CACHE BOOL
-     "Has dependencies been downloaded?" FORCE)
+  message("DOWNLOAD SUCCEDED")
 
+  set(DEPENDENCIES_DOWNLOADED TRUE CACHE BOOL
+    "Has dependencies been downloaded?" FORCE)
 endif()
 
 
