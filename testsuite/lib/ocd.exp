@@ -118,6 +118,66 @@ proc ocd_check_platform_requirements {} {
   return 1
 }
 
+proc ocd_internal_determine_version {} {
+  global OPENOCD
+  set OPENOCD_VARIANT "unknown"
+  spawn $OPENOCD "--version"
+  expect {
+    -re "Open On-Chip Debugger \[0-9.\]+" {
+      if {[regexp "Open On-Chip Debugger 0.10.0" $expect_out(buffer)]} {
+        set OPENOCD_VARIANT "legacy"
+      } elseif {[regexp "Open On-Chip Debugger 0.11.0" $expect_out(buffer)]} {
+        set OPENOCD_VARIANT "latest"
+      }
+      verbose "reported OpenOCD version: $expect_out(buffer)" 2
+    }
+    eof {
+      error "could not identify openocd variant (unexpected EOF)"
+    }
+    timeout {
+      perror "could not identify openocd variant (unexpected TIMEOUT)"
+    }
+  }
+  # clean up resources from the version invocation
+  close
+  wait
+
+  return $OPENOCD_VARIANT
+}
+
+proc ocd_internal_check_tclrpc_at_port { spawn_id port } {
+  set TCL_SERVER_ACTIVE 0
+  expect {
+    -i $spawn_id
+    -re "Listening on port $port for tcl connections" {
+      verbose "openocd TCL/RPC server launched successfully" 2
+      set TCL_SERVER_ACTIVE 1
+    }
+    eof {
+      error "unexpected EOF while waiting initial ack from TCL/RPC server"
+    }
+    timeout  { perror "could not get initial ack from TCL/RPC server" }
+  }
+  return $TCL_SERVER_ACTIVE
+}
+
+proc ocd_internal_check_gdb_server_at_port { spawn_id port } {
+  set GDB_SERVER_ACTIVE 0
+  expect {
+    -i $spawn_id
+    -re "Listening on port $port for gdb connections" {
+      verbose "openocd GDB server launched successfully" 2
+      set GDB_SERVER_ACTIVE 1
+    }
+    eof {
+      error "unexpected EOF while waiting initial ack from GDB server"
+    }
+    timeout  { perror "could not get initial ack from GDB server" }
+  }
+  return $GDB_SERVER_ACTIVE
+}
+
+
 proc ocd_init {test_file_name} {
   global ENABLE_EXP_INTERNAL
   global timeout
@@ -143,33 +203,25 @@ proc ocd_init {test_file_name} {
 
   ocd_target_info_check
 
-  set OPENOCD_VARIANT "latest"
-  spawn $OPENOCD "--version"
-  expect {
-    -re "Open On-Chip Debugger \[0-9.\]+" {
-      if {[regexp "Open On-Chip Debugger 0.10.0" $expect_out(buffer)]} {
-        set OPENOCD_VARIANT "legacy"
-        build_backward_compat
-      } else {
-        if {[target_info openocd,abi_regnames]} {
-            build_forward_compat
-        } else {
-            build_backward_compat
-        }
-      }
-      verbose "reported OpenOCD version: $expect_out(buffer)" 2
-      verbose "selected OpenOCD variant: $OPENOCD_VARIANT" 1
-    }
-    eof {
-      perror "could not identify openocd variant (unexpected EOF)"
-    }
-    timeout {
-      perror "could not identify openocd variant (unexpected TIMEOUT)"
-    }
+  if {[catch { ocd_internal_determine_version } OPENOCD_VARIANT]} {
+    perror $OPENOCD_VARIANT
+    return
   }
-  # TODO: we should not call close if eof is observed
-  close
-  wait
+
+  verbose "selected OpenOCD variant: $OPENOCD_VARIANT" 1
+
+  if {[string equal $OPENOCD_VARIANT "latest"]} {
+    if {[target_info openocd,abi_regnames]} {
+      build_forward_compat
+    } else {
+      build_backward_compat
+    }
+  } elseif {[string equal $OPENOCD_VARIANT "legacy"]} {
+    build_backward_compat
+  } else {
+    perror "unexpected OpenOCD version $OPENOCD_VARIANT"
+    return
+  }
 
   set ocd_test_name [file rootname [file tail $test_file_name]]
   # format is ${board_name}_${test_name}
@@ -179,24 +231,16 @@ proc ocd_init {test_file_name} {
   verbose "spawning openocd: $OPENOCD $openocd_args" 2
   spawn $OPENOCD {*}$openocd_args
 
-  set TCL_SERVER_ACTIVE 0
-  expect {
-    -re "Listening on port $OCD_PORT_TCLRPC for tcl connections" {
-      verbose "openocd TCL/RPC server launched successfully" 2
-      set TCL_SERVER_ACTIVE 1
-    }
-    eof { perror "unexpected EOF while waiting initial ack from TCL/RPC server" }
-    timeout  { perror "could not get initial ack from TCL/RPC server" }
+  if {[catch {ocd_internal_check_tclrpc_at_port $spawn_id $OCD_PORT_TCLRPC} \
+      TCL_SERVER_ACTIVE]} {
+    perror $TCL_SERVER_ACTIVE
+    return
   }
 
-  set GDB_SERVER_ACTIVE 0
-  expect {
-    -re "Listening on port $OCD_PORT_GDBSRV for gdb connections" {
-      verbose "openocd GDB server launched successfully" 2
-      set GDB_SERVER_ACTIVE 1
-    }
-    eof { perror "unexpected EOF while waiting initial ack from GDB server" }
-    timeout  { perror "could not get initial ack from GDB server" }
+  if {[catch {ocd_internal_check_gdb_server_at_port $spawn_id $OCD_PORT_GDBSRV} \
+    GDB_SERVER_ACTIVE]} {
+    perror $GDB_SERVER_ACTIVE
+    return
   }
 
   if {[expr {$TCL_SERVER_ACTIVE && $GDB_SERVER_ACTIVE}]} {
@@ -204,9 +248,10 @@ proc ocd_init {test_file_name} {
     set openocd_instance_spawn_id $spawn_id
   } else {
     perror "something went wrong during openocd initialization"
+    close
+    wait
   }
 
-  # TODO: we may want to do extra cleanup if timeout is observed
   sleep [ocd_exec_timeout]
   #set openocd_log "-c \"log_output ${ocd_test_name}_openocd.log\" "
   verbose "\\\\\\ ocd_init ///\n   _______" 1
