@@ -9,18 +9,10 @@ set target_conf_count 0
 proc sc_target_configuration_hook {tgt} {
   global target_conf_count
   global NCORES
-  if { $NCORES == 1 } {
+  if { ![string equal $tgt riscv.cpu$target_conf_count] } {
+    echo "ERROR: unexpected target_name: $tgt / $target_conf_count"
 
-    if { ![string equal $tgt riscv.cpu] } {
-      echo "ERROR: unexpected target_name: $tgt"
-      shutdown error
-    }
-  } else {
-    if { ![string equal $tgt riscv.cpu$target_conf_count] } {
-      echo "ERROR: unexpected target_name: $tgt / $target_conf_count"
-
-      shutdown error
-    }
+    shutdown error
   }
   incr target_conf_count
 }

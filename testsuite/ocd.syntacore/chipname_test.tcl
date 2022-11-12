@@ -12,21 +12,15 @@ init
 
 echo [targets]
 set names [target names]
-if { $NCORES == 1 } {
-  if { [string first $CHIPNAME.cpu $names] != 0 } {
-    echo "ERROR: unexpected chipname <$names>!"
+
+set ind 0
+echo $names
+foreach name $names {
+  if { [string first $CHIPNAME.cpu$ind $name] != 0 } {
+    echo "ERROR: unexpected chipname <$name>!"
     shutdown error
   }
-} else {
-  set ind 0
-  echo $names
-  foreach name $names {
-    if { [string first $CHIPNAME.cpu$ind $name] != 0 } {
-      echo "ERROR: unexpected chipname <$name>!"
-      shutdown error
-    }
-    incr ind
-  }
+  incr ind
 }
 
 shutdown
