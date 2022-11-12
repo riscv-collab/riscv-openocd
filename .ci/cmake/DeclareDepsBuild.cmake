@@ -85,6 +85,7 @@ function(declare_build_dependencies target)
     INSTALL_COMMAND
          make install
       && find ${DEPENDENCIES_INSTALL_PATH} -name libftdi*.so* -delete
+      && find ${DEPENDENCIES_INSTALL_PATH} -name libftdi*.dll* -delete
       && find ${DEPENDENCIES_INSTALL_PATH} -name libftdipp* -delete
     DEPENDS libusb
   )
