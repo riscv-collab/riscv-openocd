@@ -10,4 +10,5 @@ set(CMAKE_CXX_LINK_EXECUTABLE x86_64-w64-mingw32-ld)
 
 set(CMAKE_LINKER       x86_64-w64-mingw32-ld CACHE FILEPATH "" FORCE)
 set(CMAKE_RANLIB       x86_64-w64-mingw32-ranlib)
+set(CMAKE_STRIP        x86_64-w64-mingw32-strip)
 

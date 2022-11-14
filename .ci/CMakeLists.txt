@@ -67,6 +67,7 @@ ExternalProject_Add(openocd
   # number of cores, causing extreme number of threads to be created during
   # the build process
   BUILD_COMMAND make install -j${CPU_COUNT}
+  INSTALL_COMMAND ${CMAKE_STRIP} --strip-all ${OPENOCD_INSTALL_PATH}/bin/openocd${CMAKE_EXECUTABLE_SUFFIX}
   DEPENDS openocd_deps
 )
 
