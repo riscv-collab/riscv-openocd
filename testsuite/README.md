@@ -14,19 +14,27 @@ To run the testsuite on a paricular board
 
 ```
 # Prerequisites :
-# 1. make sure that you have riscv64-unknown-elf-gcc in your PATH.
-# 2. set `OPENOCD_ROOT` environment variable to openocd installation path.
-# 3. Optional. To run tests on a simulator make sure that spike is in your PATH.
+# 1. DejaGnu 1.6.3 should be available in your path.
+#   NOTE: at the moment of writing Linux distributives provided older version
+#         of the tool. So one had to install dejagnu 1.6.3 from sources.
+# 2. make sure that you have riscv64-unknown-elf-gcc toolchain.
+# 3. gnu GDB debugger capable to communicate with RISCV targets.
+# 4. Optional. To run tests on a simulator make sure that you have spike
+# 5. "local init" file is created. The format of the file described below.
 
 # WARNING: consider running tests in a separate directory since most likely
 #          you don't want your files to be accidentally overwritten.
 
 DEJAGNU=<PATH_TO_SITE_EXP> \
-  runtest --tool ocd --srcdir <TESTSUITE_DIR> \
+  runtest --tool ocd \
+  --local_init <PATH_TO_LOCAL_INIT> \
+  --srcdir <TESTSUITE_DIR> \
   --target_board <board_name>
 
+# <PATH_TO_LOCAL_INIT> - path to file that contains information about where to
+#                        find gcc, openocd, and (optionally) spike simulator.
 # <PATH_TO_SITE_EXP> - path to site.exp conifiguration file, found at
-($SRCDIR/site.exp).
+#                     ($SRCDIR/site.exp).
 # <TESTSUITE_DIR> - path to the `$SRCDIR/testsuite` directory.
 # <board_name> - name of the board. For example "spike_dmp6a0_64".
 # runtest - this program is part of dejagnu distribution.
@@ -35,6 +43,20 @@ DEJAGNU=<PATH_TO_SITE_EXP> \
 **target_boad** argument can be ommitted. In this case default targets
 are selected - currently, these correspond to all spike configurations
 distributed with the testsuite.
+
+## LOCAL_INIT
+
+This file should set some TCL variables to provide paths to necessary tools.
+The file should look as follows:
+
+```
+# openocd installation prefix
+set OPENOCD_ROOT /home/user/utils/install_openocd
+# path to spike binary
+set SPIKE_SIM    /home/user/utils/spike/bin/spike
+# path to gdb binary
+set GDB_BIN      /home/user/utils/riscv-gcc/bin/riscv64-unknown-elf-gdb
+```
 
 # Dependencies:
 
