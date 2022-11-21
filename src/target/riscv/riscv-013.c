@@ -1708,6 +1708,7 @@ static int examine(struct target *target)
 					info->index);
 			return ERROR_FAIL;
 		}
+		target->state = TARGET_HALTED;
 	}
 
 	/* Without knowing anything else we can at least mess with the
