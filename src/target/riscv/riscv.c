@@ -1953,7 +1953,8 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 
 	/* Write memory parameters to the target memory */
 	for (int i = 0; i < num_mem_params; i++) {
-		if (mem_params[i].direction != PARAM_IN) {
+		if (mem_params[i].direction == PARAM_OUT ||
+				mem_params[i].direction == PARAM_IN_OUT) {
 			int retval = target_write_buffer(target, mem_params[i].address, mem_params[i].size, mem_params[i].value);
 			if (retval != ERROR_OK) {
 				LOG_ERROR("Couldn't write input mem param into the memory.");
@@ -2089,7 +2090,8 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 
 	/* Read memory parameters from the target memory */
 	for (int i = 0; i < num_mem_params; i++) {
-		if (mem_params[i].direction != PARAM_OUT) {
+		if (mem_params[i].direction == PARAM_IN ||
+				mem_params[i].direction == PARAM_IN_OUT) {
 			int retval = target_read_buffer(target, mem_params[i].address, mem_params[i].size,
 					mem_params[i].value);
 			if (retval != ERROR_OK) {
