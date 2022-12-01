@@ -43,6 +43,10 @@ ExternalProject_Add(spike
   GIT_SHALLOW True
   GIT_REPOSITORY http://${NAS_USER}:${NAS_PASS}@gitlab.dev.syntacore.com/simulators/riscv-isa-sim
   GIT_TAG sc/main
+  # NOTE: it seems that cmake has a bug - it does not propagate the requested
+  # number of cores, causing extreme number of threads to be created during
+  # the build process
+  BUILD_COMMAND make install -j${CPU_COUNT}
   CONFIGURE_COMMAND
     ${CMAKE_BINARY_DIR}/SpikeSources/configure
     --prefix=${SPIKE_INSTALL_PATH}

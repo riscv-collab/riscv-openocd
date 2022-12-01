@@ -1,4 +1,4 @@
-#!/bin/env python3
+#!/usr/bin/python3
 
 import sys
 import os
@@ -21,7 +21,7 @@ with open(input_file, "r") as stream:
 
 def run_command(cmd):
   print(cmd)
-  if os.waitstatus_to_exitcode(os.system(cmd)) != 0:
+  if os.system(cmd) != 0:
     raise CommandFailedError("failed to succesfully execute command")
 
 for item, desc in deps.items():
