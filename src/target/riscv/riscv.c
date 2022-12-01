@@ -1957,7 +1957,8 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 				mem_params[i].direction == PARAM_IN_OUT) {
 			int retval = target_write_buffer(target, mem_params[i].address, mem_params[i].size, mem_params[i].value);
 			if (retval != ERROR_OK) {
-				LOG_ERROR("Couldn't write input mem param into the memory.");
+				LOG_ERROR("Couldn't write input mem param into the memory, addr=0x%" TARGET_PRIxADDR " size=0x%" PRIx32,
+						mem_params[i].address, mem_params[i].size);
 				return retval;
 			}
 		}
@@ -2095,7 +2096,8 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 			int retval = target_read_buffer(target, mem_params[i].address, mem_params[i].size,
 					mem_params[i].value);
 			if (retval != ERROR_OK) {
-				LOG_ERROR("Couldn't read output mem param from the memory.");
+				LOG_ERROR("Couldn't read output mem param from the memory, addr=0x%" TARGET_PRIxADDR " size=0x%" PRIx32,
+						mem_params[i].address, mem_params[i].size);
 				return retval;
 			}
 		}
