@@ -59,6 +59,7 @@ pipeline {
             boards = ['twin_scr7_64_single_core',
                       'twin_scr7_64',
                       'twin_scr7_64_mcore4',
+                      'twin_scr7_64_mcore2',
                       'twin_scr7_64_smp4',
                       'twin_scr7_64_wa']
             break
