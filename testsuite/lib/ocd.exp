@@ -345,6 +345,13 @@ proc ocd_finish {} {
     return
   }
 
+  if {$openocd_instance_spawn_id eq "ignore_me"} {
+    unset openocd_instance_spawn_id
+    verbose "\\\\\\ ocd_finish (ignored) ///\n   _______" 1
+    return
+  }
+
+  # TODO: implement proper shutdown
   verbose "about to kill openocd instance" 2
   exec kill -s SIGINT [exp_pid -i $openocd_instance_spawn_id ]
   # wait a little bit to allow for a clean termination
@@ -358,6 +365,12 @@ proc ocd_finish {} {
   unset openocd_instance_spawn_id
 
   verbose "\\\\\\ ocd_finish ///\n   _______" 1
+}
+
+proc ocd_manual_finish {} {
+  global openocd_instance_spawn_id
+  ocd_finish
+  set openocd_instance_spawn_id "ignore_me"
 }
 
 proc ocd_internal_error { msg } {

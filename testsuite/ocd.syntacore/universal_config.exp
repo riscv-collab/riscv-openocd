@@ -1,5 +1,5 @@
 # disconnect and kill the default openocd
-ocd_finish
+ocd_manual_finish
 
 proc ocd_launch_script { tcl_script } {
   global OPENOCD
