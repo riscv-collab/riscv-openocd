@@ -59,29 +59,29 @@ if(DEFINED ENV{TARGET_BOARD})
   set(TGT_BOARD $ENV{TARGET_BOARD})
 endif()
 
+set(TEST_RUN_DIR "${CMAKE_BINARY_DIR}/TestRun")
 if ("${TGT_BOARD}" STREQUAL "")
   set(TARGET_BOARD_CMDLINE "")
-  set(LOGS_DIR "SUMMARY")
+  set(TEST_WORKING_DIR "${TEST_RUN_DIR}/runs")
+  set(TEST_SUMMARY_DIR "${TEST_RUN_DIR}/SUMMARY")
 else()
   set(TARGET_BOARD_CMDLINE "--target_board=${TGT_BOARD}")
-  set(LOGS_DIR "SUMMARY_${TGT_BOARD}")
+  set(TEST_WORKING_DIR "${TEST_RUN_DIR}/run_${TGT_BOARD}")
+  set(TEST_SUMMARY_DIR "${TEST_RUN_DIR}/SUMMARY_${TGT_BOARD}")
 endif()
+file(MAKE_DIRECTORY ${TEST_WORKING_DIR} ${TEST_SUMMARY_DIR})
 
-add_custom_target(test_dir ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory TestRun)
 add_custom_target(OpenOCDTest
-  WORKING_DIRECTORY TestRun
-  COMMAND
-    mkdir -p ${LOGS_DIR}
+  WORKING_DIRECTORY ${TEST_WORKING_DIR}
   COMMAND
     env DEJAGNU=${OPENOCD_SOURCES}/testsuite/site.exp
     ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
         --src_dir=${OPENOCD_SOURCES}/testsuite
         ${TARGET_BOARD_CMDLINE}
         --tool=ocd
-        --outdir=${LOGS_DIR}
+        --outdir=${TEST_SUMMARY_DIR}
         --local_init ${CMAKE_BINARY_DIR}/local_init.exp
-  DEPENDS openocd dejagnu spike test_dir
+  DEPENDS openocd dejagnu spike
 )
 
 find_package(Python COMPONENTS Interpreter REQUIRED)
