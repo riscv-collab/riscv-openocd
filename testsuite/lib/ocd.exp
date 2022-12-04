@@ -145,38 +145,102 @@ proc ocd_internal_determine_version {} {
   return $OPENOCD_VARIANT
 }
 
-proc ocd_internal_check_tclrpc_at_port { spawn_id port } {
-  set TCL_SERVER_ACTIVE 0
-  expect {
-    -i $spawn_id
-    -re "Listening on port $port for tcl connections" {
-      verbose "openocd TCL/RPC server launched successfully" 2
-      set TCL_SERVER_ACTIVE 1
+proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_interval} {
+
+  set tcl_server_active 0
+  for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
+    set listen_pattern "Listening on"
+    spawn grep $listen_pattern $tcl_log
+    expect {
+      -re "Listening on port $port for tcl connections" {
+        verbose "OpenOCD TCL/RPC server launched successfully" 1
+        set tcl_server_active 1
+      }
+      eof {
+        verbose "unexpected EOF while waiting initial ack from TCL/RPC server, attempt #$it_count" 3
+        continue
+      }
+      timeout  {
+        verbose "could not scan log while waiting for TCL/RPC server, attempt #$it_count" 3
+      }
     }
-    eof {
-      error "unexpected EOF while waiting initial ack from TCL/RPC server"
+    close
+    wait
+
+    if { $tcl_server_active } {
+      return
     }
-    timeout  { perror "could not get initial ack from TCL/RPC server" }
+    sleep $wait_interval
   }
-  return $TCL_SERVER_ACTIVE
+  error "could not get initial ack from TCL/RPC server (it num: $it_count)"
 }
 
-proc ocd_internal_check_gdb_server_at_port { spawn_id port } {
-  set GDB_SERVER_ACTIVE 0
-  expect {
-    -i $spawn_id
-    -re "Listening on port $port for gdb connections" {
-      verbose "openocd GDB server launched successfully" 2
-      set GDB_SERVER_ACTIVE 1
+proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_interval} {
+  set gdb_server_active 0
+  for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
+    set listen_pattern "Listening on"
+    spawn grep $listen_pattern $tcl_log
+    expect {
+      -re "Listening on port $port for gdb connections" {
+        verbose "OpenOCD GDB server launched successfully" 1
+        set gdb_server_active 1
+      }
+      eof {
+        verbose "unexpected EOF while waiting initial ack from OpenOCD/GDB server, attempt #$it_count" 3
+        continue
+      }
+      timeout  {
+        verbose "could not scan log while waiting for OpenOCD/GDB server, attempt #$it_count" 3
+      }
     }
-    eof {
-      error "unexpected EOF while waiting initial ack from GDB server"
+    close
+    wait
+
+    if { $gdb_server_active } {
+      return
     }
-    timeout  { perror "could not get initial ack from GDB server" }
+    sleep $wait_interval
   }
-  return $GDB_SERVER_ACTIVE
+  error "could not get initial ack from OpenOCD/GDB server (it num: $it_count)"
 }
 
+proc ocd_internal_wait_for_file { filename max_retries timeout_value } {
+  for {set retries_count 0} {![file exists $filename]} {incr retries_count} {
+    verbose "waiting for the $filename to materialize... attempt #$retries_count" 2
+
+    if {$retries_count > $max_retries} {
+      error "failed to wait for $filename"
+    }
+
+    sleep $timeout_value
+  }
+  verbose "$filename detected" 1
+}
+
+proc ocd_internal_wait_for_initialization { ocd_log_name TCL_PORT GDB_PORT } {
+
+  set max_retries 5
+  set wait_time 2.5
+
+  if {[catch {ocd_internal_wait_for_file $ocd_log_name $max_retries $wait_time} \
+      ERROR_INFO]} {
+    error "log-poll error: $ERROR_INFO"
+  }
+
+  if {[catch {ocd_internal_check_tclrpc_at_port \
+              $ocd_log_name $TCL_PORT $max_retries $wait_time} \
+      ERROR_INFO]} {
+    error "OpenOCD/TclServer: $ERROR_INFO"
+  }
+
+  if {[catch {ocd_internal_check_gdb_server_at_port \
+              $ocd_log_name $GDB_PORT $max_retries $wait_time} \
+    ERROR_INFO]} {
+    error "OpenOCD/GdbServer: $ERROR_INFO"
+  }
+
+  verbose "openocd is up and running" 1
+}
 
 proc ocd_init {test_file_name} {
   global ENABLE_EXP_INTERNAL
@@ -192,6 +256,7 @@ proc ocd_init {test_file_name} {
 
   global OPENOCD
   global OPENOCD_VARIANT
+  global OPENOCD_LOG_LEVEL
   global OCD_PORT_TCLRPC
   global OCD_PORT_GDBSRV
   global ocd_test_name
@@ -226,38 +291,42 @@ proc ocd_init {test_file_name} {
   set ocd_test_name [file rootname [file tail $test_file_name]]
   # format is ${board_name}_${test_name}
   set default_bin_prefix "[target_info name]_${ocd_test_name}"
+  set ocd_test_log "[target_info name]_${ocd_test_name}.log"
+
+  if {[catch {exec rm ${ocd_test_log}} result]} {
+    verbose "ignore this: $result" 2
+  } else {
+    verbose "${ocd_test_log} removed" 1
+  }
 
   set openocd_args [concat \
+    "-d$OPENOCD_LOG_LEVEL" \
+    -l \
+    "$ocd_test_log" \
     [target_info openocd,interface_flags] \
     [target_info openocd,target_flags] \
   ]
+
   verbose "spawning openocd: $OPENOCD $openocd_args" 2
   spawn $OPENOCD {*}$openocd_args
 
-  if {[catch {ocd_internal_check_tclrpc_at_port $spawn_id $OCD_PORT_TCLRPC} \
-      TCL_SERVER_ACTIVE]} {
-    perror $TCL_SERVER_ACTIVE
-    return
-  }
-
-  if {[catch {ocd_internal_check_gdb_server_at_port $spawn_id $OCD_PORT_GDBSRV} \
-    GDB_SERVER_ACTIVE]} {
-    perror $GDB_SERVER_ACTIVE
-    return
-  }
-
-  if {[expr {$TCL_SERVER_ACTIVE && $GDB_SERVER_ACTIVE}]} {
-    verbose "openocd is up and running" 1
-    set openocd_instance_spawn_id $spawn_id
-  } else {
-    perror "something went wrong during openocd initialization"
+  if {[catch {ocd_internal_wait_for_initialization $ocd_test_log \
+                                                   $OCD_PORT_TCLRPC \
+                                                   $OCD_PORT_GDBSRV} \
+      ERR_INFO]} {
+    perror "$ERR_INFO"
+    puts "$ERR_INFO"
     close
     wait
+    return
   }
+
+  set openocd_instance_spawn_id $spawn_id
 
   sleep [ocd_exec_timeout]
   #set openocd_log "-c \"log_output ${ocd_test_name}_openocd.log\" "
   verbose "\\\\\\ ocd_init ///\n   _______" 1
+  return
 }
 
 proc ocd_finish {} {
@@ -363,11 +432,11 @@ proc ocd_gdb_connect {} {
   global openocd_instance_spawn_id
 
   if {![info exists openocd_instance_spawn_id]} {
-    ocd_internal_error "OpenOCD: no active OpenOCD instance is found"
+    ocd_internal_error "OpenOCD: no active OpenOCD instance is found (ocd_gdb_connect)"
   }
 
   if {[info exists ocd_client_spawn_id]} {
-    ocd_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported"
+    ocd_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported (ocd_gdb_connect)"
   }
 
   set stty_init "-echo"
@@ -400,14 +469,13 @@ proc ocd_connect {} {
   global openocd_instance_spawn_id
   global ocd_test_name
   global OCD_PORT_TCLRPC
-  global OPENOCD_LOG_LEVEL
 
   if {![info exists openocd_instance_spawn_id]} {
-    ocd_internal_error "OpenOCD: no active OpenOCD instance is found"
+    ocd_internal_error "OpenOCD: no active OpenOCD instance is found (ocd_connect)"
   }
 
   if {[info exists ocd_client_spawn_id]} {
-    ocd_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported"
+    ocd_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported (ocd_connect)"
   }
 
   #set stty_init "-echo -isig -icanon"
@@ -445,25 +513,6 @@ proc ocd_connect {} {
     }
   }
 
-  set board_name [board_info target name]
-  set log_commands [subst [join {
-    "log_output \"openocd_${board_name}_${ocd_test_name}.log\" ;" \
-    "debug_level $OPENOCD_LOG_LEVEL" \
-  } " "]]
-
-  ocd_internal_send_command $log_commands
-  expect {
-    -re "debug_level:.*\n\x1a" {
-      verbose "OpenOCD: debug level <$OPENOCD_LOG_LEVEL> is set" 1
-    }
-    eof {
-      ocd_internal_error "OpenOCD: could not set the desired debug_level"
-    }
-    timeout {
-      ocd_internal_error "OpenOCD: unexpected timeout while setting debug_level"
-    }
-  }
-
   return
 }
 
@@ -482,6 +531,5 @@ proc ocd_disconnect { } {
   verbose "OpenOCD connection is dead, farewell!" 1
 
   unset ocd_client_spawn_id
-
 }
 
