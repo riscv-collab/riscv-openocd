@@ -36,6 +36,9 @@ pipeline {
     // needed by docker CI scipts
     COMMON_BUILD_DIR = "$WD/build"
     DOCKER_CONTAINER_NAME = "OpenOCD_CI_CONTAINER"
+
+    ARTIFACTORY_API_KEY = credentials('OpenOCDTestReportKey')
+    BUILD_ID = "${BUILD_TAG}"
   }
   stages {
     stage('CleanWorkspaceAndCheckout') {
@@ -92,6 +95,7 @@ pipeline {
   }
   post {
     always {
+      sh 'make in_docker TARGET=upload_test_report -f ${WD}/.ci/makefile'
       sh 'make clean_docker -f ${WD}/.ci/makefile'
     }
   }

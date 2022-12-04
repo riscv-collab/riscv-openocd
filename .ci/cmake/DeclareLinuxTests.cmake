@@ -84,6 +84,16 @@ add_custom_target(OpenOCDTest
   DEPENDS openocd dejagnu spike
 )
 
+set(BUILD_ID $ENV{BUILD_ID})
+set(ARTIFACTORY_KEY $ENV{ARTIFACTORY_API_KEY})
+add_custom_target(OpenOCDTestReport
+  COMMAND
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils/upload_testing_results.sh
+    ${TEST_RUN_DIR}
+    ${BUILD_ID}
+    ${ARTIFACTORY_KEY}
+)
+
 find_package(Python COMPONENTS Interpreter REQUIRED)
 # TODO: move this to manifest
 set(RISCV_TESTS_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTests)

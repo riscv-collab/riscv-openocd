@@ -7,6 +7,7 @@ PROJECT_NAME := OpenOCD
 
 TARGET_BOARD ?=
 BUILD_TYPE ?= Release
+BUILD_ID ?=
 
 DOWNLOAD_DEPENDENCIES_FROM_ARTIFACTORY ?= false
 SYNTACORE_NAS_SERVER ?= nas.dev.syntacore.com
@@ -80,6 +81,10 @@ package: build
 	cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDPackage
 	cmake --build "$(COMMON_BUILD_DIR)/windows" --target OpenOCDPackage
 
+.PHONY: upload_test_report
+upload_test_report:
+	cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDTestReport
+
 .PHONY: clean
 clean:
 	cmake --build "$(COMMON_BUILD_DIR)" --target clean $(VERBOSE_OPTION)
@@ -141,6 +146,8 @@ container: $(DOCKER_CONTAINER)
 in_docker: $(DOCKER_CONTAINER)
 	docker exec \
 		--env TARGET_BOARD="$(TARGET_BOARD)" \
+		--env BUILD_ID="$(BUILD_ID)" \
+		\
 		--env PRESET="$(PRESET)" \
 		--env COMMON_BUILD_DIR="/home/build" \
 		--env NAS_USER="$(NAS_USR)" \
