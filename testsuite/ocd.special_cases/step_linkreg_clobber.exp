@@ -1,0 +1,47 @@
+if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
+
+ocd_compile_executable "step_linkreg_clobber.S" "$default_bin_prefix.exe"
+
+# created by compile executable
+set ENTRY_ADDR $program_info(_entry)
+set MAIN_ADDR $program_info(main)
+set END_ADDR $program_info(end1)
+set BRN_ADDR $program_info(brn)
+set EXPECTED_LINK $program_info(link)
+
+set xlen64 [expr [target_info cpu,xlen] == 64]
+
+ocd_connect
+
+ocdtlb_run_expect "targets 0"
+ocdtlb_run_expect "reset halt"
+
+ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+
+while {![ocdtlb_compare_equal_hex \
+        [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]] \
+        $BRN_ADDR]} {
+  ocdtlb_run_expect "step"
+}
+
+set pc_before_step [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+ocdtlb_run_expect "step"
+set pc_after_step [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+set link_reg [ocdtlb_rsp_get [ocdtlb_run_expect "reg $ra"]]
+
+verbose "pc_before: $pc_before_step, pc_after: $pc_after_step" 1
+verbose "link_reg: $link_reg, expected_reg: $EXPECTED_LINK" 1
+
+if {![ocdtlb_compare_equal_hex $link_reg $EXPECTED_LINK]} {
+  perror "link register $link_reg is not equal to the expected value $EXPECTED_LINK"
+  ocd_test_fail
+}
+
+if {![ocdtlb_compare_equal_hex $pc_after_step $END_ADDR]} {
+  perror "pc after jalr $pc_after_step is not equal to the expected value $END_ADDR"
+  ocd_test_fail
+}
+
+ocd_test_pass
+
