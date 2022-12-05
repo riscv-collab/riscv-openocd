@@ -219,8 +219,8 @@ proc ocd_internal_wait_for_file { filename max_retries timeout_value } {
 
 proc ocd_internal_wait_for_initialization { ocd_log_name TCL_PORT GDB_PORT } {
 
-  set max_retries 5
-  set wait_time 0.5
+  set max_retries 150
+  set wait_time 0.1
 
   if {[catch {ocd_internal_wait_for_file $ocd_log_name $max_retries $wait_time} \
       ERROR_INFO]} {
@@ -230,14 +230,16 @@ proc ocd_internal_wait_for_initialization { ocd_log_name TCL_PORT GDB_PORT } {
   if {[catch {ocd_internal_check_tclrpc_at_port \
               $ocd_log_name $TCL_PORT $max_retries $wait_time} \
       ERROR_INFO]} {
-    puts [exec cat $ocd_log_name]
+    # NOTE: log printing can be VERY expensive
+    # puts [exec cat $ocd_log_name]
     error "OpenOCD/TclServer: $ERROR_INFO"
   }
 
   if {[catch {ocd_internal_check_gdb_server_at_port \
               $ocd_log_name $GDB_PORT $max_retries $wait_time} \
     ERROR_INFO]} {
-    puts [exec cat $ocd_log_name]
+    # NOTE: log printing can be VERY expensive
+    # puts [exec cat $ocd_log_name]
     error "OpenOCD/GdbServer: $ERROR_INFO"
   }
 
