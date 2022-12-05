@@ -13,6 +13,7 @@ set(ARTY100_BOARDS
 )
 
 set(TWIN_BOARDS
+  twin_scr7_64_single_core:vcu118_scr7_hpfpu_enabled
   twin_scr7_64:rv64_cluster_scr7_eval
   twin_scr7_64_mcore4:rv64_cluster_scr7_eval
   twin_scr7_64_smp4:rv64_cluster_scr7_eval
