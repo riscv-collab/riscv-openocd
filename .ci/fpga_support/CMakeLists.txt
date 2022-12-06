@@ -21,6 +21,7 @@ set(TWIN_BOARDS
   twin_scr7_64_wa:rv64_cluster_scr7_eval
   twin_scr5_32:rv32_cluster_single_scr5_l1_l2_plic_hiperf
   twin_scr5_64:rv64_cluster_single_scr5_tcm_l1_l2_plic_hiperf
+  twin_scr6:rv64_cluster_single_scr6_eval
 )
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/BoardInit)
