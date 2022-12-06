@@ -160,6 +160,7 @@ proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_inter
       }
       eof {
         verbose "unexpected EOF while waiting initial ack from TCL/RPC server, attempt #$it_count" 3
+        wait
         continue
       }
       timeout  {
@@ -189,6 +190,7 @@ proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_i
       }
       eof {
         verbose "unexpected EOF while waiting initial ack from OpenOCD/GDB server, attempt #$it_count" 3
+        wait
         continue
       }
       timeout  {
