@@ -3,6 +3,8 @@ proc set_board_cpu { cpu_name } {
   set cpu_def [file join $dirname support cpu ${cpu_name}.exp]
   verbose "loading cpu: $cpu_name from $cpu_def" 1
   source $cpu_def
+
+  set_board_info cpu,name $cpu_name
 }
 
 set_board_info ldflags "-nostdlib -nostartfiles"

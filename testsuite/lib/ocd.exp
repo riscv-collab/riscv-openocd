@@ -62,6 +62,7 @@ proc ocd_target_info_check {} {
   set error_detected 0
   foreach property [list \
     cpu,xlen \
+    cpu,name \
     cpu,cores_num \
     cpu,has_floats \
     cpu,has_doubles \
