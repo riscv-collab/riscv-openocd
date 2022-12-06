@@ -61,7 +61,8 @@ pipeline {
                       'twin_scr7_64_mcore4',
                       'twin_scr7_64_mcore2',
                       'twin_scr7_64_smp4',
-                      'twin_scr7_64_wa']
+                      'twin_scr7_64_wa',
+                      'twin_scr5_32']
             break
           case 'zalman':
             env.fpga_lock = 'lock-fpga-on-zalman'
