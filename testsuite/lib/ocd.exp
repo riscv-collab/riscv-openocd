@@ -142,7 +142,7 @@ proc ocd_internal_determine_version {} {
   }
   # clean up resources from the version invocation
   close
-  wait
+  wait -nowait
 
   return $OPENOCD_VARIANT
 }
@@ -160,7 +160,7 @@ proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_inter
       }
       eof {
         verbose "EOF while waiting initial ack from TCL/RPC server, attempt #$it_count" 3
-        wait
+        wait -nowait
         sleep $wait_interval
         continue
       }
@@ -169,7 +169,7 @@ proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_inter
       }
     }
     close
-    wait
+    wait -nowait
 
     if { $tcl_server_active } {
       return
@@ -190,7 +190,7 @@ proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_i
       }
       eof {
         verbose "EOF while waiting initial ack from OpenOCD/GDB server, attempt #$it_count" 3
-        wait
+        wait -nowait
         sleep $wait_interval
         continue
       }
@@ -199,7 +199,7 @@ proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_i
       }
     }
     close
-    wait
+    wait -nowait
 
     if { $gdb_server_active } {
       return
@@ -323,9 +323,8 @@ proc ocd_init {test_file_name} {
                                                    $OCD_PORT_GDBSRV} \
       ERR_INFO]} {
     perror "$ERR_INFO"
-    puts "$ERR_INFO"
     close
-    wait
+    wait -nowait
     verbose "\\\\\\ ocd_init (FAILED) ///\n   _______" 1
     return
   }
@@ -373,7 +372,7 @@ proc ocd_finish {} {
   verbose "kill sent. closing connection to OpenOCD instance" 2
   close -i $openocd_instance_spawn_id
   verbose "kill sent. reaping (wait) the process..." 2
-  wait -i $openocd_instance_spawn_id
+  wait -nowait -i $openocd_instance_spawn_id
 
   verbose "wait done. openocd process is reaped" 2
   unset openocd_instance_spawn_id
@@ -554,7 +553,7 @@ proc ocd_disconnect { } {
   close -i $ocd_client_spawn_id
   verbose "OpenOCD connection closed, reaping the process" 1
 
-  wait -i $ocd_client_spawn_id
+  wait -nowait -i $ocd_client_spawn_id
   verbose "OpenOCD connection is dead, farewell!" 1
 
   unset ocd_client_spawn_id
