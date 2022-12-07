@@ -60,6 +60,7 @@ pipeline {
                       'twin_scr7_64',
                       'twin_scr7_64_mcore4',
                       'twin_scr7_64_mcore2',
+                      'twin_scr7_64_mcore2_no_bootcode',
                       'twin_scr7_64_smp4',
                       'twin_scr7_64_wa',
                       'twin_scr6',
