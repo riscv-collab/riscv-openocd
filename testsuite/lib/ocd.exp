@@ -159,8 +159,9 @@ proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_inter
         set tcl_server_active 1
       }
       eof {
-        verbose "unexpected EOF while waiting initial ack from TCL/RPC server, attempt #$it_count" 3
+        verbose "EOF while waiting initial ack from TCL/RPC server, attempt #$it_count" 3
         wait
+        sleep $wait_interval
         continue
       }
       timeout  {
@@ -173,7 +174,6 @@ proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_inter
     if { $tcl_server_active } {
       return
     }
-    sleep $wait_interval
   }
   error "could not get initial ack from TCL/RPC server (it num: $it_count)"
 }
@@ -189,8 +189,9 @@ proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_i
         set gdb_server_active 1
       }
       eof {
-        verbose "unexpected EOF while waiting initial ack from OpenOCD/GDB server, attempt #$it_count" 3
+        verbose "EOF while waiting initial ack from OpenOCD/GDB server, attempt #$it_count" 3
         wait
+        sleep $wait_interval
         continue
       }
       timeout  {
@@ -203,7 +204,6 @@ proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_i
     if { $gdb_server_active } {
       return
     }
-    sleep $wait_interval
   }
   error "could not get initial ack from OpenOCD/GDB server (it num: $it_count)"
 }
@@ -326,6 +326,7 @@ proc ocd_init {test_file_name} {
     puts "$ERR_INFO"
     close
     wait
+    verbose "\\\\\\ ocd_init (FAILED) ///\n   _______" 1
     return
   }
 
