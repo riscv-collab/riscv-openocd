@@ -6,6 +6,7 @@ default:
 variables:
   GIT_STRATEGY: clone
   ARTIFACTORY_API_KEY: $CICD_TOOLS_SC_ARTIFACTORY_API_KEY
+  BUILD_ID: gitlab_job_$CI_JOB_ID
   BUILD_TYPE: Release
   COMMON_BUILD_DIR: /home/ci_user/build
   NAS_USR: $NAS_USER
@@ -16,7 +17,12 @@ main-job:
     - sudo chown -R ci_user .
     - make container -f .ci/makefile
     - make in_docker TARGET=build -f .ci/makefile
-    - make in_docker TARGET=test -f .ci/makefile
+    - make in_docker TARGET=test -f .ci/makefile || exit_code=$?
+    - |
+      if [ $exit_code -ne 0 ]; then
+        make in_docker TARGET=upload_test_report -f .ci/makefile
+        exit $exit_code
+      fi
     - make in_docker TARGET=riscv-tests-debug -f .ci/makefile
     - make in_docker TARGET=package -f .ci/makefile
     - SKIP_ARCHIVATION=true ./.ci/utils/upload_artifact.sh
