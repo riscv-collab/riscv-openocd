@@ -37,6 +37,10 @@ if {[lindex [split [target_info cpu,name] "_"] 0] eq "scr7"} {
   setup_kfail openocd_EMBARGO/20318 "*-*-*"
   set perror_threshold 2
 }
+if {[lindex [split [target_info cpu,name] "_"] 0] eq "scr6"} {
+  setup_kfail openocd_EMBARGO/20318 "*-*-*"
+  set perror_threshold 2
+}
 
 if {![ocdtlb_compare_equal_hex $link_reg $EXPECTED_LINK]} {
   perror "link register $link_reg is not equal to the expected value $EXPECTED_LINK"
