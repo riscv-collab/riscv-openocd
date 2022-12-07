@@ -66,8 +66,11 @@ proc ${board}_close { name } {
   verbose "killing spike board for $name" 2
   exec kill -9 [exp_pid -i $spike_board_spawn_id]
 
+  verbose "closing connection to the board..." 2
+  close -i $spike_board_spawn_id
+
   verbose "board is killed, reaping..." 2
-  wait -i $spike_board_spawn_id
+  wait -nowait -i $spike_board_spawn_id
   unset spike_board_spawn_id
 
   verbose "spike board $name is closed, bye!" 1
