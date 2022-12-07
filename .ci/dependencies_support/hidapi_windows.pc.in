@@ -5,7 +5,7 @@ includedir=${prefix}/include
 
 Name: hidapi
 Description: HIDAPI is a multi-platform library which allows an application to interface with USB and Bluetooth HID-Class devices
-Version: 0.7.0
+Version: @LIBHIDAPI_VERSION@
 Libs: -L${libdir} -lhidapi -lsetupapi
 Cflags: -I${includedir}/hidapi
 

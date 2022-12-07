@@ -1,8 +1,12 @@
 function(declare_build_dependencies target)
 
-  set(LIBUSB_SRC_CODE     libusb-1.0.23.tar.bz2)
-  set(LIBFTDI_SRC_CODE    libftdi1-1.4.tar.bz2)
-  set(LIBHIDAPI_SRC_CODE  hidapi-0.7.0.tar.gz)
+  set(LIBUSB_VERSION    1.0.26)
+  set(LIBFTDI_VERSION   1.5)
+  set(LIBHIDAPI_VERSION 0.12.0)
+
+  set(LIBUSB_SRC_CODE     libusb-${LIBUSB_VERSION}.tar.bz2)
+  set(LIBFTDI_SRC_CODE    libftdi1-${LIBFTDI_VERSION}.tar.bz2)
+  set(LIBHIDAPI_SRC_CODE  hidapi-${LIBHIDAPI_VERSION}.tar.gz)
 
   # NOTE: PKG_CONFIG_PATH is used because modern distributions do not
   # have static version of libudev
@@ -26,11 +30,11 @@ function(declare_build_dependencies target)
   if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(LIBHIDAPI_BUILD_DIR "windows")
     set(LIBHIDAPI_MAKE_FILE "Makefile.mingw")
-    set(HIDAPI_PKG_TEMPLATE "hidapi_windows_v0.7.0.pc.in")
+    set(HIDAPI_PKG_TEMPLATE "hidapi_windows.pc.in")
   else()
     set(LIBHIDAPI_BUILD_DIR "linux")
     set(LIBHIDAPI_MAKE_FILE "Makefile")
-    set(HIDAPI_PKG_TEMPLATE "hidapi_linux_v0.7.0.pc.in")
+    set(HIDAPI_PKG_TEMPLATE "hidapi_linux.pc.in")
   endif()
 
   set(LIBHIDAPI_NAME libhidapi.a)
@@ -45,7 +49,8 @@ function(declare_build_dependencies target)
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     # By default the Makefile is configured for hid-libusb. This sed command
     # reconfigures makefile to hidraw backend (as per documentation)
-    PATCH_COMMAND sed -i s/hid-libusb.o/hid.o/ linux/Makefile
+    PATCH_COMMAND cp linux/Makefile-manual linux/Makefile
+    PATCH_COMMAND && sed -i s/\ ..\\/hidtest\\/test.o// linux/Makefile
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE TRUE
     BUILD_COMMAND
