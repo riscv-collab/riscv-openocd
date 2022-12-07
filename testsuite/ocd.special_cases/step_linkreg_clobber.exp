@@ -44,12 +44,12 @@ if {[lindex [split [target_info cpu,name] "_"] 0] eq "scr6"} {
 
 if {![ocdtlb_compare_equal_hex $link_reg $EXPECTED_LINK]} {
   perror "link register $link_reg is not equal to the expected value $EXPECTED_LINK"
-  ocd_test_fail
+  return [ocd_test_fail]
 }
 
 if {![ocdtlb_compare_equal_hex $pc_after_step $END_ADDR]} {
   perror "pc after jalr $pc_after_step is not equal to the expected value $END_ADDR"
-  ocd_test_fail
+  return [ocd_test_fail]
 }
 
 ocd_test_pass
