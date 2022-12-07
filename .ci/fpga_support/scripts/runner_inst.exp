@@ -3,6 +3,13 @@
 set STAND_NAME [lindex $argv 0]
 set PLATFORM [lindex $argv 1]
 
+catch {system killall -9 openocd}
+catch {system killall -9 vivado_lab}
+catch {system killall -9 hw_server}
+catch {system rm /home/stand/hw_server.log}
+
+system /home/stand/hw_server.sh
+
 set timeout 120
 spawn [pwd]/fpga.sh set $STAND_NAME $PLATFORM
 
@@ -17,4 +24,3 @@ expect {
     error "unexpected timeout (waiting for device programming)"
   }
 }
-
