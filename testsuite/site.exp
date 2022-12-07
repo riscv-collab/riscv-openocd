@@ -29,7 +29,7 @@ if {![info exists CC_FOR_TARGET]} {
 }
 
 set OPENOCD "${OPENOCD_ROOT}/bin/openocd"
-set OPENOCD_LOG_LEVEL 2
+set OPENOCD_LOG_LEVEL 3
 # enables exp_internal . That is enables internal debug of expect
 set ENABLE_EXP_INTERNAL 0
 
