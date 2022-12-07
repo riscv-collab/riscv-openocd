@@ -323,6 +323,8 @@ proc ocd_init {test_file_name} {
                                                    $OCD_PORT_GDBSRV} \
       ERR_INFO]} {
     perror "$ERR_INFO"
+    puts "looks like OpenOCD does not respond. Sending kill signal"
+    exec kill -s SIGKILL [exp_pid -i $spawn_id ]
     close
     wait -nowait
     verbose "\\\\\\ ocd_init (FAILED) ///\n   _______" 1
