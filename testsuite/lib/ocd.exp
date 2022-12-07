@@ -360,13 +360,18 @@ proc ocd_finish {} {
   }
 
   # TODO: implement proper shutdown
+  # TODO2: in theory we could just call `close`, the spawned process is
+  # expected (?) to get SIGHUP, however there is no guarantee that OpenOCD
+  # server won't hang. This needs to be tested.
   verbose "about to kill openocd instance" 2
   exec kill -s SIGINT [exp_pid -i $openocd_instance_spawn_id ]
   # wait a little bit to allow for a clean termination
   sleep [ocd_exec_timeout]
   exec kill -s SIGKILL [exp_pid -i $openocd_instance_spawn_id ]
 
-  verbose "kill issued. waiting..." 2
+  verbose "kill sent. closing connection to OpenOCD instance" 2
+  close -i $openocd_instance_spawn_id
+  verbose "kill sent. reaping (wait) the process..." 2
   wait -i $openocd_instance_spawn_id
 
   verbose "wait done. openocd process is reaped" 2
