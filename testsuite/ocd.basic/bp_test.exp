@@ -27,15 +27,17 @@ set states     [dict get $response states]
 set active_state [lindex $states $active_idx]
 
 if {![string match $active_state "halted"]} {
-  ocd_test_fail
+  perror "unexpected state: $active_state, expecting $halted"
+  return [ocd_test_fail]
 }
 
 set response_pc [ocdtlb_run_expect "reg pc"]
 set current_pc  [ocdtlb_rsp_get $response_pc]
 
-if {[expr { $current_pc == $END_ADDR}]} {
-  ocd_test_pass
-} else {
-  ocd_test_fail
+if {![expr { $current_pc == $END_ADDR}]} {
+  perror "unexpected current pc: $current_pc, expecting $END_ADDR"
+  return [ocd_test_fail]
 }
+
+return [ocd_test_pass]
 

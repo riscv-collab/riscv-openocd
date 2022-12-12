@@ -5,12 +5,13 @@ ocd_connect
 ocdtlb_run_expect "targets 0"
 ocdtlb_run_expect "reset halt"
 
-set response [ocdtlb_run_expect "reg pc"]
+set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
 set expected_pc [target_info memory,reset_vector]
 
-if { [expr { $expected_pc == [dict get $response value] }] } {
-  ocd_test_pass
-} else {
-  ocd_test_fail
+if {![expr { $expected_pc == $pc }] } {
+  perror "unexpected $pc at reset, expecting $expected_pc"
+  return [ocd_test_fail]
 }
+
+return [ocd_test_pass]
 

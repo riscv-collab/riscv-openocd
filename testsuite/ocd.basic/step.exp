@@ -14,21 +14,18 @@ ocdtlb_run_expect "reset halt"
 ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 ocdtlb_run_expect "reg pc $ENTRY_ADDR"
 
-set count 0
 set STEP_LIMIT 100
 
-while 1 {
+for { set count 0 } { $count < $STEP_LIMIT } { incr count } {
+
   ocdtlb_run_expect "step"
   set response [ocdtlb_run_expect "reg pc"]
   set cur_pc   [ocdtlb_rsp_get $response]
+
   if { [ocdtlb_compare_equal_hex $cur_pc $END_ADDR]} {
     return [ocd_test_pass]
   }
-  incr count
-  if { [expr { $count > $STEP_LIMIT } ] } {
-    error "could not reach $END_ADDR, tried $count steps"
-  }
 }
 
-ocd_test_fail
+error "could not reach $END_ADDR, tried $count steps"
 

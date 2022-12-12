@@ -35,10 +35,10 @@ set reg_prev [ocdtlb_rsp_get [ocdtlb_run_expect "reg $GPR(1)"]]
 ocdtlb_do_expect_step_untill $END_ADDR $STEP_LIMIT
 set reg_cur [ocdtlb_rsp_get [ocdtlb_run_expect "reg $GPR(1)"]]
 
-if {[expr ($reg_cur - $reg_prev) == 1]} {
-  ocd_test_pass
-} else {
-  ocd_test_fail
+if {![expr ($reg_cur - $reg_prev) == 1]} {
+  perror "unexpected GPR value after iteration cycle: prev = $reg_prev, cur = $reg_cur"
+  return [ocd_test_fail]
 }
 
+return [ocd_test_pass]
 
