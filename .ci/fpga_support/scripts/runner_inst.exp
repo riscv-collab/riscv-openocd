@@ -11,7 +11,13 @@ catch {system rm /home/stand/hw_server.log}
 system /home/stand/hw_server.sh
 
 set timeout 120
-spawn [pwd]/fpga.sh set $STAND_NAME $PLATFORM
+
+# check if platform starts with "/"
+if {[string first / $PLATFORM] == 0} {
+  spawn [pwd]/fpga.sh bit $STAND_NAME $PLATFORM
+} else {
+  spawn [pwd]/fpga.sh set $STAND_NAME $PLATFORM
+}
 
 expect {
   "Setting Platform complete!" {
