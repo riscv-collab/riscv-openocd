@@ -1,4 +1,3 @@
-// Define variable
 def boards = []
 
 def runTests(boards){
