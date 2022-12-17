@@ -9,6 +9,7 @@ pipeline {
     PASS="1"
     ZALMAN_NIGHTLY="${JENKINS_CONTROLLER}/job/Tools/job/openocd_nightly_zalman/lastBuild/api/xml"
     TWIN_NIGHTLY="${JENKINS_CONTROLLER}/job/Tools/job/openocd_nightly_twin/lastBuild/api/xml"
+    TWIN_NIGHTLY_UNSTABLE="${JENKINS_CONTROLLER}/job/Tools/job/openocd_nightly_twin_unstable/lastBuild/api/xml"
   }
   stages {
     stage('CleanWorkspaceAndCheckout') {
@@ -25,6 +26,19 @@ pipeline {
     stage('GetTwinNightly') {
       steps {
         sh 'curl -u $USR:$PASS ${TWIN_NIGHTLY} -o twin.info.xml'
+      }
+    }
+    stage('GetTwinNightlyUnstable') {
+      steps {
+        // Since this is an unstable platform, we just fetch the results
+        // but the result file DOES NOT have an "xml" extension, so
+        // it won't be processed later
+        sh 'curl -u $USR:$PASS ${TWIN_NIGHTLY_UNSTABLE} -o twin_unstable.info'
+
+        // this renders this stage as "FAILED" on a dashboard
+        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+          sh "exit 1"
+        }
       }
     }
 
