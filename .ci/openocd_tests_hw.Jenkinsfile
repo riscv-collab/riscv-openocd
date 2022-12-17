@@ -56,16 +56,23 @@ pipeline {
           switch(params.AGENT) {
           case 'twin_server':
             env.fpga_lock = 'lock-fpga-on-twin'
-            boards = ['twin_scr7_64_single_core',
-                      'twin_scr7_64',
-                      'twin_scr7_64_mcore4',
-                      'twin_scr7_64_mcore2',
-                      'twin_scr7_64_mcore2_no_bootcode',
-                      'twin_scr7_64_smp4',
-                      'twin_scr7_64_wa',
-                      'twin_scr6',
-                      'twin_scr5_32',
-                      'twin_scr5_64']
+            boards = [
+              'twin_scr7_64',
+              'twin_scr7_64_mcore4',
+              'twin_scr7_64_smp4',
+              'twin_scr7_64_wa',
+              'twin_scr6',
+              'twin_scr5_32',
+              'twin_scr5_64'
+            ]
+
+            if (params.containsKey('use_unstable_platforms')) {
+              boards = [
+                'twin_scr7_64_single_core',
+                'twin_scr7_64_mcore2',
+                'twin_scr7_64_mcore2_no_bootcode',
+              ]
+            }
             break
           case 'zalman':
             env.fpga_lock = 'lock-fpga-on-zalman'
