@@ -17,9 +17,10 @@ main-job:
     - sudo chown -R ci_user .
     - make container -f .ci/makefile
     - make in_docker TARGET=build -f .ci/makefile
+    - exit_code=0
     - make in_docker TARGET=test -f .ci/makefile || exit_code=$?
     - |
-      if [ $exit_code -ne 0 ]; then
+      if [[ "$exit_code" -ne 0 ]]; then
         make in_docker TARGET=upload_test_report -f .ci/makefile
         exit $exit_code
       fi
