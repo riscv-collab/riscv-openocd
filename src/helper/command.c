@@ -72,6 +72,13 @@ void *jimcmd_privdata(Jim_Cmd *cmd)
 	return cmd->isproc ? NULL : cmd->u.native.privData;
 }
 
+static void tcl_output(void *privData, const char *file, unsigned line,
+	const char *function, const char *string)
+{
+	struct log_capture_state *state = privData;
+	Jim_AppendString(state->interp, state->output, string, strlen(string));
+}
+
 static struct log_capture_state *command_log_capture_start(Jim_Interp *interp)
 {
 	/* capture log output and return it. A garbage collect can
@@ -92,6 +99,8 @@ static struct log_capture_state *command_log_capture_start(Jim_Interp *interp)
 	state->interp = interp;
 	state->output = jim_output;
 
+	log_add_callback(tcl_output, state);
+
 	return state;
 }
 
@@ -111,6 +120,8 @@ static void command_log_capture_finish(struct log_capture_state *state)
 {
 	if (!state)
 		return;
+
+	log_remove_callback(tcl_output, state);
 
 	int length;
 	Jim_GetString(state->output, &length);
