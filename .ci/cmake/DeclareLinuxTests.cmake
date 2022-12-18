@@ -3,25 +3,22 @@ include(FetchContent)
 set(FETCHCONTENT_BASE_DIR ToolChain)
 set(FETCHCONTENT_QUIET FALSE)
 
-set(NAS_USER $ENV{NAS_USER})
-set(NAS_PASS $ENV{NAS_PASS})
-set(SYNTACORE_NAS_SERVER $ENV{SYNTACORE_NAS_SERVER})
-
-set(GCC_VERSION 2022.09-Ubuntu18-riscv-gcc-12.1.1-g02aeca3-220927T2007-g061b664)
-set(SC_IDE_MD5 c82bcc0c1979b76a5daa86c3a3941bc4)
-set(DISTRIB_PATH pub/Distrib/sc-ide/gcc)
-set(SC_IDE_URL ftp://${NAS_USER}:${NAS_PASS}@${SYNTACORE_NAS_SERVER}/${DISTRIB_PATH}/${GCC_VERSION}.tar.gz)
-
-if(DEFINED ENV{CUSTOM_IDE_URL})
-  set(SC_IDE_URL $ENV{CUSTOM_IDE_URL})
-endif()
+set(DT_STORAGE "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts")
+set(GDB_URL "${DT_STORAGE}/riscv-binutils-gdb/197d5a51/x86_Lin-x86_Lin-RISCV64_Elf_binutils-gdb.tar.gz")
+set(GCC_URL "${DT_STORAGE}/riscv-gcc/d71188d82/linux_gcc.tar.gz")
 
 FetchContent_Declare(sc-gcc
-  URL ${SC_IDE_URL}
+  URL ${GCC_URL}
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+
+FetchContent_Declare(sc-gdb
+  URL ${GDB_URL}
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 FetchContent_MakeAvailable(sc-gcc)
+FetchContent_MakeAvailable(sc-gdb)
 
 set(DEJAGNU_SRC_CODE    dejagnu-1.6.3.tar.gz)
 
@@ -34,6 +31,10 @@ ExternalProject_Add(dejagnu
     ${CMAKE_BINARY_DIR}/DejaGNUSources/configure
     --prefix=${CMAKE_BINARY_DIR}/install_dejagnu
 )
+
+set(NAS_USER $ENV{NAS_USER})
+set(NAS_PASS $ENV{NAS_PASS})
+set(SYNTACORE_NAS_SERVER $ENV{SYNTACORE_NAS_SERVER})
 
 set(SPIKE_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_spike)
 # TODO: move this to manifest
@@ -152,7 +153,7 @@ function(add_riscv_test_debug_run_for_target target)
     COMMAND
       env LOGS=${RISCV_TESTS_LOGS_DIRNAME}
           GCC=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gcc
-          GDB=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gdb
+          GDB=${sc-gdb_SOURCE_DIR}/bin/riscv64-unknown-elf-gdb
           SIM=${SPIKE_INSTALL_PATH}/bin/spike
           OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
           ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
