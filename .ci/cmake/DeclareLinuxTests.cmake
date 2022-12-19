@@ -6,6 +6,7 @@ set(FETCHCONTENT_QUIET FALSE)
 set(DT_STORAGE "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts")
 set(GDB_URL "${DT_STORAGE}/riscv-binutils-gdb/197d5a51/x86_Lin-x86_Lin-RISCV64_Elf_binutils-gdb.tar.gz")
 set(GCC_URL "${DT_STORAGE}/riscv-gcc/d71188d82/linux_gcc.tar.gz")
+set(SPIKE_URL "${DT_STORAGE}/spike/sc/main/221219-200111_21f75211/spike.tar.gz")
 
 FetchContent_Declare(sc-gcc
   URL ${GCC_URL}
@@ -17,8 +18,14 @@ FetchContent_Declare(sc-gdb
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
+FetchContent_Declare(sc-spike
+  URL ${SPIKE_URL}
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+
 FetchContent_MakeAvailable(sc-gcc)
 FetchContent_MakeAvailable(sc-gdb)
+FetchContent_MakeAvailable(sc-spike)
 
 set(DEJAGNU_SRC_CODE    dejagnu-1.6.3.tar.gz)
 
@@ -30,27 +37,6 @@ ExternalProject_Add(dejagnu
   CONFIGURE_COMMAND
     ${CMAKE_BINARY_DIR}/DejaGNUSources/configure
     --prefix=${CMAKE_BINARY_DIR}/install_dejagnu
-)
-
-set(NAS_USER $ENV{NAS_USER})
-set(NAS_PASS $ENV{NAS_PASS})
-set(SYNTACORE_NAS_SERVER $ENV{SYNTACORE_NAS_SERVER})
-
-set(SPIKE_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_spike)
-# TODO: move this to manifest
-ExternalProject_Add(spike
-  PREFIX SpikeBuild
-  SOURCE_DIR SpikeSources
-  GIT_SHALLOW True
-  GIT_REPOSITORY http://${NAS_USER}:${NAS_PASS}@gitlab.dev.syntacore.com/simulators/riscv-isa-sim
-  GIT_TAG sc/main
-  # NOTE: it seems that cmake has a bug - it does not propagate the requested
-  # number of cores, causing extreme number of threads to be created during
-  # the build process
-  BUILD_COMMAND make install -j${CPU_COUNT}
-  CONFIGURE_COMMAND
-    ${CMAKE_BINARY_DIR}/SpikeSources/configure
-    --prefix=${SPIKE_INSTALL_PATH}
 )
 
 configure_file(local_init.exp.in local_init.exp)
@@ -82,7 +68,7 @@ add_custom_target(OpenOCDTest
         --tool=ocd
         --outdir=${TEST_SUMMARY_DIR}
         --local_init ${CMAKE_BINARY_DIR}/local_init.exp
-  DEPENDS openocd dejagnu spike
+  DEPENDS openocd dejagnu
 )
 
 set(BUILD_ID $ENV{BUILD_ID})
@@ -154,12 +140,12 @@ function(add_riscv_test_debug_run_for_target target)
       env LOGS=${RISCV_TESTS_LOGS_DIRNAME}
           GCC=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gcc
           GDB=${sc-gdb_SOURCE_DIR}/bin/riscv64-unknown-elf-gdb
-          SIM=${SPIKE_INSTALL_PATH}/bin/spike
+          SIM=${sc-spike_SOURCE_DIR}/bin/spike
           OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
           ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
           TGT=${target}
       ${CMAKE_CURRENT_SOURCE_DIR}/utils/run-riscv-debug-tests.sh
-      DEPENDS openocd spike ${WD_TARGET_NAME}
+      DEPENDS openocd ${WD_TARGET_NAME}
   )
   add_dependencies(RISCVTestsDebug ${TARGET_NAME})
 endfunction()

@@ -9,8 +9,6 @@ variables:
   BUILD_ID: gitlab_job_$CI_JOB_ID
   BUILD_TYPE: Release
   COMMON_BUILD_DIR: /home/ci_user/build
-  NAS_USR: $NAS_USER
-  NAS_PSW: $NAS_PASS
 
 main-job:
   script:
