@@ -136,25 +136,35 @@ proc ocdtlb_do_expect_step_untill { end_address iteration_limit } {
 
 proc ocdtlb_run_expect_raw {command parser_name {expect_op_fail 0}} {
   verbose "cmd: ${command}" 1
-  # TODO: maybe we should catch here
-  if { [catch {ocd_run_command $command} report ] } {
-    error $report
+
+  set response [ocd_run_command $command]
+  verbose "\nRESPONSE:\n    $response\n" 3
+
+  set status [string range $response 0 1]
+  # command can idicate an abnormal termination if something goes wrong
+  if { $status != "0:" } {
+    if { $expect_op_fail == 0 } {
+      error "abnormal op termination"
+    }
+    return [internal_parse_error "ABORT" $response {}]
   }
 
-  if { [catch { $parser_name $report } parsed] } {
+  # Now we assume that the command properly returned a result
+  # Note: the result interpretation is still determined by the parser
+  set body [string replace $response 0 1]
+
+  if { [catch { $parser_name $body } parsed] } {
     error $parsed
   }
 
-  verbose "PARSED:\n$parsed\n" 3
-  if { ($expect_op_fail == 0) } {
-    if {![response_is_success $parsed]} {
-      error "unexpected response failure"
-    }
-  } else {
-    if {![response_is_op_failure $parsed]} {
-      error "expecting op_failure"
-    }
+  # now we assume that we have a properly parsed result
+  if { ($expect_op_fail == 0) && ![response_is_success $parsed] } {
+    error "unexpected response failure"
   }
+  if { ($expect_op_fail != 0) && [response_is_success $parsed] } {
+    error "expecting op_failure"
+  }
+
   return $parsed
 }
 

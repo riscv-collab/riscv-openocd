@@ -393,7 +393,7 @@ proc ocd_internal_error { msg } {
   error $msg
 }
 
-proc ocd_internal_send_command {msg} {
+proc ocd_internal_send_command {msg {mode "catch"} } {
   global ocd_client_spawn_id
   global ocd_client_type
   if {![info exists ocd_client_spawn_id]} {
@@ -402,8 +402,20 @@ proc ocd_internal_send_command {msg} {
   if {![string match $ocd_client_type "tclrpc"]} {
     ocd_internal_error "expecting tclrpc client type, detected: <$ocd_client_type>"
   }
-  verbose ">>>> capture { $msg }" 2
-  send "capture { $msg }\x1a"
+
+  # NOTE: currently, catch_and_capture is only for debugging purposes
+  if { $mode == "catch_and_capture" } {
+    verbose ">>>> capture { set code \[catch { $msg } opr\] }"  2
+    send "set log \[capture { set code \[catch { $msg } opr\] } \] ; set opr \"\$code:\$log\$opr\"\x1a"
+  } elseif { $mode == "catch" } {
+    verbose ">>>> catch { $msg } opr" 2
+    send "set code \[catch { $msg } opr\] ; set opr \$code:\$opr\x1a"
+  } elseif { $mode == "capture" } {
+    verbose ">>>> capture { $msg }" 2
+    send "capture { $msg }\x1a"
+  } else {
+    ocd_internal_error "unsupported communication mode <$mode>"
+  }
 }
 
 proc ocd_run_command {msg} {
@@ -515,7 +527,7 @@ proc ocd_connect {} {
   set ocd_client_type "tclrpc"
   unset stty_init
 
-  ocd_internal_send_command "echo \"Hi there!\""
+  ocd_internal_send_command "echo \"Hi there!\"" capture
   expect {
     "Hi there!\n\x1a" {
       verbose "OpenOCD: connection established, all is good" 1
@@ -528,7 +540,7 @@ proc ocd_connect {} {
     }
   }
 
-  ocd_internal_send_command "targets"
+  ocd_internal_send_command "targets" capture
   expect {
     \x1a {
       verbose "OpenOCD: targets list received" 1
