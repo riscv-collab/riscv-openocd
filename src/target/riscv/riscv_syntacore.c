@@ -1,5 +1,4 @@
 #include <stdbool.h>
-#include <string.h>
 #include "target/breakpoints.h"
 #include "target/target.h"
 #include "riscv.h"
@@ -103,31 +102,4 @@ bool riscv_syntacore_csr_force_default_disabled(unsigned csr_number) {
 	default:
 		return false;
 	}
-}
-
-static const char* const default_prefix = "csr";
-
-bool riscv_syntacore_csr_expose_and_rename(struct reg *r,
-				unsigned csr_number, const range_list_t *entry) {
-	const size_t prefix_len = strlen(default_prefix);
-	// we can rename only registers that have default names like csrXXX,
-	// where XXX is a decimal number
-	if (!(r->name && entry->name &&
-			strncmp(entry->name, default_prefix, prefix_len) == 0))
-		return false;
-
-	char *parse_end = 0;
-	long passed_num = strtoul(entry->name + prefix_len, &parse_end, 10);
-	// if parse_end does not point to '\0' - something went wrong'
-	if (!*parse_end)
-		return false;
-	if ((passed_num <= 0) || (passed_num != csr_number))
-		return false;
-	// make sure that r->name is not an empty string
-	if (!*(r->name))
-		return false;
-
-	r->exist = true;
-	LOG_DEBUG("Exposing spec-compliant CSR %d (name=%s)", csr_number, r->name);
-	return true;
 }

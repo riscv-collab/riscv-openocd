@@ -420,6 +420,4 @@ int riscv_interrupts_restore(struct target *target, uint64_t old_mstatus);
 
 bool riscv_syntacore_has_csr(unsigned csr_number, struct target *target);
 bool riscv_syntacore_csr_force_default_disabled(unsigned csr_number);
-bool riscv_syntacore_csr_expose_and_rename(struct reg *r,
-		unsigned csr_number, const range_list_t *entry);
 #endif
