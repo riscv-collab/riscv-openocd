@@ -8,5 +8,7 @@ set_board_info cpu,has_u_mode 1
 set_board_info cpu,has_s_mode 1
 set_board_info cpu,has_h_ext 0
 
+set_board_info cpu,has_v_ext 0
+
 add_board_info cflags   -march=$TGT_ARCH
 add_board_info cflags   -mabi=ilp32d

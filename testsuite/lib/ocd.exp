@@ -69,6 +69,7 @@ proc ocd_target_info_check {} {
     cpu,has_u_mode \
     cpu,has_s_mode \
     cpu,has_h_ext \
+    cpu,has_v_ext \
     memory,reset_vector \
     memory,has_high_pa \
     memory,ocd_work_area \
