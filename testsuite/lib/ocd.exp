@@ -271,7 +271,7 @@ proc ocd_init {test_file_name} {
   verbose "selected OpenOCD variant: $OPENOCD_VARIANT" 1
 
   if {[string equal $OPENOCD_VARIANT "latest"]} {
-    if {[target_info openocd,abi_regnames]} {
+    if {[target_info openocd,abi_regnames] == 0} {
       build_forward_compat
     } else {
       build_backward_compat

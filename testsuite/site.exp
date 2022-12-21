@@ -74,7 +74,6 @@ if {[auto_execok $SPIKE_SIM] == ""} {
     spike64_dmp6a0
     spike64_dmp6a0_with_high_pa
     spike64_dmp6a0_extra_CSR
-    spike64_dmp6a0_abi_regnames
     spike64_dmp6a64
     spike64mcore4_rthw0_dmp6a0
     spike64mcore4_rthw4_dmp6a0

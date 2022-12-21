@@ -37,7 +37,7 @@ proc run_test {} {
   set GPR_MISSING $GPR_ABI_NAMES
   set FPR_MISSING $FPR_ABI_NAMES
 
-  if {[target_info openocd,abi_regnames]} {
+  if {[target_info openocd,abi_regnames] == 0} {
     set GPR_NAMES $GPR_ABI_NAMES
     set FPR_NAMES $FPR_ABI_NAMES
     set GPR_MISSING $GPR_CANONICAL_NAMES
