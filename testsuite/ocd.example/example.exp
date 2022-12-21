@@ -2,12 +2,6 @@
 # a quick introduction to the framework. Please consult README.md for a general
 # overview of dejagnu framework.
 
-# ocd_check_platform_requirements - is needed for compatibility reasons
-# with older OpenOCD versions. Some targets are not supported by
-# OpenOCD 0.10 (like the ones that require ELF64 images). This check
-# is required to avoid running the test on such a target.
-if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
-
 # Basic information about target board can be queried via `target_info`
 set xlen64 [expr [target_info cpu,xlen] == 64]
 

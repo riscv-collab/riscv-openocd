@@ -1,5 +1,3 @@
-if {![ocd_check_platform_requirements]} { return [ocd_test_unsupported] }
-
 set xlen64 [expr [target_info cpu,xlen] == 64]
 
 # created by compile executable

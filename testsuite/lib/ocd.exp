@@ -106,20 +106,6 @@ proc ocd_exec_timeout {} {
   return [ocd_scaled_timeout_value [target_info env,exec_timeout]]
 }
 
-proc ocd_is_legacy {} {
-  global OPENOCD_VARIANT
-  return [string match $OPENOCD_VARIANT "legacy"]
-}
-
-proc ocd_check_platform_requirements {} {
-  if {[ocd_is_legacy]} {
-    if {[expr [target_info cpu,xlen] == 64]} {
-      return 0
-    }
-  }
-  return 1
-}
-
 proc ocd_internal_determine_version {} {
   global OPENOCD
   set OPENOCD_VARIANT "unknown"
