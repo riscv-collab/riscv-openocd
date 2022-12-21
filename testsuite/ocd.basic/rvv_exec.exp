@@ -1,0 +1,45 @@
+if {![target_info cpu,has_v_ext]} { return [ocd_test_unsupported] }
+
+if {[target_info cpu,v_ext_vlen] != 128} {
+  perror "unsupported board vlen [target_info cpu,v_ext_vlen]"
+  return [ocd_test_failed]
+}
+if {[target_info cpu,v_ext_elen] != 64} {
+  perror "unsupported board elen [target_info cpu,v_ext_elen]"
+  return [ocd_test_failed]
+}
+
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+  global FPR
+
+  ocd_compile_executable "basic_rvv.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set WRITE_DONE_ADDR $program_info(write_done)
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "bp $WRITE_DONE_ADDR 4"
+  ocdtlb_run_expect "resume"
+
+  octdlb_wait_resume
+
+  ocdtlb_do_expect_halted
+
+  set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+  if {![expr { $current_pc == $WRITE_DONE_ADDR}]} {
+    perror "unexpected current pc: $current_pc, expecting $END_ADDR"
+    return [ocd_test_fail]
+  }
+  return [ocd_test_pass]
+}
+
+return [run_test]

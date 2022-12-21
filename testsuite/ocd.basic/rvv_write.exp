@@ -1,0 +1,98 @@
+if {![target_info cpu,has_v_ext]} { return [ocd_test_unsupported] }
+
+if {[target_info cpu,v_ext_vlen] != 128} {
+  perror "unsupported board vlen [target_info cpu,v_ext_vlen]"
+  return [ocd_test_failed]
+}
+if {[target_info cpu,v_ext_elen] != 64} {
+  perror "unsupported board elen [target_info cpu,v_ext_elen]"
+  return [ocd_test_failed]
+}
+
+proc show_state {state_idx} {
+  global program_info
+  parray program_info
+  set READ_VX $program_info(read_vx$state_idx)
+  set PRE_READ_VX $program_info(pre_read_vx$state_idx)
+
+  ocdtlb_run_expect "bp $PRE_READ_VX 4"
+  ocdtlb_run_expect "resume"
+  octdlb_wait_resume
+  ocdtlb_do_expect_halted
+  ocdtlb_run_expect "rbp $PRE_READ_VX"
+
+  set vx [ocdtlb_rsp_get [ocdtlb_run_expect "reg v$state_idx"]]
+  puts "v$state_idx: $vx"
+
+  ocdtlb_run_expect "bp $READ_VX 4"
+
+  ocdtlb_run_expect "resume"
+  octdlb_wait_resume
+  ocdtlb_do_expect_halted
+
+  ocdtlb_run_expect "rbp $READ_VX"
+
+  set vx [ocdtlb_rsp_get [ocdtlb_run_expect "reg v1"]]
+
+  set t3 [ocdtlb_rsp_get [ocdtlb_run_expect "reg 28"]]
+  set t4 [ocdtlb_rsp_get [ocdtlb_run_expect "reg 29"]]
+
+  set ra [ocdtlb_rsp_get [ocdtlb_run_expect "reg 1"]]
+  set sp [ocdtlb_rsp_get [ocdtlb_run_expect "reg 2"]]
+
+  puts "v1: $vx"
+  puts "t3: $t3, ra: $ra"
+  puts "t4: $t4, sp: $sp"
+}
+
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+  global FPR
+
+  ocd_compile_executable "basic_rvv.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set WRITE_DONE_ADDR $program_info(write_done)
+  set EXT_READ_START $program_info(ext_read_start)
+  set EXT_READ_DONE $program_info(ext_read_done)
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "bp $WRITE_DONE_ADDR 4"
+  ocdtlb_run_expect "resume"
+
+  octdlb_wait_resume
+
+  ocdtlb_do_expect_halted
+
+  for {set i 0} {$i < 32} {incr i} {
+    set low64 [format %.16x [expr { 2 << $i }]]
+    set high64 [format %.16x [expr { 0 - (2 << $i) } ]]
+    ocdtlb_run_expect "reg v$i 0x$high64$low64"
+  }
+  ocdtlb_run_expect "bp $EXT_READ_DONE 4"
+  ocdtlb_run_expect "reg pc $EXT_READ_START"
+
+  # shows the state of iteration, use for debugging
+  # show_state 31
+  ocdtlb_run_expect "resume"
+  octdlb_wait_resume
+  ocdtlb_do_expect_halted
+
+  set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+  if {![expr { $current_pc == $EXT_READ_DONE}]} {
+    perror "unexpected current pc: $current_pc, expecting $EXT_READ_DONE"
+    return [ocd_test_fail]
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

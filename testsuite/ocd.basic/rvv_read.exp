@@ -1,0 +1,56 @@
+if {![target_info cpu,has_v_ext]} { return [ocd_test_unsupported] }
+
+if {[target_info cpu,v_ext_vlen] != 128} {
+  perror "unsupported board vlen [target_info cpu,v_ext_vlen]"
+  return [ocd_test_failed]
+}
+if {[target_info cpu,v_ext_elen] != 64} {
+  perror "unsupported board elen [target_info cpu,v_ext_elen]"
+  return [ocd_test_failed]
+}
+
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+  global FPR
+
+  ocd_compile_executable "basic_rvv.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set WRITE_DONE_ADDR $program_info(write_done)
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "bp $WRITE_DONE_ADDR 4"
+  ocdtlb_run_expect "resume"
+
+  octdlb_wait_resume
+
+  ocdtlb_do_expect_halted
+
+  for {set i 0} {$i < 32} {incr i} {
+    set value [ocdtlb_rsp_get [ocdtlb_run_expect "reg v$i"]]
+    set prefix [string range $value 0 1]
+    if { $prefix != "0x" } {
+      error "unsupported value $value (expecting 0x prefix)"
+    }
+    set num [string replace $value 0 1]
+    set low64 0x[string reverse [string range [string reverse $num] 0 15]]
+    set high64 0x[string reverse [string range [string reverse $num] 16 31]]
+
+    set expected_low64 [format 0x%.8x [expr { 1 << $i }]]
+    set expected_high64 [format 0x%.8x [expr { 0 - (1 << $i) } ]]
+    verbose "l64: $low64, h64: $high64 -- el64: $expected_low64, eh64: $expected_high64" 1
+    ocdtlb_expect_equal_hex [list $expected_low64 $expected_high64] [list $low64 $high64]
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
