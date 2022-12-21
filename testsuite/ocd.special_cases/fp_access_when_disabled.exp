@@ -1,17 +1,20 @@
-if {!$RUN_DANGEROUS_TESTS_ON_HW} {
-  if {[target_info sim] == ""} { return [ocd_test_unsupported] }
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+  global FPR
+
+  set target_no_fp [expr [target_info cpu,has_floats] == 0]
+
+  ocd_compile_executable "fp_access_when_disabled.S" "$default_bin_prefix.exe"
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+  ocdtlb_run_expect "reg $FPR(0)" $target_no_fp
+
+  return [ocd_test_pass]
 }
 
-
-set target_no_fp [expr [target_info cpu,has_floats] == 0]
-
-ocd_compile_executable "fp_access_when_disabled.S" "$default_bin_prefix.exe"
-
-ocd_connect
-
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
-ocdtlb_run_expect "reg $FPR(0)" $target_no_fp
-
-return [ocd_test_pass]
+return [run_test]
 

@@ -1,29 +1,36 @@
-ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-# created by compile executable
-set ENTRY_ADDR $program_info(_entry)
-set END_ADDR $program_info(end)
+  ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
 
-ocd_connect
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set END_ADDR $program_info(end)
 
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
+  ocd_connect
 
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
-ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
 
-set STEP_LIMIT 100
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
 
-for { set count 0 } { $count < $STEP_LIMIT } { incr count } {
+  set STEP_LIMIT 100
 
-  ocdtlb_run_expect "step"
-  set response [ocdtlb_run_expect "reg pc"]
-  set cur_pc   [ocdtlb_rsp_get $response]
+  for { set count 0 } { $count < $STEP_LIMIT } { incr count } {
 
-  if { [ocdtlb_compare_equal_hex $cur_pc $END_ADDR]} {
-    return [ocd_test_pass]
+    ocdtlb_run_expect "step"
+    set response [ocdtlb_run_expect "reg pc"]
+    set cur_pc   [ocdtlb_rsp_get $response]
+
+    if { [ocdtlb_compare_equal_hex $cur_pc $END_ADDR]} {
+      return [ocd_test_pass]
+    }
   }
+
+  error "could not reach $END_ADDR, tried $count steps"
 }
 
-error "could not reach $END_ADDR, tried $count steps"
+return [run_test]
 

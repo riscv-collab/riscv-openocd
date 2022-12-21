@@ -1,12 +1,19 @@
-ocd_connect
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-set targets_num [ocdtlb_rsp_get [ocdtlb_run_expect "targets"] targets_num]
-set expected_num [target_info cpu,cores_num]
+  ocd_connect
 
-if {![expr { $expected_num == $targets_num}] } {
-  perror "unexpected number of targets $targets_num, expecting $expected_num"
-  return [ocd_test_fail]
+  set targets_num [ocdtlb_rsp_get [ocdtlb_run_expect "targets"] targets_num]
+  set expected_num [target_info cpu,cores_num]
+
+  if {![expr { $expected_num == $targets_num}] } {
+    perror "unexpected number of targets $targets_num, expecting $expected_num"
+    return [ocd_test_fail]
+  }
+
+  return [ocd_test_pass]
 }
 
-return [ocd_test_pass]
+return [run_test]
 

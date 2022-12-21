@@ -1,44 +1,51 @@
-if {[expr [target_info cpu,xlen] != 64]} { return [ocd_test_unsupported] }
-if {![target_info memory,has_high_pa]} { return [ocd_test_unsupported] }
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-# This test generates a binary file and then loads it via load_image, in such a
-# way that the right non-inclusive border is 2^64
+  if {[expr [target_info cpu,xlen] != 64]} { return [ocd_test_unsupported] }
+  if {![target_info memory,has_high_pa]} { return [ocd_test_unsupported] }
 
-ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+  # This test generates a binary file and then loads it via load_image, in such
+  # a way that the right non-inclusive border is 2^64
 
-ocd_connect
+  ocd_compile_executable "special.S" "$default_bin_prefix.exe"
 
-ocdtlb_run_expect "reset halt"
+  ocd_connect
 
-set end_addr "0xffffffffffffffff"
-set size 100
-set start_addr [expr ($end_addr - $size) + 1]
+  ocdtlb_run_expect "reset halt"
 
-ocdtlb_run_expect "mwb $start_addr 0xbe $size"
-set response [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $start_addr $size"] data]
-ocdtlb_expect_equal $response [lrepeat $size 0xbe]
+  set end_addr "0xffffffffffffffff"
+  set size 100
+  set start_addr [expr ($end_addr - $size) + 1]
 
-proc generate_data {size} {
-  set data {}
-  for {set i 1} {$i <= $size} {incr i} {
-    lappend data $i
+  ocdtlb_run_expect "mwb $start_addr 0xbe $size"
+  set response [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $start_addr $size"] data]
+  ocdtlb_expect_equal $response [lrepeat $size 0xbe]
+
+  proc generate_data {size} {
+    set data {}
+    for {set i 1} {$i <= $size} {incr i} {
+      lappend data $i
+    }
+    return $data
   }
-  return $data
+
+  proc dump_to_file {data} {
+    set image [ocdtlb_get_tmp_prefix "load"].img
+    set fp [open $image w]
+    fconfigure $fp -translation binary
+    puts -nonewline $fp [binary format c* $data]
+    close $fp
+    return $image
+  }
+
+  set data [generate_data $size]
+  set image [dump_to_file $data]
+  ocdtlb_run_expect "load_image $image $start_addr"
+  set response [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $start_addr $size"] data]
+  ocdtlb_expect_equal $response $data
+
+  return [ocd_test_pass]
 }
 
-proc dump_to_file {data} {
-  set image [ocdtlb_get_tmp_prefix "load"].img
-  set fp [open $image w]
-  fconfigure $fp -translation binary
-  puts -nonewline $fp [binary format c* $data]
-  close $fp
-  return $image
-}
-
-set data [generate_data $size]
-set image [dump_to_file $data]
-ocdtlb_run_expect "load_image $image $start_addr"
-set response [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $start_addr $size"] data]
-ocdtlb_expect_equal $response $data
-
-ocd_test_pass
+return [run_test]

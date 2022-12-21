@@ -1,34 +1,41 @@
-set xlen64 [expr [target_info cpu,xlen] == 64]
+proc run_test {} {
 
-ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+  global default_bin_prefix
+  global program_info
 
-# created by compile executable
-set MEM_ADDR $program_info(mdd_test_data)
+  set xlen64 [expr [target_info cpu,xlen] == 64]
 
-ocd_connect
+  ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
 
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
+  # created by compile executable
+  set MEM_ADDR $program_info(mdd_test_data)
 
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocd_connect
 
-set response [ocdtlb_run_expect "mdb $MEM_ADDR"]
-set bytes [dict get $response data]
-ocdtlb_expect_equal $bytes [list 0xad]
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
 
-set response [ocdtlb_run_expect "mdh $MEM_ADDR"]
-set bytes [dict get $response data]
-ocdtlb_expect_equal $bytes [list 0xddad]
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 
-set response [ocdtlb_run_expect "mdw $MEM_ADDR"]
-set bytes [dict get $response data]
-ocdtlb_expect_equal $bytes [list 0x00baddad]
-
-if {$xlen64} {
-  set response [ocdtlb_run_expect "mdd $MEM_ADDR"]
+  set response [ocdtlb_run_expect "mdb $MEM_ADDR"]
   set bytes [dict get $response data]
-  ocdtlb_expect_equal $bytes [list 0xdeadbabe00baddad]
+  ocdtlb_expect_equal $bytes [list 0xad]
+
+  set response [ocdtlb_run_expect "mdh $MEM_ADDR"]
+  set bytes [dict get $response data]
+  ocdtlb_expect_equal $bytes [list 0xddad]
+
+  set response [ocdtlb_run_expect "mdw $MEM_ADDR"]
+  set bytes [dict get $response data]
+  ocdtlb_expect_equal $bytes [list 0x00baddad]
+
+  if {$xlen64} {
+    set response [ocdtlb_run_expect "mdd $MEM_ADDR"]
+    set bytes [dict get $response data]
+    ocdtlb_expect_equal $bytes [list 0xdeadbabe00baddad]
+  }
+
+  return [ocd_test_pass]
 }
 
-ocd_test_pass
-
+return [run_test]

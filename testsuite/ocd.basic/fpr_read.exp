@@ -37,7 +37,7 @@ proc run_test {} {
     }
   }
 
-  ocd_test_pass
+  return [ocd_test_pass]
 }
 
 return [run_test]

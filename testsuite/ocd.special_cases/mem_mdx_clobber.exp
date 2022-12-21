@@ -1,47 +1,55 @@
-ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+  global GPR
 
-# created by compile executable
-set ENTRY_ADDR $program_info(_entry)
-set WORK_ADDR $program_info(work_area_start)
-set END_ADDR $program_info(end)
-set xlen64 [expr [target_info cpu,xlen] == 64]
+  ocd_compile_executable "special.S" "$default_bin_prefix.exe"
 
-ocd_connect
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set WORK_ADDR $program_info(work_area_start)
+  set END_ADDR $program_info(end)
+  set xlen64 [expr [target_info cpu,xlen] == 64]
 
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
+  ocd_connect
 
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
-ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
 
-ocdtlb_run_expect "bp $END_ADDR 4"
-ocdtlb_run_expect "resume"
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
 
-octdlb_wait_resume
+  ocdtlb_run_expect "bp $END_ADDR 4"
+  ocdtlb_run_expect "resume"
 
-ocdtlb_do_expect_halted
+  octdlb_wait_resume
 
-ocdtlb_run_expect "mdb $WORK_ADDR"
-ocdtlb_run_expect "mdh $WORK_ADDR"
-ocdtlb_run_expect "mdw $WORK_ADDR"
+  ocdtlb_do_expect_halted
 
-if {$xlen64} {
   ocdtlb_run_expect "mdb $WORK_ADDR"
-}
-
-for {set i 1} {$i < 32} {incr i} {
-
-  set reg_name $GPR($i)
-  set value [ocdtlb_rsp_get [ocdtlb_run_expect "reg $reg_name"]]
+  ocdtlb_run_expect "mdh $WORK_ADDR"
+  ocdtlb_run_expect "mdw $WORK_ADDR"
 
   if {$xlen64} {
-    set expected [expr 2 << [expr ($i - 1) * 2] ]
-  } else {
-    set expected [expr 1 << [expr ($i - 1)]]
+    ocdtlb_run_expect "mdb $WORK_ADDR"
   }
 
-  verbose "$reg_name / $value \\/ $expected" 1
-  ocdtlb_expect_equal $expected $value
+  for {set i 1} {$i < 32} {incr i} {
+
+    set reg_name $GPR($i)
+    set value [ocdtlb_rsp_get [ocdtlb_run_expect "reg $reg_name"]]
+
+    if {$xlen64} {
+      set expected [expr 2 << [expr ($i - 1) * 2] ]
+    } else {
+      set expected [expr 1 << [expr ($i - 1)]]
+    }
+
+    verbose "$reg_name / $value \\/ $expected" 1
+    ocdtlb_expect_equal $expected $value
+  }
+
+  return [ocd_test_pass]
 }
 
-ocd_test_pass
+return [run_test]

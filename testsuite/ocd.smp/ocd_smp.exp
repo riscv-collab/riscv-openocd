@@ -1,100 +1,107 @@
-# This test targets gdb interaction with SMP targets
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-set NUM_CORES [target_info cpu,cores_num]
+  # This test targets gdb interaction with SMP targets
 
-ocd_compile_executable "smp.S" "$default_bin_prefix.exe" [list -DNCORES=$NUM_CORES]
+  set NUM_CORES [target_info cpu,cores_num]
 
-# created by compile executable
-set ENTRY_ADDR $program_info(_entry)
-set END_ADDRESS $program_info(master_loop)
-set END_SLAVE $program_info(slave_loop)
-set RENDEZVOUS_ADDRESS $program_info(rendezvous_point)
+  ocd_compile_executable "smp.S" "$default_bin_prefix.exe" [list -DNCORES=$NUM_CORES]
 
-ocd_connect
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set END_ADDRESS $program_info(master_loop)
+  set END_SLAVE $program_info(slave_loop)
+  set RENDEZVOUS_ADDRESS $program_info(rendezvous_point)
 
-ocdtlb_run_expect "reset halt"
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocd_connect
 
-for { set i 0}  {$i < $NUM_CORES} {incr i} {
-  ocdtlb_run_expect "targets $i"
-  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
-}
-ocdtlb_run_expect "bp $END_ADDRESS 4"
+  ocdtlb_run_expect "reset halt"
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 
-# ON SMP targets resume will "resume" all targets at once
-if {[target_info openocd,smp_target]} {
-  ocdtlb_run_expect "resume"
-} else {
   for { set i 0}  {$i < $NUM_CORES} {incr i} {
     ocdtlb_run_expect "targets $i"
-    ocdtlb_run_expect "resume"
+    ocdtlb_run_expect "reg pc $ENTRY_ADDR"
   }
-}
+  ocdtlb_run_expect "bp $END_ADDRESS 4"
 
-octdlb_wait_resume
+  # ON SMP targets resume will "resume" all targets at once
+  if {[target_info openocd,smp_target]} {
+    ocdtlb_run_expect "resume"
+  } else {
+    for { set i 0}  {$i < $NUM_CORES} {incr i} {
+      ocdtlb_run_expect "targets $i"
+      ocdtlb_run_expect "resume"
+    }
+  }
 
-set tgts [ocdtlb_run_expect "targets"]
-set states [ocdtlb_rsp_get $tgts states]
-if {[llength $states] != $NUM_CORES} {
-  perror "unexpected number of targets detected"
-  return [ocd_test_fail]
-}
+  octdlb_wait_resume
 
-# ON SMP targets all targets are expected to be halted even if only 1 thread
-# actually hits the bp
+  set tgts [ocdtlb_run_expect "targets"]
+  set states [ocdtlb_rsp_get $tgts states]
+  if {[llength $states] != $NUM_CORES} {
+    perror "unexpected number of targets detected"
+    return [ocd_test_fail]
+  }
 
-if {[target_info openocd,smp_target]} {
-  foreach state $states {
-    if {![string match "halted" $state]} {
-      perror "unexpected non-halted core encountered"
+  # ON SMP targets all targets are expected to be halted even if only 1 thread
+  # actually hits the bp
+
+  if {[target_info openocd,smp_target]} {
+    foreach state $states {
+      if {![string match "halted" $state]} {
+        perror "unexpected non-halted core encountered"
+        return [ocd_test_fail]
+      }
+    }
+  } else {
+    set HALTED_COUNT 0
+    set RUNNING_COUNT 0
+    for { set i 0}  {$i < $NUM_CORES} {incr i} {
+      if {[lindex $states $i] == "halted"} {
+        incr HALTED_COUNT
+      } else {
+        incr RUNNING_COUNT
+        ocdtlb_run_expect "targets $i"
+        ocdtlb_run_expect "halt"
+      }
+    }
+
+    if {[expr $RUNNING_COUNT != ($NUM_CORES - 1)]} {
+      perror "unexpected number of running threads: $states"
+      return [ocd_test_fail]
+    }
+
+    if {$HALTED_COUNT != 1} {
+      perror "unexpected number of halted threads: $states"
       return [ocd_test_fail]
     }
   }
-} else {
-  set HALTED_COUNT 0
-  set RUNNING_COUNT 0
+
+  set SLAVE_COUNT 0
+  set MASTER_COUNT 0
   for { set i 0}  {$i < $NUM_CORES} {incr i} {
-    if {[lindex $states $i] == "halted"} {
-      incr HALTED_COUNT
-    } else {
-      incr RUNNING_COUNT
-      ocdtlb_run_expect "targets $i"
-      ocdtlb_run_expect "halt"
+    ocdtlb_run_expect "targets $i"
+    set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+    if {$pc == $END_SLAVE} {
+      incr SLAVE_COUNT
+    }
+    if {$pc == $END_ADDRESS} {
+      incr MASTER_COUNT
     }
   }
 
-  if {[expr $RUNNING_COUNT != ($NUM_CORES - 1)]} {
-    perror "unexpected number of running threads: $states"
+  if {[expr $SLAVE_COUNT != ($NUM_CORES - 1)]} {
+    perror "unexpected number($SLAVE_COUNT) of slave cores observed"
     return [ocd_test_fail]
   }
 
-  if {$HALTED_COUNT != 1} {
-    perror "unexpected number of halted threads: $states"
+  if {$MASTER_COUNT != 1} {
+    perror "unexpected number($MASTER_COUNT) of master cores observed"
     return [ocd_test_fail]
   }
+
+  return [ocd_test_pass]
 }
 
-set SLAVE_COUNT 0
-set MASTER_COUNT 0
-for { set i 0}  {$i < $NUM_CORES} {incr i} {
-  ocdtlb_run_expect "targets $i"
-  set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
-  if {$pc == $END_SLAVE} {
-    incr SLAVE_COUNT
-  }
-  if {$pc == $END_ADDRESS} {
-    incr MASTER_COUNT
-  }
-}
-
-if {[expr $SLAVE_COUNT != ($NUM_CORES - 1)]} {
-  perror "unexpected number($SLAVE_COUNT) of slave cores observed"
-  return [ocd_test_fail]
-}
-
-if {$MASTER_COUNT != 1} {
-  perror "unexpected number($MASTER_COUNT) of master cores observed"
-  return [ocd_test_fail]
-}
-
-return [ocd_test_pass]
+return [run_test]

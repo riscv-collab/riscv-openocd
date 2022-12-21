@@ -38,7 +38,7 @@ proc run_test {} {
     ocdtlb_expect_equal $values($i) $value
   }
 
-  ocd_test_pass
+  return [ocd_test_pass]
 }
 
 return [run_test]

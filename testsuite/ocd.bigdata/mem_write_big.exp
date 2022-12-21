@@ -1,57 +1,65 @@
-set xlen64 [expr [target_info cpu,xlen] == 64]
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-ocd_compile_executable "bigdata.S" "$default_bin_prefix.exe"
+  set xlen64 [expr [target_info cpu,xlen] == 64]
 
-# created by compile executable
-set MEM_ADDR      $program_info(work_area_start)
-set MEM_END_ADDR  $program_info(work_area_end)
+  ocd_compile_executable "bigdata.S" "$default_bin_prefix.exe"
 
-set ADDR_LAST_BYTE  [ocdtlb_addr_add $MEM_END_ADDR -1]
-set ADDR_LAST_WCHAR [ocdtlb_addr_add $MEM_END_ADDR -2]
-set ADDR_LAST_WORD  [ocdtlb_addr_add $MEM_END_ADDR -4]
-set ADDR_LAST_DWORD [ocdtlb_addr_add $MEM_END_ADDR -8]
+  # created by compile executable
+  set MEM_ADDR      $program_info(work_area_start)
+  set MEM_END_ADDR  $program_info(work_area_end)
 
-proc generate_iota_list { count mask } {
-  set result {}
-  for {set i 0} {$i < $count} {incr i} {
-    lappend result [expr ($i & $mask)]
+  set ADDR_LAST_BYTE  [ocdtlb_addr_add $MEM_END_ADDR -1]
+  set ADDR_LAST_WCHAR [ocdtlb_addr_add $MEM_END_ADDR -2]
+  set ADDR_LAST_WORD  [ocdtlb_addr_add $MEM_END_ADDR -4]
+  set ADDR_LAST_DWORD [ocdtlb_addr_add $MEM_END_ADDR -8]
+
+  proc generate_iota_list { count mask } {
+    set result {}
+    for {set i 0} {$i < $count} {incr i} {
+      lappend result [expr ($i & $mask)]
+    }
+    return $result
   }
-  return $result
+
+  ocd_connect
+
+  # created by compile executable
+  set MEM_ADDR $program_info(work_area_start)
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  ocdtlb_run_expect "write_memory $MEM_ADDR 8  {[generate_iota_list 8192 0xff] }"
+  set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $ADDR_LAST_BYTE"] data]
+  set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdb [ocdtlb_addr_add $ADDR_LAST_BYTE -1]"] data]
+  ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0xff 0xfe}
+
+
+  ocdtlb_run_expect "write_memory $MEM_ADDR 16 {[generate_iota_list 4096 0xffff] }"
+  set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdh $ADDR_LAST_WCHAR"] data]
+  set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdh [ocdtlb_addr_add $ADDR_LAST_WCHAR -2]"] data]
+  ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0xfff 0xffe}
+
+  ocdtlb_run_expect "write_memory $MEM_ADDR 32 {[generate_iota_list 2048 0xffffffff] }"
+  set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw $ADDR_LAST_WORD"] data]
+  set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw [ocdtlb_addr_add $ADDR_LAST_WORD -4]"] data]
+  ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0x000007ff 0x000007fe}
+
+  if {$xlen64} {
+    ocdtlb_run_expect "write_memory $MEM_ADDR 64 {[generate_iota_list 1024 0xffffffff] }"
+    set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw $ADDR_LAST_DWORD"] data]
+    set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw [ocdtlb_addr_add $ADDR_LAST_DWORD -8]"] data]
+    ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0x000003ff 0x000003fe}
+  }
+
+  return [ocd_test_pass]
 }
 
-ocd_connect
+return [run_test]
 
-# created by compile executable
-set MEM_ADDR $program_info(work_area_start)
-
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
-
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
-
-ocdtlb_run_expect "write_memory $MEM_ADDR 8  {[generate_iota_list 8192 0xff] }"
-set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $ADDR_LAST_BYTE"] data]
-set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdb [ocdtlb_addr_add $ADDR_LAST_BYTE -1]"] data]
-ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0xff 0xfe}
-
-
-ocdtlb_run_expect "write_memory $MEM_ADDR 16 {[generate_iota_list 4096 0xffff] }"
-set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdh $ADDR_LAST_WCHAR"] data]
-set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdh [ocdtlb_addr_add $ADDR_LAST_WCHAR -2]"] data]
-ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0xfff 0xffe}
-
-ocdtlb_run_expect "write_memory $MEM_ADDR 32 {[generate_iota_list 2048 0xffffffff] }"
-set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw $ADDR_LAST_WORD"] data]
-set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw [ocdtlb_addr_add $ADDR_LAST_WORD -4]"] data]
-ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0x000007ff 0x000007fe}
-
-if {$xlen64} {
-  ocdtlb_run_expect "write_memory $MEM_ADDR 64 {[generate_iota_list 1024 0xffffffff] }"
-  set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw $ADDR_LAST_DWORD"] data]
-  set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw [ocdtlb_addr_add $ADDR_LAST_DWORD -8]"] data]
-  ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0x000003ff 0x000003fe}
-}
-
-ocd_test_pass
 
 

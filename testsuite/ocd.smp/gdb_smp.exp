@@ -1,81 +1,89 @@
-# This test targets gdb interaction with SMP targets
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+  global perror_threshold
 
-set NUM_CORES [target_info cpu,cores_num]
+  # This test targets gdb interaction with SMP targets
 
-ocd_compile_executable "smp.S" "$default_bin_prefix.exe" [list -DNCORES=$NUM_CORES]
+  set NUM_CORES [target_info cpu,cores_num]
 
-# created by compile executable
-set ENTRY_ADDR $program_info(_entry)
-set END_ADDRESS $program_info(master_loop)
-set RENDEZVOUS_ADDRESS $program_info(rendezvous_point)
+  ocd_compile_executable "smp.S" "$default_bin_prefix.exe" [list -DNCORES=$NUM_CORES]
 
-ocd_gdb_connect
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set END_ADDRESS $program_info(master_loop)
+  set RENDEZVOUS_ADDRESS $program_info(rendezvous_point)
 
-set threads_info [parse_gdb_info_threads [gdb_run_command "info threads"]]
-verbose $threads_info 1
+  ocd_gdb_connect
 
-if {![target_info openocd,smp_target]} {
-  if {[ocdtlb_rsp_get $threads_info threads_num] != 1} {
-    perror "non-hwthread target should have only 1 thread"
+  set threads_info [parse_gdb_info_threads [gdb_run_command "info threads"]]
+  verbose $threads_info 1
+
+  if {![target_info openocd,smp_target]} {
+    if {[ocdtlb_rsp_get $threads_info threads_num] != 1} {
+      perror "non-hwthread target should have only 1 thread"
+      return [ocd_test_fail]
+    }
+    if {[target_info openocd,hwthreads]} {
+      if {[lindex [ocdtlb_rsp_get $threads_info types] 0] != "thread"} {
+        perror "unexpected thread type"
+        return [ocd_test_fail]
+      }
+    } else {
+      if {[lindex [ocdtlb_rsp_get $threads_info types] 0] != "remote"} {
+        perror "unexpected thread type"
+        return [ocd_test_fail]
+      }
+    }
+    return [ocd_test_pass]
+  }
+
+  if {[ocdtlb_rsp_get $threads_info threads_num] != $NUM_CORES} {
+    perror "unexpected number of threads detected"
     return [ocd_test_fail]
   }
-  if {[target_info openocd,hwthreads]} {
-    if {[lindex [ocdtlb_rsp_get $threads_info types] 0] != "thread"} {
-      perror "unexpected thread type"
-      return [ocd_test_fail]
+  set load_result [gdb_run_command "load $default_bin_prefix.exe"]
+
+  gdb_run_command "b *$END_ADDRESS"
+
+  if {[target_info name] == "twin_scr7_64_smp4"} {
+    setup_kfail openocd_EMBARGO/19207 "*-*-*"
+    set perror_threshold 2
+  }
+  # TODO: once bug is fixed we should remove the catch statement
+  if {[catch {gdb_run_command "continue"} err]} {
+    perror $err
+    return [ocd_test_fail]
+  }
+
+  set x1_values {}
+
+  for { set i 1}  {$i <= $NUM_CORES} {incr i} {
+
+    gdb_run_command "thread $i"
+    set regs_info [parse_gdb_info_reg [gdb_run_command "info reg"]]
+    set values [ocdtlb_rsp_get $regs_info values]
+    set regs [ocdtlb_rsp_get $regs_info reg_names]
+    set x1_value [lindex $values 0]
+    lappend x1_values $x1_value
+
+    set expected $x1_value
+    for { set reg_n 1 } { $reg_n < 29 } { incr reg_n} {
+      incr expected
+      set cur_val [lindex $values $reg_n]
+      if {$expected != $cur_val} {
+        perror [list "unexpected value thread($i) " \
+                "reg: [lindex $regs $reg_n] expected: $expected value $cur_val"]
+        return [ocd_test_fail]
+      }
     }
-  } else {
-    if {[lindex [ocdtlb_rsp_get $threads_info types] 0] != "remote"} {
-      perror "unexpected thread type"
-      return [ocd_test_fail]
-    }
+  }
+
+  if {[llength $x1_values] != [llength [ocdtlb_unique_list $x1_values]]} {
+    perror "non-unique values in x1(ra) detected"
+    return [ocd_test_fail]
   }
   return [ocd_test_pass]
 }
 
-if {[ocdtlb_rsp_get $threads_info threads_num] != $NUM_CORES} {
-  perror "unexpected number of threads detected"
-  return [ocd_test_fail]
-}
-set load_result [gdb_run_command "load $default_bin_prefix.exe"]
-
-gdb_run_command "b *$END_ADDRESS"
-
-if {[target_info name] == "twin_scr7_64_smp4"} {
-  setup_kfail openocd_EMBARGO/19207 "*-*-*"
-  set perror_threshold 2
-}
-# TODO: once bug is fixed we should remove the catch statement
-if {[catch {gdb_run_command "continue"} err]} {
-  perror $err
-  return [ocd_test_fail]
-}
-
-set x1_values {}
-
-for { set i 1}  {$i <= $NUM_CORES} {incr i} {
-
-  gdb_run_command "thread $i"
-  set regs_info [parse_gdb_info_reg [gdb_run_command "info reg"]]
-  set values [ocdtlb_rsp_get $regs_info values]
-  set regs [ocdtlb_rsp_get $regs_info reg_names]
-  set x1_value [lindex $values 0]
-  lappend x1_values $x1_value
-
-  set expected $x1_value
-  for { set reg_n 1 } { $reg_n < 29 } { incr reg_n} {
-    incr expected
-    set cur_val [lindex $values $reg_n]
-    if {$expected != $cur_val} {
-      perror [list "unexpected value thread($i) " \
-              "reg: [lindex $regs $reg_n] expected: $expected value $cur_val"]
-      return [ocd_test_fail]
-    }
-  }
-}
-
-if {[llength $x1_values] != [llength [ocdtlb_unique_list $x1_values]]} {
-  perror "non-unique values in x1(ra) detected"
-  return [ocd_test_fail]
-}
-return [ocd_test_pass]
+return [run_test]

@@ -1,8 +1,10 @@
 # this test just checks availability of registers. Exact values are checked in
 # (gpr|fpr)_(read|write) tests
 proc run_test {} {
+
   global GPR
   global FPR
+
   set GPR_ABI_NAMES [list       \
     zero ra sp gp tp t0 t1 t2   \
       fp s1 a0 a1 a2 a3 a4 a5   \

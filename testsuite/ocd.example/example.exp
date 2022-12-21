@@ -1,37 +1,45 @@
-# This is an example that can be used as a template for new tests and serves as
-# a quick introduction to the framework. Please consult README.md for a general
-# overview of dejagnu framework.
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-# Basic information about target board can be queried via `target_info`
-set xlen64 [expr [target_info cpu,xlen] == 64]
+  # This is an example that can be used as a template for new tests and serves
+  # as a quick introduction to the framework. Please consult README.md for a
+  # general overview of dejagnu framework.
 
-# Each test has its own `default_bin_prefix` variable defined. The expectation
-# is that this prefix is used for any temporary files required by test.
-ocd_compile_executable "example.S" "$default_bin_prefix.exe"
+  # Basic information about target board can be queried via `target_info`
+  set xlen64 [expr [target_info cpu,xlen] == 64]
 
-# Once `ocd_compile_executable` is called - a special global variable is
-# created that contains addresses of all the global symbols in the resulting
-# image. The variable is called `program_info`.
-# `program_info` is of an array type. Please, consult TCL user manual to figure
-# out how to copy an array if you need a copy (like in cases when you need to
-# compile several files).
-set ENTRY_ADDR $program_info(_entry)
-set END_ADDR $program_info(end)
+  # Each test has its own `default_bin_prefix` variable defined. The expectation
+  # is that this prefix is used for any temporary files required by test.
+  ocd_compile_executable "example.S" "$default_bin_prefix.exe"
 
-# connects to TCL-RPC server
-ocd_connect
+  # Once `ocd_compile_executable` is called - a special global variable is
+  # created that contains addresses of all the global symbols in the resulting
+  # image. The variable is called `program_info`.
+  # `program_info` is of an array type. Please, consult TCL user manual to figure
+  # out how to copy an array if you need a copy (like in cases when you need to
+  # compile several files).
+  set ENTRY_ADDR $program_info(_entry)
+  set END_ADDR $program_info(end)
 
-# ocdtlb_run_expect sends a command to TCL-RPC server ensuring that the
-# command succeeds (thats why it has expect suffix). If command fails
-# the functions signals an error and tests terminates. See TCL user manual
-# for information about how to prevent such behavior (via call to catch)
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
+  # connects to TCL-RPC server
+  ocd_connect
 
-# Library call that ensures that the currently active target is "halt" state
-ocdtlb_do_expect_halted
+  # ocdtlb_run_expect sends a command to TCL-RPC server ensuring that the
+  # command succeeds (thats why it has expect suffix). If command fails
+  # the functions signals an error and tests terminates. See TCL user manual
+  # for information about how to prevent such behavior (via call to catch)
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
 
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  # Library call that ensures that the currently active target is "halt" state
+  ocdtlb_do_expect_halted
 
-# indicates that the test is passed
-return [ocd_test_pass]
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  # indicates that the test is passed
+  return [ocd_test_pass]
+}
+
+return [run_test]
+

@@ -1,44 +1,52 @@
-ocd_compile_executable "wp_test.S" "$default_bin_prefix.exe"
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-# created by compile executable
-set ENTRY_ADDR $program_info(_entry)
-set END_ADDR $program_info(end)
-set STORE_TO_ADDR $program_info(store_to)
-set LOAD_FROM_ADDR $program_info(load_from)
+  ocd_compile_executable "wp_test.S" "$default_bin_prefix.exe"
 
-set STORE_INSTR $program_info(store_instr)
-set LOAD_INSTR $program_info(load_instr)
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set END_ADDR $program_info(end)
+  set STORE_TO_ADDR $program_info(store_to)
+  set LOAD_FROM_ADDR $program_info(load_from)
 
-ocd_connect
+  set STORE_INSTR $program_info(store_instr)
+  set LOAD_INSTR $program_info(load_instr)
 
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
-ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocd_connect
 
-ocdtlb_run_expect "wp $LOAD_FROM_ADDR 4"
-ocdtlb_run_expect "resume"
-octdlb_wait_resume
-ocdtlb_do_expect_halted
-ocdtlb_run_expect "rwp $LOAD_FROM_ADDR"
-set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
-ocdtlb_expect_equal_hex $pc $LOAD_INSTR
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
 
-ocdtlb_run_expect "resume"
-octdlb_wait_resume
+  ocdtlb_run_expect "wp $LOAD_FROM_ADDR 4"
+  ocdtlb_run_expect "resume"
+  octdlb_wait_resume
+  ocdtlb_do_expect_halted
+  ocdtlb_run_expect "rwp $LOAD_FROM_ADDR"
+  set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+  ocdtlb_expect_equal_hex $pc $LOAD_INSTR
 
-ocdtlb_do_expect_running
-ocdtlb_run_expect "halt"
-ocdtlb_run_expect "wp $STORE_TO_ADDR 4"
-ocdtlb_run_expect "resume"
-octdlb_wait_resume
-ocdtlb_do_expect_halted
-ocdtlb_run_expect "rwp $STORE_TO_ADDR"
-set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
-ocdtlb_expect_equal_hex $pc $STORE_INSTR
+  ocdtlb_run_expect "resume"
+  octdlb_wait_resume
 
-ocdtlb_run_expect "resume"
-ocdtlb_do_expect_running
+  ocdtlb_do_expect_running
+  ocdtlb_run_expect "halt"
+  ocdtlb_run_expect "wp $STORE_TO_ADDR 4"
+  ocdtlb_run_expect "resume"
+  octdlb_wait_resume
+  ocdtlb_do_expect_halted
+  ocdtlb_run_expect "rwp $STORE_TO_ADDR"
+  set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+  ocdtlb_expect_equal_hex $pc $STORE_INSTR
 
-return [ocd_test_pass]
+  ocdtlb_run_expect "resume"
+  ocdtlb_do_expect_running
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
+
 

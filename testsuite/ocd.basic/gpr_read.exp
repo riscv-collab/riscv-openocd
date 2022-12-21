@@ -1,41 +1,49 @@
-set xlen64 [expr [target_info cpu,xlen] == 64]
+proc run_test {} {
 
-ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+  global default_bin_prefix
+  global program_info
+  global GPR
 
-# created by compile executable
-set ENTRY_ADDR $program_info(_entry)
-set END_ADDR $program_info(end)
+  set xlen64 [expr [target_info cpu,xlen] == 64]
 
-ocd_connect
+  ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
 
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set END_ADDR $program_info(end)
 
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
-ocdtlb_run_expect "reg pc $ENTRY_ADDR"
-ocdtlb_run_expect "bp $END_ADDR 4"
-ocdtlb_run_expect "resume"
+  ocd_connect
 
-octdlb_wait_resume
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
 
-ocdtlb_do_expect_halted
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "bp $END_ADDR 4"
+  ocdtlb_run_expect "resume"
 
-for {set i 1} {$i < 32} {incr i} {
+  octdlb_wait_resume
 
-  set reg_name $GPR($i)
-  set value [ocdtlb_rsp_get [ocdtlb_run_expect "reg $reg_name"]]
+  ocdtlb_do_expect_halted
 
-  if {$xlen64} {
-    set expected [expr 2 << (($i - 1) * 2)]
-  } else {
-    set expected [expr 1 << ($i - 1)]
+  for {set i 1} {$i < 32} {incr i} {
+
+    set reg_name $GPR($i)
+    set value [ocdtlb_rsp_get [ocdtlb_run_expect "reg $reg_name"]]
+
+    if {$xlen64} {
+      set expected [expr 2 << (($i - 1) * 2)]
+    } else {
+      set expected [expr 1 << ($i - 1)]
+    }
+
+    verbose "$reg_name / $value \\/ $expected" 1
+    ocdtlb_expect_equal $expected $value
   }
+  set reg0 [ocdtlb_rsp_get [ocdtlb_run_expect "reg $GPR(0)"]]
+  ocdtlb_expect_equal 0 $reg0
 
-  verbose "$reg_name / $value \\/ $expected" 1
-  ocdtlb_expect_equal $expected $value
+  return [ocd_test_pass]
 }
-set reg0 [ocdtlb_rsp_get [ocdtlb_run_expect "reg $GPR(0)"]]
-ocdtlb_expect_equal 0 $reg0
 
-ocd_test_pass
-
+return [run_test]

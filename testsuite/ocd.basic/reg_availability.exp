@@ -1,5 +1,3 @@
-ocd_connect
-
 proc check_reg_availability {reg_name tgt_reg_list check_type} {
   set EXPECT_FAILURE 1
   set EXPECT_SUCCESS 0
@@ -19,54 +17,63 @@ proc check_reg_availability {reg_name tgt_reg_list check_type} {
   }
 }
 
-set ALWAYS_AVAILABLE_REGS [list \
-    cycle \
-    instret \
-    marchid \
-    mcause \
-    mcycle \
-    mepc \
-    mhartid \
-    mie \
-    mimpid \
-    minstret \
-    mip \
-    misa \
-    mscratch \
-    mstatus \
-    mtval \
-    mtvec \
-    mvendorid \
-    time \
-]
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-set ALWAYS_MISSING_REGS {}
-for {set i 3} {$i < 32} {incr i} {
-  lappend ALWAYS_MISSING_REGS HPMCOUNTER${i}H
-  lappend ALWAYS_MISSING_REGS MHPMCOUNTER${i}H
+  ocd_connect
+
+  set ALWAYS_AVAILABLE_REGS [list \
+      cycle \
+      instret \
+      marchid \
+      mcause \
+      mcycle \
+      mepc \
+      mhartid \
+      mie \
+      mimpid \
+      minstret \
+      mip \
+      misa \
+      mscratch \
+      mstatus \
+      mtval \
+      mtvec \
+      mvendorid \
+      time \
+  ]
+
+  set ALWAYS_MISSING_REGS {}
+  for {set i 3} {$i < 32} {incr i} {
+    lappend ALWAYS_MISSING_REGS HPMCOUNTER${i}H
+    lappend ALWAYS_MISSING_REGS MHPMCOUNTER${i}H
+  }
+
+  ocdtlb_run_expect "reset halt"
+
+  set rs [ocdtlb_run_expect "reg"]
+
+  set found_registers [ocdtlb_rsp_get $rs found_name]
+
+
+  if {[expr { [target_info cpu,has_u_mode] || [target_info cpu,has_s_mode] }] } {
+    check_reg_availability mcounteren $found_registers MUST_BE_AVAILABLE
+  } else {
+    check_reg_availability mcounteren $found_registers MUST_BE_ABSENT
+  }
+
+  foreach available_reg $ALWAYS_AVAILABLE_REGS {
+    check_reg_availability $available_reg $found_registers MUST_BE_AVAILABLE
+  }
+
+  foreach available_reg $ALWAYS_MISSING_REGS {
+    check_reg_availability $available_reg $found_registers MUST_BE_ABSENT
+  }
+
+  return [ocd_test_pass]
 }
 
-ocdtlb_run_expect "reset halt"
-
-set rs [ocdtlb_run_expect "reg"]
-
-set found_registers [ocdtlb_rsp_get $rs found_name]
-
-
-if {[expr { [target_info cpu,has_u_mode] || [target_info cpu,has_s_mode] }] } {
-  check_reg_availability mcounteren $found_registers MUST_BE_AVAILABLE
-} else {
-  check_reg_availability mcounteren $found_registers MUST_BE_ABSENT
-}
-
-foreach available_reg $ALWAYS_AVAILABLE_REGS {
-  check_reg_availability $available_reg $found_registers MUST_BE_AVAILABLE
-}
-
-foreach available_reg $ALWAYS_MISSING_REGS {
-  check_reg_availability $available_reg $found_registers MUST_BE_ABSENT
-}
-
-return [ocd_test_pass]
+return [run_test]
 
 

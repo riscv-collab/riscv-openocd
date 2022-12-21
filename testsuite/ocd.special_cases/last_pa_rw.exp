@@ -1,17 +1,3 @@
-if {[expr [target_info cpu,xlen] != 64]} { return [ocd_test_unsupported] }
-if {![target_info memory,has_high_pa]} { return [ocd_test_unsupported] }
-
-# This test attempts to write and then read <count> of elements (<name>: b/h/w)
-# with last element being written and read from last address (2^64 - <size>)
-# First, zeros are written to be shure that memory content has actually changed
-# after write
-
-ocd_compile_executable "special.S" "$default_bin_prefix.exe"
-
-ocd_connect
-
-ocdtlb_run_expect "reset halt"
-
 proc get_splat {count value} {
   if {$count eq ""} {
     return [list $value]
@@ -37,10 +23,31 @@ proc test_one_case {name size count} {
   write_and_read $name $address $count 0xa
 }
 
-foreach count {"" 1 2} {
-  dict for {name size} [dict create "b" 1 "h" 2 "w" 4 "d" 8] {
-    test_one_case $name $size $count
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+
+  if {[expr [target_info cpu,xlen] != 64]} { return [ocd_test_unsupported] }
+  if {![target_info memory,has_high_pa]} { return [ocd_test_unsupported] }
+
+# This test attempts to write and then read <count> of elements (<name>: b/h/w)
+# with last element being written and read from last address (2^64 - <size>)
+# First, zeros are written to be shure that memory content has actually changed
+# after write
+
+  ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+
+  ocd_connect
+
+  ocdtlb_run_expect "reset halt"
+
+  foreach count {"" 1 2} {
+    dict for {name size} [dict create "b" 1 "h" 2 "w" 4 "d" 8] {
+      test_one_case $name $size $count
+    }
   }
+
+  return [ocd_test_pass]
 }
 
-ocd_test_pass
+return [run_test]

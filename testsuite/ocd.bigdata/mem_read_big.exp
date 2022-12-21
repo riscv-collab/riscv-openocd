@@ -1,69 +1,77 @@
-set xlen64 [expr [target_info cpu,xlen] == 64]
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-ocd_compile_executable "bigdata.S" "$default_bin_prefix.exe"
+  set xlen64 [expr [target_info cpu,xlen] == 64]
 
-# created by compile executable
-set MEM_ADDR $program_info(work_area_start)
+  ocd_compile_executable "bigdata.S" "$default_bin_prefix.exe"
 
-ocd_connect
+  # created by compile executable
+  set MEM_ADDR $program_info(work_area_start)
 
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
+  ocd_connect
 
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
 
-set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 8 8192"]
-set data8 [ocdtlb_rsp_get $rs data]
-set front(0) [lindex $data8 0]
-set front(3) [lindex $data8 3]
-set front(5) [lindex $data8 5]
-set front(7) [lindex $data8 7]
-ocdtlb_expect_equal_hex [list $front(0) $front(3) $front(5) $front(7)] \
-                        { 0xee 0xbb 0xaf 0xaf }
-set back(0) [lindex $data8 8191]
-set back(2) [lindex $data8 8189]
-set back(4) [lindex $data8 8187]
-set back(6) [lindex $data8 8185]
-ocdtlb_expect_equal_hex [list $back(0) $back(2) $back(4) $back(6)] \
-                        { 0xcd 0xcd 0x88 0xaa }
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 
-array unset front
-array unset back
+  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 8 8192"]
+  set data8 [ocdtlb_rsp_get $rs data]
+  set front(0) [lindex $data8 0]
+  set front(3) [lindex $data8 3]
+  set front(5) [lindex $data8 5]
+  set front(7) [lindex $data8 7]
+  ocdtlb_expect_equal_hex [list $front(0) $front(3) $front(5) $front(7)] \
+                          { 0xee 0xbb 0xaf 0xaf }
+  set back(0) [lindex $data8 8191]
+  set back(2) [lindex $data8 8189]
+  set back(4) [lindex $data8 8187]
+  set back(6) [lindex $data8 8185]
+  ocdtlb_expect_equal_hex [list $back(0) $back(2) $back(4) $back(6)] \
+                          { 0xcd 0xcd 0x88 0xaa }
 
-set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 16 4096"]
-set data16 [ocdtlb_rsp_get $rs data]
-set front(0) [lindex $data16 0]
-set front(3) [lindex $data16 3]
-ocdtlb_expect_equal_hex [list $front(0) $front(3)] { 0xeeee 0xafaf}
-set back(0) [lindex $data16 4095]
-set back(2) [lindex $data16 4093]
-ocdtlb_expect_equal_hex [list $back(0) $back(2)] { 0xcdcd 0x8899 }
+  array unset front
+  array unset back
 
-array unset front
-array unset back
+  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 16 4096"]
+  set data16 [ocdtlb_rsp_get $rs data]
+  set front(0) [lindex $data16 0]
+  set front(3) [lindex $data16 3]
+  ocdtlb_expect_equal_hex [list $front(0) $front(3)] { 0xeeee 0xafaf}
+  set back(0) [lindex $data16 4095]
+  set back(2) [lindex $data16 4093]
+  ocdtlb_expect_equal_hex [list $back(0) $back(2)] { 0xcdcd 0x8899 }
 
-set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 32 2048"]
-set data32 [ocdtlb_rsp_get $rs data]
-set front(0) [lindex $data32 0]
-set front(2) [lindex $data32 2]
-ocdtlb_expect_equal_hex [list $front(0) $front(2)] { 0xbbbbeeee 0xdeadbabe }
-set back(0) [lindex $data32 2047]
-set back(2) [lindex $data32 2045]
-ocdtlb_expect_equal_hex [list $back(0) $back(2)] { 0xcdcdcdcd 0x80ff00ff}
+  array unset front
+  array unset back
 
-array unset front
-array unset back
+  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 32 2048"]
+  set data32 [ocdtlb_rsp_get $rs data]
+  set front(0) [lindex $data32 0]
+  set front(2) [lindex $data32 2]
+  ocdtlb_expect_equal_hex [list $front(0) $front(2)] { 0xbbbbeeee 0xdeadbabe }
+  set back(0) [lindex $data32 2047]
+  set back(2) [lindex $data32 2045]
+  ocdtlb_expect_equal_hex [list $back(0) $back(2)] { 0xcdcdcdcd 0x80ff00ff}
 
-if {$xlen64} {
-  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 64 1024"]
-  set data64 [ocdtlb_rsp_get $rs data]
-  set front(0) [lindex $data64 0]
-  set front(1) [lindex $data64 1]
-  ocdtlb_expect_equal_hex [list $front(0) $front(1)] { 0xafafafafbbbbeeee 0xdeadbabedeadbabe }
-  set back(0) [lindex $data64 1023]
-  set back(1) [lindex $data64 1022]
-  ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0xcdcdcdcd8899aabb 0x80ff00ff80ff00ff}
+  array unset front
+  array unset back
+
+  if {$xlen64} {
+    set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 64 1024"]
+    set data64 [ocdtlb_rsp_get $rs data]
+    set front(0) [lindex $data64 0]
+    set front(1) [lindex $data64 1]
+    ocdtlb_expect_equal_hex [list $front(0) $front(1)] { 0xafafafafbbbbeeee 0xdeadbabedeadbabe }
+    set back(0) [lindex $data64 1023]
+    set back(1) [lindex $data64 1022]
+    ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0xcdcdcdcd8899aabb 0x80ff00ff80ff00ff}
+  }
+
+  return [ocd_test_pass]
 }
 
-ocd_test_pass
+return [run_test]
+
 

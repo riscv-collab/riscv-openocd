@@ -1,196 +1,204 @@
-if {!$RUN_OCD_INTERNAL_ON_HW} {
-  if {[target_info sim] == ""} { return [ocd_test_unsupported] }
-}
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+  global FPR
+  global GPR
+  global RUN_OCD_INTERNAL_ON_HW
 
-ocd_compile_executable "parser.S" "$default_bin_prefix.exe"
+  if {!$RUN_OCD_INTERNAL_ON_HW} {
+    if {[target_info sim] == ""} { return [ocd_test_unsupported] }
+  }
 
-global program_info
-parray program_info
+  ocd_compile_executable "parser.S" "$default_bin_prefix.exe"
 
-# created by compile executable
-set ENTRY_ADDR $program_info(_entry)
-set MEM_ADDR $program_info(work_area_start)
-set AUX_MEM_ADDR [ocdtlb_addr_add $MEM_ADDR 7]
+  parray program_info
 
-ocdtlb_expect_equal 1 1
-ocdtlb_expect_equal {1 2} {1 2}
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set MEM_ADDR $program_info(work_area_start)
+  set AUX_MEM_ADDR [ocdtlb_addr_add $MEM_ADDR 7]
 
-ocdtlb_expect_equal_hex 0x00001 "0x01"
-ocdtlb_expect_equal_hex {"1" "2"} {"0x1" "0x02"}
+  ocdtlb_expect_equal 1 1
+  ocdtlb_expect_equal {1 2} {1 2}
 
-if {![catch {ocdtlb_expect_equal 1 2} boom]} {
-  error "unexpected match"
-}
-if {![catch {ocdtlb_expect_equal {2 2} {1 2}} boom]} {
-  error "unexpected match"
-}
-if {![catch {ocdtlb_expect_equal_hex 0x10001 "0x01"} boom]} {
-  error "unexpected match"
-}
-if {![catch {ocdtlb_expect_equal_hex {"2" "2"} {"0x1" "0x02"}} boom]} {
-  error "unexpected match"
-}
+  ocdtlb_expect_equal_hex 0x00001 "0x01"
+  ocdtlb_expect_equal_hex {"1" "2"} {"0x1" "0x02"}
+
+  if {![catch {ocdtlb_expect_equal 1 2} boom]} {
+    error "unexpected match"
+  }
+  if {![catch {ocdtlb_expect_equal {2 2} {1 2}} boom]} {
+    error "unexpected match"
+  }
+  if {![catch {ocdtlb_expect_equal_hex 0x10001 "0x01"} boom]} {
+    error "unexpected match"
+  }
+  if {![catch {ocdtlb_expect_equal_hex {"2" "2"} {"0x1" "0x02"}} boom]} {
+    error "unexpected match"
+  }
 
 
-ocd_connect
+  ocd_connect
 
-set expect_failure 1
-set op_fail_on_xlen32 [expr [target_info cpu,xlen] == 32]
-set target_no_fp [expr [target_info cpu,has_floats] == 0]
+  set expect_failure 1
+  set op_fail_on_xlen32 [expr [target_info cpu,xlen] == 32]
+  set target_no_fp [expr [target_info cpu,has_floats] == 0]
 
-# Reset/Resume/Targets
-ocdtlb_run_expect_raw "targets"    parse_targets_listing
-ocdtlb_run_expect     "targets"
+  # Reset/Resume/Targets
+  ocdtlb_run_expect_raw "targets"    parse_targets_listing
+  ocdtlb_run_expect     "targets"
 
-if {[expr {[target_info cpu,cores_num] == 1}]} {
-  ocdtlb_run_expect_raw "targets riscv.cpu"  parse_targets_set
-  ocdtlb_run_expect     "targets riscv.cpu"
-} else {
-  ocdtlb_run_expect_raw "targets riscv.cpu1"  parse_targets_set
-  ocdtlb_run_expect     "targets riscv.cpu1"
-}
+  if {[expr {[target_info cpu,cores_num] == 1}]} {
+    ocdtlb_run_expect_raw "targets riscv.cpu"  parse_targets_set
+    ocdtlb_run_expect     "targets riscv.cpu"
+  } else {
+    ocdtlb_run_expect_raw "targets riscv.cpu1"  parse_targets_set
+    ocdtlb_run_expect     "targets riscv.cpu1"
+  }
 
-ocdtlb_run_expect_raw "targets 0"  parse_targets_set
-ocdtlb_run_expect     "targets 0"
+  ocdtlb_run_expect_raw "targets 0"  parse_targets_set
+  ocdtlb_run_expect     "targets 0"
 
-ocdtlb_run_expect_raw "halt"       parse_halt
-ocdtlb_run_expect     "halt"
+  ocdtlb_run_expect_raw "halt"       parse_halt
+  ocdtlb_run_expect     "halt"
 
-ocdtlb_run_expect_raw "targets"    parse_targets_listing
-ocdtlb_run_expect     "targets"
+  ocdtlb_run_expect_raw "targets"    parse_targets_listing
+  ocdtlb_run_expect     "targets"
 
-ocdtlb_run_expect_raw "reset"      parse_reset
-ocdtlb_run_expect     "reset"
+  ocdtlb_run_expect_raw "reset"      parse_reset
+  ocdtlb_run_expect     "reset"
 
-ocdtlb_run_expect_raw "reset halt" parse_reset
-ocdtlb_run_expect     "reset"
+  ocdtlb_run_expect_raw "reset halt" parse_reset
+  ocdtlb_run_expect     "reset"
 
-ocdtlb_run_expect_raw "halt"       parse_halt
-ocdtlb_run_expect_raw "resume"     parse_resume
+  ocdtlb_run_expect_raw "halt"       parse_halt
+  ocdtlb_run_expect_raw "resume"     parse_resume
 
-ocdtlb_run_expect     "halt"
-ocdtlb_run_expect     "resume"
+  ocdtlb_run_expect     "halt"
+  ocdtlb_run_expect     "resume"
 
-ocdtlb_run_expect_raw "reset halt" parse_reset
-ocdtlb_run_expect     "reset halt"
+  ocdtlb_run_expect_raw "reset halt" parse_reset
+  ocdtlb_run_expect     "reset halt"
 
-ocdtlb_run_expect_raw "step" parse_step
-ocdtlb_run_expect     "step"
+  ocdtlb_run_expect_raw "step" parse_step
+  ocdtlb_run_expect     "step"
 
-ocdtlb_run_expect_raw "load_image $default_bin_prefix.exe" parse_load_image
-ocdtlb_run_expect     "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect_raw "load_image $default_bin_prefix.exe" parse_load_image
+  ocdtlb_run_expect     "load_image $default_bin_prefix.exe"
 
-# Registers
-ocdtlb_run_expect_raw "reg pc"       parse_reg_fetch
-ocdtlb_run_expect     "reg pc"
+  # Registers
+  ocdtlb_run_expect_raw "reg pc"       parse_reg_fetch
+  ocdtlb_run_expect     "reg pc"
 
-ocdtlb_run_expect_raw "reg 0"        parse_reg_fetch
-ocdtlb_run_expect     "reg 0"
+  ocdtlb_run_expect_raw "reg 0"        parse_reg_fetch
+  ocdtlb_run_expect     "reg 0"
 
-ocdtlb_run_expect_raw "reg"          parse_regfile_listing
-ocdtlb_run_expect     "reg"
+  ocdtlb_run_expect_raw "reg"          parse_regfile_listing
+  ocdtlb_run_expect     "reg"
 
-ocdtlb_run_expect_raw "reg $FPR(0)"      parse_reg_fetch $target_no_fp
-ocdtlb_run_expect     "reg $FPR(0)"      $target_no_fp
+  ocdtlb_run_expect_raw "reg $FPR(0)"      parse_reg_fetch $target_no_fp
+  ocdtlb_run_expect     "reg $FPR(0)"      $target_no_fp
 
-ocdtlb_run_expect_raw "reg WOBBLE"   parse_reg_fetch $expect_failure
-ocdtlb_run_expect     "reg WOBBLE"   $expect_failure
+  ocdtlb_run_expect_raw "reg WOBBLE"   parse_reg_fetch $expect_failure
+  ocdtlb_run_expect     "reg WOBBLE"   $expect_failure
 
-ocdtlb_run_expect_raw "reg pc $ENTRY_ADDR" parse_reg_set
-ocdtlb_run_expect     "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect_raw "reg pc $ENTRY_ADDR" parse_reg_set
+  ocdtlb_run_expect     "reg pc $ENTRY_ADDR"
 
-ocdtlb_run_expect_raw "reg WOBBLE 0" parse_reg_set   $expect_failure
-ocdtlb_run_expect     "reg WOBBLE 0" $expect_failure
+  ocdtlb_run_expect_raw "reg WOBBLE 0" parse_reg_set   $expect_failure
+  ocdtlb_run_expect     "reg WOBBLE 0" $expect_failure
 
-ocdtlb_run_expect_raw "reg priv"     parse_reg_fetch
-ocdtlb_run_expect     "reg priv"
+  ocdtlb_run_expect_raw "reg priv"     parse_reg_fetch
+  ocdtlb_run_expect     "reg priv"
 
-# Mwb/Mdb
-ocdtlb_run_expect_raw "mwb $AUX_MEM_ADDR 42" parse_memw_response
-ocdtlb_run_expect     "mwb $AUX_MEM_ADDR 42"
+  # Mwb/Mdb
+  ocdtlb_run_expect_raw "mwb $AUX_MEM_ADDR 42" parse_memw_response
+  ocdtlb_run_expect     "mwb $AUX_MEM_ADDR 42"
 
-ocdtlb_run_expect_raw "mwh $MEM_ADDR 42" parse_memw_response
-ocdtlb_run_expect     "mwh $MEM_ADDR 42"
+  ocdtlb_run_expect_raw "mwh $MEM_ADDR 42" parse_memw_response
+  ocdtlb_run_expect     "mwh $MEM_ADDR 42"
 
-ocdtlb_run_expect_raw "mww $MEM_ADDR 42" parse_memw_response
-ocdtlb_run_expect     "mww $MEM_ADDR 42"
+  ocdtlb_run_expect_raw "mww $MEM_ADDR 42" parse_memw_response
+  ocdtlb_run_expect     "mww $MEM_ADDR 42"
 
-ocdtlb_run_expect_raw "mwd $MEM_ADDR 42" parse_memw_response $op_fail_on_xlen32
-ocdtlb_run_expect     "mwd $MEM_ADDR 42" $op_fail_on_xlen32
+  ocdtlb_run_expect_raw "mwd $MEM_ADDR 42" parse_memw_response $op_fail_on_xlen32
+  ocdtlb_run_expect     "mwd $MEM_ADDR 42" $op_fail_on_xlen32
 
-ocdtlb_run_expect_raw "mdb $ENTRY_ADDR 100" parse_memd_response
-ocdtlb_run_expect     "mdb $ENTRY_ADDR 100"
+  ocdtlb_run_expect_raw "mdb $ENTRY_ADDR 100" parse_memd_response
+  ocdtlb_run_expect     "mdb $ENTRY_ADDR 100"
 
-ocdtlb_run_expect_raw "mdh $ENTRY_ADDR 100" parse_memd_response
-ocdtlb_run_expect     "mdh $ENTRY_ADDR 100"
+  ocdtlb_run_expect_raw "mdh $ENTRY_ADDR 100" parse_memd_response
+  ocdtlb_run_expect     "mdh $ENTRY_ADDR 100"
 
-ocdtlb_run_expect_raw "mdd $ENTRY_ADDR 100" parse_memd_response $op_fail_on_xlen32
-ocdtlb_run_expect     "mdd $ENTRY_ADDR 100" $op_fail_on_xlen32
+  ocdtlb_run_expect_raw "mdd $ENTRY_ADDR 100" parse_memd_response $op_fail_on_xlen32
+  ocdtlb_run_expect     "mdd $ENTRY_ADDR 100" $op_fail_on_xlen32
 
-ocdtlb_run_expect_raw "mdw $ENTRY_ADDR 100" parse_memd_response
-ocdtlb_run_expect     "mdw $ENTRY_ADDR 100"
+  ocdtlb_run_expect_raw "mdw $ENTRY_ADDR 100" parse_memd_response
+  ocdtlb_run_expect     "mdw $ENTRY_ADDR 100"
 
-ocdtlb_run_expect_raw "mdw $ENTRY_ADDR"     parse_memd_response
-ocdtlb_run_expect     "mdw $ENTRY_ADDR"
+  ocdtlb_run_expect_raw "mdw $ENTRY_ADDR"     parse_memd_response
+  ocdtlb_run_expect     "mdw $ENTRY_ADDR"
 
 # Read/Write memory
-ocdtlb_run_expect_raw "read_memory  $ENTRY_ADDR 64 30"      parse_memory_read_response $op_fail_on_xlen32
-ocdtlb_run_expect     "read_memory  $ENTRY_ADDR 64 30"      $op_fail_on_xlen32
+  ocdtlb_run_expect_raw "read_memory  $ENTRY_ADDR 64 30"      parse_memory_read_response $op_fail_on_xlen32
+  ocdtlb_run_expect     "read_memory  $ENTRY_ADDR 64 30"      $op_fail_on_xlen32
 
-ocdtlb_run_expect_raw "write_memory $MEM_ADDR 64 0xdeadbee" parse_memory_write_response  $op_fail_on_xlen32
-ocdtlb_run_expect     "write_memory $MEM_ADDR 64 0xdeadbee" $op_fail_on_xlen32
+  ocdtlb_run_expect_raw "write_memory $MEM_ADDR 64 0xdeadbee" parse_memory_write_response  $op_fail_on_xlen32
+  ocdtlb_run_expect     "write_memory $MEM_ADDR 64 0xdeadbee" $op_fail_on_xlen32
 
 # Register file (again)
-ocdtlb_run_expect_raw "set_reg {pc 0 $sp 0x1000}" parse_reg_set
-ocdtlb_run_expect     "set_reg {pc 0 $sp 0x1000}"
+  ocdtlb_run_expect_raw "set_reg {pc 0 $GPR(1) 0x1000}" parse_reg_set
+  ocdtlb_run_expect     "set_reg {pc 0 $GPR(1) 0x1000}"
 
-ocdtlb_run_expect_raw "set_reg {pc 0 $sp 0x1000 wobblewobble 0}" parse_reg_set $expect_failure
-ocdtlb_run_expect     "set_reg {pc 0 $sp 0x1000 wobblewobble 0}" $expect_failure
+  ocdtlb_run_expect_raw "set_reg {pc 0 $GPR(1) 0x1000 wobblewobble 0}" parse_reg_set $expect_failure
+  ocdtlb_run_expect     "set_reg {pc 0 $GPR(1) 0x1000 wobblewobble 0}" $expect_failure
 
-ocdtlb_run_expect_raw "reg pc" parse_reg_fetch
-ocdtlb_run_expect     "reg pc"
+  ocdtlb_run_expect_raw "reg pc" parse_reg_fetch
+  ocdtlb_run_expect     "reg pc"
 
-ocdtlb_run_expect_raw "reg $sp" parse_reg_fetch
-ocdtlb_run_expect     "reg $sp"
+  ocdtlb_run_expect_raw "reg $GPR(1)" parse_reg_fetch
+  ocdtlb_run_expect     "reg $GPR(1)"
 
-# Breakpoints
-ocdtlb_run_expect_raw "bp $ENTRY_ADDR 4" parse_bp
-ocdtlb_run_expect_raw "rbp all"         parse_rbp
-ocdtlb_run_expect_raw "bp [ocdtlb_addr_add $ENTRY_ADDR 1] 4" parse_bp  $expect_failure
-ocdtlb_run_expect_raw "bp $ENTRY_ADDR 8" parse_bp  $expect_failure
-# openocd_EMBARGO/21381
-# Potential bug, for some reason if the bp is missing we still report a success
-# ocdtlb_run_expect_raw "rbp $ENTRY_ADDR " parse_rbp $expect_failure
-ocdtlb_run_expect_raw "rbp all"         parse_rbp
-# openocd_EMBARGO/21381
-# Potential bug, for some reason if the bp is missing we still report a success
-# ocdtlb_run_expect_raw "rbp $ENTRY_ADDR " parse_rbp $expect_failure
-ocdtlb_run_expect_raw "rbp all"         parse_rbp
+  # Breakpoints
+  ocdtlb_run_expect_raw "bp $ENTRY_ADDR 4" parse_bp
+  ocdtlb_run_expect_raw "rbp all"         parse_rbp
+  ocdtlb_run_expect_raw "bp [ocdtlb_addr_add $ENTRY_ADDR 1] 4" parse_bp  $expect_failure
+  ocdtlb_run_expect_raw "bp $ENTRY_ADDR 8" parse_bp  $expect_failure
+  # openocd_EMBARGO/21381
+  # Potential bug, for some reason if the bp is missing we still report a success
+  # ocdtlb_run_expect_raw "rbp $ENTRY_ADDR " parse_rbp $expect_failure
+  ocdtlb_run_expect_raw "rbp all"         parse_rbp
+  # openocd_EMBARGO/21381
+  # Potential bug, for some reason if the bp is missing we still report a success
+  # ocdtlb_run_expect_raw "rbp $ENTRY_ADDR " parse_rbp $expect_failure
+  ocdtlb_run_expect_raw "rbp all"         parse_rbp
 
-ocdtlb_run_expect "bp $ENTRY_ADDR 4"
-ocdtlb_run_expect "rbp all"
-ocdtlb_run_expect "bp [ocdtlb_addr_add $ENTRY_ADDR 1] 4" $expect_failure
-ocdtlb_run_expect "bp $ENTRY_ADDR 8" $expect_failure
-# openocd_EMBARGO/21381
-# Potential bug, for some reason if the bp is missing we still report a success
-# ocdtlb_run_expect "rbp $ENTRY_ADDR " $expect_failure
-ocdtlb_run_expect "rbp all"
-# openocd_EMBARGO/21381
-# Potential bug, for some reason if the bp is missing we still report a success
-# ocdtlb_run_expect "rbp $ENTRY_ADDR " $expect_failure
-ocdtlb_run_expect "rbp all"
+  ocdtlb_run_expect "bp $ENTRY_ADDR 4"
+  ocdtlb_run_expect "rbp all"
+  ocdtlb_run_expect "bp [ocdtlb_addr_add $ENTRY_ADDR 1] 4" $expect_failure
+  ocdtlb_run_expect "bp $ENTRY_ADDR 8" $expect_failure
+  # openocd_EMBARGO/21381
+  # Potential bug, for some reason if the bp is missing we still report a success
+  # ocdtlb_run_expect "rbp $ENTRY_ADDR " $expect_failure
+  ocdtlb_run_expect "rbp all"
+  # openocd_EMBARGO/21381
+  # Potential bug, for some reason if the bp is missing we still report a success
+  # ocdtlb_run_expect "rbp $ENTRY_ADDR " $expect_failure
+  ocdtlb_run_expect "rbp all"
 
-ocdtlb_run_expect "wp $ENTRY_ADDR 4"
-ocdtlb_run_expect "rwp $ENTRY_ADDR"
-ocdtlb_run_expect "wp"
-ocdtlb_run_expect "wp $ENTRY_ADDR 4"
-ocdtlb_run_expect "wp $MEM_ADDR 4"
-ocdtlb_run_expect "wp"
-ocdtlb_run_expect "rwp $ENTRY_ADDR"
-ocdtlb_run_expect "rwp $MEM_ADDR"
+  ocdtlb_run_expect "wp $ENTRY_ADDR 4"
+  ocdtlb_run_expect "rwp $ENTRY_ADDR"
+  ocdtlb_run_expect "wp"
+  ocdtlb_run_expect "wp $ENTRY_ADDR 4"
+  ocdtlb_run_expect "wp $MEM_ADDR 4"
+  ocdtlb_run_expect "wp"
+  ocdtlb_run_expect "rwp $ENTRY_ADDR"
+  ocdtlb_run_expect "rwp $MEM_ADDR"
 
-ocdtlb_run_expect "wp $ENTRY_ADDR 4 w"
-ocdtlb_run_expect "rwp $ENTRY_ADDR"
+  ocdtlb_run_expect "wp $ENTRY_ADDR 4 w"
+  ocdtlb_run_expect "rwp $ENTRY_ADDR"
 
-ocd_test_pass
+  return [ocd_test_pass]
+}
 
+return [run_test]

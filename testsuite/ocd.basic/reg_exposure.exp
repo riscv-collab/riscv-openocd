@@ -1,45 +1,53 @@
-ocd_connect
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
 
-ocdtlb_run_expect "reset halt"
+  ocd_connect
 
-set rs [ocdtlb_run_expect "reg"]
+  ocdtlb_run_expect "reset halt"
 
-set found_registers [ocdtlb_rsp_get $rs found_name]
+  set rs [ocdtlb_run_expect "reg"]
 
-if {[target_info openocd,extra_csr]} {
-  set EXTRA_CSR_PRESENT EXPECT_PRESENT
-  set EXTRA_CSR_ACCESS  ACCESS_SUCCESS
-  set RENAMED_CSR_ACCESS ACCESS_SUCCESS
-} else {
-  set EXTRA_CSR_PRESENT EXPECT_ABSENT
-  set EXTRA_CSR_ACCESS  ACCESS_FAIL
-  # this register exists, but is locked behind syntacrore exposure policy
-  set RENAMED_CSR_ACCESS ACCESS_FAIL
-}
+  set found_registers [ocdtlb_rsp_get $rs found_name]
 
-# name, present_status, access_attempt
-set EXPOSED_CSR [list \
-  tselect $EXTRA_CSR_PRESENT $EXTRA_CSR_ACCESS \
-  tdata1  $EXTRA_CSR_PRESENT $EXTRA_CSR_ACCESS \
-  csr2048 $EXTRA_CSR_PRESENT ACCESS_FAIL       \
-  csr_some_register $EXTRA_CSR_PRESENT $RENAMED_CSR_ACCESS \
-]
-
-foreach {reg_name is_present expected_access} $EXPOSED_CSR {
-  verbose "checking $reg_name: $is_present/$expected_access" 1
-  if {[string match $is_present EXPECT_PRESENT]} {
-    ocdtlb_expect_present $found_registers $reg_name
+  if {[target_info openocd,extra_csr]} {
+    set EXTRA_CSR_PRESENT EXPECT_PRESENT
+    set EXTRA_CSR_ACCESS  ACCESS_SUCCESS
+    set RENAMED_CSR_ACCESS ACCESS_SUCCESS
   } else {
-    ocdtlb_expect_missing $found_registers $reg_name
+    set EXTRA_CSR_PRESENT EXPECT_ABSENT
+    set EXTRA_CSR_ACCESS  ACCESS_FAIL
+    # this register exists, but is locked behind syntacrore exposure policy
+    set RENAMED_CSR_ACCESS ACCESS_FAIL
   }
 
-  if {[string match $expected_access ACCESS_SUCCESS]} {
-    ocdtlb_run_expect "reg $reg_name"
-  } else {
-    if {![catch ocdtlb_run_expect "reg $reg_name"]} {
-      error "undexpected ACCESS_SUCCESS for $reg_name read"
+  # name, present_status, access_attempt
+  set EXPOSED_CSR [list \
+    tselect $EXTRA_CSR_PRESENT $EXTRA_CSR_ACCESS \
+    tdata1  $EXTRA_CSR_PRESENT $EXTRA_CSR_ACCESS \
+    csr2048 $EXTRA_CSR_PRESENT ACCESS_FAIL       \
+    csr_some_register $EXTRA_CSR_PRESENT $RENAMED_CSR_ACCESS \
+  ]
+
+  foreach {reg_name is_present expected_access} $EXPOSED_CSR {
+    verbose "checking $reg_name: $is_present/$expected_access" 1
+    if {[string match $is_present EXPECT_PRESENT]} {
+      ocdtlb_expect_present $found_registers $reg_name
+    } else {
+      ocdtlb_expect_missing $found_registers $reg_name
+    }
+
+    if {[string match $expected_access ACCESS_SUCCESS]} {
+      ocdtlb_run_expect "reg $reg_name"
+    } else {
+      if {![catch ocdtlb_run_expect "reg $reg_name"]} {
+        error "undexpected ACCESS_SUCCESS for $reg_name read"
+      }
     }
   }
+
+  return [ocd_test_pass]
 }
 
-return [ocd_test_pass]
+return [run_test]
+

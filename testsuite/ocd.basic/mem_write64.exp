@@ -1,40 +1,47 @@
-set xlen64 [expr [target_info cpu,xlen] == 64]
-if {!$xlen64} {
-  return [ocd_test_unsupported]
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+
+  set xlen64 [expr [target_info cpu,xlen] == 64]
+  if {!$xlen64} {
+    return [ocd_test_unsupported]
+  }
+
+  ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+  # created by compile executable
+  set MEM_ADDR $program_info(work_area_start)
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  # original data
+  set expected_data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 16"] data]
+  ocdtlb_expect_equal_hex $expected_data \
+                          { 0xad 0xdd 0xba 0x00 0xbe 0xba 0xad 0xde \
+                            0xef 0x0d 0xdc 0xda 0xbe 0xba 0xed 0xfe }
+
+  ocdtlb_run_expect "write_memory $MEM_ADDR 64 0xabcdef00f0fbfcfd"
+  set idx 0
+  foreach byte { 0xfd 0xfc 0xfb 0xf0 0x00 0xef 0xcd 0xab } {
+    set expected_data [lreplace $expected_data $idx $idx $byte]
+    incr idx
+  }
+  set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 16"] data]
+  ocdtlb_expect_equal_hex $expected_data $data
+
+  ocdtlb_run_expect \
+      "write_memory $MEM_ADDR 64 { 0x8888ff0001011001 0xabcdef00f0fbfcfd }"
+  set expected_data { 0x01 0x10 0x01 0x01 0x00 0xff 0x88 0x88 \
+                      0xfd 0xfc 0xfb 0xf0 0x00 0xef 0xcd 0xab }
+  set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 16"] data]
+  ocdtlb_expect_equal_hex $expected_data $data
+
+  return [ocd_test_pass]
 }
 
-ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
-# created by compile executable
-set MEM_ADDR $program_info(work_area_start)
-
-ocd_connect
-
-ocdtlb_run_expect "targets 0"
-ocdtlb_run_expect "reset halt"
-
-ocdtlb_run_expect "load_image $default_bin_prefix.exe"
-
-# original data
-set expected_data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 16"] data]
-ocdtlb_expect_equal_hex $expected_data \
-                        { 0xad 0xdd 0xba 0x00 0xbe 0xba 0xad 0xde \
-                          0xef 0x0d 0xdc 0xda 0xbe 0xba 0xed 0xfe }
-
-ocdtlb_run_expect "write_memory $MEM_ADDR 64 0xabcdef00f0fbfcfd"
-set idx 0
-foreach byte { 0xfd 0xfc 0xfb 0xf0 0x00 0xef 0xcd 0xab } {
-  set expected_data [lreplace $expected_data $idx $idx $byte]
-  incr idx
-}
-set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 16"] data]
-ocdtlb_expect_equal_hex $expected_data $data
-
-ocdtlb_run_expect \
-    "write_memory $MEM_ADDR 64 { 0x8888ff0001011001 0xabcdef00f0fbfcfd }"
-set expected_data { 0x01 0x10 0x01 0x01 0x00 0xff 0x88 0x88 \
-                    0xfd 0xfc 0xfb 0xf0 0x00 0xef 0xcd 0xab }
-set data [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $MEM_ADDR 16"] data]
-ocdtlb_expect_equal_hex $expected_data $data
-
-return [ocd_test_pass]
+return [run_test]
 
