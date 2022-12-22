@@ -10,23 +10,22 @@ proc run_test {} {
 
   set found_registers [ocdtlb_rsp_get $rs found_name]
 
-  if {[target_info openocd,extra_csr]} {
+  if {[target_info openocd,extra_csr] == 1} {
     set EXTRA_CSR_PRESENT EXPECT_PRESENT
-    set EXTRA_CSR_ACCESS  ACCESS_SUCCESS
-    set RENAMED_CSR_ACCESS ACCESS_SUCCESS
+    set RENAMED_CSR_ACCESS ACCESS_FAIL
   } else {
     set EXTRA_CSR_PRESENT EXPECT_ABSENT
-    set EXTRA_CSR_ACCESS  ACCESS_FAIL
-    # this register exists, but is locked behind syntacrore exposure policy
     set RENAMED_CSR_ACCESS ACCESS_FAIL
   }
 
   # name, present_status, access_attempt
+  # invalid_rename - is an attempt to rename existing register
+  # csr2048 - default name for some exposed csr
+  # csr_some_register - renamed exposed csr (non-default name)
   set EXPOSED_CSR [list \
-    tselect $EXTRA_CSR_PRESENT $EXTRA_CSR_ACCESS \
-    tdata1  $EXTRA_CSR_PRESENT $EXTRA_CSR_ACCESS \
-    csr2048 $EXTRA_CSR_PRESENT ACCESS_FAIL       \
-    csr_some_register $EXTRA_CSR_PRESENT $RENAMED_CSR_ACCESS \
+    invalid_rename EXPECT_ABSENT ACCESS_FAIL \
+    csr2048 $EXTRA_CSR_PRESENT ACCESS_FAIL \
+    csr_some_register $EXTRA_CSR_PRESENT ACCESS_FAIL \
   ]
 
   foreach {reg_name is_present expected_access} $EXPOSED_CSR {
