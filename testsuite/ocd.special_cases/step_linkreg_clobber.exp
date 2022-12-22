@@ -23,11 +23,7 @@ proc run_test {} {
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
 
-  while {![ocdtlb_compare_equal_hex \
-          [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]] \
-          $BRN_ADDR]} {
-    ocdtlb_run_expect "step"
-  }
+  ocdtlb_do_expect_step_until $BRN_ADDR 500
 
   set pc_before_step [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
   ocdtlb_run_expect "step"

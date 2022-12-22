@@ -26,12 +26,12 @@ proc run_test {} {
 
   # now check that the target is still responsive
   set STEP_LIMIT 100
-  ocdtlb_do_expect_step_untill $MAIN_ADDR $STEP_LIMIT
+  ocdtlb_do_expect_step_until $MAIN_ADDR $STEP_LIMIT
 
-  ocdtlb_do_expect_step_untill $END_ADDR $STEP_LIMIT
+  ocdtlb_do_expect_step_until $END_ADDR $STEP_LIMIT
   set reg_prev [ocdtlb_rsp_get [ocdtlb_run_expect "reg $GPR(1)"]]
 
-  ocdtlb_do_expect_step_untill $END_ADDR $STEP_LIMIT
+  ocdtlb_do_expect_step_until $END_ADDR $STEP_LIMIT
   set reg_cur [ocdtlb_rsp_get [ocdtlb_run_expect "reg $GPR(1)"]]
 
   if {![expr ($reg_cur - $reg_prev) == 1]} {
