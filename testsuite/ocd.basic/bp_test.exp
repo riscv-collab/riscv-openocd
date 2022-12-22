@@ -29,7 +29,7 @@ proc run_test {} {
   set active_state [lindex $states $active_idx]
 
   if {![string match $active_state "halted"]} {
-    perror "unexpected state: $active_state, expecting $halted"
+    perror "unexpected state: $active_state, expecting halted"
     return [ocd_test_fail]
   }
 
