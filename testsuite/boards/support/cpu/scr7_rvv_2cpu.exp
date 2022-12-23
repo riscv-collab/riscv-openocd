@@ -1,7 +1,7 @@
 set TGT_ARCH "rv64gcv"
 
 add_board_info cpu,xlen 64
-add_board_info cpu,cores_num 1
+add_board_info cpu,cores_num 2
 set_board_info cpu,has_floats 1
 set_board_info cpu,has_doubles 1
 set_board_info cpu,has_u_mode 1

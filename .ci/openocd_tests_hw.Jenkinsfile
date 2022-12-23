@@ -71,7 +71,7 @@ pipeline {
                 'twin_scr7_64_mcore2',
                 'twin_scr7_64_mcore2_no_bootcode',
                 'twin_scr9_single_core',
-                'twin_scr7_64_rvv'
+                'twin_scr7_64_rvv_mcore2'
               ]
             }
             break

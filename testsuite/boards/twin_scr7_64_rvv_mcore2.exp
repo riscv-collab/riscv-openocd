@@ -1,6 +1,6 @@
 load_board_description "baremetal-fpga-common"
 
-set_board_cpu scr7_rvv
+set_board_cpu scr7_rvv_2cpu
 
 set_board_info memory,has_high_pa 0
 set_board_info memory,ocd_work_area 0
@@ -17,5 +17,5 @@ set_board_info openocd,interface_flags [list \
  -f ${OPENOCD_ROOT}/share/openocd/scripts/interface/ftdi/digilent-hs2a.cfg \
 ]
 set_board_info openocd,target_flags [list \
- -f ${testsuitedir}/boards/support/ocd/syntacore_riscv.cfg \
+ -f ${testsuitedir}/boards/support/ocd/syntacore_riscv_scr7_dual.cfg \
 ]
