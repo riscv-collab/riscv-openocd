@@ -304,7 +304,7 @@ proc ocd_init {test_file_name} {
     [target_info openocd,target_flags] \
   ]
 
-  verbose "spawning openocd: $OPENOCD $openocd_args" 2
+  verbose "spawning openocd: $OPENOCD $openocd_args" 1
   spawn $OPENOCD {*}$openocd_args
 
   if {[catch {ocd_internal_wait_for_initialization $ocd_test_log \

@@ -81,6 +81,8 @@ if {[auto_execok $SPIKE_SIM] == ""} {
     spike64smp4_rthw1_dmp6a0
     spike64smp4_rthw4_dmp6a0
     spike64_rvv_dmp6a0
+    spike32_ide_cloak
+    spike64_ide_cloak
   }
 }
 

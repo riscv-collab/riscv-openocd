@@ -23,6 +23,7 @@ proc run_test {} {
 
   ocd_connect
 
+  # some basic sanity test
   set ALWAYS_AVAILABLE_REGS [list \
       cycle \
       instret \
@@ -44,12 +45,6 @@ proc run_test {} {
       time \
   ]
 
-  set ALWAYS_MISSING_REGS {}
-  for {set i 3} {$i < 32} {incr i} {
-    lappend ALWAYS_MISSING_REGS HPMCOUNTER${i}H
-    lappend ALWAYS_MISSING_REGS MHPMCOUNTER${i}H
-  }
-
   ocdtlb_run_expect "reset halt"
 
   set rs [ocdtlb_run_expect "reg"]
@@ -67,8 +62,22 @@ proc run_test {} {
     check_reg_availability $available_reg $found_registers MUST_BE_AVAILABLE
   }
 
-  foreach available_reg $ALWAYS_MISSING_REGS {
-    check_reg_availability $available_reg $found_registers MUST_BE_ABSENT
+  set CLOAKED_REGS {}
+  for {set i 3} {$i < 32} {incr i} {
+    lappend ALWAYS_MISSING_REGS hpmcounter${i}h
+    lappend ALWAYS_MISSING_REGS hpmcounter${i}
+    lappend ALWAYS_MISSING_REGS mhpmcounter${i}h
+    lappend ALWAYS_MISSING_REGS mhpmcounter${i}
+  }
+
+  if {[target_info openocd,ide_cloak] == 1} {
+    foreach reg $CLOAKED_REGS {
+      check_reg_availability $reg $found_registers MUST_BE_ABSENT
+    }
+  } else {
+    foreach reg $CLOAKED_REGS {
+      check_reg_availability $reg $found_registers MUST_BE_AVAILABLE
+    }
   }
 
   return [ocd_test_pass]
