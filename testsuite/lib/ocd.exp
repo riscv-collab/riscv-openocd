@@ -77,6 +77,8 @@ proc ocd_target_info_check {} {
     openocd,extra_csr \
     openocd,smp_target \
     openocd,abi_regnames \
+    openocd,hidden_triggers \
+    openocd,ide_cloak \
     env,preferred_timeout \
     env,resume_timeout \
     env,exec_timeout \
