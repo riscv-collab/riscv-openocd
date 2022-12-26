@@ -10,6 +10,14 @@ proc run_test {} {
 
   set found_registers [ocdtlb_rsp_get $rs found_name]
 
+  if {[target_info openocd,hidden_triggers] == 1} {
+    set TRIGGER_CSR_PRESENT EXPECT_ABSENT
+    set TRIGGER_CSR_ACCESS ACCESS_SUCCESS
+  } else {
+    set TRIGGER_CSR_PRESENT EXPECT_PRESENT
+    set TRIGGER_CSR_ACCESS ACCESS_SUCCESS
+  }
+
   if {[target_info openocd,extra_csr] == 1} {
     set EXTRA_CSR_PRESENT EXPECT_PRESENT
     set RENAMED_CSR_ACCESS ACCESS_FAIL
@@ -23,6 +31,8 @@ proc run_test {} {
   # csr2048 - default name for some exposed csr
   # csr_some_register - renamed exposed csr (non-default name)
   set EXPOSED_CSR [list \
+    tselect $TRIGGER_CSR_PRESENT $TRIGGER_CSR_ACCESS \
+    tdata1 $TRIGGER_CSR_PRESENT $TRIGGER_CSR_ACCESS \
     invalid_rename EXPECT_ABSENT ACCESS_FAIL \
     csr2048 $EXTRA_CSR_PRESENT ACCESS_FAIL \
     csr_some_register $EXTRA_CSR_PRESENT ACCESS_FAIL \
