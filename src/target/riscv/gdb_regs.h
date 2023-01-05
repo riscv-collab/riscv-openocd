@@ -2,7 +2,7 @@
 
 #ifndef TARGET__RISCV__GDB_REGS_H
 #define TARGET__RISCV__GDB_REGS_H
-
+#include "encoding.h"
 /* gdb's register list is defined in riscv_gdb_reg_names gdb/riscv-tdep.c in
  * its source tree. We must interpret the numbers the same here. */
 enum gdb_regno {
@@ -87,8 +87,6 @@ enum gdb_regno {
 	GDB_REGNO_TSELECT = CSR_TSELECT + GDB_REGNO_CSR0,
 	GDB_REGNO_TDATA1 = CSR_TDATA1 + GDB_REGNO_CSR0,
 	GDB_REGNO_TDATA2 = CSR_TDATA2 + GDB_REGNO_CSR0,
-	GDB_REGNO_TDATA3 = CSR_TDATA3 + GDB_REGNO_CSR0,
-	GDB_REGNO_TINFO = CSR_TINFO + GDB_REGNO_CSR0,
 	GDB_REGNO_MISA = CSR_MISA + GDB_REGNO_CSR0,
 	GDB_REGNO_DPC = CSR_DPC + GDB_REGNO_CSR0,
 	GDB_REGNO_DCSR = CSR_DCSR + GDB_REGNO_CSR0,

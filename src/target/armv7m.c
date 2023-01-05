@@ -494,6 +494,7 @@ int armv7m_run_algorithm(struct target *target,
 	target_addr_t entry_point, target_addr_t exit_point,
 	int timeout_ms, void *arch_info)
 {
+	
 	int retval;
 
 	retval = armv7m_start_algorithm(target,
@@ -577,6 +578,7 @@ int armv7m_start_algorithm(struct target *target,
 
 /*		regvalue = buf_get_u32(reg_params[i].value, 0, 32); */
 		armv7m_set_core_reg(reg, reg_params[i].value);
+		
 	}
 
 	{
@@ -614,9 +616,8 @@ int armv7m_start_algorithm(struct target *target,
 
 	/* save previous core mode */
 	armv7m_algorithm_info->core_mode = core_mode;
-
 	retval = target_resume(target, 0, entry_point, 1, 1);
-
+	
 	return retval;
 }
 
@@ -626,7 +627,8 @@ int armv7m_wait_algorithm(struct target *target,
 	int num_reg_params, struct reg_param *reg_params,
 	target_addr_t exit_point, int timeout_ms,
 	void *arch_info)
-{
+{	
+	
 	struct armv7m_common *armv7m = target_to_armv7m(target);
 	struct armv7m_algorithm *armv7m_algorithm_info = arch_info;
 	int retval = ERROR_OK;
@@ -650,7 +652,7 @@ int armv7m_wait_algorithm(struct target *target,
 			return retval;
 		return ERROR_TARGET_TIMEOUT;
 	}
-
+	
 	if (exit_point) {
 		/* PC value has been cached in cortex_m_debug_entry() */
 		uint32_t pc = buf_get_u32(armv7m->arm.pc->value, 0, 32);

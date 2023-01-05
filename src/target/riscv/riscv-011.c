@@ -67,8 +67,6 @@
  * to the target. Afterwards use cache_get... to read results.
  */
 
-static int handle_halt(struct target *target, bool announce);
-
 #define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
 #define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
 
@@ -1194,7 +1192,17 @@ static int full_step(struct target *target, bool announce)
 			return ERROR_FAIL;
 		}
 	}
-	return handle_halt(target, announce);
+	return ERROR_OK;
+}
+
+static int resume(struct target *target, int debug_execution, bool step)
+{
+	if (debug_execution) {
+		LOG_ERROR("TODO: debug_execution is true");
+		return ERROR_FAIL;
+	}
+
+	return execute_resume(target, step);
 }
 
 static uint64_t reg_cache_get(struct target *target, unsigned int number)
@@ -1927,7 +1935,7 @@ static int riscv011_resume(struct target *target, int current,
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
 	r->prepped = false;
-	return execute_resume(target, false);
+	return resume(target, debug_execution, false);
 }
 
 static int assert_reset(struct target *target)

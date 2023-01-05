@@ -14,6 +14,7 @@ noinst_LTLIBRARIES += %D%/libtarget.la
 	$(ARMV7_SRC) \
 	$(ARM_MISC_SRC) \
 	$(AVR32_SRC) \
+	$(WCH_RISCV_SRC) \
 	$(MIPS32_SRC) \
 	$(NDS32_SRC) \
 	$(STM8_SRC) \
@@ -115,6 +116,9 @@ AVR32_SRC = \
 	%D%/avr32_mem.c \
 	%D%/avr32_regs.c
 
+WCH_RISCV_SRC = \
+	%D%/wch_riscv.c\
+	%D%/wch_riscv-013.c
 MIPS32_SRC = \
 	%D%/mips32.c \
 	%D%/mips_m4k.c \
@@ -256,6 +260,7 @@ ARC_SRC = \
 	%D%/arc_cmd.h \
 	%D%/arc_jtag.h \
 	%D%/arc_mem.h \
+	%D%/wch_riscv.h \
 	%D%/rtt.h
 
 include %D%/openrisc/Makefile.am

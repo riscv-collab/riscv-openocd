@@ -154,29 +154,6 @@ static int gdb_use_target_description = 1;
 /* current processing free-run type, used by file-I/O */
 static char gdb_running_type;
 
-/* Find an available target in the SMP group that gdb is connected to. For
- * commands that affect an entire SMP group (like memory access and run control)
- * this will give better results than returning the unavailable target and having
- * the command fail.  If gdb was aware that targets can be unavailable we
- * wouldn't need this logic.
- */
-struct target *get_available_target_from_connection(struct connection *connection)
-{
-	struct gdb_service *gdb_service = connection->service->priv;
-	struct target *target = gdb_service->target;
-	if (target->state == TARGET_UNAVAILABLE && target->smp) {
-		struct target_list *tlist;
-		foreach_smp_target(tlist, target->smp_targets) {
-			struct target *t = tlist->target;
-			if (t->state != TARGET_UNAVAILABLE)
-				return t;
-		}
-		/* If we can't find an available target, just return the
-		 * original. */
-	}
-	return target;
-}
-
 static int gdb_last_signal(struct target *target)
 {
 	switch (target->debug_reason) {
@@ -999,9 +976,9 @@ static int gdb_target_callback_event_handler(struct target *target,
 		enum target_event event, void *priv)
 {
 	struct connection *connection = priv;
-	struct target *gdb_target = get_available_target_from_connection(connection);
+	struct gdb_service *gdb_service = connection->service->priv;
 
-	if (gdb_target != target)
+	if (gdb_service->target != target)
 		return ERROR_OK;
 
 	switch (event) {
@@ -1526,7 +1503,7 @@ static int gdb_error(struct connection *connection, int retval)
 static int gdb_read_memory_packet(struct connection *connection,
 		char const *packet, int packet_size)
 {
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	char *separator;
 	uint64_t addr = 0;
 	uint32_t len = 0;
@@ -1601,7 +1578,7 @@ static int gdb_read_memory_packet(struct connection *connection,
 static int gdb_write_memory_packet(struct connection *connection,
 		char const *packet, int packet_size)
 {
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	char *separator;
 	uint64_t addr = 0;
 	uint32_t len = 0;
@@ -1652,7 +1629,7 @@ static int gdb_write_memory_packet(struct connection *connection,
 static int gdb_write_memory_binary_packet(struct connection *connection,
 		char const *packet, int packet_size)
 {
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	char *separator;
 	uint64_t addr = 0;
 	uint32_t len = 0;
@@ -1731,7 +1708,7 @@ static int gdb_write_memory_binary_packet(struct connection *connection,
 static int gdb_step_continue_packet(struct connection *connection,
 		char const *packet, int packet_size)
 {
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	int current = 0;
 	uint64_t address = 0x0;
 	int retval = ERROR_OK;
@@ -1759,7 +1736,7 @@ static int gdb_step_continue_packet(struct connection *connection,
 static int gdb_breakpoint_watchpoint_packet(struct connection *connection,
 		char const *packet, int packet_size)
 {
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	int type;
 	enum breakpoint_type bp_type = BKPT_SOFT /* dummy init to avoid warning */;
 	enum watchpoint_rw wp_type = WPT_READ /* dummy init to avoid warning */;
@@ -1808,13 +1785,7 @@ static int gdb_breakpoint_watchpoint_packet(struct connection *connection,
 		case 0:
 		case 1:
 			if (packet[0] == 'Z') {
-				struct target *bp_target = target;
-				if (target->rtos && bp_type == BKPT_SOFT) {
-					bp_target = rtos_swbp_target(target, address, size, bp_type);
-					if (!bp_target)
-						return ERROR_FAIL;
-				}
-				retval = breakpoint_add(bp_target, address, size, bp_type);
+				retval = breakpoint_add(target, address, size, bp_type);
 				if (retval != ERROR_OK) {
 					retval = gdb_error(connection, retval);
 					if (retval != ERROR_OK)
@@ -1941,7 +1912,7 @@ static int gdb_memory_map(struct connection *connection,
 	 * have to regenerate it a couple of times.
 	 */
 
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	struct flash_bank *p;
 	char *xml = NULL;
 	int size = 0;
@@ -3011,7 +2982,7 @@ static int gdb_query_packet(struct connection *connection,
 static bool gdb_handle_vcont_packet(struct connection *connection, const char *packet, int packet_size)
 {
 	struct gdb_connection *gdb_connection = connection->priv;
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	const char *parse = packet;
 	int retval;
 
@@ -3250,7 +3221,7 @@ static void gdb_restart_inferior(struct connection *connection, const char *pack
 
 static bool gdb_handle_vrun_packet(struct connection *connection, const char *packet, int packet_size)
 {
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	const char *parse = packet;
 
 	/* Skip "vRun" */
@@ -3296,7 +3267,7 @@ static int gdb_v_packet(struct connection *connection,
 	struct gdb_connection *gdb_connection = connection->priv;
 	int result;
 
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 
 	if (strncmp(packet, "vCont", 5) == 0) {
 		bool handled;
@@ -3467,7 +3438,7 @@ static int gdb_detach(struct connection *connection)
 static int gdb_fileio_response_packet(struct connection *connection,
 		char const *packet, int packet_size)
 {
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	char *separator;
 	char *parsing_point;
 	int fileio_retcode = strtoul(packet + 1, &separator, 16);
@@ -3567,7 +3538,25 @@ static int gdb_input_inner(struct connection *connection)
 
 		/* terminate with zero */
 		gdb_packet_buffer[packet_size] = '\0';
-
+		// if(1){	
+		// 	char buf[64];
+		// 	unsigned offset = 0;
+		// 	int i = 0;
+		// 	while (i < packet_size && offset < 56) {
+		// 		if (packet[i] == '\\') {
+		// 			buf[offset++] = '\\';
+		// 			buf[offset++] = '\\';
+		// 		} else if (isprint(packet[i])) {
+		// 			buf[offset++] = packet[i];
+		// 		} else {
+		// 			sprintf(buf + offset, "\\x%02x", (unsigned char) packet[i]);
+		// 			offset += 4;
+		// 		}
+		// 		i++;
+		// 	}
+		// 	buf[offset] = 0;
+		// 	LOG_INFO("received packet: '%s'%s", buf, i < packet_size ? "..." : "");
+		// }
 		if (packet_size > 0) {
 
 			gdb_log_incoming_packet(connection, gdb_packet_buffer);
@@ -3754,11 +3743,10 @@ static int gdb_input_inner(struct connection *connection)
 		}
 
 		if (gdb_con->ctrl_c) {
-			struct target *available_target = get_available_target_from_connection(connection);
-			if (available_target->state == TARGET_RUNNING) {
-				struct target *t = available_target;
-				if (available_target->rtos)
-					available_target->rtos->gdb_target_for_threadid(connection, target->rtos->current_threadid, &t);
+			if (target->state == TARGET_RUNNING) {
+				struct target *t = target;
+				if (target->rtos)
+					target->rtos->gdb_target_for_threadid(connection, target->rtos->current_threadid, &t);
 				retval = target_halt(t);
 				if (retval == ERROR_OK)
 					retval = target_poll(t);
@@ -3766,8 +3754,7 @@ static int gdb_input_inner(struct connection *connection)
 					target_call_event_callbacks(target, TARGET_EVENT_GDB_HALT);
 				gdb_con->ctrl_c = false;
 			} else {
-				LOG_TARGET_INFO(target, "Not running when halt was requested, stopping GDB. (state=%d)",
-						target->state);
+				LOG_INFO("The target is not running when halt was requested, stopping GDB.");
 				target_call_event_callbacks(target, TARGET_EVENT_GDB_HALT);
 			}
 		}

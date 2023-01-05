@@ -27,6 +27,7 @@
 
 #include <jtag/jtag.h>
 #include <jtag/swim.h>
+#include <jtag/sdi.h>
 #include <target/arm_tpiu_swo.h>
 
 /* @file
@@ -363,10 +364,12 @@ struct adapter_driver {
 
 	/* SWIM APIs */
 	const struct swim_driver *swim_ops;
+	/* SDI APIs */
+	const struct sdi_driver *sdi_ops;
 };
 
 extern const char * const jtag_only[];
-
+extern const char *sdi_transports[];
 int adapter_resets(int assert_trst, int assert_srst);
 int adapter_assert_reset(void);
 int adapter_deassert_reset(void);

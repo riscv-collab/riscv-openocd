@@ -75,6 +75,8 @@ NOR_DRIVERS = \
 	%D%/w600.c \
 	%D%/xcf.c \
 	%D%/xmc1xxx.c \
+	%D%/wchriscv.c \
+	%D%/wcharm.c \
 	%D%/xmc4xxx.c
 
 NORHEADERS = \
