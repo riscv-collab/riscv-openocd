@@ -68,9 +68,11 @@ pipeline {
             if (params.containsKey('use_unstable_platforms')) {
               boards = [
                 'twin_scr7_64_single_core',
-                'twin_scr7_64_mcore2',
+                'twin_SCR7dev_mcore2',
+                'twin_SCR7dev_mcore2_rtoshw',
                 'twin_scr7_64_mcore2_no_bootcode',
-                'twin_scr9_single_core',
+                'twin_SCR9dev',
+                'twin_SCR9dev_rtoshw',
                 'twin_scr7_64_rvv_mcore2'
               ]
             }
