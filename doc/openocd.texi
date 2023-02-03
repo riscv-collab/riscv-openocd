@@ -10753,6 +10753,19 @@ For details on this trigger type, see the RISC-V Debug Specification.
 Clear the type 4 trigger that was set using @command{riscv itrigger set}.
 @end deffn
 
+@subsection RISC-V Program Buffer Commands
+
+Program Buffer is an optional feature of RISC-V targets - it is a mechanism that debuggers
+can use to execute sequences of arbitrary instructions (small programs) on the target.
+For details on the Program Buffer, please refer to the RISC-V Debug Specification.
+
+@deffn {Command} {riscv exec_progbuf inst1 [inst2 [... inst_n]]}
+Execute the given sequence of instructions on the target using the Program Buffer.
+The instructions @var{inst1} .. @var{inst_n} shall be specified in their binary form
+(as 32-bit intergers). The terminating @var{ebreak} instruction needs not be specified -
+it is added automatically if needed. The command can only be used on halted targets.
+@end deffn
+
 @section ARC Architecture
 @cindex ARC
 
