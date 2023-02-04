@@ -13,6 +13,8 @@ set_board_info openocd,hwthreads 0
 set_board_info openocd,smp_target 0
 set_board_info openocd,abi_regnames 0
 
+set_board_info openocd,bug20318_fixed 1
+
 set_board_info openocd,interface_flags [list \
  -f ${OPENOCD_ROOT}/share/openocd/scripts/interface/ftdi/digilent-hs2a.cfg \
 ]
