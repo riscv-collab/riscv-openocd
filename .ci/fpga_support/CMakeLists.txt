@@ -13,20 +13,19 @@ set(ARTY100_BOARDS
 )
 
 set(TWIN_BOARDS
-  twin_scr7_64_single_core:/home/stand/users/aap-sc/bitstreams/bug_21107/1/22121300/top.bit
   twin_scr7_64:rv64_cluster_scr7_eval
   twin_scr7_64_mcore4:rv64_cluster_scr7_eval
-  twin_SCR7dev_mcore2:SCR7dev
-  twin_SCR7dev_mcore2_rtoshw:SCR7dev
-  twin_scr7_64_mcore2_no_bootcode:/home/stand/users/aap-sc/bitstreams/rv64_dual_scr7_pci_storage_hpfpu/top.bit
   twin_scr7_64_smp4:rv64_cluster_scr7_eval
   twin_scr7_64_wa:rv64_cluster_scr7_eval
   twin_scr5_32:rv32_cluster_single_scr5_l1_l2_plic_hiperf
   twin_scr5_64:rv64_cluster_single_scr5_tcm_l1_l2_plic_hiperf
   twin_scr6:rv64_cluster_single_scr6_eval
-  twin_SCR9dev:SCR9dev
-  twin_SCR9dev_rtoshw:SCR9dev
-  twin_scr7_64_rvv_mcore2:/home/stand/users/aap-sc/bitstreams/rvv_openocd/ver1/top.bit
+  twin_scr7bug21107_score_nortos:/home/stand/users/aap-sc/bitstreams/bug_21107/1/22121300/top.bit
+  twin_scr7_mcore2_nortos_rvv:/home/stand/users/aap-sc/bitstreams/rvv_openocd/ver1/top.bit
+  twin_SCR7dev_mcore2_nortos:SCR7dev
+  twin_SCR7dev_mcore2_rtoshw:SCR7dev
+  twin_SCR9dev_score_nortos:SCR9dev
+  twin_SCR9dev_score_rtoshw:SCR9dev
 )
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/BoardInit)

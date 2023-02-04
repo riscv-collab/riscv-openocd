@@ -67,13 +67,12 @@ pipeline {
 
             if (params.containsKey('use_unstable_platforms')) {
               boards = [
-                'twin_scr7_64_single_core',
-                'twin_SCR7dev_mcore2',
+                'twin_scr7_mcore2_nortos_rvv',
+                'twin_scr7bug21107_score_nortos',
+                'twin_SCR7dev_mcore2_nortos',
                 'twin_SCR7dev_mcore2_rtoshw',
-                'twin_scr7_64_mcore2_no_bootcode',
-                'twin_SCR9dev',
-                'twin_SCR9dev_rtoshw',
-                'twin_scr7_64_rvv_mcore2'
+                'twin_SCR9dev_score_nortos',
+                'twin_SCR9dev_score_rtoshw',
               ]
             }
             break
