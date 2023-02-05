@@ -2,20 +2,45 @@
 
 import sys
 import os
-# well...  unfortunately we need yet another python module here
-# pip install pyyaml
-import yaml
-
-input_file = sys.argv[1]
 
 ARTIFACTORY_URL = "http://artifactory.dev.syntacore.com:8082/artifactory"
 ARTIFACTORY_DIR = 'openocd_build_dependencies'
 
+# NOTE: originally this file was an external yaml. However recent updates
+# to docker image render pyyaml library as unusable without venv environment.
+# To reduce the scope of changes it was decided to just embed dependencies into
+# python script
+deps = {
+  "dejagnu-1.6.3.tar.gz" : {
+    "URL": "https://ftp.gnu.org/gnu/dejagnu/dejagnu-1.6.3.tar.gz",
+    "MD5": "68c5208c58236eba447d7d6d1326b821",
+    "HOW": "curl",
+    "DST": "-"
+  },
+
+  "libusb-1.0.26.tar.bz2" : {
+    "URL": "https://github.com/libusb/libusb/releases/download/v1.0.26/libusb-1.0.26.tar.bz2",
+    "MD5": "9c75660dfe1d659387c37b28c91e3160",
+    "HOW": "curl",
+    "DST": "-"
+  },
+
+  "libftdi1-1.5.tar.bz2" : {
+    "URL": "https://www.intra2net.com/en/developer/libftdi/download/libftdi1-1.5.tar.bz2",
+    "MD5": "f515d7d69170a9afc8b273e8f1466a80",
+    "HOW": "curl",
+    "DST": "-"
+  },
+
+  "hidapi-0.12.0.tar.gz" : {
+    "URL": "https://github.com/libusb/hidapi/archive/refs/tags/hidapi-0.12.0.tar.gz",
+    "MD5": "d0e344f2c75aba08908ce26d3fb17d74",
+    "HOW": "curl",
+    "DST": "-"
+  }
+}
 class CommandFailedError(Exception):
   pass
-
-with open(input_file, "r") as stream:
-  deps = yaml.safe_load(stream)
 
 def run_command(cmd):
   print(cmd, file=sys.stderr, flush=True)

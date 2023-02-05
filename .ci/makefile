@@ -36,25 +36,34 @@ all: \
 	test \
 	riscv-tests-debug \
 
-configure:
-	./bootstrap
+VENV := source $(COMMON_BUILD_DIR)/.venv/bin/activate
+
+# NOTE: transitive list of requirements can be obtained using
+# `pip3 freeze -r requirements.txt | sponge requirements.txt`
+$(COMMON_BUILD_DIR)/.venv: .ci/requirements.txt
+	python3 -m venv $(COMMON_BUILD_DIR)/.venv
+	$(VENV) && pip3 install -r .ci/requirements.txt
+	$(VENV) && pip3 freeze
+
+configure: $(COMMON_BUILD_DIR)/.venv
+	$(VENV) && ./bootstrap
 
 .PHONY: config_linux
 config_linux: configure
-	cmake -S .ci -B $(COMMON_BUILD_DIR)/linux   -G "Unix Makefiles"
+	$(VENV) && cmake -S .ci -B $(COMMON_BUILD_DIR)/linux   -G "Unix Makefiles"
 
 .PHONY: config_windows
 config_windows: configure
-	cmake -S .ci -B $(COMMON_BUILD_DIR)/windows -G "Unix Makefiles" \
+	$(VENV) && cmake -S .ci -B $(COMMON_BUILD_DIR)/windows -G "Unix Makefiles" \
 		--toolchain cmake/ToolchainMingw.cmake
 
 .PHONY: build_linux
 build_linux: config_linux
-	cmake --build $(COMMON_BUILD_DIR)/linux --target openocd --parallel $(PARALLEL)
+	$(VENV) && cmake --build $(COMMON_BUILD_DIR)/linux --target openocd --parallel $(PARALLEL)
 
 .PHONY: build_windows
 build_windows: config_windows
-	cmake --build $(COMMON_BUILD_DIR)/windows --target openocd --parallel $(PARALLEL)
+	$(VENV) && cmake --build $(COMMON_BUILD_DIR)/windows --target openocd --parallel $(PARALLEL)
 
 .PHONY: build
 build: build_linux build_windows
@@ -62,11 +71,11 @@ build: build_linux build_windows
 
 .PHONY: test
 test: build
-	cmake --build $(COMMON_BUILD_DIR)/linux --target OpenOCDTest --parallel $(PARALLEL)
+	$(VENV) && cmake --build $(COMMON_BUILD_DIR)/linux --target OpenOCDTest --parallel $(PARALLEL)
 
 .PHONY: riscv-tests-debug
 riscv-tests-debug: build
-	cmake --build $(COMMON_BUILD_DIR)/linux --target RISCVTestsDebug --parallel $(PARALLEL)
+	$(VENV) && cmake --build $(COMMON_BUILD_DIR)/linux --target RISCVTestsDebug --parallel $(PARALLEL)
 
 .PHONY: install
 install:
@@ -79,16 +88,16 @@ package_name:
 
 .PHONY: package
 package: build
-	cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDPackage
-	cmake --build "$(COMMON_BUILD_DIR)/windows" --target OpenOCDPackage
+	$(VENV) && cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDPackage
+	$(VENV) && cmake --build "$(COMMON_BUILD_DIR)/windows" --target OpenOCDPackage
 
 .PHONY: upload_test_report
 upload_test_report:
-	cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDTestReport
+	$(VENV) && cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDTestReport
 
 .PHONY: clean
 clean:
-	cmake --build "$(COMMON_BUILD_DIR)" --target clean $(VERBOSE_OPTION)
+	$(VENV) && cmake --build "$(COMMON_BUILD_DIR)" --target clean $(VERBOSE_OPTION)
 
 .PHONY: prepare_board
 prepare_board:
@@ -103,12 +112,7 @@ DOCKER_CACHE ?= $$HOME/.cache
 DOCKER_REGISTRY ?= nexus.dev.syntacore.com:8091
 DOCKER_CONTAINER_NAME ?= $(PROJECT_NAME)_container
 
-KEEP_SUDO := true
-DOCKER_USER ?= $(shell id --user --name)
-DOCKER_UID != id --user $(DOCKER_USER)
-DOCKER_USER_HOME != [[ "$(DOCKER_USER)" != "root" ]] && echo "/home/$(DOCKER_USER)" || echo "/root"
-
-DOCKER_IMAGE_TAG := sc/cpp_image:18.0.7
+DOCKER_IMAGE_TAG := sc/cpp_ubuntu:18.1.0
 DOCKER_CONTAINER := $(COMMON_BUILD_DIR)/$(DOCKER_CONTAINER_NAME)
 DOCKER_COMMAND != [[ ! -z '$(COMMAND)' ]] && echo '$$(COMMAND)' || echo 'make $$(TARGET) -f .ci/makefile'
 
@@ -129,15 +133,21 @@ endif
 	find "$(COMMON_BUILD_DIR)" -type d -empty
 	docker run --interactive --tty --detach \
 		--privileged \
-		--env KEEP_SUDO="$(KEEP_SUDO)" \
-		--env USER_ID="$(DOCKER_UID)" --env USER_NAME="$(DOCKER_USER)" \
 		--env "TERM=xterm-256color" \
+		--user $$(id -u):$$(id -g) \
 		--name $(DOCKER_CONTAINER_NAME) \
 		--mount type=bind,source="$$(dirname $(CI_MK_DIR))",target=/home/repo \
 		--mount type=bind,source="$$(realpath $(COMMON_BUILD_DIR))",target=/home/build \
 		--workdir "/home/repo" \
 		$(DOCKER_REGISTRY)/$(DOCKER_IMAGE_TAG)
-	sleep 1
+	docker exec --user root $(DOCKER_CONTAINER_NAME) \
+		bash -c "mkdir --parents $$HOME"
+	docker exec --user root $(DOCKER_CONTAINER_NAME) \
+		bash -c "chown $$(id -u):$$(id -g) $$HOME"
+	docker exec --user root $(DOCKER_CONTAINER_NAME) \
+		bash -c "groupadd --gid $$(id -g) $$(id -u -n)"
+	docker exec --user root $(DOCKER_CONTAINER_NAME) \
+		bash -c "useradd --uid $$(id -u) --gid $$(id -g) $$(id -u -n)"
 	touch $@
 
 .PHONY: container
@@ -161,7 +171,7 @@ in_docker: $(DOCKER_CONTAINER)
 		\
 		--env COMMIT="$(COMMIT)" \
 		\
-		--user $(DOCKER_USER) \
+		--user "$$(id -u -n)" \
 		$(DOCKER_CONTAINER_NAME) \
 		bash -c '$(DOCKER_COMMAND)'
 
