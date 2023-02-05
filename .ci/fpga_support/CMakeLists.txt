@@ -13,15 +13,15 @@ set(ARTY100_BOARDS
 )
 
 set(TWIN_BOARDS
-  twin_scr7_64:rv64_cluster_scr7_eval
-  twin_scr7_64_mcore4:rv64_cluster_scr7_eval
-  twin_scr7_64_smp4:rv64_cluster_scr7_eval
-  twin_scr7_64_wa:rv64_cluster_scr7_eval
   twin_scr5_32:rv32_cluster_single_scr5_l1_l2_plic_hiperf
   twin_scr5_64:rv64_cluster_single_scr5_tcm_l1_l2_plic_hiperf
   twin_scr6:rv64_cluster_single_scr6_eval
+  twin_scr7evalcluster_pseudoscore_nortos:rv64_cluster_scr7_eval
+  twin_scr7evalcluster_pseudoscore_nortos_workarea:rv64_cluster_scr7_eval
+  twin_scr7evalcluster_mcore4_nortos:rv64_cluster_scr7_eval
+  twin_scr7evalcluster_smp4:rv64_cluster_scr7_eval
   twin_scr7bug21107_score_nortos:/home/stand/users/aap-sc/bitstreams/bug_21107/1/22121300/top.bit
-  twin_scr7_mcore2_nortos_rvv:/home/stand/users/aap-sc/bitstreams/rvv_openocd/ver1/top.bit
+  twin_scr7RVV_mcore2_nortos:/home/stand/users/aap-sc/bitstreams/rvv_openocd/ver1/top.bit
   twin_SCR7dev_mcore2_nortos:SCR7dev
   twin_SCR7dev_mcore2_rtoshw:SCR7dev
   twin_SCR9dev_score_nortos:SCR9dev

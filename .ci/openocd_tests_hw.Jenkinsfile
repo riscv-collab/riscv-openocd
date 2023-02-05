@@ -56,23 +56,23 @@ pipeline {
           case 'twin_server':
             env.fpga_lock = 'lock-fpga-on-twin'
             boards = [
-              'twin_scr7_64',
-              'twin_scr7_64_mcore4',
-              'twin_scr7_64_smp4',
-              'twin_scr7_64_wa',
-              'twin_scr6',
               'twin_scr5_32',
-              'twin_scr5_64'
+              'twin_scr5_64',
+              'twin_scr6',
+              'twin_scr7evalcluster_pseudoscore_nortos',
+              'twin_scr7evalcluster_pseudoscore_nortos_workarea',
+              'twin_scr7evalcluster_mcore4_nortos',
+              'twin_scr7evalcluster_smp4'
             ]
 
             if (params.containsKey('use_unstable_platforms')) {
               boards = [
-                'twin_scr7_mcore2_nortos_rvv',
+                'twin_scr7RVV_mcore2_nortos',
                 'twin_scr7bug21107_score_nortos',
                 'twin_SCR7dev_mcore2_nortos',
                 'twin_SCR7dev_mcore2_rtoshw',
                 'twin_SCR9dev_score_nortos',
-                'twin_SCR9dev_score_rtoshw',
+                'twin_SCR9dev_score_rtoshw'
               ]
             }
             break
