@@ -30,6 +30,10 @@ proc run_test {} {
   ocdtlb_run_expect "step"
   set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
 
+  if {[target_info name] == "twin_scr7evalcluster_smp4_workarea"} {
+    setup_kfail openocd_EMBARGO/19141 "*-*-*"
+    set perror_threshold 2
+  }
   if {[target_info name] == "twin_scr7evalcluster_smp4"} {
     setup_kfail openocd_EMBARGO/19141 "*-*-*"
     set perror_threshold 2

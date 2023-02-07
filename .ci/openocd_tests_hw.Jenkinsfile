@@ -62,6 +62,8 @@ pipeline {
               'twin_scr7evalcluster_pseudoscore_nortos',
               'twin_scr7evalcluster_pseudoscore_nortos_workarea',
               'twin_scr7evalcluster_mcore4_nortos',
+              'twin_scr7evalcluster_mcore4_nortos_workarea',
+              'twin_scr7evalcluster_smp4_workarea',
               'twin_scr7evalcluster_smp4'
             ]
 

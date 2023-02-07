@@ -18,7 +18,9 @@ set(TWIN_BOARDS
   twin_scr6:rv64_cluster_single_scr6_eval
   twin_scr7evalcluster_pseudoscore_nortos:rv64_cluster_scr7_eval
   twin_scr7evalcluster_pseudoscore_nortos_workarea:rv64_cluster_scr7_eval
+  twin_scr7evalcluster_mcore4_nortos_workarea:rv64_cluster_scr7_eval
   twin_scr7evalcluster_mcore4_nortos:rv64_cluster_scr7_eval
+  twin_scr7evalcluster_smp4_workarea:rv64_cluster_scr7_eval
   twin_scr7evalcluster_smp4:rv64_cluster_scr7_eval
   twin_scr7bug21107_score_nortos:/home/stand/users/aap-sc/bitstreams/bug_21107/1/22121300/top.bit
   twin_scr7RVV_mcore2_nortos:/home/stand/users/aap-sc/bitstreams/rvv_openocd/ver1/top.bit
