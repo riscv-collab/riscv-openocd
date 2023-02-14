@@ -3636,7 +3636,6 @@ COMMAND_HANDLER(riscv_exec_progbuf)
 	return ERROR_OK;
 }
 
-
 static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "dump_sample_buf",
@@ -3856,7 +3855,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "exec_progbuf",
 		.handler = riscv_exec_progbuf,
 		.mode = COMMAND_EXEC,
-		.usage = "instr1 [instr2 [... instr_n]]",
+		.usage = "instr1 [instr2 [... instr16]]",
 		.help = "Execute a sequence of 32-bit instructions using the program buffer. "
 			"The final ebreak instruction is added automatically, if needed."
 	},

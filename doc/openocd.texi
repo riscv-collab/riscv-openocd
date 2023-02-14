@@ -10763,7 +10763,7 @@ For details on the Program Buffer, please refer to the RISC-V Debug Specificatio
 Execute the given sequence of instructions on the target using the Program Buffer.
 The command can only be used on halted targets.
 
-The instructions @var{inst1} .. @var{inst_16} shall be specified in their binary form
+The instructions @var{inst1} .. @var{inst16} shall be specified in their binary form
 (as 32-bit integers). In case a pair of compressed (16-bit) instructions is used,
 the first instruction should be placed to the lower 16-bits of the 32-bit value.
 The terminating @var{ebreak} instruction needs not be specified - it is added
