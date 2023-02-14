@@ -3707,7 +3707,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.usage = "{n0|n-m0}[,n1|n-m1]......",
 		.help = "Configure a list of inclusive ranges for CSRs to hide from gdb. "
 			"Hidden registers are still available, but are not listed in "
-			"gdb target description and `reg` command output."
+			"gdb target description and `reg` command output. "
 			"This must be executed before `init`."
 	},
 	{
