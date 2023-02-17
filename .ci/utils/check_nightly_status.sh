@@ -17,7 +17,8 @@ function check_build_status {
   STAND_NAME=$1
   EXPECTED_PATH="${ARTIFACTORY_BASEPATH}/${STAND_NAME}_${COMMIT}_success.txt"
   echo "trying to get $EXPECTED_PATH"
-  echo "$(curl -H "X-JFrog-Art-Api:$API_KEY" "${EXPECTED_PATH}")" | grep "Great Success"
+  OUTPUT=$(curl -H "X-JFrog-Art-Api:$API_KEY" "${EXPECTED_PATH}")
+  echo "${OUTPUT}" | grep "Great Success"
 }
 
 check_build_status zalman
