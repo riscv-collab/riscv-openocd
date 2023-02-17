@@ -8,6 +8,7 @@ PROJECT_NAME := OpenOCD
 TARGET_BOARD ?=
 BUILD_TYPE ?= Release
 BUILD_ID ?=
+STAND_ID ?=
 PARALLEL ?= ON
 
 DOWNLOAD_DEPENDENCIES_FROM_ARTIFACTORY ?= false
@@ -95,6 +96,10 @@ package: build
 upload_test_report:
 	$(VENV) && cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDTestReport
 
+.PHONY: record_test_success
+upload_test_report:
+	$(VENV) && cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDTestSuccess
+
 .PHONY: clean
 clean:
 	$(VENV) && cmake --build "$(COMMON_BUILD_DIR)" --target clean $(VERBOSE_OPTION)
@@ -158,6 +163,7 @@ in_docker: $(DOCKER_CONTAINER)
 	docker exec \
 		--env TARGET_BOARD="$(TARGET_BOARD)" \
 		--env BUILD_ID="$(BUILD_ID)" \
+		--env STAND_ID="$(STAND_ID)" \
 		\
 		--env PRESET="$(PRESET)" \
 		--env COMMON_BUILD_DIR="/home/build" \

@@ -72,7 +72,16 @@ add_custom_target(OpenOCDTest
 )
 
 set(BUILD_ID $ENV{BUILD_ID})
+set(STAND_ID $ENV{STAND_ID})
 set(ARTIFACTORY_KEY $ENV{ARTIFACTORY_API_KEY})
+add_custom_target(OpenOCDTestSuccess
+  COMMAND
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils/report_test_success.sh
+    ${TEST_RUN_DIR}
+    ${STAND_ID}
+    ${ARTIFACTORY_KEY}
+)
+
 add_custom_target(OpenOCDTestReport
   COMMAND
     ${CMAKE_CURRENT_SOURCE_DIR}/utils/upload_testing_results.sh

@@ -38,6 +38,7 @@ pipeline {
 
     ARTIFACTORY_API_KEY = credentials('OpenOCDTestReportKey')
     BUILD_ID = "${BUILD_TAG}"
+    STAND_ID = "${params.AGENT}"
   }
   stages {
     stage('CleanWorkspaceAndCheckout') {
@@ -113,6 +114,11 @@ pipeline {
   post {
     always {
       sh 'make in_docker TARGET=upload_test_report -f ${WD}/.ci/makefile'
+    }
+    success {
+      sh 'make in_docker TARGET=record_test_success -f ${WD}/.ci/makefile'
+    }
+    cleanup {
       sh 'make clean_docker -f ${WD}/.ci/makefile'
     }
   }
