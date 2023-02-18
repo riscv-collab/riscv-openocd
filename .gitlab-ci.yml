@@ -24,9 +24,9 @@ main-job:
       fi
     - make in_docker TARGET=riscv-tests-debug -f .ci/makefile
     - make in_docker TARGET=package -f .ci/makefile
-    - SKIP_ARCHIVATION=true ./.ci/utils/upload_artifact.sh
+    - ./.ci/utils/upload_development_build.sh
         $COMMON_BUILD_DIR/linux/install_openocd/linux_openocd.tar.gz
-    - SKIP_ARCHIVATION=true ./.ci/utils/upload_artifact.sh
+    - ./.ci/utils/upload_development_build.sh
         $COMMON_BUILD_DIR/windows/install_openocd/windows_openocd.zip
     - |
       if [[ "$UPLOAD_STABLE_BUILDS" == "true" ]]; then
