@@ -34,5 +34,8 @@ main-job:
         if [[ "$exit_code" -eq 0 ]]; then
           # Upload release artifacts
           echo "stub"
+        else
+          echo "could not find recods indicating that nightly passed"
+          echo "no artifacts for stable builds produced"
         fi
       fi
