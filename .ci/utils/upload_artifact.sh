@@ -13,6 +13,8 @@ COMMIT_DATE=$(git --git-dir="${REPO_PATH}/.git" --work-tree "${REPO_PATH}" \
               show -s --format=%cd --date=format:%y%m%d-%H%M%S ${COMMIT})
 BRANCH=$(git --git-dir="$REPO_PATH/.git" --work-tree "$REPO_PATH" \
               rev-parse --abbrev-ref HEAD)
+# TODO: figure out if re really need this
+BRANCH="$2"
 ARTIFACTORY_URL="http://artifactory.dev.syntacore.com:8082/artifactory"
 ARTIFACTORY_DIR=${ARTIFACTORY_DIR:-tools-gitlab-artifacts/openocd/$BRANCH/$COMMIT_DATE"_"$COMMIT}
 ARTIFACTORY_BASEPATH="$ARTIFACTORY_URL/$ARTIFACTORY_DIR"
