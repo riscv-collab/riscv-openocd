@@ -33,10 +33,8 @@ main-job:
         ./.ci/utils/check_nightly_status.sh "$ARTIFACTORY_API_KEY" || exit_code=$?
         if [[ "$exit_code" -eq 0 ]]; then
           # Upload release artifacts
-          ./.ci/utils/upload_artifact.sh
-            $COMMON_BUILD_DIR/linux/install_openocd/linux_openocd.tar.gz
-          ./.ci/utils/upload_artifact.sh
-            $COMMON_BUILD_DIR/linux/install_openocd/windows_openocd.zip
+          ./.ci/utils/upload_artifact.sh $COMMON_BUILD_DIR/linux/install_openocd/linux_openocd.tar.gz
+          ./.ci/utils/upload_artifact.sh $COMMON_BUILD_DIR/linux/install_openocd/windows_openocd.zip
         else
           echo "could not find recods indicating that nightly passed"
           echo "no artifacts for stable builds produced"
