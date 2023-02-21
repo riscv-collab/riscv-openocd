@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install device-tree-compiler build-essential
 
-      - name: Cache dependencies
+      - name: Get dependencies from cache
         id: cache-deps
         uses: actions/cache@v3
         with:
@@ -33,17 +33,17 @@ jobs:
           key: "spike-${{env.SPIKE_REV}}-toolchain-${{env.TOOLCHAIN_URL}}"
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
-        name: Download Toolchain
+        name: Download Toolchain (if not cached)
         run: |
           mkdir /opt/riscv
           wget --progress=dot:giga $TOOLCHAIN_URL -O /tmp/toolchain.tar.gz
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
-        name: Install Toolchain
+        name: Install Toolchain (if not cached)
         run: tar zxf /tmp/toolchain.tar.gz --strip-components=1 -C /opt/riscv
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
-        name: Download Spike source
+        name: Download Spike source (if not cached)
         run: |
           git clone  https://github.com/riscv-software-src/riscv-isa-sim
           cd riscv-isa-sim
@@ -51,7 +51,7 @@ jobs:
           git submodule update --init --recursive
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
-        name: Build Spike
+        name: Build Spike (if not cached)
         run: |
           cd riscv-isa-sim
           mkdir build install
