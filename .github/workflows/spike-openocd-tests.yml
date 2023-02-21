@@ -32,7 +32,7 @@ jobs:
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
         name: Install Toolchain
-        run: tar zxf --strip-components=1 -C /opt/riscv xpack-riscv-none-elf-gcc-12.2.0-1-linux-x64.tar.gz
+        run: tar zxf xpack-riscv-none-elf-gcc-12.2.0-1-linux-x64.tar.gz --strip-components=1 -C /opt/riscv
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
         name: Install Spike build dependencies
