@@ -4,6 +4,7 @@ name: Test OpenOCD against 2 spike configurations
 
 env:
   SPIKE_REV: 0d1a48c0c0e97521c0081b130e97b1352f27380a
+  TOOLCHAIN_URL: https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v12.2.0-1/xpack-riscv-none-elf-gcc-12.2.0-1-linux-x64.tar.gz
 
 on: pull_request
 
@@ -24,17 +25,17 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /opt/riscv
-          key: "spike-${{env.SPIKE_REV}}"
+          key: "spike-${{env.SPIKE_REV}}-toolchain-${{env.TOOLCHAIN_URL}}"
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
         name: Download Toolchain
         run: |
           mkdir /opt/riscv
-          wget --progress=dot:giga https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v12.2.0-1/xpack-riscv-none-elf-gcc-12.2.0-1-linux-x64.tar.gz
+          wget --progress=dot:giga $TOOLCHAIN_URL -O /tmp/toolchain.tar.gz
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
         name: Install Toolchain
-        run: tar zxf xpack-riscv-none-elf-gcc-12.2.0-1-linux-x64.tar.gz --strip-components=1 -C /opt/riscv
+        run: tar zxf /tmp/toolchain.tar.gz --strip-components=1 -C /opt/riscv
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
         name: Install build dependencies
