@@ -100,4 +100,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: test-logs
-          path: riscv-test/debug/logs
+          path: riscv-tests/debug/logs
