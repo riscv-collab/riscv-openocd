@@ -23,7 +23,7 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install device-tree-compiler build-essentials
+          sudo apt-get install device-tree-compiler build-essential
 
       - name: Cache dependencies
         id: cache-deps
