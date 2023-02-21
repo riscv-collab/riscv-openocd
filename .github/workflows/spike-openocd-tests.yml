@@ -94,3 +94,11 @@ jobs:
               --gdb /opt/riscv/bin/riscv-none-elf-gdb \
               --sim_cmd /opt/riscv/bin/spike \
               --server_cmd $GITHUB_WORKSPACE/src/openocd
+
+      - name: Archive test logs
+        # Run even if there was a failed test
+        if: ${{ success() || failure() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-logs
+          path: riscv-test/debug/logs
