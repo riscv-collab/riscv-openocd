@@ -20,6 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install device-tree-compiler build-essentials
+
       - name: Cache dependencies
         id: cache-deps
         uses: actions/cache@v3
@@ -36,12 +41,6 @@ jobs:
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
         name: Install Toolchain
         run: tar zxf /tmp/toolchain.tar.gz --strip-components=1 -C /opt/riscv
-
-      - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
-        name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install build-essential device-tree-compiler
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
         name: Download Spike source
