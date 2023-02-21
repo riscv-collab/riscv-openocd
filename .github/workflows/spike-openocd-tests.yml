@@ -39,8 +39,8 @@ jobs:
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
         name: Install build dependencies
         run: |
-          sudo apt update
-          sudo apt install build-essential device-tree-compiler
+          sudo apt-get update
+          sudo apt-get install build-essential device-tree-compiler
 
       - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
         name: Download Spike source
