@@ -59,6 +59,8 @@ struct FreeRTOS {
 	unsigned ubasetype_size;
 	/* sizeof(void *) */
 	unsigned pointer_size;
+	/* sizeof(TickType_t) */
+	unsigned ticktype_size;
 	unsigned list_width;
 	unsigned list_item_width;
 	unsigned list_elem_next_offset;
@@ -305,13 +307,12 @@ static unsigned populate_offset_size(struct FreeRTOS *freertos,
 				align = freertos->pointer_size;
 				break;
 			case TYPE_TICKTYPE:
-				/* Could be either 16 or 32 bits, depending on configUSE_16_BIT_TICKS. */
-				info[i].size = 4;
-				align = 4;
+				info[i].size = freertos->ticktype_size;
+				align = freertos->ticktype_size;
 				break;
 			case TYPE_LIST_ITEM:
 				info[i].size = freertos->list_item_width;
-				align = MAX(freertos->ubasetype_size, freertos->pointer_size);
+				align = MAX(freertos->ticktype_size, freertos->pointer_size);
 				break;
 			case TYPE_CHAR_ARRAY:
 				/* size is set by the caller. */
@@ -352,6 +353,12 @@ static void freertos_compute_offsets(struct rtos *rtos)
 
 	freertos->pointer_size = DIV_ROUND_UP(target_address_bits(rtos->target), 8);
 	freertos->ubasetype_size = DIV_ROUND_UP(target_data_bits(rtos->target), 8);
+	/*
+	 * According to FreeRTOS/portable/GCC/RISC-V/portmacro.h,
+	 * the TickType_t is defined as UBASE_TYPE,
+	 * Not controlled by configUSE_16_BIT_TICKS.
+	 */
+	freertos->ticktype_size = freertos->ubasetype_size;
 
 	/*
 	 * FreeRTOS can be compiled with configUSE_LIST_DATA_INTEGRITY_CHECK_BYTES
