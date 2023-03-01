@@ -346,7 +346,7 @@ static unsigned populate_offset_size(struct FreeRTOS *freertos,
 				align = freertos->pointer_size;
 				break;
 			case TYPE_TICKTYPE:
-				info[i].size = freertos->ticktype_size;;
+				info[i].size = freertos->ticktype_size;
 				align = freertos->ticktype_size;
 				break;
 			case TYPE_LIST_ITEM:
