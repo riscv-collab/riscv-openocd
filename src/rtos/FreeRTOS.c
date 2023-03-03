@@ -132,7 +132,7 @@ static int nds32_stacking(struct rtos *rtos, const struct rtos_register_stacking
 /* take 4 bytes (32 bits) as the default size,
  * which is suitable for most 32-bit targets and
  * configuration of configUSE_16_BIT_TICKS = 0. */
-static unsigned freertos_ticktype_size = 4;
+static unsigned int freertos_ticktype_size = 4;
 COMMAND_HANDLER(handle_freertos_ticktype_size)
 {
 	if (CMD_ARGC != 1) {
@@ -140,7 +140,7 @@ COMMAND_HANDLER(handle_freertos_ticktype_size)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	unsigned size;
+	unsigned int size;
 	COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], size);
 	switch (size) {
 		case 2:
@@ -156,12 +156,12 @@ COMMAND_HANDLER(handle_freertos_ticktype_size)
 	return ERROR_OK;
 }
 
-static const struct command_registration freetros_commands[] = {
+static const struct command_registration freertos_commands[] = {
 	{
 		.name = "freertos_ticktype_size",
 		.handler = handle_freertos_ticktype_size,
 		.mode = COMMAND_ANY,
-		.usage = "<2|4|8>",
+		.usage = "(2|4|8)",
 		.help = "Pass the size (in bytes) of TickType_t to OpenOCD. To make sure the "
 		"calculation of offsets and sizes is correct. Defaults to 4."
 	},
@@ -956,5 +956,5 @@ static int freertos_create(struct target *target)
 			return ERROR_FAIL;
 	}
 
-	return register_commands(target->rtos->cmd_ctx, NULL, freetros_commands);
+	return register_commands(target->rtos->cmd_ctx, NULL, freertos_commands);
 }
