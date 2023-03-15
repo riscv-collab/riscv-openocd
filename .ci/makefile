@@ -97,7 +97,7 @@ upload_test_report:
 	$(VENV) && cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDTestReport
 
 .PHONY: record_test_success
-upload_test_report:
+record_test_success:
 	$(VENV) && cmake --build "$(COMMON_BUILD_DIR)/linux" --target OpenOCDTestSuccess
 
 .PHONY: clean
