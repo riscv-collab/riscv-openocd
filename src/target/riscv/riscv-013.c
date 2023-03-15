@@ -2445,36 +2445,36 @@ static int deassert_reset(struct target *target)
 
 	select_dmi(target);
 	/* Clear the reset, but make sure haltreq is still set */
-	uint32_t control = 0, control_haltreq;
+	uint32_t control = 0;
 	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
-	control_haltreq = set_field(control, DM_DMCONTROL_HALTREQ, target->reset_halt ? 1 : 0);
-	result = dmi_write(target, DM_DMCONTROL,
-			set_dmcontrol_hartsel(control_haltreq, info->index));
+	control = set_field(control, DM_DMCONTROL_HALTREQ, target->reset_halt ? 1 : 0);
+	control = set_dmcontrol_hartsel(control, info->index);
+	result = dmi_write(target, DM_DMCONTROL, control);
 	if (result != ERROR_OK)
 		return result;
 
 	uint32_t dmstatus;
-	const int dmi_busy_delay = info->dmi_busy_delay;
+	const int orig_dmi_busy_delay = info->dmi_busy_delay;
 	time_t start = time(NULL);
-	LOG_DEBUG("Waiting for hart %d to come out of reset.", info->index);
+	LOG_TARGET_DEBUG(target, "Waiting for hart to come out of reset.");
 	do {
 		result = dmstatus_read_timeout(target, &dmstatus, true,
 				riscv_reset_timeout_sec);
 		if (result == ERROR_TIMEOUT_REACHED)
-			LOG_ERROR("Hart %d didn't complete a DMI read coming out of "
-					"reset in %ds; Increase the timeout with riscv "
+			LOG_TARGET_ERROR(target, "Hart didn't complete a DMI read coming "
+					"out of reset in %ds; Increase the timeout with riscv "
 					"set_reset_timeout_sec.",
-					info->index, riscv_reset_timeout_sec);
+					riscv_reset_timeout_sec);
 		if (result != ERROR_OK)
 			return result;
 
 		if (time(NULL) - start > riscv_reset_timeout_sec) {
-			LOG_ERROR("Hart %d didn't leave reset in %ds; "
+			LOG_TARGET_ERROR(target, "Hart didn't leave reset in %ds; "
 					"dmstatus=0x%x (allunavail=%s, allhavereset=%s); "
 					"Increase the timeout with riscv set_reset_timeout_sec.",
-					info->index, riscv_reset_timeout_sec, dmstatus,
+					riscv_reset_timeout_sec, dmstatus,
 					get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL) ? "true" : "false",
-					get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL) ? "true" : "false");
+					get_field(dmstatus, DM_DMSTATUS_ALLHAVERESET) ? "true" : "false");
 			return ERROR_TIMEOUT_REACHED;
 		}
 		/* Certain debug modules, like the one in GD32VF103
@@ -2487,7 +2487,7 @@ static int deassert_reset(struct target *target)
 	} while (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL) &&
 			!get_field(dmstatus, DM_DMSTATUS_ALLHAVERESET));
 
-	info->dmi_busy_delay = dmi_busy_delay;
+	info->dmi_busy_delay = orig_dmi_busy_delay;
 
 	if (target->reset_halt) {
 		target->state = TARGET_HALTED;
@@ -2498,9 +2498,11 @@ static int deassert_reset(struct target *target)
 	}
 
 	/* Ack reset and clear DM_DMCONTROL_HALTREQ if previously set */
-	return dmi_write(target, DM_DMCONTROL,
-			set_dmcontrol_hartsel(control, info->index) |
-			DM_DMCONTROL_ACKHAVERESET);
+	control = 0;
+	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
+	control = set_field(control, DM_DMCONTROL_ACKHAVERESET, 1);
+	control = set_dmcontrol_hartsel(control, info->index);
+	return dmi_write(target, DM_DMCONTROL, control);
 }
 
 static int execute_fence(struct target *target)
@@ -4411,7 +4413,7 @@ int riscv013_invalidate_cached_debug_buffer(struct target *target)
 {
 	dm013_info_t *dm = get_dm(target);
 	if (!dm) {
-		LOG_ERROR("No DM is specifyed for the target");
+		LOG_TARGET_DEBUG(target, "No DM is specified for the target");
 		return ERROR_FAIL;
 	}
 
