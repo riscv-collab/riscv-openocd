@@ -29,20 +29,7 @@ proc run_test {} {
 
   ocdtlb_run_expect "step"
   set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
-
-  if {[target_info name] == "twin_scr7evalcluster_smp4_workarea"} {
-    setup_kfail openocd_EMBARGO/19141 "*-*-*"
-    set perror_threshold 2
-  }
-  if {[target_info name] == "twin_scr7evalcluster_smp4"} {
-    setup_kfail openocd_EMBARGO/19141 "*-*-*"
-    set perror_threshold 2
-  }
-  # TODO: remove catch statement once the bug is fixed
-  if {[catch {ocdtlb_expect_equal $current_pc $MAIN_ADDR} err]} {
-    perror $err
-    return [ocd_test_fail]
-  }
+  ocdtlb_expect_equal $current_pc $MAIN_ADDR
 
   ocdtlb_run_expect "rbp all"
 
