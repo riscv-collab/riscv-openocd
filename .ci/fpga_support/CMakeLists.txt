@@ -28,6 +28,9 @@ set(TWIN_BOARDS
   twin_SCR7dev_mcore2_rtoshw:SCR7dev
   twin_SCR9dev_score_nortos:SCR9dev
   twin_SCR9dev_score_rtoshw:SCR9dev
+  twin_norvv_SCR9dev_score_nortos:SCR9dev
+  twin_norvv_SCR9dev_score_rtoshw:SCR9dev
+  twin_norvv_scr9hpfpu200323_score_rtoshw:scr9_vpu_hpfpu_fpga_200323
 )
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/BoardInit)

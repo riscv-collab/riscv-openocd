@@ -78,6 +78,15 @@ pipeline {
                 'twin_SCR9dev_score_rtoshw'
               ]
             }
+
+            if (params.containsKey('scr9_validation')) {
+              boards = [
+                'twin_norvv_SCR9dev_score_nortos',
+                'twin_norvv_SCR9dev_score_rtoshw',
+                'twin_norvv_scr9hpfpu200323_score_rtoshw'
+              ]
+            }
+
             break
           case 'zalman':
             env.fpga_lock = 'lock-fpga-on-zalman'
