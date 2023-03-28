@@ -22,7 +22,6 @@ jobs:
       - run: file src/openocd | grep 32-bit
       - run: src/openocd --version
 
-
   # 64-bit, gcc
   build64:
     runs-on: ubuntu-latest
@@ -39,5 +38,20 @@ jobs:
       - run: ./bootstrap
       - run: ./configure --enable-remote-bitbang --enable-jtag_vpi --enable-ftdi-cjtag
       - run: make -j`nproc`
-      - run: file src/openocd | grep 64-bit
-      - run: src/openocd --version
+      - name: Check that we built something
+        run: |
+          file src/openocd | grep 64-bit
+          src/openocd --version
+      - name: Package
+        run: |
+          mkdir install
+          make install DESTDIR=$PWD/install
+          tar zcvf openocd64-${{ github.sha }}.tgz -C install .
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: openocd64-${{ github.sha }}
+          commit: ${{ github.sha }}
+          draft: false
+          artifacts: install/openocd64-${{ github.sha }}.tgz
+          token: ${{ secrets.GITHUB_TOKEN }}
