@@ -6,7 +6,7 @@ set(FETCHCONTENT_QUIET FALSE)
 set(DT_STORAGE "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts")
 set(GDB_URL "${DT_STORAGE}/riscv-binutils-gdb/197d5a51/x86_Lin-x86_Lin-RISCV64_Elf_binutils-gdb.tar.gz")
 set(GCC_URL "${DT_STORAGE}/riscv-gcc/d71188d82/linux_gcc.tar.gz")
-set(SPIKE_URL "${DT_STORAGE}/spike/sc/main/221219-200111_21f75211/spike.tar.gz")
+set(SPIKE_URL "${DT_STORAGE}/spike/sc_main/230331-003854_06a0e1bf/spike-23_03_30-x86_64-ubuntu-18.04-06a0e1bfff19.tar.gz")
 
 FetchContent_Declare(sc-gcc
   URL ${GCC_URL}
@@ -149,7 +149,7 @@ function(add_riscv_test_debug_run_for_target target)
       env LOGS=${RISCV_TESTS_LOGS_DIRNAME}
           GCC=${sc-gcc_SOURCE_DIR}/bin/riscv64-unknown-elf-gcc
           GDB=${sc-gdb_SOURCE_DIR}/bin/riscv64-unknown-elf-gdb
-          SIM=${sc-spike_SOURCE_DIR}/bin/spike
+          SIM=${sc-spike_SOURCE_DIR}/spike/bin/spike
           OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
           ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
           TGT=${target}
