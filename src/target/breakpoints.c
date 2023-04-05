@@ -85,7 +85,7 @@ static int breakpoint_add_internal(struct target *target,
 			reason = "resource not available";
 			goto fail;
 		case ERROR_TARGET_NOT_HALTED:
-			reason = "target running";
+			reason = "target not halted";
 			goto fail;
 		default:
 			reason = "unknown reason";
@@ -218,24 +218,12 @@ int breakpoint_add(struct target *target,
 	uint32_t length,
 	enum breakpoint_type type)
 {
-	if (target->smp) {
-		struct target_list *head;
-
-		if (type == BKPT_SOFT) {
-			head = list_first_entry(target->smp_targets, struct target_list, lh);
-			struct target *curr = head->target;
-			if (target->rtos) {
-				curr = rtos_swbp_target(target, address, length, type);
-				if (!curr) {
-					assert(head->target);
-					curr = head->target;
-				}
-			}
-			return breakpoint_add_internal(curr, address, length, type);
-		}
-
-		foreach_smp_target(head, target->smp_targets) {
-			struct target *curr = head->target;
+	if (target->smp && type == BKPT_HARD) {
+		struct target_list *list_node;
+		foreach_smp_target(list_node, target->smp_targets) {
+			struct target *curr = list_node->target;
+			if (curr->state == TARGET_UNAVAILABLE)
+				continue;
 			int retval = breakpoint_add_internal(curr, address, length, type);
 			if (retval != ERROR_OK)
 				return retval;
@@ -257,6 +245,8 @@ int context_breakpoint_add(struct target *target,
 
 		foreach_smp_target(head, target->smp_targets) {
 			struct target *curr = head->target;
+			if (curr->state == TARGET_UNAVAILABLE)
+				continue;
 			int retval = context_breakpoint_add_internal(curr, asid, length, type);
 			if (retval != ERROR_OK)
 				return retval;
@@ -279,6 +269,8 @@ int hybrid_breakpoint_add(struct target *target,
 
 		foreach_smp_target(head, target->smp_targets) {
 			struct target *curr = head->target;
+			if (curr->state == TARGET_UNAVAILABLE)
+				continue;
 			int retval = hybrid_breakpoint_add_internal(curr, address, asid, length, type);
 			if (retval != ERROR_OK)
 				return retval;
@@ -455,7 +447,7 @@ int watchpoint_add_internal(struct target *target, target_addr_t address,
 			reason = "resource not available";
 			goto bye;
 		case ERROR_TARGET_NOT_HALTED:
-			reason = "target running";
+			reason = "target not halted";
 			goto bye;
 		default:
 			reason = "unrecognized error";
@@ -487,6 +479,8 @@ int watchpoint_add(struct target *target, target_addr_t address,
 
 		foreach_smp_target(head, target->smp_targets) {
 			struct target *curr = head->target;
+			if (curr->state == TARGET_UNAVAILABLE)
+				continue;
 			int retval = watchpoint_add_internal(curr, address, length, rw, value, mask);
 			if (retval != ERROR_OK)
 				return retval;

@@ -57,6 +57,7 @@
 #include "transport/transport.h"
 #include "arm_cti.h"
 #include "smp.h"
+#include "semihosting_common.h"
 
 /* default halt wait timeout (ms) */
 #define DEFAULT_HALT_TIMEOUT 5000
@@ -104,6 +105,7 @@ extern struct target_type hla_target;
 extern struct target_type nds32_v2_target;
 extern struct target_type nds32_v3_target;
 extern struct target_type nds32_v3m_target;
+extern struct target_type esp32s2_target;
 extern struct target_type or1k_target;
 extern struct target_type quark_x10xx_target;
 extern struct target_type quark_d20xx_target;
@@ -140,6 +142,7 @@ static struct target_type *target_types[] = {
 	&nds32_v2_target,
 	&nds32_v3_target,
 	&nds32_v3m_target,
+	&esp32s2_target,
 	&or1k_target,
 	&quark_x10xx_target,
 	&quark_d20xx_target,
@@ -159,7 +162,7 @@ static struct target_timer_callback *target_timer_callbacks;
 static int64_t target_timer_next_event_value;
 static LIST_HEAD(target_reset_callback_list);
 static LIST_HEAD(target_trace_callback_list);
-static const int polling_interval = TARGET_DEFAULT_POLLING_INTERVAL;
+static const unsigned int polling_interval = TARGET_DEFAULT_POLLING_INTERVAL;
 static LIST_HEAD(empty_smp_targets);
 
 static const struct jim_nvp nvp_assert[] = {
@@ -256,6 +259,7 @@ static const struct jim_nvp nvp_target_state[] = {
 	{ .name = "halted",  .value = TARGET_HALTED },
 	{ .name = "reset",   .value = TARGET_RESET },
 	{ .name = "debug-running", .value = TARGET_DEBUG_RUNNING },
+	{ .name = "unavailable", .value = TARGET_UNAVAILABLE },
 	{ .name = NULL, .value = -1 },
 };
 
@@ -2267,6 +2271,8 @@ static void target_destroy(struct target *target)
 	if (target->type->deinit_target)
 		target->type->deinit_target(target);
 
+	if (target->semihosting)
+		free(target->semihosting->basedir);
 	free(target->semihosting);
 
 	jtag_unregister_event_callback(jtag_enable_callback, target);
@@ -2596,7 +2602,7 @@ int target_blank_check_memory(struct target *target,
 	}
 
 	if (!target->type->blank_check_memory)
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+		return ERROR_NOT_IMPLEMENTED;
 
 	return target->type->blank_check_memory(target, blocks, num_blocks, erased_value);
 }
@@ -3046,44 +3052,40 @@ static int handle_target(void *priv)
 			is_jtag_poll_safe() && target;
 			target = target->next) {
 
-		if (!target->tap->enabled)
+		/* This function only gets called every polling_interval, so
+		 * allow some slack in the time comparison. Otherwise, if we
+		 * schedule for now+polling_interval, the next poll won't
+		 * actually happen until a polling_interval later. */
+		bool poll_needed = timeval_ms() + polling_interval / 2 >= target->backoff.next_attempt;
+		if (!target->tap->enabled || power_dropout || srst_asserted || !poll_needed)
 			continue;
 
-		if (target->backoff.times > target->backoff.count) {
-			/* do not poll this time as we failed previously */
-			target->backoff.count++;
-			continue;
+		/* polling may fail silently until the target has been examined */
+		retval = target_poll(target);
+		if (retval == ERROR_OK) {
+			/* Polling succeeded, reset the back-off interval */
+			target->backoff.interval = polling_interval;
+		} else {
+			/* Increase interval between polling up to 5000ms */
+			target->backoff.interval = MAX(polling_interval,
+					MIN(target->backoff.interval * 2 + 1, 5000));
+			/* Tell GDB to halt the debugger. This allows the user to run
+			 * monitor commands to handle the situation. */
+			target_call_event_callbacks(target, TARGET_EVENT_GDB_HALT);
 		}
-		target->backoff.count = 0;
+		target->backoff.next_attempt = timeval_ms() + target->backoff.interval;
+		LOG_TARGET_DEBUG(target, "target_poll() -> %d, next attempt in %dms",
+				 retval, target->backoff.interval);
 
-		/* only poll target if we've got power and srst isn't asserted */
-		if (!power_dropout && !srst_asserted) {
-			/* polling may fail silently until the target has been examined */
-			retval = target_poll(target);
+		if (retval != ERROR_OK && examine_attempted) {
+			target_reset_examined(target);
+			retval = target_examine_one(target);
 			if (retval != ERROR_OK) {
-				/* 100ms polling interval. Increase interval between polling up to 5000ms */
-				if (target->backoff.times * polling_interval < 5000)
-					target->backoff.times = MIN(target->backoff.times * 2 + 1,
-												5000 / polling_interval);
-
-				/* Tell GDB to halt the debugger. This allows the user to
-				 * run monitor commands to handle the situation.
-				 */
-				target_call_event_callbacks(target, TARGET_EVENT_GDB_HALT);
+				LOG_TARGET_DEBUG(target, "Examination failed, GDB will be halted. "
+					"Polling again in %dms",
+					target->backoff.interval);
+				return retval;
 			}
-			if (target->backoff.times > 0 && examine_attempted) {
-				LOG_DEBUG("[%s] Polling failed, trying to reexamine", target_name(target));
-				target_reset_examined(target);
-				retval = target_examine_one(target);
-				if (retval != ERROR_OK) {
-					LOG_DEBUG("[%s] Examination failed, GDB will be halted. Polling again in %dms",
-						 target_name(target), target->backoff.times * polling_interval);
-					return retval;
-				}
-			}
-
-			/* Since we succeeded, we reset backoff count */
-			target->backoff.times = 0;
 		}
 	}
 
@@ -5230,10 +5232,18 @@ static int target_jim_set_reg(Jim_Interp *interp, int argc,
 	}
 
 	int tmp;
+#if JIM_VERSION >= 80
 	Jim_Obj **dict = Jim_DictPairs(interp, argv[1], &tmp);
 
 	if (!dict)
 		return JIM_ERR;
+#else
+	Jim_Obj **dict;
+	int ret = Jim_DictPairs(interp, argv[1], &dict, &tmp);
+
+	if (ret != JIM_OK)
+		return ret;
+#endif
 
 	const unsigned int length = tmp;
 	struct command_context *cmd_ctx = current_command_context(interp);

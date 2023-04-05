@@ -56,6 +56,8 @@ struct gdb_fileio_info;
  * not sure how this is used with all the recent changes)
  * TARGET_DEBUG_RUNNING = 4: the target is running, but it is executing code on
  * behalf of the debugger (e.g. algorithm for flashing)
+ * TARGET_UNAVAILABLE = 5: The target is unavailable for some reason. It might
+ * be powered down, for instance.
  *
  * also see: target_state_name();
  */
@@ -66,6 +68,7 @@ enum target_state {
 	TARGET_HALTED = 2,
 	TARGET_RESET = 3,
 	TARGET_DEBUG_RUNNING = 4,
+	TARGET_UNAVAILABLE = 5
 };
 
 enum nvp_assert {
@@ -117,8 +120,8 @@ struct gdb_service {
 
 /* target back off timer */
 struct backoff_timer {
-	int times;
-	int count;
+	int64_t next_attempt;
+	unsigned int interval;
 };
 
 /* split target registers into multiple class */
@@ -199,8 +202,11 @@ struct target {
 	struct rtos *rtos;					/* Instance of Real Time Operating System support */
 	bool rtos_auto_detect;				/* A flag that indicates that the RTOS has been specified as "auto"
 										 * and must be detected when symbols are offered */
+	/* Track when next to poll(). If polling is failing, we don't want to
+	 * poll too quickly because we'll just overwhelm the user with error
+	 * messages. */
 	struct backoff_timer backoff;
-	int smp;							/* add some target attributes for smp support */
+	int smp;							/* Unique non-zero number for each SMP group */
 	struct list_head *smp_targets;		/* list all targets in this smp group/cluster
 										 * The head of the list is shared between the
 										 * cluster, thus here there is a pointer */

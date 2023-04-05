@@ -98,7 +98,6 @@ static int os_alloc(struct target *target, struct rtos_type *ostype,
 
 	/* RTOS drivers can override the packet handler in _create(). */
 	os->gdb_thread_packet = rtos_thread_packet;
-	os->gdb_v_packet = NULL;
 	os->gdb_target_for_threadid = rtos_target_for_threadid;
 	os->cmd_ctx = cmd_ctx;
 
@@ -574,10 +573,9 @@ int rtos_get_gdb_reg_list(struct connection *connection)
 		struct rtos_reg *reg_list;
 		int num_regs;
 
-		LOG_DEBUG("RTOS: getting register list for thread 0x%" PRIx64
-				  ", target->rtos->current_thread=0x%" PRIx64 "\r\n",
-										current_threadid,
-										target->rtos->current_thread);
+		LOG_TARGET_DEBUG(target, "RTOS: getting register list for thread 0x%" PRIx64
+			  ", target->rtos->current_thread=0x%" PRIx64,
+			  current_threadid, target->rtos->current_thread);
 
 		int retval = target->rtos->type->get_thread_reg_list(target->rtos,
 				current_threadid,
