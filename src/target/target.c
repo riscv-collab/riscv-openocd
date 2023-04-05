@@ -6466,11 +6466,32 @@ create_target_list_node(Jim_Obj *const name) {
 	return new;
 }
 
+static int get_target_with_common_rtos_type(struct list_head *lh, struct target **result)
+{
+	struct target *target = NULL;
+	struct target_list *curr;
+	foreach_smp_target(curr, lh) {
+		struct rtos *curr_rtos = curr->target->rtos;
+		if (curr_rtos) {
+			if (target && target->rtos && target->rtos->type != curr_rtos->type) {
+				LOG_ERROR("Different rtos types in members of one smp target!");
+				return JIM_ERR;
+			}
+			target = curr->target;
+		}
+	}
+	*result = target;
+	return JIM_OK;
+}
+
 static int jim_target_smp(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 {
-	int retval = 0;
 	static int smp_group = 1;
 
+	if (argc == 1) {
+		LOG_DEBUG("Empty SMP target");
+		return JIM_OK;
+	}
 	LOG_DEBUG("%d", argc);
 	/* argv[1] = target to associate in smp
 	 * argv[2] = target to associate in smp
@@ -6498,10 +6519,10 @@ static int jim_target_smp(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 	}
 	smp_group++;
 
-	struct target_list *first =
-		list_first_entry_or_null(lh, typeof(*first), lh);
-	if (first && first->target && first->target->rtos)
-		retval = rtos_smp_init(first->target);
+	struct target *rtos_target;
+	int retval = get_target_with_common_rtos_type(lh, &rtos_target);
+	if (retval == JIM_OK && rtos_target)
+		retval = rtos_smp_init(rtos_target);
 
 	return retval;
 }
