@@ -96,16 +96,13 @@ set(RISCV_TESTS_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTests)
 ExternalProject_Add(riscv_tests
   SOURCE_DIR ${RISCV_TESTS_SOURCE_DIR}
   GIT_REPOSITORY https://github.com/riscv-software-src/riscv-tests.git
-  GIT_TAG 0d690752517d82e6ce823ea20d2f4d95f535728f
+  GIT_TAG 48491dadafcd59442c5bf22603fb0a7f1c589cb9
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ""
   INSTALL_COMMAND ""
-  # TODO: Remove the patch command.
-  # Currently, it is required because Syntacore OpenOCD does not expose most
-  # CSR by default (including tselect needed for some tests)
   PATCH_COMMAND
-       git checkout debug/targets/RISC-V
-    && git apply ${CMAKE_CURRENT_SOURCE_DIR}/riscv_tests_patches/expose-tselect.patch
+        git checkout debug/targets/RISC-V
+    &&  git apply ${CMAKE_CURRENT_SOURCE_DIR}/riscv_tests_patches/memory_sample_thresholds.patch
 )
 
 set(RISCV_TESTS_RUN_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTestsRun)
