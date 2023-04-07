@@ -4094,6 +4094,13 @@ static const struct command_registration riscv_command_handlers[] = {
 		.chain = riscv_exec_command_handlers
 	},
 	{
+		.name = "riscv",
+		.mode = COMMAND_ANY,
+		.help = "RISCV Additional Command Group",
+		.usage = "",
+		.chain = semihosting_common_handlers
+	},
+	{
 		.name = "arm",
 		.mode = COMMAND_ANY,
 		.help = "ARM Command Group",

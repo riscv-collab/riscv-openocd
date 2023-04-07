@@ -9533,6 +9533,10 @@ requests by using a special SVC instruction that is trapped at the
 Supervisor Call vector by OpenOCD.
 @end deffn
 
+@deffn {Command} {riscv semihosting} [@option{enable}|@option{disable}]
+@cindex RISCV semihosting
+@end deffn
+
 @deffn {Command} {arm semihosting_redirect} (@option{disable} | @option{tcp} <port>
 [@option{debug}|@option{stdio}|@option{all})
 @cindex ARM semihosting
@@ -9567,6 +9571,10 @@ Enabling this option forwards semihosting I/O to GDB process using the
 File-I/O remote protocol extension. This is especially useful for
 interacting with remote files or displaying console messages in the
 debugger.
+@end deffn
+
+@deffn {Command} {riscv semihosting_fileio} [@option{enable}|@option{disable}]
+@cindex RISCV semihosting
 @end deffn
 
 @deffn {Command} {arm semihosting_resexit} [@option{enable}|@option{disable}]
