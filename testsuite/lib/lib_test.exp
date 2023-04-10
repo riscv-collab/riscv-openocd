@@ -182,6 +182,7 @@ proc ocdtlb_run_expect {command {expect_op_fail 0} } {
     {^targets +[^ ]+$}      { set parser parse_targets_set }
     {^targets$}             { set parser parse_targets_listing }
     {^halt$}                { set parser parse_halt }
+    {^resume +[^ ]+$}       { set parser parse_resume }
     {^resume$}              { set parser parse_resume }
     {^reset +[^ ]+$}        { set parser parse_reset }
     {^reset$}               { set parser parse_reset }

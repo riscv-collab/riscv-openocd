@@ -1,0 +1,74 @@
+proc check_state {states expected_state i} {
+  set state [lindex $states $i]
+  if {![string match $state $expected_state]} {
+    error "unexpected state of hart $i: $state, expecting $expected_state"
+  }
+}
+
+proc check_all_states {states expected_state i_from i_to} {
+  for { set i $i_from}  {$i < $i_to} {incr i} {
+    check_state $states $expected_state $i
+  }
+}
+
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+
+  set NUM_CORES [target_info cpu,cores_num]
+  set IS_SMP [target_info openocd,smp_target]
+
+  ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set LOOP_ADDR $program_info(loop)
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+
+  ocdtlb_run_expect "resume"
+  set response [ocdtlb_run_expect "targets"]
+  set states [dict get $response states]
+  if {$IS_SMP} {
+    check_all_states $states "running" 0 $NUM_CORES
+  } else {
+    check_state $states "running" 0
+    check_all_states $states "halted" 1 $NUM_CORES
+  }
+
+  ocdtlb_run_expect "halt"
+  ocdtlb_run_expect "resume $LOOP_ADDR"
+  if {$IS_SMP} {
+    check_all_states $states "running" 0 $NUM_CORES
+  } else {
+    check_state $states "running" 0
+    check_all_states $states "halted" 1 $NUM_CORES
+  }
+  ocdtlb_run_expect "halt"
+
+  set response_pc [ocdtlb_run_expect "reg pc"]
+  if {$IS_SMP} {
+      set NUM_CORES_TO_CHECK $NUM_CORES
+  } else {
+      set NUM_CORES_TO_CHECK 1
+  }
+  for {set i 0}  {$i < $NUM_CORES_TO_CHECK} {incr i} {
+    ocdtlb_run_expect "targets $i"
+    set current_pc  [ocdtlb_rsp_get $response_pc]
+    ocdtlb_expect_equal $current_pc $LOOP_ADDR
+  }
+
+  ocdtlb_run_expect "resume"
+  set expect_failure 1
+  ocdtlb_run_expect "resume $ENTRY_ADDR" $expect_failure
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
