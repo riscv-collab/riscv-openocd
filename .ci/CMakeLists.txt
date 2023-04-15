@@ -54,7 +54,12 @@ ExternalProject_Add(openocd
   PREFIX OpenOCDBuild
   SOURCE_DIR ${OPENOCD_SOURCES}
   CONFIGURE_COMMAND
-  # NOTE: we can't use PKG_CONFIG_LIBDIR because of udev dependency
+  # NOTE: we can't use PKG_CONFIG_LIBDIR because of udev dependency:
+  # when we set PKG_CONFIG_LIBDIR libraries are searched only at that
+  # directory. Since in modern linux distributions udev is part of systemd -
+  # this will require us to have the whole systemd distribution at that
+  # location. This is an overkill. So we choose to link dynamically with
+  # whatever library we have in the build environment.
   env
     PKG_CONFIG_PATH=${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig
     CC=${CMAKE_C_COMPILER}
