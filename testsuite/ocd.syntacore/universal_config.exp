@@ -2,6 +2,7 @@ proc run_test {} {
   global default_bin_prefix
   global program_info
 
+  ocd_connect
   # disconnect and kill the default openocd
   ocd_manual_finish
 

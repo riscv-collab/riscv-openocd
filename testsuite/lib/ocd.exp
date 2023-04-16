@@ -140,9 +140,24 @@ proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_inter
 
   set tcl_server_active 0
   for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
-    set listen_pattern "Listening on"
-    spawn grep $listen_pattern $tcl_log
+    set listen_pattern "Listening on\\|error"
+    spawn grep -i $listen_pattern $tcl_log
     expect {
+      -re "LIBUSB_ERROR_BUSY" {
+        close
+        wait -nowait
+        error "LIBUSB_ERROR_BUSY encountered while waiting for TCL port"
+      }
+      -re "EXAMINATION FAILURE\n" {
+        close
+        wait -nowait
+        error "target examination failed unexpectedly"
+      }
+      -re "Timed out after" {
+        close
+        wait -nowait
+        error "target examination (?) resulted in timeout"
+      }
       -re "Listening on port $port for tcl connections" {
         verbose "OpenOCD TCL/RPC server launched successfully" 1
         set tcl_server_active 1
@@ -170,9 +185,24 @@ proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_inter
 proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_interval} {
   set gdb_server_active 0
   for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
-    set listen_pattern "Listening on"
-    spawn grep $listen_pattern $tcl_log
+    set listen_pattern "Listening on\\|error"
+    spawn grep -i $listen_pattern $tcl_log
     expect {
+      -re "LIBUSB_ERROR_BUSY" {
+        close
+        wait -nowait
+        error "LIBUSB_ERROR_BUSY encountered while waiting for GDB port"
+      }
+      -re "EXAMINATION FAILURE\n" {
+        close
+        wait -nowait
+        error "target examination failed unexpectedly"
+      }
+      -re "Timed out after" {
+        close
+        wait -nowait
+        error "target examination (?) resulted in timeout"
+      }
       -re "Listening on port $port for gdb connections" {
         verbose "OpenOCD GDB server launched successfully" 1
         set gdb_server_active 1
@@ -480,6 +510,8 @@ proc ocd_gdb_connect {} {
       verbose "GDB: got initial prompt" 1
     }
     eof {
+      unset ocd_client_spawn_id
+      wait -nowait
       ocd_internal_error "GDB: unexpected EOF while waiting for prompt"
     }
     timeout {
@@ -522,6 +554,8 @@ proc ocd_connect {} {
       verbose "OpenOCD: connection established, all is good" 1
     }
     eof {
+      unset ocd_client_spawn_id
+      wait -nowait
       ocd_internal_error "OpenOCD: unexpected EOF while expecting acknowledge"
     }
     timeout {
