@@ -41,29 +41,32 @@ ExternalProject_Add(dejagnu
 
 configure_file(local_init.exp.in local_init.exp)
 
+set(OPENOCD_TESTSUITE_DIRECTORY "${OPENOCD_SOURCES}/testsuite")
+include(fpga_support/cmake/BoardDefinitions.cmake)
 set(TGT_BOARD "")
 if(DEFINED ENV{TARGET_BOARD})
   set(TGT_BOARD $ENV{TARGET_BOARD})
 endif()
 
 set(TEST_RUN_DIR "${CMAKE_BINARY_DIR}/TestRun")
-if ("${TGT_BOARD}" STREQUAL "")
+if (TGT_BOARD)
+  get_property(openocd_board TARGET ${TGT_BOARD} PROPERTY OPENOCD_BOARD)
+  set(TARGET_BOARD_CMDLINE "--target_board=${openocd_board}")
+  set(TEST_WORKING_DIR "${TEST_RUN_DIR}/run_${TGT_BOARD}")
+  set(TEST_SUMMARY_DIR "${TEST_RUN_DIR}/SUMMARY_${TGT_BOARD}")
+else()
   set(TARGET_BOARD_CMDLINE "")
   set(TEST_WORKING_DIR "${TEST_RUN_DIR}/runs")
   set(TEST_SUMMARY_DIR "${TEST_RUN_DIR}/SUMMARY")
-else()
-  set(TARGET_BOARD_CMDLINE "--target_board=${TGT_BOARD}")
-  set(TEST_WORKING_DIR "${TEST_RUN_DIR}/run_${TGT_BOARD}")
-  set(TEST_SUMMARY_DIR "${TEST_RUN_DIR}/SUMMARY_${TGT_BOARD}")
 endif()
 file(MAKE_DIRECTORY ${TEST_WORKING_DIR} ${TEST_SUMMARY_DIR})
 
 add_custom_target(OpenOCDTest
   WORKING_DIRECTORY ${TEST_WORKING_DIR}
   COMMAND
-    env DEJAGNU=${OPENOCD_SOURCES}/testsuite/site.exp
+    env DEJAGNU="${OPENOCD_TESTSUITE_DIRECTORY}/site.exp"
     ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
-        --src_dir=${OPENOCD_SOURCES}/testsuite
+        --src_dir="${OPENOCD_TESTSUITE_DIRECTORY}"
         ${TARGET_BOARD_CMDLINE}
         --tool=ocd
         --outdir=${TEST_SUMMARY_DIR}

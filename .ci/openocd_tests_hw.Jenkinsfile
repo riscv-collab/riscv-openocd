@@ -50,66 +50,48 @@ pipeline {
         }
       }
     }
-    stage('SetupEnvironment') {
-      steps {
-        script {
-          switch(params.AGENT) {
-          case 'twin_server':
-            env.fpga_lock = 'lock-fpga-on-twin'
-            boards = [
-              'twin_scr5_32',
-              'twin_scr5_64',
-              'twin_scr6',
-              'twin_scr7evalcluster_pseudoscore_nortos',
-              'twin_scr7evalcluster_pseudoscore_nortos_workarea',
-              'twin_scr7evalcluster_mcore4_nortos',
-              'twin_scr7evalcluster_mcore4_nortos_workarea',
-              'twin_scr7evalcluster_smp4_workarea',
-              'twin_scr7evalcluster_smp4'
-            ]
-
-            if (params.containsKey('use_unstable_platforms')) {
-              boards = [
-                'twin_scr7RVV_mcore2_nortos',
-                'twin_scr7bug21107_score_nortos',
-                'twin_SCR7dev_mcore2_nortos',
-                'twin_SCR7dev_mcore2_rtoshw',
-                'twin_SCR9dev_score_nortos',
-                'twin_SCR9dev_score_rtoshw'
-              ]
-            }
-
-            if (params.containsKey('scr9_validation')) {
-              boards = [
-                'twin_norvv_SCR9dev_score_nortos',
-                'twin_norvv_SCR9dev_score_rtoshw',
-                'twin_norvv_scr9hpfpu200323_score_rtoshw'
-              ]
-            }
-
-            break
-          case 'zalman':
-            env.fpga_lock = 'lock-fpga-on-zalman'
-            boards = ['arty100_scr1_32',
-                      'arty100_scr3_32',
-                      'arty100_scr4_32_imcaf',
-                      'arty100_scr4_32_imcafd']
-            break
-          default:
-            currentBuild.result = 'ABORTED'
-            error "What the hell I'm doing here? I don't belong to ${params.AGENT}"
-            break
-          }
-        }
-        sh 'printenv'
-      }
-    }
     stage('Build') {
       steps {
         echo "Building project"
         dir ("$WD") {
           sh 'make in_docker TARGET=build -f ${WD}/.ci/makefile'
         }
+      }
+    }
+    stage('PrepareBoards') {
+      steps {
+        dir ("$WD") {
+          sh 'make fpga_configuration_registry -f ${WD}/.ci/makefile'
+          script {
+            switch(params.AGENT) {
+            case 'twin_server':
+              env.fpga_lock = 'lock-fpga-on-twin'
+              platforms = readFile("build/host_tools/TWIN_NIGHTLY_CONFIGURATIONS.list")
+
+              if (params.containsKey('use_unstable_platforms')) {
+                platforms = readFile("build/host_tools/TWIN_UNSTABLE_CONFIGURATIONS.list")
+              }
+
+              if (params.containsKey('scr9_validation')) {
+                platforms = readFile("build/host_tools/TWIN_SCR9_CONFIGURATIONS.list")
+              }
+
+              break
+            case 'zalman':
+              platforms = readFile("build/host_tools/ZALMAN_NIGHTLY_CONFIGURATIONS.list")
+              env.fpga_lock = 'lock-fpga-on-zalman'
+              break
+            default:
+              currentBuild.result = 'ABORTED'
+              error "What the hell I'm doing here? I don't belong to ${params.AGENT}"
+              break
+            }
+            echo "configurations:"
+            echo "${platforms}"
+            boards = platforms.tokenize("\n")
+          }
+        }
+        sh 'printenv'
       }
     }
     stage('RunTests') {

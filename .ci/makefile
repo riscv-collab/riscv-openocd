@@ -106,8 +106,13 @@ clean:
 
 .PHONY: prepare_board
 prepare_board:
+	cmake --build $(HOST_CONFIGURATION_DIRECTORY) --target init_${TARGET_BOARD}
+
+.PHONY: fpga_configuration_registry
+fpga_configuration_registry:
 	cmake -S .ci/fpga_support -B $(HOST_CONFIGURATION_DIRECTORY) -G "Unix Makefiles"
-	cmake --build $(HOST_CONFIGURATION_DIRECTORY) --target board_${TARGET_BOARD}
+	cmake --build $(HOST_CONFIGURATION_DIRECTORY) --target fpga_configuration_registry
+
 
 
 ###################### docker support ######################
