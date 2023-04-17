@@ -136,9 +136,8 @@ proc ocd_internal_determine_version {} {
   return $OPENOCD_VARIANT
 }
 
-proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_interval} {
-
-  set tcl_server_active 0
+proc ocd_internal_wait_for_acknowledge { tcl_log primary_pattern max_retry_count wait_interval } {
+  set ack_detected 0
   for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
     set listen_pattern "Listening on\\|error"
     spawn grep -i $listen_pattern $tcl_log
@@ -146,7 +145,7 @@ proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_inter
       -re "LIBUSB_ERROR_BUSY" {
         close
         wait -nowait
-        error "LIBUSB_ERROR_BUSY encountered while waiting for TCL port"
+        error "LIBUSB_ERROR_BUSY encountered while waiting for ($primary_pattern)"
       }
       -re "EXAMINATION FAILURE\n" {
         close
@@ -158,73 +157,38 @@ proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_inter
         wait -nowait
         error "target examination (?) resulted in timeout"
       }
-      -re "Listening on port $port for tcl connections" {
-        verbose "OpenOCD TCL/RPC server launched successfully" 1
-        set tcl_server_active 1
+      -re "$primary_pattern" {
+        verbose "ack_detected! ($primary_pattern)" 1
+        set ack_detected 1
       }
       eof {
-        verbose "EOF while waiting initial ack from TCL/RPC server, attempt #$it_count" 3
+        verbose "EOF while waiting for ($primary_pattern), attempt #$it_count" 3
         wait -nowait
         sleep $wait_interval
         continue
       }
       timeout  {
-        verbose "could not scan log while waiting for TCL/RPC server, attempt #$it_count" 3
+        verbose "could not scan log while waiting for ($primary_pattern), attempt #$it_count" 3
       }
     }
     close
     wait -nowait
 
-    if { $tcl_server_active } {
+    if { $ack_detected } {
       return
     }
   }
-  error "could not get initial ack from TCL/RPC server (it num: $it_count)"
+  error "could not get initial ack while waiting for $primary_pattern (it num: $it_count)"
 }
 
-proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_interval} {
-  set gdb_server_active 0
-  for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
-    set listen_pattern "Listening on\\|error"
-    spawn grep -i $listen_pattern $tcl_log
-    expect {
-      -re "LIBUSB_ERROR_BUSY" {
-        close
-        wait -nowait
-        error "LIBUSB_ERROR_BUSY encountered while waiting for GDB port"
-      }
-      -re "EXAMINATION FAILURE\n" {
-        close
-        wait -nowait
-        error "target examination failed unexpectedly"
-      }
-      -re "Timed out after" {
-        close
-        wait -nowait
-        error "target examination (?) resulted in timeout"
-      }
-      -re "Listening on port $port for gdb connections" {
-        verbose "OpenOCD GDB server launched successfully" 1
-        set gdb_server_active 1
-      }
-      eof {
-        verbose "EOF while waiting initial ack from OpenOCD/GDB server, attempt #$it_count" 3
-        wait -nowait
-        sleep $wait_interval
-        continue
-      }
-      timeout  {
-        verbose "could not scan log while waiting for OpenOCD/GDB server, attempt #$it_count" 3
-      }
-    }
-    close
-    wait -nowait
+proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_interval } {
+  set ack_message "Listening on port $port for tcl connections"
+  ocd_internal_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
+}
 
-    if { $gdb_server_active } {
-      return
-    }
-  }
-  error "could not get initial ack from OpenOCD/GDB server (it num: $it_count)"
+proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_interval } {
+  set ack_message "Listening on port $port for gdb connections"
+  ocd_internal_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
 }
 
 proc ocd_internal_wait_for_file { filename max_retries timeout_value } {
