@@ -43,14 +43,14 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /opt/riscv/toolchain
-          key: "spike-${{env.SPIKE_COMMIT}}"
+          key: "toolchain-${{env.TOOLCHAIN_URL}}"
 
       - name: Get spike from cache (if available)
         id: cache-spike
         uses: actions/cache@v3
         with:
           path: /opt/riscv/spike
-          key: "toolchain-${{env.TOOLCHAIN_URL}}"
+          key: "spike-${{env.SPIKE_COMMIT}}"
 
       - if: ${{ steps.cache-toolchain.outputs.cache-hit != 'true' }}
         name: Download Toolchain (if not cached)
