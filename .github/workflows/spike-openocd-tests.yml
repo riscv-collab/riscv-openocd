@@ -30,32 +30,39 @@ jobs:
 
       - name: Get revisions of dependencies
         run: |
-          SPIKE_COMMIT=$( git ls-remote https://github.com/riscv-software-src/riscv-isa-sim.git master | awk '{ print $1; }' )
-          RISC_V_TESTS_COMMIT=$( git ls-remote https://github.com/riscv-software-src/riscv-isa-sim.git master | awk '{ print $1; }' )
+          SPIKE_COMMIT=$( git ls-remote "$SPIKE_REPO" master | awk '{ print $1; }' )
+          RISC_V_TESTS_COMMIT=$( git ls-remote "$RISCV_TESTS_REPO" master | awk '{ print $1; }' )
           echo "Revison of Spike: $SPIKE_COMMIT"
           echo "Revision of RISC-V tests: $RISC_V_TESTS_COMMIT"
           # Save for later use
           echo "SPIKE_COMMIT=$SPIKE_COMMIT" >> $GITHUB_ENV
           echo "RISC_V_TESTS_COMMIT=$RISC_V_TESTS_COMMIT" >> $GITHUB_ENV
 
-      - name: Get dependencies from cache
-        id: cache-deps
+      - name: Get the toolchain from cache (if available)
+        id: cache-toolchain
         uses: actions/cache@v3
         with:
-          path: /opt/riscv
-          key: "spike-${{env.SPIKE_COMMIT}}-toolchain-${{env.TOOLCHAIN_URL}}"
+          path: /opt/riscv/toolchain
+          key: "spike-${{env.SPIKE_COMMIT}}"
 
-      - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
+      - name: Get spike from cache (if available)
+        id: cache-spike
+        uses: actions/cache@v3
+        with:
+          path: /opt/riscv/spike
+          key: "toolchain-${{env.TOOLCHAIN_URL}}"
+
+      - if: ${{ steps.cache-toolchain.outputs.cache-hit != 'true' }}
         name: Download Toolchain (if not cached)
         run: |
-          mkdir /opt/riscv
+          mkdir -p /opt/riscv/toolchain
           wget --progress=dot:giga $TOOLCHAIN_URL -O /tmp/toolchain.tar.gz
 
-      - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
+      - if: ${{ steps.cache-toolchain.outputs.cache-hit != 'true' }}
         name: Install Toolchain (if not cached)
-        run: tar zxf /tmp/toolchain.tar.gz --strip-components=1 -C /opt/riscv
+        run: tar zxf /tmp/toolchain.tar.gz --strip-components=1 -C /opt/riscv/toolchain
 
-      - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
+      - if: ${{ steps.cache-spike.outputs.cache-hit != 'true' }}
         name: Download Spike source (if not cached)
         run: |
           git clone "$SPIKE_REPO"
@@ -63,13 +70,12 @@ jobs:
           git checkout "$SPIKE_COMMIT"
           git submodule update --init --recursive
 
-      - if: ${{ steps.cache-deps.outputs.cache-hit != 'true' }}
+      - if: ${{ steps.cache-spike.outputs.cache-hit != 'true' }}
         name: Build Spike (if not cached)
         run: |
           cd riscv-isa-sim
-          mkdir build install
-          cd build
-          ../configure --prefix=/opt/riscv
+          mkdir build && cd build
+          ../configure --prefix=/opt/riscv/spike
           make -j"$(nproc 2> /dev/null || sysctl -n hw.ncpu)"
           make install
 
@@ -98,14 +104,14 @@ jobs:
         run: |
           cd riscv-tests/debug
           ./gdbserver.py targets/RISC-V/spike32.py --print-failures \
-              --gcc /opt/riscv/bin/riscv-none-elf-gcc \
-              --gdb /opt/riscv/bin/riscv-none-elf-gdb \
-              --sim_cmd /opt/riscv/bin/spike \
+              --gcc /opt/riscv/toolchain/bin/riscv-none-elf-gcc \
+              --gdb /opt/riscv/toolchain/bin/riscv-none-elf-gdb \
+              --sim_cmd /opt/riscv/spike/bin/spike \
               --server_cmd $GITHUB_WORKSPACE/src/openocd
           ./gdbserver.py targets/RISC-V/spike64-2.py --print-failures \
-              --gcc /opt/riscv/bin/riscv-none-elf-gcc \
-              --gdb /opt/riscv/bin/riscv-none-elf-gdb \
-              --sim_cmd /opt/riscv/bin/spike \
+              --gcc /opt/riscv/toolchain/bin/riscv-none-elf-gcc \
+              --gdb /opt/riscv/toolchain/bin/riscv-none-elf-gdb \
+              --sim_cmd /opt/riscv/spike/bin/spike \
               --server_cmd $GITHUB_WORKSPACE/src/openocd
 
       - name: Archive test logs
