@@ -11,6 +11,9 @@ set_board_info cpu,has_h_ext 0
 
 set_board_info cpu,has_v_ext 0
 
+set_board_info cpu,dm_abstract_csr 1
+set_board_info cpu,dm_abstract_fpr 1
+
 add_board_info cflags   -march=$TGT_ARCH
 add_board_info cflags   -mabi=lp64d
 
