@@ -1,0 +1,46 @@
+proc run_bp_step_test  { ENTRY_ADDR MAIN_ADDR END_ADDR TYPE } {
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+
+  ocdtlb_run_expect "bp $END_ADDR 4 $TYPE"
+  ocdtlb_run_expect "resume"
+
+  octdlb_wait_resume
+
+  set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+  ocdtlb_expect_equal $current_pc $END_ADDR
+
+  ocdtlb_run_expect "step"
+  set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+  ocdtlb_expect_equal $current_pc $MAIN_ADDR
+
+  ocdtlb_run_expect "rbp all"
+}
+
+proc run_test {} {
+  global default_bin_prefix
+  global program_info
+
+  ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set ENTRY_ADDR $program_info(_entry)
+  set MAIN_ADDR $program_info(main)
+  set END_ADDR $program_info(end)
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  # hw breakpoints
+  run_bp_step_test $ENTRY_ADDR $MAIN_ADDR $END_ADDR "hw"
+  # sw breakpoints
+  run_bp_step_test $ENTRY_ADDR $MAIN_ADDR $END_ADDR ""
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
+
