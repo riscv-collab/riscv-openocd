@@ -1,5 +1,6 @@
 .global _entry
 .global main
+.global before_end
 .global end
 .global work_area_start
 .global work_area_end
@@ -42,6 +43,7 @@ main:
   sll    x28, x27, x1
   sll    x29, x28, x1
   sll    x30, x29, x1
+before_end:
   sll    x31, x30, x1
 end:
    j main
