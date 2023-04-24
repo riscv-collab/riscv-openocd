@@ -14,10 +14,10 @@ set timeout 120
 
 # check if platform starts with "/"
 if {[string first / $PLATFORM] == 0} {
-  set EXPECTED_PATTERN "Flashng BitStream complete!"
+  set EXPECTED_PATTERN "Flashing BitStream completed!"
   spawn [pwd]/fpga.sh bit $STAND_NAME $PLATFORM
 } else {
-  set EXPECTED_PATTERN "Setting Platform complete!"
+  set EXPECTED_PATTERN "Setting Platform completed!"
   spawn [pwd]/fpga.sh set $STAND_NAME $PLATFORM
 }
 
