@@ -6,7 +6,7 @@ set(FETCHCONTENT_QUIET FALSE)
 set(DT_STORAGE "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts")
 set(GDB_URL "${DT_STORAGE}/riscv-binutils-gdb/197d5a51/x86_Lin-x86_Lin-RISCV64_Elf_binutils-gdb.tar.gz")
 set(GCC_URL "${DT_STORAGE}/riscv-gcc/d71188d82/linux_gcc.tar.gz")
-set(SPIKE_URL "${DT_STORAGE}/spike/sc_main/230331-003854_06a0e1bf/spike-23_03_30-x86_64-ubuntu-18.04-06a0e1bfff19.tar.gz")
+set(SPIKE_URL "${DT_STORAGE}/spike/sc_main/230424-213636_e65e8816/spike-23_04_24-x86_64-ubuntu-18.04-e65e881676a6.tar.gz")
 
 FetchContent_Declare(sc-gcc
   URL ${GCC_URL}
