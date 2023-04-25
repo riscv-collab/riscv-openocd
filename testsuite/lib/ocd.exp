@@ -70,6 +70,7 @@ proc ocd_target_info_check {} {
     cpu,has_s_mode \
     cpu,has_h_ext \
     cpu,has_v_ext \
+    cpu,misaligned_access_support \
     cpu,dm_abstract_csr \
     cpu,dm_abstract_fpr \
     memory,reset_vector \

@@ -1,0 +1,15 @@
+load_board_description "spike-sim-common"
+
+set_board_cpu spike64_misaligned_access_dmp6a64
+
+set_board_info memory,has_high_pa 0
+set_board_info memory,ocd_work_area 0
+
+set_board_info openocd,extra_csr 0
+set_board_info openocd,hwthreads 0
+set_board_info openocd,smp_target 0
+set_board_info openocd,abi_regnames 0
+set_board_info openocd,hidden_triggers 0
+set_board_info openocd,ide_cloak 0
+
+set_board_info openocd,target_flags [target_ocd_flags_for_spike spike_default.cfg]

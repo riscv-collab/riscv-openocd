@@ -12,6 +12,8 @@ set_board_info cpu,has_v_ext 1
 set_board_info cpu,v_ext_vlen 128
 set_board_info cpu,v_ext_elen 64
 
+set_board_info cpu,misaligned_access_support 0
+
 set_board_info cpu,dm_abstract_csr 1
 set_board_info cpu,dm_abstract_fpr 1
 
