@@ -1,0 +1,9 @@
+#!/bin/sh
+
+git diff $(git merge-base sc/main HEAD) HEAD \
+  | filterdiff \
+    -x "a/src/jtag/drivers/libjaylink/*" \
+    -x "a/tools/git2cl/*" \
+    -x "a/.github/*" \
+    -x "a/HACKING" \
+  | ./tools/scripts/checkpatch.pl --no-signoff -
