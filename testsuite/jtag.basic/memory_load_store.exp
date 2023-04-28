@@ -1,0 +1,31 @@
+proc run_test {} {
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "memory.S" "$default_bin_prefix.exe"
+
+    set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+    global taps_info
+
+    jtag_connect
+
+    ocdjtag_riscv_reset_hart 0
+    ocdjtag_riscv_halt_hart 0
+
+    set true_data 0xdeadbeef
+
+    ocdjtag_riscv_store_memory 0 $ENTRY_ADDR 32 $true_data
+
+    set result [ocdjtag_riscv_load_memory 0 $ENTRY_ADDR 32]
+
+    if {[dict get $result status] == 0} {
+        return [ocd_test_fail]
+    }
+
+    set data 0x[format %x [dict get $result data]]
+
+    ocdtlb_expect_equal $data $true_data
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

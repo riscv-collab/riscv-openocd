@@ -1,0 +1,35 @@
+proc run_test {} {
+    global taps_info
+
+    jtag_connect
+
+    ocdjtag_riscv_reset_hart 0
+
+    #DTM registers
+    set dtmcs      [ocdjtag_riscv_get_dtmcs 0]
+
+    #DM registers
+    set dmstatus   [ocdjtag_riscv_get_dmstatus 0]
+    set dmcontrol  [ocdjtag_riscv_get_dmcontrol 0]
+    set hartinfo   [ocdjtag_riscv_get_hartinfo 0]
+    set sbcs       [ocdjtag_riscv_get_sbcs 0]
+    set abstractcs [ocdjtag_riscv_get_abstractcs 0]
+
+    verbose "__________DTM registers__________" 1
+    verbose "dtmcs 0x10: $dtmcs" 1
+    verbose "__________DM registers___________" 1
+    verbose "dmstatus 0x11: $dmstatus" 1
+    verbose "_________________________________" 1
+    verbose "dmcontrol 0x10: $dmcontrol" 1
+    verbose "_________________________________" 1
+    verbose "hartinfo 0x12: $hartinfo" 1
+    verbose "_________________________________" 1
+    verbose "sbcs 0x38: $sbcs" 1
+    verbose "_________________________________" 1
+    verbose "abstractcs 0x16: $abstractcs" 1
+    verbose "_________________________________" 1
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

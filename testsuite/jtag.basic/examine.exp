@@ -1,0 +1,15 @@
+proc run_test {} {
+    global taps_info
+
+    jtag_connect
+
+    ocdjtag_riscv_reset_hart 0
+
+    if {[ocdjtag_riscv_examine_hart 0] == 0} {
+        return [ocd_test_fail]
+    }
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

@@ -436,3 +436,44 @@ proc parse_gdb_info_reg { report } {
           [list reg_names $reg_names values $values]]
 }
 
+proc parse_irscan { report } {
+  set TYPE "irscan"
+
+  return [internal_parse_success $TYPE $report {info "irscan passed"}]
+}
+
+proc parse_drscan { report } {
+  set TYPE "drscan"
+  #For example:
+  #00000061
+  #but it should be interpreted like hexadecimal value
+  if {[regexp {^[0-9a-fA-F]+} $report value]} {
+    return [internal_parse_success $TYPE $report \
+           [list value 0x$value]]
+  }
+
+  return [internal_parse_error $TYPE $report {info "regexp dont passed"}]
+}
+
+proc parse_scan_chain { report } {
+  set TYPE "scan_chain"
+
+  set tap_count 0
+  set tap_list [dict create]
+
+  set rlines [split $report "\n"]
+  #For example:
+  #   TapName             Enabled  IdCode     Expected   IrLen IrCap IrMask
+  #-- ------------------- -------- ---------- ---------- ----- ----- ------
+  # 0 riscv.tap1             Y     0xdeadbeef 0x00000000     5 0x01  0x0
+  # here we try to parse TapName and corresponding number
+  foreach line $rlines {
+    if {[regexp {^\s([0-9]+)\s([0-9a-zA-Z]+\.[0-9a-zA-z]+)} $line m cur_number cur_name]} {
+      dict set tap_list $cur_number $cur_name
+      set tap_count [expr {$tap_count + 1}]
+    }
+  }
+
+  return [internal_parse_success $TYPE $report \
+          [list count $tap_count tap_list $tap_list]]
+}

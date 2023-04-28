@@ -4,6 +4,7 @@ load_lib "lib_response.exp"
 load_lib "lib_test.exp"
 load_lib "lib_tool_support.exp"
 load_lib "lib_tool_state.exp"
+load_lib "lib_lowlevel_jtag.exp"
 
 proc jtag_init {test_file_name} {
   global OCD_PORT_TCLRPC
@@ -53,7 +54,24 @@ proc jtag_finish {{ cleanup_type "immediate" }} {
   verbose "\\\\\\ ocd_jtag_finish ///\n   _______" 1
 }
 
-proc jtag_connect {} {
+proc jtag_connect { {need_scan_and_restart 1} } {
   tsuplib_tclrcp_connect
+
+  if {$need_scan_and_restart == 1} {
+    global taps_info
+
+    ocdjtag_riscv_update_taps_info
+
+    if {[dict get $taps_info count] == 0} {
+        perror "No harts found"
+        return [ocd_test_fail]
+    }
+
+    set count [dict get $taps_info count]
+
+    for {set i 0} {$i < $count} {incr i} {
+        ocdjtag_riscv_reset_dm $i
+    }
+  }
 }
 

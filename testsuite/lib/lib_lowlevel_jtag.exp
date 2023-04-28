@@ -1,0 +1,698 @@
+#to understand all strange numbers from this lib read riscv debug spec
+
+set taps_info [dict create]
+
+proc ocdjtag_riscv_get_dtmcs { tap_num } {
+    global taps_info
+
+    set tap_name [dict get $taps_info $tap_num name]
+
+    ocdtlb_run_expect "irscan $tap_name 0x10"
+    set dtmcs_bitval [ocdtlb_rsp_get [ocdtlb_run_expect "drscan $tap_name 32 0x0"] value]
+
+    return [dict create \
+        dmireset [expr {($dtmcs_bitval >> 16) & 0x1}] \
+        idle     [expr {($dtmcs_bitval >> 12) & 0x7}] \
+        dmistat  [expr {($dtmcs_bitval >> 10) & 0x3}] \
+        abits    [expr {($dtmcs_bitval >> 4)  & 0x3f}] \
+        version  [expr {($dtmcs_bitval) & 0xf}] \
+        is_zero  [expr {$dtmcs_bitval == 0}] \
+    ]
+    # is_zero is not a field of register, it's created just for using in examine_hart function
+}
+
+proc ocdjtag_riscv_scan_chain {} {
+    return [ocdtlb_run_expect "scan_chain"]
+}
+
+proc ocdjtag_riscv_update_taps_info {} {
+    global taps_info
+
+    set scan_chain_result [ocdjtag_riscv_scan_chain]
+
+    set count [ocdtlb_rsp_get $scan_chain_result count]
+
+    dict set taps_info count $count
+
+    for {set i 0} {$i < $count} {incr i} {
+        set tap_name [dict get [ocdtlb_rsp_get $scan_chain_result tap_list] $i]
+
+        dict set taps_info $i name $tap_name
+
+        set dtmcs [ocdjtag_riscv_get_dtmcs $i]
+
+        dict set taps_info $i abits [dict get $dtmcs abits]
+        dict set taps_info $i dmi_size [expr {34 + [dict get $dtmcs abits]}]
+        dict set taps_info $i idle [dict get $dtmcs idle]
+    }
+}
+
+# here address is a debug module register address
+proc ocdjtag_riscv_dmi_scan { tap_num address data op } {
+    global taps_info
+
+    set tap_name [dict get $taps_info $tap_num name]
+    set dmi_size [dict get $taps_info $tap_num dmi_size]
+
+    set shifted_address [expr {$address << 34}]
+    set shifted_data    [expr {$data    << 2 }]
+
+    set dmi_val [expr {$shifted_address + $shifted_data + $op}]
+
+    ocdtlb_run_expect "irscan $tap_name 0x11"
+    ocdtlb_run_expect "drscan $tap_name $dmi_size 0x[format %x $dmi_val]"
+
+    return [ocdtlb_rsp_get [ocdtlb_run_expect "drscan $tap_name $dmi_size 0x0"] value]
+}
+
+proc ocdjtag_riscv_dmi_read { tap_num address } {
+    set dmi_bitval [ocdjtag_riscv_dmi_scan $tap_num $address 0 1]
+
+    return [expr {($dmi_bitval >> 2) & 0xffffffff}]
+}
+
+proc ocdjtag_riscv_dmi_write { tap_num address data } {
+    set dmi_bitval [ocdjtag_riscv_dmi_scan $tap_num $address $data 2]
+}
+
+#start of getters for DM registers
+
+proc ocdjtag_riscv_get_dmstatus { tap_num } {
+    set dmstatus_bitval [ocdjtag_riscv_dmi_read $tap_num 0x11]
+
+    return [dict create \
+        impebreak       [expr {($dmstatus_bitval >> 22) & 1}] \
+        allhavereset    [expr {($dmstatus_bitval >> 19) & 1}] \
+        anyhavereset    [expr {($dmstatus_bitval >> 18) & 1}] \
+        allresumeack    [expr {($dmstatus_bitval >> 17) & 1}] \
+        anyresumeack    [expr {($dmstatus_bitval >> 16) & 1}] \
+        allnonexistent  [expr {($dmstatus_bitval >> 15) & 1}] \
+        anynonexistent  [expr {($dmstatus_bitval >> 14) & 1}] \
+        allunavail      [expr {($dmstatus_bitval >> 13) & 1}] \
+        anyunavail      [expr {($dmstatus_bitval >> 12) & 1}] \
+        allrunning      [expr {($dmstatus_bitval >> 11) & 1}] \
+        anyrunning      [expr {($dmstatus_bitval >> 10) & 1}] \
+        allhalted       [expr {($dmstatus_bitval >> 9) & 1}] \
+        anyhalted       [expr {($dmstatus_bitval >> 8) & 1}] \
+        authenticated   [expr {($dmstatus_bitval >> 7) & 1}] \
+        authbusy        [expr {($dmstatus_bitval >> 6) & 1}] \
+        hasresethaltreq [expr {($dmstatus_bitval >> 5) & 1}] \
+        confstrptrvalid [expr {($dmstatus_bitval >> 4) & 1}] \
+        version         [expr {$dmstatus_bitval & 0xf}] \
+    ]
+}
+
+proc ocdjtag_riscv_get_dmcontrol { tap_num } {
+    set dmcontrol_bitval [ocdjtag_riscv_dmi_read $tap_num 0x10]
+
+    return [dict create \
+        haltreq      [expr {($dmcontrol_bitval >> 31) & 1}] \
+        resumereq    [expr {($dmcontrol_bitval >> 30) & 1}] \
+        ackhavereset [expr {($dmcontrol_bitval >> 28) & 1}] \
+        hartreset    [expr {($dmcontrol_bitval >> 29) & 1}] \
+        hasel        [expr {($dmcontrol_bitval >> 26) & 1}] \
+        hartsel      [expr {($dmcontrol_bitval >> 6) & 0xfffff}] \
+        dmactive     [expr {$dmcontrol_bitval & 1}] \
+    ]
+}
+
+proc ocdjtag_riscv_get_hartinfo { tap_num } {
+    set hartinfo_bitval [ocdjtag_riscv_dmi_read $tap_num 0x12]
+
+    return [dict create \
+        dataaccess [expr {($hartinfo_bitval >> 16) & 1}] \
+        datasize   [expr {($hartinfo_bitval >> 12) & 0xf}] \
+        dataaddr   [expr {$hartinfo_bitval & 0xfff}] \
+    ]
+}
+proc ocdjtag_riscv_get_sbcs { tap_num } {
+    set sbcs_bitval [ocdjtag_riscv_dmi_read $tap_num 0x38]
+
+    return [dict create \
+        sbversion       [expr {($sbcs_bitval >> 29) & 0x7}] \
+        sbbusyerror     [expr {($sbcs_bitval >> 22) & 0x1}] \
+        sbbusy          [expr {($sbcs_bitval >> 21) & 0x1}] \
+        sbreadonaddr    [expr {($sbcs_bitval >> 20) & 0x1}] \
+        sbaccess        [expr {($sbcs_bitval >> 17) & 0x3}] \
+        sbautoincrement [expr {($sbcs_bitval >> 16) & 0x1}] \
+        sbreadondata    [expr {($sbcs_bitval >> 15) & 0x1}] \
+        sberror         [expr {($sbcs_bitval >> 12) & 0x3}] \
+        sbasize         [expr {($sbcs_bitval >> 5)  & 0x7}] \
+        sbaccess128     [expr {($sbcs_bitval >> 4) & 0x1}] \
+        sbaccess64      [expr {($sbcs_bitval >> 3) & 0x1}] \
+        sbaccess32      [expr {($sbcs_bitval >> 2) & 0x1}] \
+        sbaccess16      [expr {($sbcs_bitval >> 1) & 0x1}] \
+        sbaccess8       [expr {$sbcs_bitval & 0x1}] \
+    ]
+}
+
+proc ocdjtag_riscv_get_abstractcs { tap_num } {
+    set abstr_bitval [ocdjtag_riscv_dmi_read $tap_num 0x16]
+
+    return [dict create \
+        progbufsize [expr {($abstr_bitval >> 24) & 0x1f}] \
+        datacount   [expr {$abstr_bitval & 0xf}] \
+        cmderr      [expr {($abstr_bitval >> 8) & 0x7}] \
+        busy        [expr {($abstr_bitval >> 12) & 0x1}] \
+    ]
+}
+
+#end of getter for DM registers
+
+proc ocdjtag_riscv_check_cmderr { tap_num info } {
+    set abstractcs [ocdjtag_riscv_get_abstractcs $tap_num]
+
+    set timeout_ 2000
+
+    set start [clock milliseconds]
+    set cur $start
+
+    while {[expr {([dict get $abstractcs busy] == 1) && ($cur - $start < $timeout_)}]} {
+        set abstractcs [ocdjtag_riscv_get_abstractcs $tap_num]
+
+        set cur [clock milliseconds]
+    }
+
+    if {$cur - $start >= $timeout_} {
+        verbose "Timed out during running abstract command" 1
+        verbose "Info: $info" 1
+        return 7
+    }
+
+    set cmderr [dict get $abstractcs cmderr]
+
+    if {$cmderr > 0} {
+        verbose "Error during running abstract command; cmderr = $cmderr" 1
+        verbose "Info: $info" 1
+    }
+
+    return $cmderr
+}
+
+#start of hart control commands
+#select_hart work only for selecting single hart
+proc ocdjtag_riscv_select_hart { tap_num } {
+    set dmcontrol [expr {1 | $tap_num << 6}]
+
+    ocdjtag_riscv_dmi_write $tap_num 0x10 $dmcontrol
+}
+
+proc ocdjtag_riscv_halt_hart { tap_num } {
+    set dmi_val [expr {$tap_num << 6 | 1 | 1 << 31}]
+
+    ocdjtag_riscv_dmi_write $tap_num 0x10 $dmi_val
+
+    set timeout_ 1000
+    set start [clock milliseconds]
+    set cur $start
+
+    set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
+
+    while {[expr {([dict get $dmstatus anyhalted] == 0) && ($cur - $start < $timeout_)}]} {
+        set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
+
+        set cur [clock milliseconds]
+    }
+
+    if {$cur - $start >= $timeout_} {
+        verbose "Timed out during waiting state update after halt"
+        return 0
+    }
+
+    if {![dict get $dmstatus anyhalted]} {
+        verbose "halt isn't successfull" 1
+    }
+
+    return [dict get $dmstatus anyhalted]
+}
+
+proc ocdjtag_riscv_resume_hart { tap_num } {
+    set res 1
+
+    set dmi_val [expr {$tap_num << 6 | 1 | 1 << 30}]
+
+    ocdjtag_riscv_dmi_write $tap_num 0x10 $dmi_val
+
+    set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
+
+    if {![dict get $dmstatus anyrunning]} {
+        verbose "resume isn't successfull" 1
+        set res 0
+    }
+
+    if {![dict get $dmstatus anyresumeack]} {
+        verbose "resume acknowledgement isn't successfull" 1
+        set res 0
+    }
+
+    return $res
+}
+
+proc ocdjtag_riscv_reset_hart { tap_num } {
+    set res 1
+
+    set dmi_val [expr {$tap_num << 6 | 0x3}]
+    ocdjtag_riscv_dmi_write $tap_num 0x10 $dmi_val
+
+    set dmi_val [expr {$tap_num << 6 | 0x1}]
+    ocdjtag_riscv_dmi_write $tap_num 0x10 $dmi_val
+
+    set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
+
+    if {![dict get $dmstatus anyhavereset]} {
+        verbose "reset isn't successfull" 1
+        set res 0
+    }
+
+    # clearing havereset state bit
+    set dmi_val [expr {$tap_num << 6 | 1 << 28 | 1}]
+    ocdjtag_riscv_dmi_write $tap_num 0x10 $dmi_val
+
+    set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
+    if {![dict get $dmstatus anyhavereset]} {
+        verbose "clearing haverest bit isn't successfull"
+        set res 0
+    }
+
+    return res
+}
+#end of hart control commands
+
+proc ocdjtag_riscv_reset_dm { tap_num } {
+    set dmi_val [expr {$tap_num << 6}]
+    ocdjtag_riscv_dmi_write $tap_num 0x10 $dmi_val
+
+    set dmi_val [expr {$tap_num << 6 | 1}]
+    ocdjtag_riscv_dmi_write $tap_num 0x10 $dmi_val
+}
+
+#list of copies of openocd C functions
+proc internal_ocdjtag_riscv_set_field { reg mask val} {
+    return [expr {((($reg) & ~($mask)) | ((($val) * (($mask) & ~(($mask) << 1))) & ($mask)))}]
+}
+
+proc internal_ocdjtag_riscv_get_field { reg mask } {
+    return [expr {((($reg) & ($mask)) / (($mask) & ~(($mask) << 1)))}]
+}
+
+proc internal_ocdjtag_riscv_access_register_command { tap_num number size flags } {
+    set command [internal_ocdjtag_riscv_set_field 0 0xff000000 0]
+
+    if {$size == 32} {
+        set command [internal_ocdjtag_riscv_set_field $command 0x700000 2]
+    } elseif {$size == 64} {
+        set command [internal_ocdjtag_riscv_set_field $command 0x700000 3]
+    } else {
+        perror "[$tap_num] $size bit register $number not supported"
+    }
+
+    if {$number <= 31} {
+        set command [internal_ocdjtag_riscv_set_field $command 0xffff [expr {0x1000 + $number}]]
+    } elseif {$number >= 33 && $number <= 64} {
+        set command [internal_ocdjtag_riscv_set_field $command 0xffff [expr {0x1020 + $number - 33}]]
+    } elseif {$number >= 65 && $number <= 4160} {
+        set command [internal_ocdjtag_riscv_set_field $command 0xffff [expr {$number - 65}]]
+    } else {
+        perror "Unknown register"
+    }
+    #TODO: add custom registers support
+
+    set command [expr {$command | $flags}]
+
+    return $command
+}
+
+proc internal_ocdjtag_riscv_execute_abstract_command { tap_num command } {
+    verbose "command=0x[format %x $command]" 1
+
+    if {[internal_ocdjtag_riscv_get_field $command 0xff000000] == 0} {
+        set size_     [expr {8 << [internal_ocdjtag_riscv_get_field $command 0x700000]}]
+        set postexec_ [internal_ocdjtag_riscv_get_field $command 0x40000]
+        set transfer_ [internal_ocdjtag_riscv_get_field $command 0x20000]
+        set write_    [internal_ocdjtag_riscv_get_field $command 0x10000]
+        set regno_    [internal_ocdjtag_riscv_get_field $command 0xffff]
+
+        verbose "access register" 1
+        verbose "size=$size_" 1
+        verbose "postexec=$postexec_" 1
+        verbose "transfer=$transfer_" 1
+        verbose "write=$write_" 1
+        verbose "regno=0x[format %X $regno_]" 1
+    }
+
+    ocdjtag_riscv_dmi_write $tap_num 0x17 $command
+
+    set cmderr [ocdjtag_riscv_check_cmderr $tap_num "running abstract command"]
+
+    set abstracts [ocdjtag_riscv_dmi_read $tap_num 0x16]
+
+    if {[internal_ocdjtag_riscv_get_field $abstracts 0x1000] != 0} {
+        verbose "Timed out after 2s waiting for busy to go low (abstractcs=0x[format %X $abstracts])" 1
+
+        return 0
+    }
+
+    if {[internal_ocdjtag_riscv_get_field $abstracts 0x700] != 0} {
+        verbose "command 0x[format %X $command] failed; abstracts 0x[format %X $abstracts]" 1
+
+        #clear the error
+        ocdjtag_riscv_dmi_write $tap_num 0x16 0x700
+
+        return 0
+    }
+
+    return 1
+}
+
+proc internal_ocdjtag_riscv_register_read_abstract { tap_num number size} {
+    #TODO: add check for supporting csr and fpr
+
+    if {$number >= 4162 && $number <= 4193} {
+        perror "Spec doesn't define abstract register numbers for vector registers"
+    }
+
+    set command [internal_ocdjtag_riscv_access_register_command $tap_num $number $size 0x20000]
+
+    return [internal_ocdjtag_riscv_execute_abstract_command $tap_num $command]
+}
+#end of list of copies of openocd C functions
+
+proc ocdjtag_riscv_examine_hart { tap_num } {
+    global taps_info
+
+    set dtmcontrol [ocdjtag_riscv_get_dtmcs $tap_num]
+    verbose "dtmcontrol: $dtmcontrol" 1
+
+    if {[dict get $dtmcontrol is_zero]} {
+        perror "dtmcontrol is 0. Check JTAG connectivity/board power"
+        return 0
+    }
+
+    if {[dict get $dtmcontrol version] != 1} {
+        perror "Unsupported DTM version [dict get $dtmcontrol version]"
+    }
+
+    ocdjtag_riscv_update_taps_info
+
+    if {[dict get $taps_info count] == 0} {
+        perror "No harts found"
+        return 0
+    } else {
+        verbose "[dict get $taps_info count] harts found" 1
+    }
+
+    ocdjtag_riscv_reset_dm $tap_num
+
+    set dmcontrol_bitval [expr {(1 << 26) | (((1 << 21) - 1) << 6) | 1}]
+    ocdjtag_riscv_dmi_write $tap_num 0x10 $dmcontrol_bitval
+
+    set dmcontrol [ocdjtag_riscv_get_dmcontrol $tap_num]
+    verbose "dmcontrol: $dmcontrol" 1
+
+    if {![dict get $dmcontrol dmactive]} {
+        perror "Debug Module is not become active"
+        return 0
+    }
+
+    set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
+    set dm_version [dict get $dmstatus version]
+
+    if {$dm_version != 2 && $dm_version != 3} {
+        perror "OpenOCD only supports Debug Module version 2 (0.13) and 3 (1.0), not $dm_version"
+        return 0
+    }
+
+    if {[dict get $dmcontrol hartsel] == 0} {
+        verbose "hartsellen=0" 1
+    } else {
+        set hartsellen 0
+        set hartsel [dict get $dmcontrol hartsel]
+
+        while {$hartsel != 0} {
+            set hartsellen [expr {$hartsellen + 1}]
+            set hartsel [expr {$hartsel >> 1}]
+        }
+
+        verbose "hartsellen=$hartsellen" 1
+    }
+
+    set hartinfo [ocdjtag_riscv_get_hartinfo $tap_num]
+    verbose "hartinfo: $hartinfo"
+
+    if {[dict get $dmstatus authenticated] == 0} {
+        perror "Debugger is not authenticated to target Debug Module. dmstatus: $dmstatus"
+        return 0
+    }
+
+    set sbcs [ocdjtag_riscv_get_sbcs $tap_num]
+    verbose "sbcs: $sbcs" 1
+
+    set abstracts [ocdjtag_riscv_get_abstractcs $tap_num]
+    verbose "abstracts: $abstracts" 1
+
+    if {[dict get $abstracts progbufsize] + [dict get $dmstatus impebreak] < 2} {
+        verbose "We won't be able to execute fence instructions on this \
+        target. Memory may not always appear consistent" 1
+    }
+
+    ocdjtag_riscv_halt_hart $tap_num
+
+    set res_ [internal_ocdjtag_riscv_register_read_abstract $tap_num 8 64]
+
+    #if result of execution register_read_abstract isn't successfull (returned 0),
+    #xlen remains 32, in other case (returned 1), xlen become 64
+    set xlen 32
+
+    if {$res_} {
+        set xlen 64
+    }
+
+    verbose "xlen: $xlen" 1
+
+    return 1
+}
+
+#functions for memory access using program buffer
+
+proc ocdjtag_riscv_load_memory { tap_num address size} {
+    set result [dict create status 1 data 0]
+
+    # getting a registers size
+    set aarsize 2
+    set res_ [internal_ocdjtag_riscv_register_read_abstract $tap_num 8 64]
+
+    if {$res_} {
+        set aarsize 3
+    }
+    #
+
+    set abstractcs [ocdjtag_riscv_get_abstractcs $tap_num]
+    set progbuf_size [dict get $abstractcs progbufsize]
+
+    set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
+    set impebreak [dict get $dmstatus impebreak]
+
+    if {$progbuf_size < 2} {
+        verbose "Need at least 2 program buffer size" 1
+
+        dict set result status 0
+        return $result
+    }
+
+    if {$progbuf_size == 2 && $impebreak == 0} {
+        verbose "Need at least 3 program buffer size" 1
+
+        dict set result status 0
+        return $result
+    }
+
+    ocdjtag_riscv_halt_hart $tap_num
+
+    # lw s1, 0(s0)
+    set lw_opcode 0x42483
+
+    ocdjtag_riscv_dmi_write $tap_num 0x20 $lw_opcode
+
+    # addi s0, s0, 4
+    set addi_opcode 0x440413
+
+    ocdjtag_riscv_dmi_write $tap_num 0x21 $addi_opcode
+
+    if {$progbuf_size > 2} {
+        # ebreak instr
+        set ebreak_opcode 0x100073
+
+        ocdjtag_riscv_dmi_write $tap_num 0x22 $ebreak_opcode
+    }
+
+    ocdjtag_riscv_dmi_write $tap_num 0x4 $address
+
+    set command_data [expr {($aarsize << 20) | (1 << 16) | (1 << 17) | (1 << 18) | 0x1008}]
+    ocdjtag_riscv_dmi_write $tap_num 0x17 $command_data
+
+    set cmderr [ocdjtag_riscv_check_cmderr $tap_num "writing address to s0 (load memory)"]
+
+    if {$cmderr != 0} {
+        dict set result status 0
+        return $result
+    }
+
+    set command_data [expr {($aarsize << 20) | (1 << 17) | (1 << 18) | 0x1009}]
+    ocdjtag_riscv_dmi_write $tap_num 0x17 $command_data
+
+    set cmderr [ocdjtag_riscv_check_cmderr $tap_num "reading from s1, block 0"]
+    if {$cmderr != 0} {
+        dict set result status 0
+        return $result
+    }
+
+    ocdjtag_riscv_dmi_write $tap_num 0x18 0x1
+
+    set block_number 1
+    while {$size > 32} {
+        set res_data [ocdjtag_riscv_dmi_read $tap_num 0x4]
+
+        set cmderr [ocdjtag_riscv_check_cmderr $tap_num "reading from s1, block $block_number"]
+        if {$cmderr != 0} {
+            dict set result status 0
+            return $result
+        }
+
+        dict set result data [expr {[dict get $result data] << 32 + $res_data}]
+
+        set size [expr {$size - 32}]
+
+        set block_number [expr {$block_number + 1}]
+    }
+
+    ocdjtag_riscv_dmi_write $tap_num 0x18 0x0
+
+    if {$size == 0} {
+        return $result
+    }
+
+    set res_data [ocdjtag_riscv_dmi_read $tap_num 0x4]
+
+    set cmderr [ocdjtag_riscv_check_cmderr $tap_num "reading from s1, block $block_number"]
+    if {$cmderr != 0} {
+        dict set result status 0
+        return $result
+    }
+
+    set mask [expr {(1 << $size) - 1}]
+
+    set masked_data [expr {$res_data & $mask}]
+
+    dict set result data [expr {([dict get $result data] << $size ) | $masked_data}]
+
+    return $result
+}
+
+proc ocdjtag_riscv_store_memory { tap_num address size data} {
+    # getting a registers size
+    set aarsize 2
+    set res_ [internal_ocdjtag_riscv_register_read_abstract $tap_num 8 64]
+
+    if {$res_} {
+        set aarsize 3
+    }
+    #
+
+    set abstractcs [ocdjtag_riscv_get_abstractcs $tap_num]
+    set progbuf_size [dict get $abstractcs progbufsize]
+
+    set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
+    set impebreak [dict get $dmstatus impebreak]
+
+    if {$progbuf_size < 2} {
+        verbose "Need at least 2 program buffer size" 1
+
+        return 0
+    }
+
+    if {$progbuf_size == 2 && $impebreak == 0} {
+        verbose "Need at least 3 program buffer size" 1
+
+        return 0
+    }
+
+    ocdjtag_riscv_halt_hart $tap_num
+
+    # sw s1, 0(s0)
+    set sw_opcode 0x942023
+
+    ocdjtag_riscv_dmi_write $tap_num 0x20 $sw_opcode
+
+    # addi s0, s0, 4
+    set addi_opcode 0x440413
+
+    ocdjtag_riscv_dmi_write $tap_num 0x21 $addi_opcode
+
+    if {$progbuf_size > 2} {
+        # ebreak instr
+        set ebreak_opcode 0x100073
+
+        ocdjtag_riscv_dmi_write $tap_num 0x22 $ebreak_opcode
+    }
+
+    ocdjtag_riscv_dmi_write $tap_num 0x4 $address
+
+    set command_data [expr {($aarsize << 20) | (1 << 16) | (1 << 17) | 0x1008}]
+    ocdjtag_riscv_dmi_write $tap_num 0x17 $command_data
+
+    set cmderr [ocdjtag_riscv_check_cmderr $tap_num "writing address to s0 (store memory)"]
+    if {$cmderr != 0} {
+        return 0
+    }
+
+    set data_part [expr {$data & 0xffffffff}]
+    ocdjtag_riscv_dmi_write $tap_num 0x4 $data_part
+
+    set command_data [expr {($aarsize << 20) | (1 << 16) | (1 << 17) | (1 << 18) | 0x1009}]
+    ocdjtag_riscv_dmi_write $tap_num 0x17 $command_data
+
+    set cmderr [ocdjtag_riscv_check_cmderr $tap_num "writing to s1, block 0"]
+    if {$cmderr != 0} {
+        return 0
+    }
+
+    set size [expr {$size - 32}]
+
+    ocdjtag_riscv_dmi_write $tap_num 0x18 0x1
+
+    set block_number 1
+    while {$size > 32} {
+        set data [expr {$data >> 32}]
+        set data_part [expr {$data & 0xffffffff}]
+
+        ocdjtag_riscv_dmi_write $tap_num 0x4 $data_part
+
+        set cmderr [ocdjtag_riscv_check_cmderr $tap_num "writing to s1, block $block_number"]
+        if {$cmderr != 0} {
+            return 0
+        }
+
+        set size [expr {$size - 32}]
+
+        set block_number [expr {$block_number + 1}]
+    }
+
+    if {$size == 0} {
+        ocdjtag_riscv_dmi_write $tap_num 0x18 0x0
+        return 1
+    }
+
+    set data [expr {$data >> 32}]
+    set data_part [expr {$data & 0xffff}]
+    ocdjtag_riscv_dmi_write $tap_num 0x4 $data_part
+
+    set cmderr [ocdjtag_riscv_check_cmderr $tap_num "writing to s1, block $block_number"]
+    if {$cmderr != 0} {
+        ocdjtag_riscv_dmi_write $tap_num 0x18 0x0
+        return 0
+    }
+
+    ocdjtag_riscv_dmi_write $tap_num 0x18 0x0
+
+    return 1
+}
