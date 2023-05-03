@@ -3,7 +3,8 @@
 %C%_libtarget_la_LIBADD = %D%/openrisc/libopenrisc.la \
 	%D%/riscv/libriscv.la \
 	%D%/xtensa/libxtensa.la \
-	%D%/espressif/libespressif.la
+	%D%/espressif/libespressif.la \
+	%D%/elct/libelct.la
 
 %C%_libtarget_la_CPPFLAGS = $(AM_CPPFLAGS)
 
@@ -242,3 +243,4 @@ include %D%/openrisc/Makefile.am
 include %D%/riscv/Makefile.am
 include %D%/xtensa/Makefile.am
 include %D%/espressif/Makefile.am
+include %D%/elct/Makefile.am

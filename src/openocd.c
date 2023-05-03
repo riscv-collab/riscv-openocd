@@ -27,6 +27,7 @@
 #include <target/arm_cti.h>
 #include <target/arm_adi_v5.h>
 #include <target/arm_tpiu_swo.h>
+#include <target/elct/elct_cmd.h>
 #include <rtt/rtt.h>
 
 #include <server/server.h>
@@ -256,6 +257,7 @@ static struct command_context *setup_command_handler(Jim_Interp *interp)
 		&cti_register_commands,
 		&dap_register_commands,
 		&arm_tpiu_swo_register_commands,
+		&elct_register_commands,
 		NULL
 	};
 	for (unsigned i = 0; command_registrants[i]; i++) {
@@ -362,6 +364,7 @@ int openocd_main(int argc, char *argv[])
 	/* free all DAP and CTI objects */
 	arm_cti_cleanup_all();
 	dap_cleanup_all();
+	elct_cleanup();
 
 	adapter_quit();
 

@@ -168,7 +168,8 @@ m4_define([SERIAL_PORT_ADAPTERS],
 	[[[buspirate], [Bus Pirate], [BUS_PIRATE]]])
 
 m4_define([OPTIONAL_LIBRARIES],
-	[[[capstone], [Use Capstone disassembly framework], []]])
+	[[[capstone], [Use Capstone disassembly framework], []],
+	[[jansson], [Use Jansson library to load ELCT ILAs], []]])
 
 AC_ARG_ENABLE([doxygen-html],
   AS_HELP_STRING([--disable-doxygen-html],
@@ -662,6 +663,25 @@ AS_IF([test "x$enable_capstone" == xno], [
 	AC_DEFINE([HAVE_CAPSTONE], [0], [0 if you don't have Capstone disassembly framework.])
 ])
 
+AC_ARG_WITH([jansson],
+		AS_HELP_STRING([--with-jansson], [Use Jansson library to load ELCT ILAs (default=auto)])
+	, [
+		enable_jansson=$withval
+	], [
+		enable_jansson=auto
+])
+
+AS_IF([test "x$enable_jansson" != xno], [
+	PKG_CHECK_MODULES([JANSSON], [jansson], [
+		AC_DEFINE([HAVE_JANSSON], [1], [Define to 1 if you have Jansson library.])
+	], [
+		if test "x$enable_jansson" != xauto; then
+			AC_MSG_ERROR([--with-jansson was given, but test for Jansson failed])
+		fi
+		enable_jansson=no
+	])
+])
+
 for hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
 	PKG_CHECK_MODULES([HIDAPI],[$hidapi_lib],[
 		use_hidapi=yes
@@ -785,6 +805,7 @@ AM_CONDITIONAL([USE_LIBJAYLINK], [test "x$use_libjaylink" = "xyes"])
 AM_CONDITIONAL([RSHIM], [test "x$build_rshim" = "xyes"])
 AM_CONDITIONAL([DMEM], [test "x$build_dmem" = "xyes"])
 AM_CONDITIONAL([HAVE_CAPSTONE], [test "x$enable_capstone" != "xno"])
+AM_CONDITIONAL([HAVE_JANSSON], [test "x$enable_jansson" != "xno"])
 
 AM_CONDITIONAL([INTERNAL_JIMTCL], [test "x$use_internal_jimtcl" = "xyes"])
 AM_CONDITIONAL([INTERNAL_LIBJAYLINK], [test "x$use_internal_libjaylink" = "xyes"])
