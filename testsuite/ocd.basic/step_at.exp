@@ -1,19 +1,18 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
   global GPR
 
   set xlen64 [expr [target_info cpu,xlen] == 64]
 
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   # created by compile executable
   ocd_compile_executable "step_at.S" "$default_bin_prefix.exe"
 
-  set ENTRY_ADDR $program_info(_entry)
-  set END_ADDR $program_info(end)
-  set INSTR1_ADDR $program_info(instr1)
-  set INSTR2_ADDR $program_info(instr2)
-  set INSTR3_ADDR $program_info(instr3)
-  set AFTER3_ADDR $program_info(after3)
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set END_ADDR [tool_state_get_program_symbol end]
+  set INSTR1_ADDR [tool_state_get_program_symbol instr1]
+  set INSTR2_ADDR [tool_state_get_program_symbol instr2]
+  set INSTR3_ADDR [tool_state_get_program_symbol instr3]
+  set AFTER3_ADDR [tool_state_get_program_symbol after3]
 
   ocd_connect
 

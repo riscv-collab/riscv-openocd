@@ -1,17 +1,16 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
   global ra
   global perror_threshold
 
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "step_linkreg_clobber.S" "$default_bin_prefix.exe"
 
   # created by compile executable
-  set ENTRY_ADDR $program_info(_entry)
-  set MAIN_ADDR $program_info(main)
-  set END_ADDR $program_info(end1)
-  set BRN_ADDR $program_info(brn)
-  set EXPECTED_LINK $program_info(link)
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set MAIN_ADDR [tool_state_get_program_symbol main]
+  set END_ADDR [tool_state_get_program_symbol end1]
+  set BRN_ADDR [tool_state_get_program_symbol brn]
+  set EXPECTED_LINK [tool_state_get_program_symbol link]
 
   set xlen64 [expr [target_info cpu,xlen] == 64]
 

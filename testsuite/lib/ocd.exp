@@ -1,103 +1,9 @@
-load_lib "lib_response.exp"
 load_lib "lib_elf_ripper.exp"
 load_lib "lib_abi_compat.exp"
+load_lib "lib_response.exp"
 load_lib "lib_test.exp"
-
-proc ocd_test_pass {} {
-  global ocd_test_name
-  pass $ocd_test_name
-}
-
-proc ocd_test_fail {} {
-  global ocd_test_name
-  fail $ocd_test_name
-}
-
-proc ocd_test_untested {} {
-  global ocd_test_name
-  untested $ocd_test_name
-}
-
-proc ocd_test_unresolved {} {
-  global ocd_test_name
-  unresolved $ocd_test_name
-}
-
-proc ocd_test_unsupported {} {
-  global ocd_test_name
-  unsupported $ocd_test_name
-}
-
-proc ocd_test_xfail {} {
-  global ocd_test_name
-  xfail $ocd_test_name
-}
-
-proc ocd_compile_executable { src_name outputname { extra_flags {} } } {
-  global srcdir
-  global subdir
-
-  set additional_flags [list \
-    debug \
-    additional_flags=-Xlinker \
-    additional_flags=-Map=$outputname.map \
-  ]
-  foreach add_flag $extra_flags {
-    lappend additional_flags additional_flags=$add_flag
-  }
-  set result [target_compile \
-    "$srcdir/$subdir/$src_name" \
-    "$outputname" \
-    "executable" \
-    $additional_flags \
-  ]
-  if {![string match $result ""]} {
-    error "could not compile executable ($src_name->$outputname): $result"
-  }
-  describe_program "$outputname"
-  return $result
-}
-
-proc ocd_target_info_check {} {
-  set error_detected 0
-  foreach property [list \
-    cpu,xlen \
-    cpu,name \
-    cpu,cores_num \
-    cpu,has_floats \
-    cpu,has_doubles \
-    cpu,has_u_mode \
-    cpu,has_s_mode \
-    cpu,has_h_ext \
-    cpu,has_v_ext \
-    cpu,misaligned_access_support \
-    cpu,dm_abstract_csr \
-    cpu,dm_abstract_fpr \
-    memory,reset_vector \
-    memory,has_high_pa \
-    memory,ocd_work_area \
-    openocd,hwthreads \
-    openocd,extra_csr \
-    openocd,smp_target \
-    openocd,abi_regnames \
-    openocd,hidden_triggers \
-    openocd,ide_cloak \
-    env,preferred_timeout \
-    env,resume_timeout \
-    env,exec_timeout \
-  ] {
-    if {[target_info $property] == ""} {
-      perror "target definition does not have $property set"
-      set error_detected 1
-    }
-  }
-
-  if {$error_detected} {
-    set target_name [target_info name]
-    perror "currently selected target <$target_name> is not configured properly, aborting"
-    exit 1
-  }
-}
+load_lib "lib_tool_support.exp"
+load_lib "lib_tool_state.exp"
 
 proc ocd_scaled_timeout_value { per_core_timeout } {
   set cores_num [target_info cpu,cores_num]
@@ -112,99 +18,14 @@ proc ocd_exec_timeout {} {
   return [ocd_scaled_timeout_value [target_info env,exec_timeout]]
 }
 
-proc ocd_internal_determine_version {} {
-  global OPENOCD
-  set OPENOCD_VARIANT "unknown"
-  spawn $OPENOCD "--version"
-  expect {
-    -re "Open On-Chip Debugger \[0-9.\]+" {
-      if {[regexp "Open On-Chip Debugger 0.10.0" $expect_out(buffer)]} {
-        set OPENOCD_VARIANT "legacy"
-      } elseif {[regexp "Open On-Chip Debugger 0.11.0" $expect_out(buffer)]} {
-        set OPENOCD_VARIANT "latest"
-      }
-      verbose "reported OpenOCD version: $expect_out(buffer)" 2
-    }
-    eof {
-      error "could not identify openocd variant (unexpected EOF)"
-    }
-    timeout {
-      perror "could not identify openocd variant (unexpected TIMEOUT)"
-    }
-  }
-  # clean up resources from the version invocation
-  close
-  wait -nowait
-
-  return $OPENOCD_VARIANT
-}
-
-proc ocd_internal_wait_for_acknowledge { tcl_log primary_pattern max_retry_count wait_interval } {
-  set ack_detected 0
-  for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
-    set listen_pattern "Listening on\\|error"
-    spawn grep -i $listen_pattern $tcl_log
-    expect {
-      -re "LIBUSB_ERROR_BUSY" {
-        close
-        wait -nowait
-        error "LIBUSB_ERROR_BUSY encountered while waiting for ($primary_pattern)"
-      }
-      -re "EXAMINATION FAILURE\n" {
-        close
-        wait -nowait
-        error "target examination failed unexpectedly"
-      }
-      -re "Timed out after" {
-        close
-        wait -nowait
-        error "target examination (?) resulted in timeout"
-      }
-      -re "$primary_pattern" {
-        verbose "ack_detected! ($primary_pattern)" 1
-        set ack_detected 1
-      }
-      eof {
-        verbose "EOF while waiting for ($primary_pattern), attempt #$it_count" 3
-        wait -nowait
-        sleep $wait_interval
-        continue
-      }
-      timeout  {
-        verbose "could not scan log while waiting for ($primary_pattern), attempt #$it_count" 3
-      }
-    }
-    close
-    wait -nowait
-
-    if { $ack_detected } {
-      return
-    }
-  }
-  error "could not get initial ack while waiting for $primary_pattern (it num: $it_count)"
-}
-
 proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_interval } {
   set ack_message "Listening on port $port for tcl connections"
-  ocd_internal_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
+  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
 }
 
 proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_interval } {
   set ack_message "Listening on port $port for gdb connections"
-  ocd_internal_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
-}
-
-proc ocd_internal_wait_for_file { filename max_retries timeout_value } {
-  for {set retries_count 0} {![file exists $filename]} {incr retries_count} {
-    verbose "waiting for the $filename to materialize... attempt #$retries_count" 2
-
-    if {$retries_count > $max_retries} {
-      error "failed to wait for $filename"
-    }
-
-    sleep $timeout_value
-  }
-  verbose "$filename detected" 1
+  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
 }
 
 proc ocd_internal_wait_for_initialization { ocd_log_name TCL_PORT GDB_PORT } {
@@ -212,7 +33,7 @@ proc ocd_internal_wait_for_initialization { ocd_log_name TCL_PORT GDB_PORT } {
   set max_retries 150
   set wait_time 0.1
 
-  if {[catch {ocd_internal_wait_for_file $ocd_log_name $max_retries $wait_time} \
+  if {[catch {tsuplib_wait_for_file $ocd_log_name $max_retries $wait_time} \
       ERROR_INFO]} {
     error "log-poll error: $ERROR_INFO"
   }
@@ -242,49 +63,51 @@ proc ocd_init {test_file_name} {
 
   exp_internal $ENABLE_EXP_INTERNAL
   match_max -d 1000000
-  #puts [target_info name]
-  #puts [board_info target name]
-  #puts [board_info target sim,options]
-  #puts [target_info sim,options]
+  # puts [target_info name]
+  # puts [board_info target name]
+  # puts [board_info target sim,options]
+  # puts [target_info sim,options]
   verbose "/// ocd_init \\\\\\" 1
 
   global OPENOCD
-  global OPENOCD_VARIANT
   global OPENOCD_LOG_LEVEL
   global OCD_PORT_TCLRPC
   global OCD_PORT_GDBSRV
-  global ocd_test_name
-  global default_bin_prefix
-  global openocd_instance_spawn_id
+
+  tool_ensure_pristine_state
 
   set preferred_timeout [target_info env,preferred_timeout]
   set timeout $preferred_timeout
 
-  ocd_target_info_check
+  tsuplib_target_info_check
 
-  if {[catch { ocd_internal_determine_version } OPENOCD_VARIANT]} {
-    perror $OPENOCD_VARIANT
+  if {[catch { tsuplib_determine_openocd_version } openocd_variant]} {
+    perror $openocd_variant
     return
   }
 
-  verbose "selected OpenOCD variant: $OPENOCD_VARIANT" 1
+  verbose "selected OpenOCD variant: $openocd_variant" 1
 
-  if {[string equal $OPENOCD_VARIANT "latest"]} {
+  if {[string equal $openocd_variant "latest"]} {
     if {[target_info openocd,abi_regnames] == 0} {
       build_forward_compat
     } else {
       build_backward_compat
     }
-  } elseif {[string equal $OPENOCD_VARIANT "legacy"]} {
+  } elseif {[string equal $openocd_variant "legacy"]} {
     build_backward_compat
   } else {
-    perror "unexpected OpenOCD version $OPENOCD_VARIANT"
+    perror "unexpected OpenOCD version $openocd_variant"
     return
   }
 
   set ocd_test_name [file rootname [file tail $test_file_name]]
+  tool_state_update test_name $ocd_test_name
+
   # format is ${board_name}_${test_name}
   set default_bin_prefix "[target_info name]_${ocd_test_name}"
+  tool_state_update default_bin_prefix $default_bin_prefix
+
   set ocd_test_log "[target_info name]_${ocd_test_name}.log"
 
   if {[catch {exec rm ${ocd_test_log}} result]} {
@@ -317,32 +140,27 @@ proc ocd_init {test_file_name} {
     return
   }
 
-  set openocd_instance_spawn_id $spawn_id
+  tool_state_update openocd_tclrpc_port $OCD_PORT_TCLRPC
+  tool_state_update openocd_gdb_port $OCD_PORT_GDBSRV
+  tool_state_update openocd_spawn_id $spawn_id
 
   sleep [ocd_exec_timeout]
-  #set openocd_log "-c \"log_output ${ocd_test_name}_openocd.log\" "
   verbose "\\\\\\ ocd_init ///\n   _______" 1
   return
 }
 
-proc ocd_finish {} {
-  ocd_disconnect
+proc ocd_finish { { cleanup_type "immediate" } } {
+  tsuplib_disconnect_client
   verbose "/// ocd_finish \\\\\\" 1
 
-  global ocd_test_name
-  global openocd_instance_spawn_id
-
-  if {[info exists ocd_test_name]} {
-    unset ocd_test_name
-  }
-
-  if {![info exists openocd_instance_spawn_id]} {
+  if {![tool_state_has openocd_spawn_id]} {
     perror "unexpected tool_finish (no openocd session is active)"
     return
   }
 
+  set openocd_instance_spawn_id [tool_state_get openocd_spawn_id]
   if {$openocd_instance_spawn_id eq "ignore_me"} {
-    unset openocd_instance_spawn_id
+    tool_state_clear
     verbose "\\\\\\ ocd_finish (ignored) ///\n   _______" 1
     return
   }
@@ -363,74 +181,31 @@ proc ocd_finish {} {
   wait -nowait -i $openocd_instance_spawn_id
 
   verbose "wait done. openocd process is reaped" 2
-  unset openocd_instance_spawn_id
 
+  if {[string match $cleanup_type "immediate"]} {
+    tool_state_clear
+  } else {
+    tool_state_update openocd_spawn_id ignore_me
+  }
   verbose "\\\\\\ ocd_finish ///\n   _______" 1
 }
 
 proc ocd_manual_finish {} {
-  global openocd_instance_spawn_id
-  ocd_finish
-  set openocd_instance_spawn_id "ignore_me"
-}
-
-proc ocd_internal_error { msg } {
-  ocd_disconnect
-  error $msg
-}
-
-proc ocd_internal_send_command {msg {mode "catch"} } {
-  global ocd_client_spawn_id
-  global ocd_client_type
-  if {![info exists ocd_client_spawn_id]} {
-    ocd_internal_error "trying to send <$msg> without tclrpc connection"
-  }
-  if {![string match $ocd_client_type "tclrpc"]} {
-    ocd_internal_error "expecting tclrpc client type, detected: <$ocd_client_type>"
-  }
-
-  # NOTE: currently, catch_and_capture is only for debugging purposes
-  if { $mode == "catch_and_capture" } {
-    verbose ">>>> capture { set code \[catch { $msg } opr\] }"  2
-    send "set log \[capture { set code \[catch { $msg } opr\] } \] ; set opr \"\$code:\$log\$opr\"\x1a"
-  } elseif { $mode == "catch" } {
-    verbose ">>>> catch { $msg } opr" 2
-    send "set code \[catch { $msg } opr\] ; set opr \$code:\$opr\x1a"
-  } elseif { $mode == "capture" } {
-    verbose ">>>> capture { $msg }" 2
-    send "capture { $msg }\x1a"
-  } else {
-    ocd_internal_error "unsupported communication mode <$mode>"
-  }
-}
-
-proc ocd_run_command {msg} {
-  ocd_internal_send_command $msg
-  expect {
-    \x1a {
-      return $expect_out(buffer)
-    }
-    eof {
-      ocd_internal_error "tclrpc: unexpected EOF while waiting results of <$msg>"
-    }
-    timeout {
-      ocd_internal_error "tclrpc: unexpected timeout while waiting results of <$msg>"
-    }
-  }
+  ocd_finish deferred
 }
 
 proc gdb_get_prompt_pattern {} {
   return ".*\\(gdb\\)\\s$"
 }
-proc gdb_run_command {msg} {
-  global ocd_client_spawn_id
-  global ocd_client_type
 
-  if {![info exists ocd_client_spawn_id]} {
-    ocd_internal_error "trying to send <$msg> without gdb connection"
+proc gdb_run_command {msg} {
+  if {![tool_state_has client_spawn_id]} {
+    tsuplib_internal_error "trying to send <$msg> without gdb connection"
   }
+
+  set ocd_client_type [tool_state_get client_type]
   if {![string match $ocd_client_type "gdb"]} {
-    ocd_internal_error "expecting gdb client type, detected: <$ocd_client_type>"
+    tsuplib_internal_error "expecting gdb client type, detected: <$ocd_client_type>"
   }
 
   verbose "sending gdb command: $msg" 3
@@ -441,125 +216,99 @@ proc gdb_run_command {msg} {
       return  $expect_out(buffer)
     }
     eof {
-      ocd_internal_error "gdb: unexpected EOF while waiting results of <$msg>"
+      tsuplib_internal_error "gdb: unexpected EOF while waiting results of <$msg>"
     }
     timeout {
-      ocd_internal_error "gdb: unexpected timeout while waiting results of <$msg>"
+      tsuplib_internal_error "gdb: unexpected timeout while waiting results of <$msg>"
     }
   }
 }
 
 proc ocd_gdb_connect {} {
+  # TODO: remove this global
   global spawn_id
-  global ocd_client_spawn_id
-  global ocd_client_type
   global GDB_BIN
-  global OCD_PORT_GDBSRV
-  global openocd_instance_spawn_id
 
-  if {![info exists openocd_instance_spawn_id]} {
-    ocd_internal_error "OpenOCD: no active OpenOCD instance is found (ocd_gdb_connect)"
+  if {![tool_state_has openocd_spawn_id]} {
+    tsuplib_internal_error "OpenOCD: no active OpenOCD instance is found (ocd_gdb_connect)"
   }
-
-  if {[info exists ocd_client_spawn_id]} {
-    ocd_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported (ocd_gdb_connect)"
+  if {[tool_state_has client_spawn_id]} {
+    tsuplib_internal_error "OpenOCD: multiple connections to OpenOCD instance are not supported (ocd_gdb_connect)"
   }
 
   set stty_init "-echo"
   spawn $GDB_BIN
+  tool_state_update client_spawn_id $spawn_id
+  tool_state_update client_type gdb
   unset stty_init
-
-  set ocd_client_spawn_id $spawn_id
-  set ocd_client_type "gdb"
 
   expect {
     -re [gdb_get_prompt_pattern] {
       verbose "GDB: got initial prompt" 1
     }
     eof {
-      unset ocd_client_spawn_id
+      tool_state_steal client_spawn_id
       wait -nowait
-      ocd_internal_error "GDB: unexpected EOF while waiting for prompt"
+      tsuplib_internal_error "GDB: unexpected EOF while waiting for prompt"
     }
     timeout {
-      ocd_internal_error "GDB: could not get initial prompt"
+      tsuplib_internal_error "GDB: could not get initial prompt"
     }
   }
   gdb_run_command "set height 0"
   gdb_run_command "set style enabled off"
-  gdb_run_command "target remote :$OCD_PORT_GDBSRV"
+  gdb_run_command "target remote :[tool_state_get openocd_gdb_port]"
 }
 
 proc ocd_connect {} {
+  # TODO: remove this global
   global spawn_id
-  global ocd_client_spawn_id
-  global ocd_client_type
-  global openocd_instance_spawn_id
-  global ocd_test_name
-  global OCD_PORT_TCLRPC
 
-  if {![info exists openocd_instance_spawn_id]} {
-    ocd_internal_error "OpenOCD: no active OpenOCD instance is found (ocd_connect)"
+  if {![tool_state_has openocd_spawn_id]} {
+    tsuplib_internal_error "OpenOCD: no active OpenOCD instance is found (ocd_connect)"
   }
-
-  if {[info exists ocd_client_spawn_id]} {
-    ocd_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported (ocd_connect)"
+  if {[tool_state_has client_spawn_id]} {
+    tsuplib_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported (ocd_connect)"
   }
 
   #set stty_init "-echo -isig -icanon"
   # we use raw to avoid translation of \x1a to ^D
   # -echo just disables echoing of sent symbols
   set stty_init "raw -echo"
-  spawn nc localhost $OCD_PORT_TCLRPC
-  set ocd_client_spawn_id $spawn_id
-  set ocd_client_type "tclrpc"
+  spawn nc localhost [tool_state_get openocd_tclrpc_port]
+  tool_state_update client_spawn_id $spawn_id
+  tool_state_update client_type tclrpc
   unset stty_init
 
-  ocd_internal_send_command "echo \"Hi there!\"" capture
+
+  tsuplib_internal_tclrpc_send_command "echo \"Hi there!\"" capture
   expect {
     "Hi there!\n\x1a" {
       verbose "OpenOCD: connection established, all is good" 1
     }
     eof {
-      unset ocd_client_spawn_id
+      tool_state_steal client_spawn_id
       wait -nowait
-      ocd_internal_error "OpenOCD: unexpected EOF while expecting acknowledge"
+      tsuplib_internal_error "OpenOCD: unexpected EOF while expecting acknowledge"
     }
     timeout {
-      ocd_internal_error "OpenOCD: could not recieve acknowledge"
+      tsuplib_internal_error "OpenOCD: could not recieve acknowledge"
     }
   }
 
-  ocd_internal_send_command "targets" capture
+  tsuplib_internal_tclrpc_send_command "targets" capture
   expect {
     \x1a {
       verbose "OpenOCD: targets list received" 1
     }
     eof {
-      ocd_internal_error "OpenOCD: could not recieve targets list from OpenOCD"
+      tsuplib_internal_error "OpenOCD: could not recieve targets list from OpenOCD"
     }
     timeout {
-      ocd_internal_error "OpenOCD: unexpected timeout while waiting for initial targets listing"
+      tsuplib_internal_error "OpenOCD: unexpected timeout while waiting for initial targets listing"
     }
   }
 
   return
-}
-
-proc ocd_disconnect { } {
-  global ocd_client_spawn_id
-
-  if {![info exists ocd_client_spawn_id]} {
-    return
-  }
-
-  verbose "Disconnecting from OpenOCD" 1
-  close -i $ocd_client_spawn_id
-  verbose "OpenOCD connection closed, reaping the process" 1
-
-  wait -nowait -i $ocd_client_spawn_id
-  verbose "OpenOCD connection is dead, farewell!" 1
-
-  unset ocd_client_spawn_id
 }
 

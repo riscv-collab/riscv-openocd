@@ -10,15 +10,14 @@ if {[target_info cpu,v_ext_elen] != 64} {
 }
 
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
   global FPR
 
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "basic_rvv.S" "$default_bin_prefix.exe"
 
   # created by compile executable
-  set ENTRY_ADDR $program_info(_entry)
-  set WRITE_DONE_ADDR $program_info(write_done)
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set WRITE_DONE_ADDR [tool_state_get_program_symbol write_done]
 
   ocd_connect
 

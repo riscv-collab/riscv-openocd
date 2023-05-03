@@ -1,6 +1,4 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
   global FPR
   global GPR
   global RUN_OCD_INTERNAL_ON_HW
@@ -9,13 +7,12 @@ proc run_test {} {
     if {[target_info sim] == ""} { return [ocd_test_unsupported] }
   }
 
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "parser.S" "$default_bin_prefix.exe"
 
-  parray program_info
-
   # created by compile executable
-  set ENTRY_ADDR $program_info(_entry)
-  set MEM_ADDR $program_info(work_area_start)
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set MEM_ADDR [tool_state_get_program_symbol work_area_start]
   set AUX_MEM_ADDR [ocdtlb_addr_add $MEM_ADDR 7]
 
   ocdtlb_expect_equal 1 1

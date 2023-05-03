@@ -19,15 +19,13 @@ proc bp_resume_test { ENTRY_ADDR END_ADDR BEFORE_END_ADDR BP_TYPE } {
 }
 
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "special.S" "$default_bin_prefix.exe"
 
   # created by compile executable
-  set ENTRY_ADDR $program_info(_entry)
-  set BEFORE_END_ADDR $program_info(before_end)
-  set END_ADDR $program_info(end)
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set BEFORE_END_ADDR [tool_state_get_program_symbol before_end]
+  set END_ADDR [tool_state_get_program_symbol end]
 
   ocd_connect
 

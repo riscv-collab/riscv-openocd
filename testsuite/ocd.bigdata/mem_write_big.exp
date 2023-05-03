@@ -1,14 +1,12 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
   set xlen64 [expr [target_info cpu,xlen] == 64]
 
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "bigdata.S" "$default_bin_prefix.exe"
 
   # created by compile executable
-  set MEM_ADDR      $program_info(work_area_start)
-  set MEM_END_ADDR  $program_info(work_area_end)
+  set MEM_ADDR      [tool_state_get_program_symbol work_area_start]
+  set MEM_END_ADDR  [tool_state_get_program_symbol work_area_end]
 
   set ADDR_LAST_BYTE  [ocdtlb_addr_add $MEM_END_ADDR -1]
   set ADDR_LAST_WCHAR [ocdtlb_addr_add $MEM_END_ADDR -2]
@@ -26,7 +24,7 @@ proc run_test {} {
   ocd_connect
 
   # created by compile executable
-  set MEM_ADDR $program_info(work_area_start)
+  set MEM_ADDR [tool_state_get_program_symbol work_area_start]
 
   ocdtlb_run_expect "targets 0"
   ocdtlb_run_expect "reset halt"

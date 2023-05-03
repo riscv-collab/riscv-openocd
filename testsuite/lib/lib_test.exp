@@ -11,7 +11,7 @@ proc ocdtlb_expect_missing {where what} {
 }
 
 proc ocdtlb_get_tmp_prefix {id} {
-  global default_bin_prefix
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   return "${default_bin_prefix}_$id"
 }
 
@@ -137,7 +137,7 @@ proc ocdtlb_do_expect_step_until { end_address iteration_limit } {
 proc ocdtlb_run_expect_raw {command parser_name {expect_op_fail 0}} {
   verbose "cmd: ${command}" 1
 
-  set response [ocd_run_command $command]
+  set response [tsuplib_tclrpc_run_command $command]
   verbose "\nRESPONSE:\n    $response\n" 3
 
   set status [string range $response 0 1]
@@ -216,3 +216,54 @@ proc ocdtlb_run_expect {command {expect_op_fail 0} } {
   }
   return [ocdtlb_run_expect_raw $command $parser $expect_op_fail]
 }
+
+proc ocd_test_pass {} {
+  pass [tool_state_get test_name]
+}
+
+proc ocd_test_fail {} {
+  fail [tool_state_get test_name]
+}
+
+proc ocd_test_untested {} {
+  untested [tool_state_get test_name]
+}
+
+proc ocd_test_unresolved {} {
+  unresolved [tool_state_get test_name]
+}
+
+proc ocd_test_unsupported {} {
+  unsupported [tool_state_get test_name]
+}
+
+proc ocd_test_xfail {} {
+  xfail [tool_state_get test_name]
+}
+
+proc ocd_compile_executable { src_name outputname { extra_flags {} } } {
+  # Note: these come from expect framework
+  global srcdir
+  global subdir
+
+  set additional_flags [list \
+    debug \
+    additional_flags=-Xlinker \
+    additional_flags=-Map=$outputname.map \
+  ]
+  foreach add_flag $extra_flags {
+    lappend additional_flags additional_flags=$add_flag
+  }
+  set result [target_compile \
+    "$srcdir/$subdir/$src_name" \
+    "$outputname" \
+    "executable" \
+    $additional_flags \
+  ]
+  if {![string match $result ""]} {
+    error "could not compile executable ($src_name->$outputname): $result"
+  }
+  describe_program "$outputname"
+  return $result
+}
+

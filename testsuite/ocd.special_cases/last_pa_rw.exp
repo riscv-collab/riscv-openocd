@@ -24,9 +24,6 @@ proc test_one_case {name size count} {
 }
 
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
   if {[expr [target_info cpu,xlen] != 64]} { return [ocd_test_unsupported] }
   if {![target_info memory,has_high_pa]} { return [ocd_test_unsupported] }
 
@@ -35,6 +32,7 @@ proc run_test {} {
 # First, zeros are written to be shure that memory content has actually changed
 # after write
 
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "special.S" "$default_bin_prefix.exe"
 
   ocd_connect

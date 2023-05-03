@@ -1,0 +1,188 @@
+proc tsuplib_target_info_check {} {
+  set error_detected 0
+  foreach property [list \
+    cpu,xlen \
+    cpu,name \
+    cpu,cores_num \
+    cpu,has_floats \
+    cpu,has_doubles \
+    cpu,has_u_mode \
+    cpu,has_s_mode \
+    cpu,has_h_ext \
+    cpu,has_v_ext \
+    cpu,misaligned_access_support \
+    cpu,dm_abstract_csr \
+    cpu,dm_abstract_fpr \
+    memory,reset_vector \
+    memory,has_high_pa \
+    memory,ocd_work_area \
+    openocd,hwthreads \
+    openocd,extra_csr \
+    openocd,smp_target \
+    openocd,abi_regnames \
+    openocd,hidden_triggers \
+    openocd,ide_cloak \
+    env,preferred_timeout \
+    env,resume_timeout \
+    env,exec_timeout \
+  ] {
+    if {[target_info $property] == ""} {
+      perror "target definition does not have $property set"
+      set error_detected 1
+    }
+  }
+
+  if {$error_detected} {
+    set target_name [target_info name]
+    perror "currently selected target <$target_name> is not configured properly, aborting"
+    # FIXME: probably, exit 1 is too harsh
+    exit 1
+  }
+}
+
+proc tsuplib_determine_openocd_version {} {
+  global OPENOCD
+  set OPENOCD_VARIANT "unknown"
+  spawn $OPENOCD "--version"
+  expect {
+    -re "Open On-Chip Debugger \[0-9.\]+" {
+      if {[regexp "Open On-Chip Debugger 0.10.0" $expect_out(buffer)]} {
+        set OPENOCD_VARIANT "legacy"
+      } elseif {[regexp "Open On-Chip Debugger 0.11.0" $expect_out(buffer)]} {
+        set OPENOCD_VARIANT "latest"
+      } elseif {[regexp "Open On-Chip Debugger 0.12.0" $expect_out(buffer)]} {
+        set OPENOCD_VARIANT "bleeding_edge"
+      }
+      verbose "reported OpenOCD version: $expect_out(buffer)" 2
+    }
+    eof {
+      error "could not identify openocd variant (unexpected EOF)"
+    }
+    timeout {
+      perror "could not identify openocd variant (unexpected TIMEOUT)"
+    }
+  }
+  # clean up resources from the version invocation
+  close
+  wait -nowait
+
+  return $OPENOCD_VARIANT
+}
+
+proc tsuplib_wait_for_file { filename max_retries wait_interval } {
+  for {set retries_count 0} {![file exists $filename]} {incr retries_count} {
+    verbose "waiting for the $filename to materialize... attempt #$retries_count" 2
+
+    if {$retries_count > $max_retries} {
+      error "failed to wait for $filename"
+    }
+
+    sleep $wait_interval
+  }
+  verbose "$filename detected" 1
+}
+
+proc tsuplib_wait_for_acknowledge { tcl_log primary_pattern max_retry_count wait_interval } {
+  set ack_detected 0
+  for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
+    set listen_pattern "Listening on\\|error"
+    spawn grep -i $listen_pattern $tcl_log
+    expect {
+      -re "LIBUSB_ERROR_BUSY" {
+        close
+        wait -nowait
+        error "LIBUSB_ERROR_BUSY encountered while waiting for ($primary_pattern)"
+      }
+      -re "EXAMINATION FAILURE\n" {
+        close
+        wait -nowait
+        error "target examination failed unexpectedly"
+      }
+      -re "Timed out after" {
+        close
+        wait -nowait
+        error "target examination (?) resulted in timeout"
+      }
+      -re "$primary_pattern" {
+        verbose "ack_detected! ($primary_pattern)" 1
+        set ack_detected 1
+      }
+      eof {
+        verbose "EOF while waiting for ($primary_pattern), attempt #$it_count" 3
+        wait -nowait
+        sleep $wait_interval
+        continue
+      }
+      timeout  {
+        verbose "could not scan log while waiting for ($primary_pattern), attempt #$it_count" 3
+      }
+    }
+    close
+    wait -nowait
+
+    if { $ack_detected } {
+      return
+    }
+  }
+  error "could not get initial ack while waiting for $primary_pattern (it num: $it_count)"
+}
+
+proc tsuplib_internal_error { msg } {
+  ocd_disconnect
+  error $msg
+}
+
+proc tsuplib_internal_tclrpc_send_command {msg {mode "catch"} } {
+
+  if {![tool_state_has client_spawn_id]} {
+    tsuplib_internal_error "trying to send <$msg> without tclrpc connection"
+  }
+
+  set ocd_client_type [tool_state_get client_type]
+  if {![string match $ocd_client_type "tclrpc"]} {
+    tsuplib_internal_error "expecting tclrpc client type, detected: <$ocd_client_type>"
+  }
+
+  # NOTE: currently, catch_and_capture is only for debugging purposes
+  if { $mode == "catch_and_capture" } {
+    verbose ">>>> capture { set code \[catch { $msg } opr\] }"  2
+    send "set log \[capture { set code \[catch { $msg } opr\] } \] ; set opr \"\$code:\$log\$opr\"\x1a"
+  } elseif { $mode == "catch" } {
+    verbose ">>>> catch { $msg } opr" 2
+    send "set code \[catch { $msg } opr\] ; set opr \$code:\$opr\x1a"
+  } elseif { $mode == "capture" } {
+    verbose ">>>> capture { $msg }" 2
+    send "capture { $msg }\x1a"
+  } else {
+    tsuplib_internal_error "unsupported communication mode <$mode>"
+  }
+}
+
+proc tsuplib_tclrpc_run_command {msg} {
+  tsuplib_internal_tclrpc_send_command $msg
+  expect {
+    \x1a {
+      return $expect_out(buffer)
+    }
+    eof {
+      tsuplib_internal_error "tclrpc: unexpected EOF while waiting results of <$msg>"
+    }
+    timeout {
+      tsuplib_internal_error "tclrpc: unexpected timeout while waiting results of <$msg>"
+    }
+  }
+}
+
+proc tsuplib_disconnect_client { } {
+  if {![tool_state_has client_spawn_id]} {
+    return
+  }
+  set ocd_client_spawn_id [tool_state_steal client_spawn_id]
+
+  verbose "Closing connection to OpenOCD client" 1
+  close -i $ocd_client_spawn_id
+  verbose "client connection closed, reaping the process" 1
+
+  wait -nowait -i $ocd_client_spawn_id
+  verbose "client connection is dead, farewell!" 1
+}

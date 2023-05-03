@@ -1,7 +1,4 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
   ocd_connect
 
   ocdtlb_run_expect "reset halt"

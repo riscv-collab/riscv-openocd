@@ -1,17 +1,15 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "wp_test.S" "$default_bin_prefix.exe"
 
   # created by compile executable
-  set ENTRY_ADDR $program_info(_entry)
-  set END_ADDR $program_info(end)
-  set STORE_TO_ADDR $program_info(store_to)
-  set LOAD_FROM_ADDR $program_info(load_from)
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set END_ADDR [tool_state_get_program_symbol end]
+  set STORE_TO_ADDR [tool_state_get_program_symbol store_to]
+  set LOAD_FROM_ADDR [tool_state_get_program_symbol load_from]
 
-  set STORE_INSTR $program_info(store_instr)
-  set LOAD_INSTR $program_info(load_instr)
+  set STORE_INSTR [tool_state_get_program_symbol store_instr]
+  set LOAD_INSTR [tool_state_get_program_symbol load_instr]
 
   ocd_connect
 

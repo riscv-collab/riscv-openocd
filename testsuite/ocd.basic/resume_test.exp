@@ -12,17 +12,15 @@ proc check_all_states {states expected_state i_from i_to} {
 }
 
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
   set NUM_CORES [target_info cpu,cores_num]
   set IS_SMP [target_info openocd,smp_target]
 
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
 
   # created by compile executable
-  set ENTRY_ADDR $program_info(_entry)
-  set LOOP_ADDR $program_info(loop)
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set LOOP_ADDR [tool_state_get_program_symbol loop]
 
   ocd_connect
 

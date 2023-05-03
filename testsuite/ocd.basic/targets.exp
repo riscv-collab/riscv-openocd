@@ -1,7 +1,4 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
   ocd_connect
 
   set targets_num [ocdtlb_rsp_get [ocdtlb_run_expect "targets"] targets_num]

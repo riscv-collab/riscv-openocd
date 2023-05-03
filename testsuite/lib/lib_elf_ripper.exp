@@ -1,5 +1,4 @@
 proc describe_program { elf_filename } {
-  global program_info
   verbose "riscv64-unknown-elf-readelf -s $elf_filename" 1
   if {[catch {spawn riscv64-unknown-elf-readelf -s "$elf_filename"} result]} {
     error $result
@@ -14,10 +13,6 @@ proc describe_program { elf_filename } {
   # TODO: test error-handling
   wait
 
-  if {[info exists program_info]} {
-    array unset program_info
-  }
-
   verbose "symtab:\n$symtab" 2
   foreach line [split $symtab "\n"] {
     if { ![regexp "^\[ \]*\[0-9\]+: +\(\[0-9a-fA-F\]+\).* +GLOBAL +DEFAULT +1 +\(\[^ \r]+\)" $line \
@@ -27,7 +22,7 @@ proc describe_program { elf_filename } {
     if {$trimmed_addr eq ""} {
       set trimmed_addr 0
     }
-    set program_info($global_lbl) "0x$trimmed_addr"
+    tool_state_compiled_program_update_symtab $global_lbl "0x$trimmed_addr"
   }
 }
 

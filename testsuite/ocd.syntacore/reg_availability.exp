@@ -18,9 +18,6 @@ proc check_reg_availability {reg_name tgt_reg_list check_type} {
 }
 
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
   ocd_connect
 
   # some basic sanity test

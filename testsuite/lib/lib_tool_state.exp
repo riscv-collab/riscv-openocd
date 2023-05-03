@@ -1,0 +1,74 @@
+proc tool_state_update { property value } {
+  global TOOL_STATE
+
+  if {[tool_state_has $property]} {
+    if {[string match $property "openocd_spawn_id"]} {
+      if {![string match $value "ignore_me"]} {
+        error "FATAL: $property may be changed only to *ignore_me*"
+      } else {
+        verbose "TOOL_STATE $property is set to *ignore_me*" 2
+      }
+    } else {
+      error "FATAL: $property is expected to be set only once"
+    }
+  }
+
+  switch $property {
+    openocd_spawn_id -
+    client_spawn_id -
+    client_type -
+    openocd_variant -
+    openocd_tclrpc_port -
+    openocd_gdb_port -
+    default_bin_prefix -
+    test_name {
+      set TOOL_STATE($property) $value
+    }
+    default {
+      error "FATAL: unsupported TOOL_STATE property $property specified (value: $value)"
+    }
+  }
+}
+
+proc tool_ensure_pristine_state {} {
+  global TOOL_STATE
+  if {[info exists TOOL_STATE]} {
+    parray TOOL_STATE
+    tsuplib_internal_error "FATAL: tool state is not pristine!"
+    exit 1
+  }
+}
+
+proc tool_state_has { property } {
+  global TOOL_STATE
+  return [info exists TOOL_STATE($property)]
+}
+
+proc tool_state_get { property } {
+  global TOOL_STATE
+  return $TOOL_STATE($property)
+}
+
+proc tool_state_steal { property } {
+  global TOOL_STATE
+  set resource $TOOL_STATE($property)
+  verbose "$property got stolen from TOOL_STATE" 2
+  unset TOOL_STATE($property)
+  return $resource
+}
+
+proc tool_state_clear {} {
+  global TOOL_STATE
+  unset TOOL_STATE
+}
+
+proc tool_state_compiled_program_update_symtab { symbol value} {
+  global TOOL_STATE
+  set TOOL_STATE(program_symtab,$symbol) $value
+}
+
+proc tool_state_get_program_symbol { symbol } {
+  global TOOL_STATE
+  return $TOOL_STATE(program_symtab,$symbol)
+}
+

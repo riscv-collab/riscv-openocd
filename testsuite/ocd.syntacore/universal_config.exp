@@ -1,7 +1,4 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
   ocd_connect
   # disconnect and kill the default openocd
   ocd_manual_finish
@@ -11,7 +8,8 @@ proc run_test {} {
     global OPENOCD_ROOT
     global srcdir
     global subdir
-    global default_bin_prefix
+
+    set default_bin_prefix [tool_state_get default_bin_prefix]
     # TODO: env is unused for now
     set openocd_adapter_flags [target_info openocd,interface_flags]
 

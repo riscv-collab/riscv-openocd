@@ -1,10 +1,9 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
   global FPR
 
   set target_no_fp [expr [target_info cpu,has_floats] == 0]
 
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "fp_access_when_disabled.S" "$default_bin_prefix.exe"
 
   ocd_connect

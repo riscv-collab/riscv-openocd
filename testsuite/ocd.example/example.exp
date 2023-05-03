@@ -1,7 +1,5 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   # This is an example that can be used as a template for new tests and serves
   # as a quick introduction to the framework. Please consult README.md for a
   # general overview of dejagnu framework.
@@ -13,14 +11,11 @@ proc run_test {} {
   # is that this prefix is used for any temporary files required by test.
   ocd_compile_executable "example.S" "$default_bin_prefix.exe"
 
-  # Once `ocd_compile_executable` is called - a special global variable is
-  # created that contains addresses of all the global symbols in the resulting
-  # image. The variable is called `program_info`.
-  # `program_info` is of an array type. Please, consult TCL user manual to figure
-  # out how to copy an array if you need a copy (like in cases when you need to
-  # compile several files).
-  set ENTRY_ADDR $program_info(_entry)
-  set END_ADDR $program_info(end)
+  # Once `ocd_compile_executable` is called global symbols from the resulting
+  # executable are read into TOOL_STATE object. Symbols can be extracted
+  # via tool_state_get_program_symbol function
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set END_ADDR [tool_state_get_program_symbol end]
 
   # connects to TCL-RPC server
   ocd_connect

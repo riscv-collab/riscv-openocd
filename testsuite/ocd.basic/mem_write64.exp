@@ -1,15 +1,13 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
   set xlen64 [expr [target_info cpu,xlen] == 64]
   if {!$xlen64} {
     return [ocd_test_unsupported]
   }
 
+  set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
   # created by compile executable
-  set MEM_ADDR $program_info(work_area_start)
+  set MEM_ADDR [tool_state_get_program_symbol work_area_start]
 
   ocd_connect
 

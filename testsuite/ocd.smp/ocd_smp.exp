@@ -1,18 +1,15 @@
 proc run_test {} {
-  global default_bin_prefix
-  global program_info
-
   # This test targets gdb interaction with SMP targets
-
   set NUM_CORES [target_info cpu,cores_num]
+  set default_bin_prefix [tool_state_get default_bin_prefix]
 
   ocd_compile_executable "smp.S" "$default_bin_prefix.exe" [list -DNCORES=$NUM_CORES]
 
   # created by compile executable
-  set ENTRY_ADDR $program_info(_entry)
-  set END_ADDRESS $program_info(master_loop)
-  set END_SLAVE $program_info(slave_loop)
-  set RENDEZVOUS_ADDRESS $program_info(rendezvous_point)
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set END_ADDRESS [tool_state_get_program_symbol master_loop]
+  set END_SLAVE [tool_state_get_program_symbol slave_loop]
+  set RENDEZVOUS_ADDRESS [tool_state_get_program_symbol rendezvous_point]
 
   ocd_connect
 
