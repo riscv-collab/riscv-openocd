@@ -1,0 +1,8 @@
+proc run_test {} {
+  jtag_connect
+  return [ocd_test_pass]
+}
+
+return [run_test]
+
+

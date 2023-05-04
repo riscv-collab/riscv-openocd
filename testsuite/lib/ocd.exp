@@ -1,138 +1,40 @@
 load_lib "lib_elf_ripper.exp"
-load_lib "lib_abi_compat.exp"
 load_lib "lib_response.exp"
 load_lib "lib_test.exp"
 load_lib "lib_tool_support.exp"
 load_lib "lib_tool_state.exp"
 
-proc ocd_scaled_timeout_value { per_core_timeout } {
-  set cores_num [target_info cpu,cores_num]
-  return [expr { $cores_num * $per_core_timeout} ]
-}
-
-proc ocd_resume_timeout {} {
-  return [ocd_scaled_timeout_value [target_info env,resume_timeout]]
-}
-
-proc ocd_exec_timeout {} {
-  return [ocd_scaled_timeout_value [target_info env,exec_timeout]]
-}
-
-proc ocd_internal_check_tclrpc_at_port { tcl_log port max_retry_count wait_interval } {
-  set ack_message "Listening on port $port for tcl connections"
-  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
-}
-
-proc ocd_internal_check_gdb_server_at_port { tcl_log port max_retry_count wait_interval } {
-  set ack_message "Listening on port $port for gdb connections"
-  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
-}
-
-proc ocd_internal_wait_for_initialization { ocd_log_name TCL_PORT GDB_PORT } {
-
-  set max_retries 150
-  set wait_time 0.1
-
-  if {[catch {tsuplib_wait_for_file $ocd_log_name $max_retries $wait_time} \
-      ERROR_INFO]} {
-    error "log-poll error: $ERROR_INFO"
-  }
-
-  if {[catch {ocd_internal_check_tclrpc_at_port \
-              $ocd_log_name $TCL_PORT $max_retries $wait_time} \
-      ERROR_INFO]} {
-    # NOTE: log printing can be VERY expensive
-    # puts [exec cat $ocd_log_name]
-    error "OpenOCD/TclServer: $ERROR_INFO"
-  }
-
-  if {[catch {ocd_internal_check_gdb_server_at_port \
-              $ocd_log_name $GDB_PORT $max_retries $wait_time} \
-    ERROR_INFO]} {
-    # NOTE: log printing can be VERY expensive
-    # puts [exec cat $ocd_log_name]
-    error "OpenOCD/GdbServer: $ERROR_INFO"
-  }
-
-  verbose "openocd is up and running" 1
-}
-
 proc ocd_init {test_file_name} {
+
+  global OCD_PORT_TCLRPC
+  global OCD_PORT_GDBSRV
+
   global ENABLE_EXP_INTERNAL
   global timeout
 
   exp_internal $ENABLE_EXP_INTERNAL
   match_max -d 1000000
+  set timeout [target_info env,preferred_timeout]
+
   # puts [target_info name]
   # puts [board_info target name]
   # puts [board_info target sim,options]
   # puts [target_info sim,options]
   verbose "/// ocd_init \\\\\\" 1
 
-  global OPENOCD
-  global OPENOCD_LOG_LEVEL
-  global OCD_PORT_TCLRPC
-  global OCD_PORT_GDBSRV
+  tsuplib_launch_openocd ocd \
+                         $test_file_name \
+                         [target_info openocd,interface_flags] \
+                         [target_info openocd,ocd_tool_target_flags]
 
-  tool_ensure_pristine_state
-
-  set preferred_timeout [target_info env,preferred_timeout]
-  set timeout $preferred_timeout
-
-  tsuplib_target_info_check
-
-  if {[catch { tsuplib_determine_openocd_version } openocd_variant]} {
-    perror $openocd_variant
-    return
-  }
-
-  verbose "selected OpenOCD variant: $openocd_variant" 1
-
-  if {[string equal $openocd_variant "latest"]} {
-    if {[target_info openocd,abi_regnames] == 0} {
-      build_forward_compat
-    } else {
-      build_backward_compat
-    }
-  } elseif {[string equal $openocd_variant "legacy"]} {
-    build_backward_compat
-  } else {
-    perror "unexpected OpenOCD version $openocd_variant"
-    return
-  }
-
-  set ocd_test_name [file rootname [file tail $test_file_name]]
-  tool_state_update test_name $ocd_test_name
-
-  # format is ${board_name}_${test_name}
-  set default_bin_prefix "[target_info name]_${ocd_test_name}"
-  tool_state_update default_bin_prefix $default_bin_prefix
-
-  set ocd_test_log "[target_info name]_${ocd_test_name}.log"
-
-  if {[catch {exec rm ${ocd_test_log}} result]} {
-    verbose "ignore this: $result" 2
-  } else {
-    verbose "${ocd_test_log} removed" 1
-  }
-
-  set openocd_args [concat \
-    "-d$OPENOCD_LOG_LEVEL" \
-    -l \
-    "$ocd_test_log" \
-    [target_info openocd,interface_flags] \
-    [target_info openocd,target_flags] \
-  ]
-
-  verbose "spawning openocd: $OPENOCD $openocd_args" 1
-  spawn $OPENOCD {*}$openocd_args
-
-  if {[catch {ocd_internal_wait_for_initialization $ocd_test_log \
-                                                   $OCD_PORT_TCLRPC \
-                                                   $OCD_PORT_GDBSRV} \
+  if {[catch { \
+        tsuplib_wait_for_openocd_initialization [tool_state_get openocd_log] \
+                                                 $OCD_PORT_TCLRPC \
+                                                 $OCD_PORT_GDBSRV} \
       ERR_INFO]} {
     perror "$ERR_INFO"
     puts "looks like OpenOCD does not respond. Sending kill signal"
+    set spawn_id [tool_state_steal openocd_spawn_id]
     exec kill -s SIGKILL [exp_pid -i $spawn_id ]
     close
     wait -nowait
@@ -142,56 +44,26 @@ proc ocd_init {test_file_name} {
 
   tool_state_update openocd_tclrpc_port $OCD_PORT_TCLRPC
   tool_state_update openocd_gdb_port $OCD_PORT_GDBSRV
-  tool_state_update openocd_spawn_id $spawn_id
 
-  sleep [ocd_exec_timeout]
   verbose "\\\\\\ ocd_init ///\n   _______" 1
   return
 }
 
 proc ocd_finish { { cleanup_type "immediate" } } {
-  tsuplib_disconnect_client
   verbose "/// ocd_finish \\\\\\" 1
 
-  if {![tool_state_has openocd_spawn_id]} {
-    perror "unexpected tool_finish (no openocd session is active)"
-    return
-  }
+  tsuplib_disconnect_client
+  tsuplib_shutdown_openocd $cleanup_type
 
-  set openocd_instance_spawn_id [tool_state_get openocd_spawn_id]
-  if {$openocd_instance_spawn_id eq "ignore_me"} {
-    tool_state_clear
-    verbose "\\\\\\ ocd_finish (ignored) ///\n   _______" 1
-    return
-  }
-
-  # TODO: implement proper shutdown
-  # TODO2: in theory we could just call `close`, the spawned process is
-  # expected (?) to get SIGHUP, however there is no guarantee that OpenOCD
-  # server won't hang. This needs to be tested.
-  verbose "about to kill openocd instance" 2
-  exec kill -s SIGINT [exp_pid -i $openocd_instance_spawn_id ]
-  # wait a little bit to allow for a clean termination
-  sleep [ocd_exec_timeout]
-  exec kill -s SIGKILL [exp_pid -i $openocd_instance_spawn_id ]
-
-  verbose "kill sent. closing connection to OpenOCD instance" 2
-  close -i $openocd_instance_spawn_id
-  verbose "kill sent. reaping (wait) the process..." 2
-  wait -nowait -i $openocd_instance_spawn_id
-
-  verbose "wait done. openocd process is reaped" 2
-
-  if {[string match $cleanup_type "immediate"]} {
-    tool_state_clear
-  } else {
-    tool_state_update openocd_spawn_id ignore_me
-  }
   verbose "\\\\\\ ocd_finish ///\n   _______" 1
 }
 
 proc ocd_manual_finish {} {
   ocd_finish deferred
+}
+
+proc ocd_connect {} {
+  tsuplib_tclrcp_connect
 }
 
 proc gdb_get_prompt_pattern {} {
@@ -259,56 +131,3 @@ proc ocd_gdb_connect {} {
   gdb_run_command "set style enabled off"
   gdb_run_command "target remote :[tool_state_get openocd_gdb_port]"
 }
-
-proc ocd_connect {} {
-  # TODO: remove this global
-  global spawn_id
-
-  if {![tool_state_has openocd_spawn_id]} {
-    tsuplib_internal_error "OpenOCD: no active OpenOCD instance is found (ocd_connect)"
-  }
-  if {[tool_state_has client_spawn_id]} {
-    tsuplib_internal_error "OpenOCD: multiple connections to OpenOCD instance is not supported (ocd_connect)"
-  }
-
-  #set stty_init "-echo -isig -icanon"
-  # we use raw to avoid translation of \x1a to ^D
-  # -echo just disables echoing of sent symbols
-  set stty_init "raw -echo"
-  spawn nc localhost [tool_state_get openocd_tclrpc_port]
-  tool_state_update client_spawn_id $spawn_id
-  tool_state_update client_type tclrpc
-  unset stty_init
-
-
-  tsuplib_internal_tclrpc_send_command "echo \"Hi there!\"" capture
-  expect {
-    "Hi there!\n\x1a" {
-      verbose "OpenOCD: connection established, all is good" 1
-    }
-    eof {
-      tool_state_steal client_spawn_id
-      wait -nowait
-      tsuplib_internal_error "OpenOCD: unexpected EOF while expecting acknowledge"
-    }
-    timeout {
-      tsuplib_internal_error "OpenOCD: could not recieve acknowledge"
-    }
-  }
-
-  tsuplib_internal_tclrpc_send_command "targets" capture
-  expect {
-    \x1a {
-      verbose "OpenOCD: targets list received" 1
-    }
-    eof {
-      tsuplib_internal_error "OpenOCD: could not recieve targets list from OpenOCD"
-    }
-    timeout {
-      tsuplib_internal_error "OpenOCD: unexpected timeout while waiting for initial targets listing"
-    }
-  }
-
-  return
-}
-

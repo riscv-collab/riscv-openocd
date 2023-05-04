@@ -17,4 +17,4 @@ set target_flags [list \
 ]
 lappend target_flags {*}[target_ocd_flags_for_spike spike_default.cfg]
 
-set_board_info openocd,target_flags $target_flags
+set_board_info openocd,ocd_tool_target_flags $target_flags

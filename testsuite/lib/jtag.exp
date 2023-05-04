@@ -1,0 +1,55 @@
+load_lib "lib_elf_ripper.exp"
+load_lib "lib_abi_compat.exp"
+load_lib "lib_response.exp"
+load_lib "lib_test.exp"
+load_lib "lib_tool_support.exp"
+load_lib "lib_tool_state.exp"
+
+proc jtag_init {test_file_name} {
+  global OCD_PORT_TCLRPC
+  global ENABLE_EXP_INTERNAL
+  global timeout
+
+  exp_internal $ENABLE_EXP_INTERNAL
+  match_max -d 1000000
+  set timeout [target_info env,preferred_timeout]
+  verbose "/// ocd_jtag_init \\\\\\" 1
+
+  tsuplib_launch_openocd jtag \
+                         $test_file_name \
+                         [target_info openocd,interface_flags] \
+                         [target_info openocd,jtag_tool_tap_definition_flags]
+
+  if {[catch { \
+        tsuplib_wait_for_openocd_initialization [tool_state_get openocd_log] \
+                                                 $OCD_PORT_TCLRPC \
+                                                 none} \
+      ERR_INFO]} {
+    perror "$ERR_INFO"
+    puts "looks like OpenOCD does not respond. Sending kill signal"
+    set spawn_id [tool_state_steal openocd_spawn_id]
+    exec kill -s SIGKILL [exp_pid -i $spawn_id ]
+    close
+    wait -nowait
+    verbose "\\\\\\ ocd_jtag_init (FAILED) ///\n   _______" 1
+    return
+  }
+
+  tool_state_update openocd_tclrpc_port $OCD_PORT_TCLRPC
+
+  verbose "\\\\\\ ocd_jtag_init ///\n   _______" 1
+}
+
+proc jtag_finish {{ cleanup_type "immediate" }} {
+  verbose "/// ocd_jtag_finish \\\\\\" 1
+
+  tsuplib_disconnect_client
+  tsuplib_shutdown_openocd $cleanup_type
+
+  verbose "\\\\\\ ocd_jtag_finish ///\n   _______" 1
+}
+
+proc jtag_connect {} {
+  tsuplib_tclrcp_connect
+}
+

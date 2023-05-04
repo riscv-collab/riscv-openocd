@@ -15,6 +15,7 @@ proc tool_state_update { property value } {
 
   switch $property {
     openocd_spawn_id -
+    openocd_log -
     client_spawn_id -
     client_type -
     openocd_variant -
