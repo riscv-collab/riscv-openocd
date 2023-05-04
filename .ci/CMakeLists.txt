@@ -61,7 +61,7 @@ ExternalProject_Add(openocd
   # location. This is an overkill. So we choose to link dynamically with
   # whatever library we have in the build environment.
   env
-    PKG_CONFIG_PATH=${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig
+    PKG_CONFIG_PATH=${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig:${DEPENDENCIES_INSTALL_PATH}/lib64/pkgconfig
     CC=${CMAKE_C_COMPILER}
       ${OPENOCD_SOURCES}/configure
         --prefix=${OPENOCD_INSTALL_PATH}
