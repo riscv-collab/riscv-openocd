@@ -1,0 +1,28 @@
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.mypy]
+strict = "True"
+implicit_reexport = "True"
+
+[tool.pylint]
+max-line-length = 120
+disable = [
+  "empty-docstring",
+  "fixme",
+  "logging-fstring-interpolation",
+  "logging-not-lazy",
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "missing-module-docstring",
+  "too-few-public-methods",
+  "too-many-arguments",
+  "too-many-branches",
+  "too-many-instance-attributes",
+  "too-many-locals",
+  "too-many-statements",
+]

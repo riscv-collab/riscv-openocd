@@ -1,0 +1,8 @@
+{
+    "version": "0.5",
+    "requires": [
+        "riscv-gcc/0.1.0-rc.0.2@sc/main#0bdcd6f3e84969d071412cdb77229f146fe36a8b%1683200607.634"
+    ],
+    "build_requires": [],
+    "python_requires": []
+}

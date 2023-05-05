@@ -1,0 +1,4 @@
+set OPENOCD_ROOT  @OPENOCD_INSTALL_PATH@
+set SPIKE_SIM     @RISCVSpike_DIR@/bin/spike
+set GDB_BIN       @RISCVGDB_DIR@/bin/riscv64-unknown-elf-gdb
+set CC_FOR_TARGET @RISCVGCC_DIR@/bin/riscv64-unknown-elf-gcc
