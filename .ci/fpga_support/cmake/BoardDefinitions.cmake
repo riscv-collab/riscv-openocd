@@ -168,24 +168,28 @@ registerFPGAConfiguration(arty100_scr1_32
   BITSTREAM_FROM_NAS
   BITSTREAM "scr1_#18494.rar"
   OPENOCD_BOARD arty100_scr1_32
+  ARTY_STAND_TOOL
   ZALMAN_NIGHTLY
 )
 registerFPGAConfiguration(arty100_scr3_32
   BITSTREAM_FROM_NAS
   BITSTREAM rv32_single_scr3_tcm_ipic_hiperf.rar
   OPENOCD_BOARD arty100_scr3_32
+  ARTY_STAND_TOOL
   ZALMAN_NIGHTLY
 )
 registerFPGAConfiguration(arty100_scr4_32_imcaf
   BITSTREAM_FROM_NAS
   BITSTREAM rv32_single_scr4_tcm_l1_ipic_hiperf_256MB_wo_D.tar.gz
   OPENOCD_BOARD arty100_scr4_32_imcaf
+  ARTY_STAND_TOOL
   ZALMAN_NIGHTLY
 )
 registerFPGAConfiguration(arty100_scr4_32_imcafd
   BITSTREAM_FROM_NAS
   BITSTREAM rv32_single_scr4_tcm_l1_ipic_hiperf_256MB.tar.gz
   OPENOCD_BOARD arty100_scr4_32_imcafd
+  ARTY_STAND_TOOL
   ZALMAN_NIGHTLY
 )
 
