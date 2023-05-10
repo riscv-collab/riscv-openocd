@@ -249,13 +249,13 @@ addSCR7L2Config(scr7_rls_ww04.1.0
   /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW04.1.0/scr7_rls_ww04.1.0.bit
 )
 addSCR7L2Config(scr7_rls_ww05.4.0
-  /home/stand/users/aap-sc/bitstreams/scr7wr_23ww05.4.0/scr7wr_23ww05.4.0_dual_65mhz.bit
+  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
 )
 addSCR7L2Config(scr7_rls_ww08.1.0
-  /home/stand/users/aap-sc/bitstreams/scr7wr_23ww08.1.0/scr7wr_23ww08.1.0_dual_65mhz.bit
+  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
 )
 addSCR7L2Config(scr7_rls_ww08.2.1
-  /home/stand/users/aap-sc/bitstreams/scr7wr_23ww08.2.1/scr7wr_23ww08.2.1_dual_65mhz.bit
+  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
   TWIN_NIGHTLY
 )
 
