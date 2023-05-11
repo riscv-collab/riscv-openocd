@@ -63,30 +63,29 @@ pipeline {
         dir ("$WD") {
           sh 'make fpga_configuration_registry -f ${WD}/.ci/makefile'
           script {
+            platform_list = "NO_PLATFROM_LIST_SELECTED"
             switch(params.AGENT) {
             case 'twin_server':
               env.fpga_lock = 'lock-fpga-on-twin'
-              platforms = readFile("build/host_tools/TWIN_NIGHTLY_CONFIGURATIONS.list")
-
               if (params.containsKey('use_unstable_platforms')) {
-                platforms = readFile("build/host_tools/TWIN_UNSTABLE_CONFIGURATIONS.list")
+                platform_list = 'build/host_tools/TWIN_UNSTABLE_CONFIGURATIONS.list'
+              } else if (params.containsKey('scr9_validation')) {
+                platform_list = 'build/host_tools/TWIN_SCR9_CONFIGURATIONS.list'
+              } else {
+                platform_list = 'build/host_tools/TWIN_NIGHTLY_CONFIGURATIONS.list'
               }
-
-              if (params.containsKey('scr9_validation')) {
-                platforms = readFile("build/host_tools/TWIN_SCR9_CONFIGURATIONS.list")
-              }
-
               break
             case 'zalman':
-              platforms = readFile("build/host_tools/ZALMAN_NIGHTLY_CONFIGURATIONS.list")
               env.fpga_lock = 'lock-fpga-on-zalman'
+              platform_list = 'build/host_tools/ZALMAN_NIGHTLY_CONFIGURATIONS.list'
               break
             default:
               currentBuild.result = 'ABORTED'
               error "What the hell I'm doing here? I don't belong to ${params.AGENT}"
               break
             }
-            echo "configurations:"
+            echo "selected platform list: ${platform_list}"
+            platforms = readFile("${platform_list}")
             echo "${platforms}"
             boards = platforms.tokenize("\n")
           }
