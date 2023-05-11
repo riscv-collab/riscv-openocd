@@ -210,25 +210,68 @@ registerFPGAConfiguration(twin_scr6
   TWIN_NIGHTLY
 )
 
+# SCR7 testing
+
+addSCR7L2Config(scr7_rls_ww08.2.1
+  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
+  TWIN_NIGHTLY
+)
+
+addSCR7L2Config(scr7_rls_ww15.3.0
+  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW15.3.0/SCR7WR_23WW15.3.0.bit
+  TWIN_NIGHTLY
+)
+
+addSCR7L2Config(scr7_dev
+  scr7_dev
+)
+
+# SCR9 testing
+
+addSCR9L2Config(scr9_23WW14.5.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr9_rls_23ww14.5.0/scr9_rls_23ww14.5.0.bit
+)
+
+addSCR9L2Config(scr9_23WW18.5.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr9_rls_23ww18.5.0/scr9_rls_23ww18.5.0.bit
+)
+
+addSCR9L2Config(scr9_dev
+  scr9_dev
+)
+
+
+# Legacy platforms (for historic interest)
+
+addSCR7L2Config(scr7_rls_ww04.1.0
+  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW04.1.0/scr7_rls_ww04.1.0.bit
+)
+addSCR7L2Config(scr7_rls_ww05.4.0
+  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
+)
+addSCR7L2Config(scr7_rls_ww08.1.0
+  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
+)
+
 registerFPGAConfiguration(twin_scr7evalcluster_pseudoscore_nortos
   BITSTREAM rv64_cluster_scr7_eval
   OPENOCD_BOARD twin_scr7_x_1core_nortos
-  TWIN_NIGHTLY
+  TWIN_UNSTABLE
 )
 registerFPGAConfiguration(twin_scr7evalcluster_mcore4_nortos
   BITSTREAM rv64_cluster_scr7_eval
   OPENOCD_BOARD twin_scr7_x_mcore4_nortos
-  TWIN_NIGHTLY
+  TWIN_UNSTABLE
 )
 registerFPGAConfiguration(twin_scr7evalcluster_smp4_workarea
   BITSTREAM rv64_cluster_scr7_eval
   OPENOCD_BOARD twin_scr7_x_smp4_workarea
-  TWIN_NIGHTLY
+  TWIN_UNSTABLE
 )
 registerFPGAConfiguration(twin_scr7evalcluster_smp4
   BITSTREAM rv64_cluster_scr7_eval
   OPENOCD_BOARD twin_scr7_x_smp4
-  TWIN_NIGHTLY
+  TWIN_UNSTABLE
 )
 
 registerFPGAConfiguration(twin_scr7bug21107_score_nortos
@@ -242,26 +285,3 @@ registerFPGAConfiguration(twin_scr7bug21107_score_rtoshw
   TWIN_UNSTABLE
 )
 
-addSCR7L2Config(scr7_dev
-  scr7_dev
-)
-addSCR7L2Config(scr7_rls_ww04.1.0
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW04.1.0/scr7_rls_ww04.1.0.bit
-)
-addSCR7L2Config(scr7_rls_ww05.4.0
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
-)
-addSCR7L2Config(scr7_rls_ww08.1.0
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
-)
-addSCR7L2Config(scr7_rls_ww08.2.1
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
-  TWIN_NIGHTLY
-)
-
-addSCR9L2Config(scr9_23WW14.5.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_rls_23ww14.5.0/scr9_rls_23ww14.5.0.bit
-)
-addSCR9L2Config(scr9_dev
-  scr9_dev
-)
