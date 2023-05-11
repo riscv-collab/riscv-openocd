@@ -33,16 +33,9 @@ proc run_test {} {
   verbose "pc_before: $pc_before_step, pc_after: $pc_after_step" 1
   verbose "link_reg: $link_reg, expected_reg: $EXPECTED_LINK" 1
 
-  if {[target_info openocd,bug20318_fixed] == 1} {
-  } else {
-    if {[lindex [split [target_info cpu,name] "_"] 0] eq "scr7"} {
-      setup_kfail openocd_EMBARGO/20318 "*-*-*"
-      set perror_threshold 2
-    }
-    if {[lindex [split [target_info cpu,name] "_"] 0] eq "scr6"} {
-      setup_kfail openocd_EMBARGO/20318 "*-*-*"
-      set perror_threshold 2
-    }
+  if {[lindex [split [target_info cpu,name] "_"] 0] eq "scr6"} {
+    setup_kfail openocd_EMBARGO/20318 "*-*-*"
+    set perror_threshold 2
   }
 
   if {![ocdtlb_compare_equal_hex $link_reg $EXPECTED_LINK]} {

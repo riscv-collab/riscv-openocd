@@ -46,14 +46,14 @@ proc run_test {} {
 
   gdb_run_command "b *$END_ADDRESS"
 
-  if {[target_info name] == "twin_scr7evalcluster_smp4_workarea"} {
+  # NOTE: if we have an SMP target and cpu is not SPIKE, this test
+  # is known to fail
+  if { ( [string first "_smp" [target_info name] ] != -1 ) && \
+       ( [string first "spike" [target_info cpu,name] ] == -1 ) } {
     setup_kfail openocd_EMBARGO/19207 "*-*-*"
     set perror_threshold 2
   }
-  if {[target_info name] == "twin_scr7evalcluster_smp4"} {
-    setup_kfail openocd_EMBARGO/19207 "*-*-*"
-    set perror_threshold 2
-  }
+
   # TODO: once bug is fixed we should remove the catch statement
   if {[catch {gdb_run_command "continue"} err]} {
     perror $err
