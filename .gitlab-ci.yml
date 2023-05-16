@@ -93,7 +93,7 @@ deploy:
         fi;
       fi
     - if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
-        ./make.py --image $IMAGE ci check;
+        ./make.py --image $IMAGE ci check --credentials $MAKEPY_CREDS;
       fi
     - ./make.py --image $IMAGE conan create --profile:host $PROFILE --user $CONAN_USER --channel $CONAN_CHANNEL .
     - ./make.py --image $IMAGE conan upload --remote syntacore --check "$PACKAGE_NAME"
