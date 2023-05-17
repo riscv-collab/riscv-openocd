@@ -1,4 +1,4 @@
-makepy @ git+ssh://git@gitlab.dev.syntacore.com/tools/makepy.git@8574f1c4525302e175a6fc0e912502bcf6adb645
+makepy @ git+ssh://git@gitlab.dev.syntacore.com/tools/makepy.git@2bc5b27366dac0730130cff00d524d739610abec
 black==23.3.0
 cmakelang==0.6.13
 conan==2.0.4
