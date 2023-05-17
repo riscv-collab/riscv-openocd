@@ -33,7 +33,7 @@ _repo_path = _Path(__file__).parent.parent
 
 class _BuildArgsHook(_ArgsHook):
     def amend_commands(self) -> list[str]:
-        return ["config", "build"]
+        return ["config", "build", "just-config"]
 
     def amend_parser(self, parser: _ArgumentParser) -> None:
         parser.add_argument(
@@ -46,6 +46,91 @@ class _BuildArgsHook(_ArgsHook):
 
     def hook(self, args: _Namespace) -> None:
         args.install_path = (args.build_path / "install").absolute()
+
+
+class _JustConfigCommand(_Command):
+    def name(self) -> str:
+        return "just-config"
+
+    def help(self) -> str:
+        return "Just config the project!"
+
+    def amend_parser(self, parser: _ArgumentParser) -> None:
+        conan_help = "See './make.py conan install --help'."
+        parser.add_argument("--build", type=str, default="never", help=conan_help)
+        parser.add_argument(
+            "-pr",
+            "--profile",
+            "-pr:h",
+            "--profile:host",
+            dest="host_profile",
+            type=str,
+            default="default",
+            help=conan_help,
+        )
+        parser.add_argument(
+            "-pr:b", "--profile:build", dest="build_profile", type=str, default="default", help=conan_help
+        )
+        parser.add_argument(
+            "-s",
+            "--settings",
+            "-s:h",
+            "--settings:host",
+            dest="host_settings",
+            type=str,
+            default=[],
+            action="append",
+            help=conan_help,
+        )
+        parser.add_argument(
+            "-s:b",
+            "--settings:build",
+            dest="build_settings",
+            type=str,
+            default=[],
+            action="append",
+            help=conan_help,
+        )
+
+    def _get_output_folder(self, build_path: _Path) -> _Path:
+        msg = (
+            "Conan will always generate files into build/(Debug|Release), "
+            "so your build path should be in the format <any_mangle>/build/(Debug|Release). "
+            "You can change this behavior in conanfile.py."
+        )
+        if build_path.name not in ["Debug", "Release"]:
+            raise ValueError(msg)
+        if build_path.parent.name != "build":
+            raise ValueError(msg)
+        return build_path.parent.parent
+
+    def command(self, args: _Namespace) -> None:
+        _shutil.rmtree(_repo_path / "external_sources", ignore_errors=True)
+        makepy = _repo_path / "make.py"
+        output_folder = self._get_output_folder(args.build_path)
+        install_cmd = [
+            "conan",
+            "install",
+            "--profile:host",
+            args.host_profile,
+            "--profile:build",
+            args.build_profile,
+            "--build",
+            args.build,
+            "--output-folder",
+            output_folder,
+        ]
+        install_cmd.extend(
+            _itertools.chain.from_iterable(["--settings:host", setting] for setting in args.host_settings)
+        )
+        install_cmd.extend(
+            _itertools.chain.from_iterable(["--settings:build", setting] for setting in args.build_settings)
+        )
+        install_cmd.append(_repo_path)
+
+        _run_shell(["conan", "source", _repo_path], cwd=_repo_path)
+        _run_shell(install_cmd, cwd=_repo_path)
+        _run_shell([makepy, "--no-history-dump", "config", "--build-path", args.build_path], cwd=_repo_path)
 
 
 class _ConfigCommand(_Command):
@@ -152,6 +237,7 @@ def _main() -> None:
         _ConanSuite(name="openocd", start_version="cd481a97e9ae604880b8239679bf83534e83b381", start_semver="0.11.0")
     )
 
+    conductor.add(_JustConfigCommand())
     conductor.add(_ConfigCommand())
     conductor.add(_BuildCommand())
     conductor.add(_FormatCommand())
