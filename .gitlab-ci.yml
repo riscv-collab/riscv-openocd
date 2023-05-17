@@ -44,9 +44,9 @@ default:
     - ./make.py --image $IMAGE container run --cache-mount-base .makepy/artifacts/cache --credentials "$MAKEPY_CREDS"
     # Install conan settings, profiles, remotes, toolchains and login to the registry.
     - ./make.py --image $IMAGE conan-config --credentials "$MAKEPY_CREDS"
-    - CONAN_USER=$(./make.py --image $IMAGE --logging-level error conan-info user)
-    - CONAN_CHANNEL=$(./make.py --image $IMAGE --logging-level error conan-info channel)
-    - PACKAGE_NAME=$(./make.py --image $IMAGE --logging-level error conan-info package)
+    - CONAN_USER=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info user)
+    - CONAN_CHANNEL=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info channel)
+    - PACKAGE_NAME=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info package)
     - BUILD_PATH=build/Release
   after_script:
     - echo "You can reproduce this pipeline with the following commands:"
