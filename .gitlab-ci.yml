@@ -93,7 +93,12 @@ deploy:
         fi;
       fi
     - if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
-        ./make.py --image $IMAGE ci check --credentials $MAKEPY_CREDS;
+        API_KEY=$(cat "$MAKEPY_CREDS" | jq -r ".artifactory.api_key");
+        if ! ./.ci/utils/check_nightly_status.sh $API_KEY; then
+          echo "could not find recods indicating that nightly passed";
+          echo "no artifacts for stable builds produced";
+          exit 1;
+        fi;
       fi
     - ./make.py --image $IMAGE conan create --profile:host $PROFILE --user $CONAN_USER --channel $CONAN_CHANNEL .
     - ./make.py --image $IMAGE conan upload --remote syntacore --check "$PACKAGE_NAME"

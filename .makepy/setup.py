@@ -23,7 +23,6 @@ from makepy import Conductor as _Conductor
 from makepy.generic import GenericSuite as _GenericSuite
 from makepy.generic import ParallelHook as _ParallelHook
 from makepy.syntacore import ConanSuite as _ConanSuite
-from makepy.syntacore import SyntacoreCredentialsHook as _SyntacoreCredentialsHook
 from makepy.syntacore import SyntacoreSuite as _SyntacoreSuite
 from makepy.utils import main as _main_decorator
 from makepy.utils import run_shell as _run_shell
@@ -90,44 +89,6 @@ class _BuildCommand(_Command):
         _run_shell(cmd)
 
 
-class _CICommand(_Command):
-    def name(self) -> str:
-        return "ci"
-
-    def help(self) -> str:
-        return "CI commands. Please do not abuse them and run from CI only."
-
-    def required_subparsers(self) -> bool:
-        return True
-
-
-class _CICheckCommand(_Command):
-    def name(self) -> str:
-        return "ci check"
-
-    def help(self) -> str:
-        return "Check CI status run on FPGA."
-
-    def amend_parser(self, parser: _ArgumentParser) -> None:
-        parser.add_argument(
-            "-v",
-            "--revision",
-            help="Specify revision.",
-            default="HEAD",
-        )
-
-    def command(self, args: _Namespace) -> None:
-        repo = _utils.detect_repo()  # be extremely careful here. Your build should not depend on git.
-        commit = str(repo.commit(args.revision))[:8]
-        jojo_stands = ["zalman", "twin_server"]
-        headers = {"X-JFrog-Art-Api": args.credentials["artifactory"]["api_key"]}
-        for stand in jojo_stands:
-            url = f"http://artifactory.dev.syntacore.com/artifactory/openocd_test_reports/{stand}_{commit}_success.txt"
-            response = _requests.get(url, headers=headers, timeout=60)
-            if not response.ok:
-                raise RuntimeError(f"Successful test report for {stand} is not found.")
-
-
 def _sources(kind: str | list[str], path: _Path = _repo_path) -> list[_Path]:
     if isinstance(kind, str):
         kind = [kind]
@@ -187,7 +148,6 @@ def _main() -> None:
     conductor = _Conductor()
     conductor.add(_GenericSuite())
     conductor.add(_SyntacoreSuite())
-    conductor.add(_SyntacoreCredentialsHook(commands=["ci check"]))
     conductor.add(
         _ConanSuite(name="openocd", start_version="cd481a97e9ae604880b8239679bf83534e83b381", start_semver="0.11.0")
     )
@@ -196,8 +156,6 @@ def _main() -> None:
     conductor.add(_BuildCommand())
     conductor.add(_FormatCommand())
     conductor.add(_LintCommand())
-    conductor.add(_CICommand())
-    conductor.add(_CICheckCommand())
 
     conductor.add(_BuildArgsHook())
     conductor.add(_ParallelHook(commands=["build"]))
