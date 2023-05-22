@@ -14,12 +14,12 @@ def runTests(boards){
               #!/bin/bash
               set +x
               echo "${board}"
-              ${SOURCE_DIR}/make.py sh \
+              ${MAKE_PY} sh \
                 make prepare_board \
                     -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile \
                     TARGET_BOARD=${board}
-              ${SOURCE_DIR}/make.py --image cpp_ubuntu_18 -l debug build \
-                    -b ${BUILD_DIR}/Release --target OpenOCDTestsOn_${board}
+              ${MAKE_PY} --image ${DOCKER_IMAGE} -l debug build \
+                    -b ${BUILD_DIR} --target OpenOCDTestsOn_${board}
               """
             }
          }
@@ -36,23 +36,29 @@ pipeline {
     timestamps()
   }
   environment {
+    BUILD_ID = "${BUILD_TAG}"
+    STAND_ID = "${params.AGENT}"
+
     WD = "${WORKSPACE}/${BUILD_TAG}"
-    SOURCE_DIR = "$WD/openocd_sources"
-    BUILD_DIR  = "$WD/build"
-    PYTHON_DIR = "$WD/python"
+    SOURCE_DIR = "${WD}/openocd_sources"
+    BUILD_CONFIG = "Release"
+    BUILD_MOUNT = "${WD}/build"
+    BUILD_DIR = "${BUILD_MOUNT}/${BUILD_CONFIG}"
+
+    MAKE_PY = "${SOURCE_DIR}/make.py"
+
+    PYTHON_DIR = "${WD}/python"
     PYTHON_INSTALL = "$PYTHON_DIR/install"
     PYTHON_BIN_DIR = "$PYTHON_INSTALL/bin"
     PATH = "$PYTHON_BIN_DIR:${env.PATH}"
+
     // in addition NAS_PSW and NAS_USR variables are defined
     NAS = credentials('GitlabJenkins')
     DOCKER = credentials('docker-images-nexus')
-    SUDO_PSW = "${NAS_PSW}"
-    // needed by docker CI scipts
-    DOCKER_CONTAINER_NAME = "OpenOCD_CI_CONTAINER"
+    DOCKER_IMAGE = "cpp_ubuntu_18"
 
+    SUDO_PSW = "${NAS_PSW}"
     ARTIFACTORY_API_KEY = credentials('OpenOCDTestReportKey')
-    BUILD_ID = "${BUILD_TAG}"
-    STAND_ID = "${params.AGENT}"
   }
   stages {
     stage('CleanWorkspaceAndCheckout') {
@@ -98,7 +104,7 @@ pipeline {
               cp "$MAKEPY_SSH" the_key
               cat "$MAKEPY_CREDS"  | ./jq ".gitlab.ssh_path = \\\"$WD/the_key\\\"" | tee credentials.json
               export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -i '$MAKEPY_SSH'"
-              ${SOURCE_DIR}/make.py pass
+              ${MAKE_PY} pass
               """
             }
             }
@@ -109,12 +115,12 @@ pipeline {
     stage('Build') {
       steps {
         echo "Building project"
-        dir ("$BUILD_DIR") {
-          sh '${SOURCE_DIR}/make.py container clean'
-          sh '${SOURCE_DIR}/make.py --image cpp_ubuntu_18 container run -p -m . --credentials ${WD}/credentials.json'
-          sh '${SOURCE_DIR}/make.py --image cpp_ubuntu_18 conan-config --credentials ${WD}/credentials.json'
-          sh '${SOURCE_DIR}/make.py --image cpp_ubuntu_18 just-config --profile:host default -b ${BUILD_DIR}/Release'
-          sh '${SOURCE_DIR}/make.py --image cpp_ubuntu_18 build -b ${BUILD_DIR}/Release --target openocd'
+        dir ("$BUILD_MOUNT") {
+          sh '${MAKE_PY} container clean'
+          sh '${MAKE_PY} --image $DOCKER_IMAGE container run -p -m . --credentials ${WD}/credentials.json'
+          sh '${MAKE_PY} --image $DOCKER_IMAGE conan-config --credentials ${WD}/credentials.json'
+          sh '${MAKE_PY} --image $DOCKER_IMAGE just-config -b ${BUILD_DIR} --profile:host default'
+          sh '${MAKE_PY} --image $DOCKER_IMAGE build -b ${BUILD_DIR} --target openocd'
         }
       }
     }
@@ -122,7 +128,7 @@ pipeline {
       steps {
         dir ("$WD") {
           // fpga_configuration_registry creates **fpga_info** directory
-          sh "${SOURCE_DIR}/make.py sh make fpga_configuration_registry -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile"
+          sh "${MAKE_PY} sh make fpga_configuration_registry -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile"
           script {
             platform_list = "NO_PLATFROM_LIST_SELECTED"
             switch(params.AGENT) {
@@ -166,8 +172,8 @@ pipeline {
   }
   post {
     always {
-      sh "${SOURCE_DIR}/make.py history"
-      sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/Release/testing ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
+      sh "${MAKE_PY} history"
+      sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/testing ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
     }
     success {
       sh "${SOURCE_DIR}/.ci/utils/report_test_success.sh ${UploadResults} ${STAND_ID} ${ARTIFACTORY_API_KEY}"
