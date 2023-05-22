@@ -8,6 +8,9 @@ set(OPENOCD_CONFIGURE_OPTIONS
     --enable-ftdi
     --enable-gw16012
     --enable-jlink
+    # cmake-format: off
+    --enable-internal-libjaylink #FIXME: See #29575
+    # cmake-format: on
     --enable-jtag_vpi
     --enable-opendous
     --enable-openjtag_ftdi
