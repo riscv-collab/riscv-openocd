@@ -5,9 +5,15 @@ set -o pipefail
 set -o nounset
 #set -o xtrace
 
-LOGS_PATH=$1
+SHOULD_UPLOAD=$1
 STAND_ID=$2
 API_KEY=$3
+
+if [[ $SHOULD_UPLOAD -ne 1 ]]
+then
+  echo "Looks like we should not upload results for this run"
+  exit 0
+fi
 
 REPO_PATH=$(realpath "$(dirname "$0")/../..")
 COMMIT=$(git --git-dir="$REPO_PATH/.git" --work-tree "$REPO_PATH" rev-parse --short=8 HEAD)

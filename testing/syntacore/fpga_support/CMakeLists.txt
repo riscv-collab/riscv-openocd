@@ -2,16 +2,15 @@ cmake_minimum_required(VERSION 3.16)
 
 project(FpgaSupport)
 
-set(SYNTACORE_NAS_SERVER $ENV{SYNTACORE_NAS_SERVER})
-set(ARTY_BITSTREAM_FTP_STORAGE ${SYNTACORE_NAS_SERVER}/pub/exchange/ot-sc/arty-a7-100t)
-
 # NOTE: well... it's better to specify this externally, but at the momement
 # I'm too lazy for that
-get_filename_component(OPENOCD_SRC_DIRECTORY ../../ ABSOLUTE)
+get_filename_component(OPENOCD_SRC_DIRECTORY ../../../ ABSOLUTE)
 cmake_path(APPEND OPENOCD_SRC_DIRECTORY testsuite
   OUTPUT_VARIABLE OPENOCD_TESTSUITE_DIRECTORY)
 include(cmake/BoardDefinitions.cmake)
 printAvailableFPGAConfigurations()
+
+set(ARTY_BITSTREAM_FTP_STORAGE ${SYNTACORE_NAS_SERVER}/pub/exchange/ot-sc/arty-a7-100t)
 
 add_custom_target(fpga_configuration_registry)
 function(generate_configuration_registry registry_name configs)

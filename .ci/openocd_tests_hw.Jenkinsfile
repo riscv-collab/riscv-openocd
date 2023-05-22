@@ -1,4 +1,5 @@
 def boards = []
+def UploadResults = 0
 
 def runTests(boards){
   tests = [:]
@@ -10,8 +11,8 @@ def runTests(boards){
          lock (resource: "${fpga_lock}") {
             dir ("$WD") {
               echo "${board}"
-              sh "make prepare_board -f ${WD}/.ci/makefile TARGET_BOARD=${board}"
-              sh "make in_docker -f ${WD}/.ci/makefile TARGET=test TARGET_BOARD=${board}"
+              sh "make prepare_board -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile TARGET_BOARD=${board}"
+              sh "${SOURCE_DIR}/make.py --image cpp_ubuntu_18 build -b ${BUILD_DIR}/Release --target OpenOCDTestsOn_${board}"
             }
          }
       }
@@ -28,12 +29,17 @@ pipeline {
   }
   environment {
     WD = "${WORKSPACE}/${BUILD_TAG}"
+    SOURCE_DIR = "$WD/openocd_sources"
+    BUILD_DIR  = "$WD/build"
+    PYTHON_DIR = "$WD/python"
+    PYTHON_INSTALL = "$PYTHON_DIR/install"
+    PYTHON_BIN_DIR = "$PYTHON_INSTALL/bin"
+    PATH = "$PYTHON_BIN_DIR:${env.PATH}"
     // in addition NAS_PSW and NAS_USR variables are defined
     NAS = credentials('GitlabJenkins')
     DOCKER = credentials('docker-images-nexus')
     SUDO_PSW = "${NAS_PSW}"
     // needed by docker CI scipts
-    COMMON_BUILD_DIR = "$WD/build"
     DOCKER_CONTAINER_NAME = "OpenOCD_CI_CONTAINER"
 
     ARTIFACTORY_API_KEY = credentials('OpenOCDTestReportKey')
@@ -43,41 +49,90 @@ pipeline {
   stages {
     stage('CleanWorkspaceAndCheckout') {
       steps {
-        sh "docker login -u ${DOCKER_USR} -p ${DOCKER_PSW} nexus.dev.syntacore.com:8091"
         cleanWs()
-        dir ("$WD") {
+        dir ("$SOURCE_DIR") {
           checkout scm
+        }
+      }
+    }
+    stage('DockerClean') {
+      steps {
+        sh "${SOURCE_DIR}/.ci/utils/docker_clean.sh"
+      }
+    }
+    stage('PythonBuild') {
+      steps {
+        dir("$PYTHON_DIR") {
+          script {
+            sh """
+            #!/bin/bash
+            wget 'https://www.python.org/ftp/python/3.10.0/Python-3.10.0.tar.xz'
+            tar -xvf Python-3.10.0.tar.xz
+            cd Python-3.10.0
+            ./configure --prefix=$PYTHON_INSTALL
+            make install -j8
+            """
+          }
+        }
+      }
+    }
+    stage('PrepareStupidCredentials') {
+      steps {
+        echo "Generating credential file"
+        dir ("$WD") {
+          script {
+            withCredentials([file(credentialsId: 'makepy_creds', variable: 'MAKEPY_CREDS')]) {
+            withCredentials([sshUserPrivateKey(credentialsId: 'cicd-sc_gitlab_ssh_key', keyFileVariable: 'MAKEPY_SSH')]) {
+              sh """
+              #!/bin/bash
+              set +x
+              wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 -O jq && chmod +x jq
+              cp "$MAKEPY_SSH" the_key
+              cat "$MAKEPY_CREDS"  | ./jq ".gitlab.ssh_path = \\\"$WD/the_key\\\"" | tee credentials.json
+              export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -i '$MAKEPY_SSH'"
+              ${SOURCE_DIR}/make.py pass
+              """
+            }
+            }
+          }
         }
       }
     }
     stage('Build') {
       steps {
         echo "Building project"
-        dir ("$WD") {
-          sh 'make in_docker TARGET=build -f ${WD}/.ci/makefile'
+        dir ("$BUILD_DIR") {
+          sh '${SOURCE_DIR}/make.py container clean'
+          sh '${SOURCE_DIR}/make.py --image cpp_ubuntu_18 container run -p -m . --credentials ${WD}/credentials.json'
+          sh '${SOURCE_DIR}/make.py --image cpp_ubuntu_18 conan-config --credentials ${WD}/credentials.json'
+          sh '${SOURCE_DIR}/make.py --image cpp_ubuntu_18 just-config --profile:host default -b ${BUILD_DIR}/Release'
+          sh '${SOURCE_DIR}/make.py --image cpp_ubuntu_18 build -b ${BUILD_DIR}/Release --target openocd'
         }
       }
     }
     stage('PrepareBoards') {
       steps {
         dir ("$WD") {
-          sh 'make fpga_configuration_registry -f ${WD}/.ci/makefile'
+          sh 'make fpga_configuration_registry -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile'
+          // fpga_configuration_registry creates **fpga_info** directory
           script {
             platform_list = "NO_PLATFROM_LIST_SELECTED"
             switch(params.AGENT) {
             case 'twin_server':
               env.fpga_lock = 'lock-fpga-on-twin'
               if (params.containsKey('use_unstable_platforms')) {
-                platform_list = 'build/host_tools/TWIN_UNSTABLE_CONFIGURATIONS.list'
+                platform_list = 'fpga_info/TWIN_UNSTABLE_CONFIGURATIONS.list'
               } else if (params.containsKey('scr9_validation')) {
-                platform_list = 'build/host_tools/TWIN_SCR9_CONFIGURATIONS.list'
+                platform_list = 'fpga_info/TWIN_SCR9_CONFIGURATIONS.list'
               } else {
-                platform_list = 'build/host_tools/TWIN_NIGHTLY_CONFIGURATIONS.list'
+                platform_list = 'fpga_info/TWIN_NIGHTLY_CONFIGURATIONS.list'
+                UploadResults = 1
               }
               break
             case 'zalman':
               env.fpga_lock = 'lock-fpga-on-zalman'
-              platform_list = 'build/host_tools/ZALMAN_NIGHTLY_CONFIGURATIONS.list'
+              platform_list = 'fpga_info/ZALMAN_NIGHTLY_CONFIGURATIONS.list'
+              UploadResults = 1
               break
             default:
               currentBuild.result = 'ABORTED'
@@ -103,13 +158,10 @@ pipeline {
   }
   post {
     always {
-      sh 'make in_docker TARGET=upload_test_report -f ${WD}/.ci/makefile'
+      sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/Release/TestRun ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
     }
     success {
-      sh 'make in_docker TARGET=record_test_success -f ${WD}/.ci/makefile'
-    }
-    cleanup {
-      sh 'make clean_docker -f ${WD}/.ci/makefile'
+      sh "${SOURCE_DIR}/.ci/utils/report_test_success.sh ${UploadResults} ${STAND_ID} ${ARTIFACTORY_API_KEY}"
     }
   }
 }

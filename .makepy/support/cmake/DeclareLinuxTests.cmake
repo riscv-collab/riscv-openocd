@@ -3,28 +3,74 @@ find_package(riscv-gcc REQUIRED)
 set(RISCVGCC_DIR "${riscv-gcc_PACKAGE_FOLDER_RELEASE}")
 set(DEJAGNU_SRC_CODE dejagnu)
 
+# cmake-format: off
 ExternalProject_Add(
   dejagnu
   PREFIX DejaGnuBuild
   SOURCE_DIR DejaGNUSources
-  URL file://${DEPENDENCIES_LOCATION}/${DEJAGNU_SRC_CODE} DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-  CONFIGURE_COMMAND ${CMAKE_BINARY_DIR}/DejaGNUSources/configure --prefix=${CMAKE_BINARY_DIR}/install_dejagnu)
+  URL file://${DEPENDENCIES_LOCATION}/${DEJAGNU_SRC_CODE}
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  CONFIGURE_COMMAND
+    ${CMAKE_BINARY_DIR}/DejaGNUSources/configure
+      --prefix=${CMAKE_BINARY_DIR}/install_dejagnu)
+# cmake-format: on
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/local_init.exp.in local_init.exp @ONLY)
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/local_init.exp.in
+  local_init.exp @ONLY)
 
-set(TEST_RUN_DIR "${CMAKE_BINARY_DIR}/TestRun")
-set(TEST_WORKING_DIR "${TEST_RUN_DIR}/runs")
-set(TEST_SUMMARY_DIR "${TEST_RUN_DIR}/SUMMARY")
-file(MAKE_DIRECTORY ${TEST_WORKING_DIR} ${TEST_SUMMARY_DIR})
+# this variable is used by BoardDefinitions.cmake
+set(OPENOCD_TESTSUITE_DIRECTORY "${OPENOCD_SOURCES}/testsuite")
+# we expect that FpgaBoardInfo interface target is defined after this include
+set(FPGA_SUPPORT_PROJECT_PATH ${OPENOCD_SOURCES}/testing/syntacore/fpga_support)
+include("${FPGA_SUPPORT_PROJECT_PATH}/cmake/BoardDefinitions.cmake")
+get_property(
+  FPGA_TEST_BOARDS
+  TARGET FpgaBoardInfo
+  PROPERTY ALL_CONFIGURATIONS)
+set(TEST_BOARDS spike ${FPGA_TEST_BOARDS})
 
-add_custom_target(
-  OpenOCDTest
-  WORKING_DIRECTORY ${TEST_WORKING_DIR}
-  COMMAND
-    env DEJAGNU=${OPENOCD_SOURCES}/testsuite/site.exp ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
-    --src_dir=${OPENOCD_SOURCES}/testsuite --tool=ocd --outdir=${TEST_SUMMARY_DIR} --local_init
-    ${CMAKE_BINARY_DIR}/local_init.exp
-  DEPENDS openocd dejagnu)
+set(TESTING_ROOT "${CMAKE_BINARY_DIR}/TestRun")
+function(addOpenOCDTestsForBoard board_config)
+  set(test_run_dir "${TESTING_ROOT}/${board_config}")
+  # TODO: implement separate working/summary dir for each tool
+  set(test_working_dir "${test_run_dir}/runs")
+  set(test_summary_dir "${test_run_dir}/SUMMARY")
+  file(MAKE_DIRECTORY ${test_working_dir} ${test_summary_dir})
+
+  if(board_config STREQUAL "spike")
+    set(target_board_cmdline "")
+  else()
+    get_property(
+      openocd_board
+      TARGET ${board_config}
+      PROPERTY OPENOCD_BOARD)
+    set(target_board_cmdline "--target_board=${openocd_board}")
+  endif()
+
+  set(test_target_name "OpenOCDTestsOn_${board_config}")
+  # cmake-format: off
+  add_custom_target(
+    ${test_target_name}
+    WORKING_DIRECTORY ${test_working_dir}
+    COMMAND
+      env DEJAGNU=${OPENOCD_TESTSUITE_DIRECTORY}/site.exp
+      ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
+        --src_dir=${OPENOCD_TESTSUITE_DIRECTORY}
+        ${target_board_cmdline}
+        --tool=ocd
+        --outdir=${test_summary_dir}
+        --local_init ${CMAKE_BINARY_DIR}/local_init.exp
+    DEPENDS openocd dejagnu)
+  # cmake-format: on
+  message(STATUS "test target ${test_target_name} defined")
+endfunction()
+
+foreach(test_board ${TEST_BOARDS})
+  # cmake-format: off
+  addOpenOCDTestsForBoard(${test_board})
+  # cmake-format: on
+endforeach()
 
 find_package(
   Python

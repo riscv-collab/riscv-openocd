@@ -1,4 +1,0 @@
-wheel==0.38.4
-pexpect==4.8.0
-## The following requirements were added by pip freeze:
-ptyprocess==0.7.0

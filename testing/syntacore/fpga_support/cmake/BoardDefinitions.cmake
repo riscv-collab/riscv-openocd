@@ -1,4 +1,4 @@
-set(SYNTACORE_NAS_SERVER $ENV{SYNTACORE_NAS_SERVER})
+set(SYNTACORE_NAS_SERVER nas.dev.syntacore.com)
 set(ARTY_BITSTREAM_FTP_STORAGE ${SYNTACORE_NAS_SERVER}/pub/exchange/ot-sc/arty-a7-100t)
 
 message(STATUS "Syntacore NAS server: ${SYNTACORE_NAS_SERVER}")

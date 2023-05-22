@@ -71,7 +71,7 @@ main:
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target openocd
     - if [[ "$PROFILE" == "makepy_sc_mingw" ]]; then exit; fi
     - if [[ "$IMAGE" == "cpp_centos_7" ]]; then exit; fi # TODO: fix tests on CentOS
-    - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target OpenOCDTest
+    - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target OpenOCDTestsOn_spike
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target RISCVTestsDebug
 
 deploy:

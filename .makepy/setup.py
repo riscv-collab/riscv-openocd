@@ -22,6 +22,7 @@ from makepy import Command as _Command
 from makepy import Conductor as _Conductor
 from makepy.generic import GenericSuite as _GenericSuite
 from makepy.generic import ParallelHook as _ParallelHook
+from makepy.generic import PrivilegedContainerHook as _PrivilegedContainerHook
 from makepy.syntacore import ConanSuite as _ConanSuite
 from makepy.syntacore import SyntacoreSuite as _SyntacoreSuite
 from makepy.utils import main as _main_decorator
@@ -232,6 +233,7 @@ class _LintCommand(_Command):
 @_main_decorator()
 def _main() -> None:
     conductor = _Conductor()
+
     conductor.add(_GenericSuite())
     conductor.add(_SyntacoreSuite())
     conductor.add(
@@ -244,6 +246,7 @@ def _main() -> None:
     conductor.add(_FormatCommand())
     conductor.add(_LintCommand())
 
+    conductor.add(_PrivilegedContainerHook())
     conductor.add(_BuildArgsHook())
     conductor.add(_ParallelHook(commands=["build"]))
 
