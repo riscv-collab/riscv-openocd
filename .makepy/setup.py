@@ -186,6 +186,30 @@ def _sources(kind: str | list[str], path: _Path = _repo_path) -> list[_Path]:
     return sources
 
 
+class _RenderMagicLink(_Command):
+    def name(self) -> str:
+        return "conan-info magic-link"
+
+    def help(self) -> str:
+        return "Materialize the link to conan package binary archive"
+
+    def amend_parser(self, parser: _ArgumentParser) -> None:
+        parser.add_argument(
+            "-p",
+            "--package_info",
+            type=str,
+            default="nothing",
+            help="Package info string",
+        )
+
+    def command(self, args: _Namespace) -> None:
+        cmd = [
+            "./.makepy/support/utils/create_clickable_link.sh",
+            str(args.package_info),
+        ]
+        _run_shell(cmd, cwd=_repo_path)
+
+
 class _FormatCommand(_Command):
     def name(self) -> str:
         return "format"
@@ -243,6 +267,7 @@ def _main() -> None:
     conductor.add(_JustConfigCommand())
     conductor.add(_ConfigCommand())
     conductor.add(_BuildCommand())
+    conductor.add(_RenderMagicLink())
     conductor.add(_FormatCommand())
     conductor.add(_LintCommand())
 

@@ -100,7 +100,9 @@ deploy:
         fi;
       fi
     - ./make.py --image $IMAGE conan create --profile:host $PROFILE --user $CONAN_USER --channel $CONAN_CHANNEL .
-    - ./make.py --image $IMAGE conan upload --remote syntacore --check "$PACKAGE_NAME"
+    - ./make.py --image $IMAGE conan upload --remote syntacore --check "$PACKAGE_NAME" |& tee $BUILD_DIR/upload.log
+    - PACKAGE_INFO=$(cat $BUILD_DIR/upload.log | grep "Uploading package")
+    - ./make.py --image $IMAGE conan-info magic-link --package_info "$PACKAGE_INFO"
 
 deploy_tag:
   stage: deploy_tag
@@ -109,7 +111,6 @@ deploy_tag:
     - git tag "$PACKAGE_NAME" --force
     - git push --force "git@$CI_SERVER_HOST:$CI_PROJECT_PATH" "$PACKAGE_NAME"
     - echo "Git Tag created successfully"
-
 
 lint:
   stage: lint
