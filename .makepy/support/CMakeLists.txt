@@ -29,31 +29,41 @@ endif()
 get_filename_component(OPENOCD_SOURCES ${CMAKE_SOURCE_DIR}/../.. ABSOLUTE)
 
 # cmake-format: off
+set(OCD_PKG_CONFIG_LIB ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig)
+set(OCD_PKG_CONFIG_LIB64 ${DEPENDENCIES_INSTALL_PATH}/lib64/pkgconfig)
+
+set(OPENOCD_SCRIPTS_INSTALL_DIR
+  ${OPENOCD_INSTALL_PATH}/share/openocd/scripts/syntacore)
+
 ExternalProject_Add(
   openocd
   PREFIX OpenOCDBuild
   SOURCE_DIR ${OPENOCD_SOURCES}
+  BUILD_ALWAYS TRUE
   CONFIGURE_COMMAND
-    # NOTE: we can't use PKG_CONFIG_LIBDIR because of udev dependency: when we set PKG_CONFIG_LIBDIR libraries are
-    # searched only at that directory. Since in modern linux distributions udev is part of systemd - this will require
-    # us to have the whole systemd distribution at that location. This is an overkill. So we choose to link dynamically
-    # with whatever library we have in the build environment.
-    env PKG_CONFIG_PATH=${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig:${DEPENDENCIES_INSTALL_PATH}/lib64/pkgconfig
-    CC=${CMAKE_C_COMPILER}
+    # NOTE: we can't use PKG_CONFIG_LIBDIR because of udev dependency: when we
+    # set PKG_CONFIG_LIBDIR libraries are searched only at that directory.
+    # Since in modern linux distributions udev is part of systemd - this will
+    # require us to have the whole systemd distribution at that location. This
+    # is an overkill. So we choose to link dynamically with whatever library we
+    # have in the build environment.
+    env
+      PKG_CONFIG_PATH=${OCD_PKG_CONFIG_LIB}:${OCD_PKG_CONFIG_LIB64}
+      CC=${CMAKE_C_COMPILER}
     ${OPENOCD_SOURCES}/configure
       --prefix=${OPENOCD_INSTALL_PATH}
       --host=$<$<BOOL:${CMAKE_CROSSCOMPILING}>:${CONFIGURE_HOST}>
       ${OPENOCD_CONFIGURE_OPTIONS}
-  # NOTE: it seems that cmake has a bug - it does not propagate the requested number of cores, causing extreme number of
-  # threads to be created during the build process
+  # NOTE: it seems that cmake has a bug - it does not propagate the requested
+  # number of cores, causing extreme number of threads to be created during the
+  # build process
   BUILD_COMMAND make install -j${CPU_COUNT}
   INSTALL_COMMAND
-    ${CMAKE_STRIP} --strip-all ${OPENOCD_INSTALL_PATH}/bin/openocd${CMAKE_EXECUTABLE_SUFFIX} &&
-    : AND THEN : &&
-    mkdir ${OPENOCD_INSTALL_PATH}/share/openocd/scripts/syntacore -p &&
-    : AND THEN : &&
+    ${CMAKE_STRIP} --strip-all
+      ${OPENOCD_INSTALL_PATH}/bin/openocd${CMAKE_EXECUTABLE_SUFFIX} &&
+    mkdir ${OPENOCD_SCRIPTS_INSTALL_DIR} -p &&
     ${OPENOCD_SOURCES}/tools/syntacore/ide_cloak.tcl
-      ${OPENOCD_INSTALL_PATH}/share/openocd/scripts/syntacore/syntacore_ide_csr_cloak.cfg
+      ${OPENOCD_SCRIPTS_INSTALL_DIR}/syntacore_ide_csr_cloak.cfg
   DEPENDS openocd_deps)
 # cmake-format: on
 

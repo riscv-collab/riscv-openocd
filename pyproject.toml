@@ -1,16 +1,16 @@
 [tool.black]
-line-length = 120
+line-length = 80
 
 [tool.isort]
 profile = "black"
-line_length = 120
+line_length = 80
 
 [tool.mypy]
 strict = "True"
 implicit_reexport = "True"
 
 [tool.pylint]
-max-line-length = 120
+max-line-length = 80
 disable = [
   "empty-docstring",
   "fixme",
@@ -25,4 +25,5 @@ disable = [
   "too-many-instance-attributes",
   "too-many-locals",
   "too-many-statements",
+  "line-too-long"
 ]

@@ -116,7 +116,8 @@ function(add_riscv_test_debug_run_for_target target)
   add_custom_target(
     ${wd_target_name} ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory ${wd_relative_path}
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${RISCV_TESTS_SOURCE_DIR}/debug/bin ${wd_relative_path}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${RISCV_TESTS_SOURCE_DIR}/debug/bin ${wd_relative_path}/bin
     DEPENDS riscv_tests_run_dir)
 
   # cmake-format: off
@@ -125,13 +126,13 @@ function(add_riscv_test_debug_run_for_target target)
     WORKING_DIRECTORY ${wd_relative_path}
     COMMAND
       env
-      LOGS=${RISCV_TESTS_LOGS_DIRNAME}
-      GCC=${RISCVGCC_DIR}/bin/riscv64-unknown-elf-gcc
-      GDB=${RISCVGDB_DIR}/bin/riscv64-unknown-elf-gdb
-      SIM=${RISCVSpike_DIR}/bin/spike
-      OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
-      ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
-      TGT=${target}
+        LOGS=${RISCV_TESTS_LOGS_DIRNAME}
+        GCC=${RISCVGCC_DIR}/bin/riscv64-unknown-elf-gcc
+        GDB=${RISCVGDB_DIR}/bin/riscv64-unknown-elf-gdb
+        SIM=${RISCVSpike_DIR}/bin/spike
+        OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
+        ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
+        TGT=${target}
       ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/run-riscv-debug-tests.sh
     DEPENDS openocd ${wd_target_name})
   # cmake-format: on

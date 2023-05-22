@@ -3,7 +3,8 @@ function(declare_build_dependencies target)
   set(libftdi_src_code libftdi)
   set(libhidapi_src_code hidapi)
 
-  # NOTE: pkg_config_path is used because modern distributions do not have static version of libudev
+  # NOTE: pkg_config_path is used because modern distributions do not have
+  # static version of libudev
   set(pkg_config_path ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig)
 
   # LIBUSB
@@ -12,12 +13,20 @@ function(declare_build_dependencies target)
     libusb
     PREFIX libusb_Build
     SOURCE_DIR libusb_Sources
-    URL file://${DEPENDENCIES_LOCATION}/${libusb_src_code} DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    URL file://${DEPENDENCIES_LOCATION}/${libusb_src_code}
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     CONFIGURE_COMMAND
-      env PKG_CONFIG_PATH=${pkg_config_path} CC=${CMAKE_C_COMPILER}
+      env
+        PKG_CONFIG_PATH=${pkg_config_path}
+        CC=${CMAKE_C_COMPILER}
       ${CMAKE_BINARY_DIR}/libusb_Sources/configure
-        --host=${CONFIGURE_HOST} --prefix=${DEPENDENCIES_INSTALL_PATH} --disable-shared --with-pic &&
-      touch ${CMAKE_BINARY_DIR}/libusb_Sources/Makefile.in ${CMAKE_BINARY_DIR}/libusb_Sources/aclocal.m4)
+        --host=${CONFIGURE_HOST}
+        --prefix=${DEPENDENCIES_INSTALL_PATH}
+        --disable-shared
+        --with-pic &&
+      touch
+        ${CMAKE_BINARY_DIR}/libusb_Sources/Makefile.in
+        ${CMAKE_BINARY_DIR}/libusb_Sources/aclocal.m4)
   # cmake-format: on
 
   if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -32,16 +41,19 @@ function(declare_build_dependencies target)
 
   set(libhidapi_name libhidapi.a)
   set(libhidapi_pc_tmp hidapi_tmp.pc)
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/${hidapi_pkg_template}
-                 ${CMAKE_CURRENT_BINARY_DIR}/${libhidapi_pc_tmp} @ONLY)
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/${hidapi_pkg_template}
+    ${CMAKE_CURRENT_BINARY_DIR}/${libhidapi_pc_tmp} @ONLY)
   # cmake-format: off
   ExternalProject_Add(
     libhidapi
     PREFIX libhidapi_Build
     SOURCE_DIR libhidapi_Sources
-    URL file://${DEPENDENCIES_LOCATION}/${libhidapi_src_code} DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    URL file://${DEPENDENCIES_LOCATION}/${libhidapi_src_code}
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     # By default the Makefile is configured for hid-libusb.
-    # This sed command reconfigures makefile to hidraw backend (as per documentation).
+    # This sed command reconfigures makefile to hidraw backend
+    # (as per documentation).
     PATCH_COMMAND
       cp linux/Makefile-manual linux/Makefile &&
       sed -i s/\ ..\\/hidtest\\/test.o// linux/Makefile
@@ -59,11 +71,13 @@ function(declare_build_dependencies target)
       mkdir -p ${DEPENDENCIES_INSTALL_PATH}/include/hidapi &&
       cp ${libhidapi_name} ${DEPENDENCIES_INSTALL_PATH}/lib &&
       cp hidapi/hidapi.h ${DEPENDENCIES_INSTALL_PATH}/include/hidapi &&
-      cp ${CMAKE_CURRENT_BINARY_DIR}/${libhidapi_pc_tmp} ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig/hidapi.pc)
+      cp ${CMAKE_CURRENT_BINARY_DIR}/${libhidapi_pc_tmp}
+        ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig/hidapi.pc)
   # cmake-format: on
 
   # LIBFTDI
   # cmake-format: off
+  # cmake-lint: disable=C0301
   ExternalProject_Add(
     libftdi
     CMAKE_ARGS -DCMAKE_PREFIX_PATH=${DEPENDENCIES_INSTALL_PATH}
@@ -78,7 +92,8 @@ function(declare_build_dependencies target)
                $<$<BOOL:${CMAKE_CROSSCOMPILING}>:-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}>
     PREFIX libftdi_Build
     SOURCE_DIR libftdi_Sources
-    URL file://${DEPENDENCIES_LOCATION}/${libftdi_src_code} DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    URL file://${DEPENDENCIES_LOCATION}/${libftdi_src_code}
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     INSTALL_DIR ${DEPENDENCIES_INSTALL_PATH}
     # NOTE: -delete commands are needed to enforce static linking
     INSTALL_COMMAND

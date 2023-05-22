@@ -58,7 +58,9 @@ class _JustConfigCommand(_Command):
 
     def amend_parser(self, parser: _ArgumentParser) -> None:
         conan_help = "See './make.py conan install --help'."
-        parser.add_argument("--build", type=str, default="never", help=conan_help)
+        parser.add_argument(
+            "--build", type=str, default="never", help=conan_help
+        )
         parser.add_argument(
             "-pr",
             "--profile",
@@ -70,7 +72,12 @@ class _JustConfigCommand(_Command):
             help=conan_help,
         )
         parser.add_argument(
-            "-pr:b", "--profile:build", dest="build_profile", type=str, default="default", help=conan_help
+            "-pr:b",
+            "--profile:build",
+            dest="build_profile",
+            type=str,
+            default="default",
+            help=conan_help,
         )
         parser.add_argument(
             "-s",
@@ -122,16 +129,30 @@ class _JustConfigCommand(_Command):
             output_folder,
         ]
         install_cmd.extend(
-            _itertools.chain.from_iterable(["--settings:host", setting] for setting in args.host_settings)
+            _itertools.chain.from_iterable(
+                ["--settings:host", setting] for setting in args.host_settings
+            )
         )
         install_cmd.extend(
-            _itertools.chain.from_iterable(["--settings:build", setting] for setting in args.build_settings)
+            _itertools.chain.from_iterable(
+                ["--settings:build", setting] for setting in args.build_settings
+            )
         )
         install_cmd.append(_repo_path)
 
+        # TODO: should we remove all these "cwd" statements?
         _run_shell(["conan", "source", _repo_path], cwd=_repo_path)
         _run_shell(install_cmd, cwd=_repo_path)
-        _run_shell([makepy, "--no-history-dump", "config", "--build-path", args.build_path], cwd=_repo_path)
+        _run_shell(
+            [
+                makepy,
+                "--no-history-dump",
+                "config",
+                "--build-path",
+                args.build_path,
+            ],
+            cwd=_repo_path,
+        )
 
 
 class _ConfigCommand(_Command):
@@ -166,11 +187,24 @@ class _BuildCommand(_Command):
 
     def amend_parser(self, parser: _ArgumentParser) -> None:
         parser.add_argument(
-            "-t", "--target", dest="cmake_target", type=str, default="openocd", help="Build target for CMake."
+            "-t",
+            "--target",
+            dest="cmake_target",
+            type=str,
+            default="openocd",
+            help="Build target for CMake.",
         )
 
     def command(self, args: _Namespace) -> None:
-        cmd = ["cmake", "--build", args.build_path, "--target", args.cmake_target, "--parallel", str(args.parallel)]
+        cmd = [
+            "cmake",
+            "--build",
+            args.build_path,
+            "--target",
+            args.cmake_target,
+            "--parallel",
+            str(args.parallel),
+        ]
         if args.logging_level == "DEBUG":
             cmd.append("--verbose")
         _run_shell(cmd)
@@ -182,7 +216,11 @@ def _sources(kind: str | list[str], path: _Path = _repo_path) -> list[_Path]:
 
     _repo = _git.Repo(_repo_path)
     all_files = _repo.git.ls_files(path).splitlines()
-    sources = [_Path(source) for source in all_files if any(source.endswith(e) for e in kind)]
+    sources = [
+        _Path(source)
+        for source in all_files
+        if any(source.endswith(e) for e in kind)
+    ]
     return sources
 
 
@@ -218,12 +256,24 @@ class _FormatCommand(_Command):
         return "Run formatter."
 
     def command(self, args: _Namespace) -> None:
-        _run_shell(["python3", "-m", "black", _repo_path / ".makepy" / "setup.py"])
+        _run_shell(
+            ["python3", "-m", "black", _repo_path / ".makepy" / "setup.py"]
+        )
         _run_shell(["python3", "-m", "black", _repo_path / "conanfile.py"])
-        _run_shell(["python3", "-m", "isort", _repo_path / ".makepy" / "setup.py"])
+        _run_shell(
+            ["python3", "-m", "isort", _repo_path / ".makepy" / "setup.py"]
+        )
         _run_shell(["python3", "-m", "isort", _repo_path / "conanfile.py"])
-        for cmake_file in _sources([".cmake", "CMakeLists.txt"], path=_repo_path / ".makepy"):
-            _run_shell(["cmake-format", cmake_file, "--in-place"])
+        for cmake_file in _sources(
+            [".cmake", "CMakeLists.txt"], path=_repo_path / ".makepy"
+        ):
+            _run_shell(
+                [
+                    "cmake-format",
+                    _repo_path / cmake_file,
+                    "--in-place",
+                ]
+            )
 
 
 class _LintCommand(_Command):
@@ -243,11 +293,35 @@ class _LintCommand(_Command):
 
     def command(self, args: _Namespace) -> None:
         failed = 0
-        failed += self._out_on_fail(["python3", "-m", "mypy", _repo_path / ".makepy" / "setup.py"])
-        failed += self._out_on_fail(["python3", "-m", "mypy", _repo_path / "conanfile.py"])
-        failed += self._out_on_fail(["python3", "-m", "pylint", _repo_path / ".makepy" / "setup.py", "--jobs", "0"])
-        failed += self._out_on_fail(["python3", "-m", "pylint", _repo_path / "conanfile.py", "--jobs", "0"])
-        for cmake_file in _sources([".cmake", "CMakeLists.txt"], path=_repo_path / ".makepy"):
+        failed += self._out_on_fail(
+            ["python3", "-m", "mypy", _repo_path / ".makepy" / "setup.py"]
+        )
+        failed += self._out_on_fail(
+            ["python3", "-m", "mypy", _repo_path / "conanfile.py"]
+        )
+        failed += self._out_on_fail(
+            [
+                "python3",
+                "-m",
+                "pylint",
+                _repo_path / ".makepy" / "setup.py",
+                "--jobs",
+                "0",
+            ]
+        )
+        failed += self._out_on_fail(
+            [
+                "python3",
+                "-m",
+                "pylint",
+                _repo_path / "conanfile.py",
+                "--jobs",
+                "0",
+            ]
+        )
+        for cmake_file in _sources(
+            [".cmake", "CMakeLists.txt"], path=_repo_path / ".makepy"
+        ):
             failed += self._out_on_fail(["cmake-lint", cmake_file])
 
         if failed > 0:
@@ -261,7 +335,11 @@ def _main() -> None:
     conductor.add(_GenericSuite())
     conductor.add(_SyntacoreSuite())
     conductor.add(
-        _ConanSuite(name="openocd", start_version="cd481a97e9ae604880b8239679bf83534e83b381", start_semver="0.11.0")
+        _ConanSuite(
+            name="openocd",
+            start_version="cd481a97e9ae604880b8239679bf83534e83b381",
+            start_semver="0.11.0",
+        )
     )
 
     conductor.add(_JustConfigCommand())

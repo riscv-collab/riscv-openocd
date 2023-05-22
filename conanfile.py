@@ -46,7 +46,9 @@ class Package(_conan.ConanFile):  # type: ignore
     ]
 
     def requirements(self) -> None:
-        conanfile_json = _Path(__file__).parent / ".makepy" / "conan" / "conanfile.json"
+        conanfile_json = (
+            _Path(__file__).parent / ".makepy" / "conan" / "conanfile.json"
+        )
         with open(conanfile_json, "r", encoding="UTF-8") as file:
             deps = _json.loads(file.read())
         if self.settings.os != "Linux":  # type: ignore
@@ -57,7 +59,10 @@ class Package(_conan.ConanFile):  # type: ignore
     def set_name(self) -> None:
         source_folder = _Path(__file__).parent
         with _io.StringIO() as result:
-            self.run(f"{source_folder}/make.py --no-history-dump --logging-level error conan-info name", stdout=result)
+            self.run(
+                f"{source_folder}/make.py --no-history-dump --logging-level error conan-info name",
+                stdout=result,
+            )
             name = result.getvalue().splitlines()[-1].strip()
         self.name = name
 
@@ -65,7 +70,8 @@ class Package(_conan.ConanFile):  # type: ignore
         source_folder = _Path(__file__).parent
         with _io.StringIO() as result:
             self.run(
-                f"{source_folder}/make.py --no-history-dump --logging-level error conan-info version", stdout=result
+                f"{source_folder}/make.py --no-history-dump --logging-level error conan-info version",
+                stdout=result,
             )
             version = result.getvalue().splitlines()[-1].strip()
 
@@ -77,7 +83,9 @@ class Package(_conan.ConanFile):  # type: ignore
         self.folders.build = build_folder
 
     def _manifest_path(self) -> _Path:
-        return _Path(self.source_folder) / ".makepy" / "support" / "manifest.json"
+        return (
+            _Path(self.source_folder) / ".makepy" / "support" / "manifest.json"
+        )
 
     def _download_source_deps(self, destination: _Path) -> None:
         jobs = max(_multiprocessing.cpu_count(), 8)
@@ -190,13 +198,20 @@ class Package(_conan.ConanFile):  # type: ignore
         deps.generate()
 
     def build(self) -> None:
-        self.run(f"{self.source_folder}/make.py --no-history-dump config --build-path {self.build_folder}")
+        self.run(
+            f"{self.source_folder}/make.py --no-history-dump config --build-path {self.build_folder}"
+        )
         self.run(
             f"{self.source_folder}/make.py --no-history-dump build --build-path {self.build_folder} --target openocd"
         )
 
     def package(self) -> None:
-        _conan.tools.files.copy(self, "*", f"{self.build_folder}/install_openocd/openocd", self.package_folder)
+        _conan.tools.files.copy(
+            self,
+            "*",
+            f"{self.build_folder}/install_openocd/openocd",
+            self.package_folder,
+        )
 
     def package_info(self) -> None:
         self.buildenv_info.define("RISCV_OPENOCD_DIR", self.package_folder)

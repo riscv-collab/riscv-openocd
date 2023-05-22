@@ -2,7 +2,7 @@
 # pylint: skip-file
 
 with section("format"):
-    line_width = 120
+    line_width = 80
 
 with section("lint"):
     disabled_codes = [
