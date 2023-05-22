@@ -145,9 +145,9 @@ class Package(_conan.ConanFile):  # type: ignore
     def source(self) -> None:
         # NOTE: OpenOCD requires a dedicated "bootstrap" process. Usually this
         # involves calling of ./bootstrap script which is part of OpenOCD
-        # source code. Currently our conan/make.py build system initializes the
-        # initializes submoudules separately and expect make.py-initiated
-        # bootstrapping to be call as `./bootstrap nosubmodule`
+        # source code. Currently, our conan/make.py build system initializes
+        # submoudules separately and expect make.py-initiated bootstrap to be
+        # launched as `./bootstrap nosubmodule`
         self.run("git submodule init")
         self.run("git submodule update")
 
