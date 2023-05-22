@@ -167,7 +167,7 @@ pipeline {
   post {
     always {
       sh "${SOURCE_DIR}/make.py history"
-      sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/Release/TestRun ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
+      sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/Release/testing ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
     }
     success {
       sh "${SOURCE_DIR}/.ci/utils/report_test_success.sh ${UploadResults} ${STAND_ID} ${ARTIFACTORY_API_KEY}"

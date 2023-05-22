@@ -30,10 +30,11 @@ get_property(
   PROPERTY ALL_CONFIGURATIONS)
 set(TEST_BOARDS spike ${FPGA_TEST_BOARDS})
 
-set(TESTING_ROOT "${CMAKE_BINARY_DIR}/TestRun")
+set(TESTING_ROOT "${CMAKE_BINARY_DIR}/testing")
 
+set(DEJAGNU_TESTING_ROOT "${TESTING_ROOT}/dejagnu")
 function(addNextToolToTestForBoard tool_name board_config_name)
-  set(tool_dir "${TESTING_ROOT}/${board_config_name}/${tool_name}")
+  set(tool_dir "${DEJAGNU_TESTING_ROOT}/${board_config_name}/${tool_name}")
   set(tool_run_dir "${tool_dir}/runs")
   set(tool_summary_dir "${tool_dir}/SUMMARY")
 
@@ -112,7 +113,7 @@ ExternalProject_Add(
   BUILD_COMMAND ""
   INSTALL_COMMAND "")
 
-set(RISCV_TESTS_RUN_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTestsRun)
+set(RISCV_TESTS_RUN_DIR ${TESTING_ROOT}/riscv_tests)
 set(RISCV_TESTS_LOGS_DIRNAME "${RISCV_TESTS_RUN_DIR}/logs")
 add_custom_target(
   riscv_tests_run_dir ALL
