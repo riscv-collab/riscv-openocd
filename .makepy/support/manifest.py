@@ -12,7 +12,6 @@ class BaseDependency:
     name: str
     kind: str
     url: str
-    path: _Path
     patch: _Path | None
 
 
@@ -37,7 +36,6 @@ class Manifest:
             name = dep["name"].strip()
             kind = dep["kind"].strip()
             url = dep["url"].strip()
-            path = (manifest_path.parent / dep["path"]).resolve()
             patch = dep.get("patch", None)
             if patch is not None:
                 patch = manifest_path.parent / patch
@@ -46,12 +44,12 @@ class Manifest:
                 version = dep["version"].strip()
                 full_clone = dep.get("full_clone", False)
                 dependency = GitDependency(
-                    name=name, kind=kind, url=url, path=path, patch=patch, version=version, full_clone=full_clone
+                    name=name, kind=kind, url=url, patch=patch, version=version, full_clone=full_clone
                 )
             elif kind == "archive":
                 strip_root = dep.get("strip_root", False)
                 dependency = ArchiveDependency(
-                    name=name, kind=kind, url=url, path=path, patch=patch, strip_root=strip_root
+                    name=name, kind=kind, url=url, patch=patch, strip_root=strip_root
                 )
             else:
                 assert False, f"Unknown dependency kind: {kind}"

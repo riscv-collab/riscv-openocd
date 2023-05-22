@@ -37,17 +37,21 @@ default:
     # makepy tells conan about user and channel based on git branch. By default gitlab runs in 'detached HEAD' state,
     # so we need to checkout to an actual branch.
     - git checkout -B "$CI_COMMIT_BRANCH"
-    # Sometimes makepy fails to clean containers after the job. Clean them in before_script for such case.
+    # Sometimes makepy fails to clean containers after the job. Clean them in
+    # before_script for such case.
     - ./make.py container clean
+    - BUILD_DIR=$(readlink -f $(pwd)/../build)
+    - BUILD_PATH=$BUILD_DIR/Release
+    - rm -rf $BUILD_DIR
+    - mkdir $BUILD_DIR
     # Create container with cache-mount-base local to this repo,
     # eliminating its interference with other jobs and pipelines.
-    - ./make.py --image $IMAGE container run --cache-mount-base .makepy/artifacts/cache --credentials "$MAKEPY_CREDS"
+    - ./make.py --image $IMAGE container run -m $BUILD_DIR --cache-mount-base .makepy/artifacts/cache --credentials "$MAKEPY_CREDS"
     # Install conan settings, profiles, remotes, toolchains and login to the registry.
     - ./make.py --image $IMAGE conan-config --credentials "$MAKEPY_CREDS"
     - CONAN_USER=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info user)
     - CONAN_CHANNEL=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info channel)
     - PACKAGE_NAME=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info package)
-    - BUILD_PATH=build/Release
   after_script:
     - echo "You can reproduce this pipeline with the following commands:"
     - ./make.py history
@@ -72,7 +76,7 @@ main:
 
 deploy:
   stage: deploy
-  needs: []
+  needs: [main]
   parallel:
     matrix:
       - PROFILE: [default]
@@ -81,13 +85,10 @@ deploy:
         IMAGE: [cpp_ubuntu_18]
   script:
     - if git fetch origin "$PACKAGE_NAME" &> /dev/null; then
-        echo "[ERROR] Tag '$PACKAGE_NAME' already exists. Package will not be deployed!";
         if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
+          echo "[ERROR] Tag '$PACKAGE_NAME' already exists. Package will not be deployed!";
           `# Silent exit on main branch`
           exit;
-        else
-          `# Error exit on dev branches`
-          exit 1;
         fi;
       fi
     - if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
@@ -106,7 +107,7 @@ deploy_tag:
   needs: [deploy]
   script:
     - git tag "$PACKAGE_NAME" --force
-    - git push "git@$CI_SERVER_HOST:$CI_PROJECT_PATH" "$PACKAGE_NAME"
+    - git push --force "git@$CI_SERVER_HOST:$CI_PROJECT_PATH" "$PACKAGE_NAME"
     - echo "Git Tag created successfully"
 
 

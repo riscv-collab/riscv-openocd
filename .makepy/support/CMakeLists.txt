@@ -12,7 +12,7 @@ execute_process(
   OUTPUT_VARIABLE CONFIGURE_HOST
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-set(DEPENDENCIES_LOCATION ${CMAKE_SOURCE_DIR}/../../external_sources)
+set(DEPENDENCIES_LOCATION ${CMAKE_BINARY_DIR}/external_dependencies/sources)
 set(DEPENDENCIES_INSTALL_PATH ${CMAKE_BINARY_DIR}/dependencies_install)
 include(cmake/DeclareDepsBuild.cmake)
 declare_build_dependencies(openocd_deps)

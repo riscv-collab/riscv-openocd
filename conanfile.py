@@ -1,6 +1,7 @@
 import io as _io
 import json as _json
 import multiprocessing as _multiprocessing
+import os as _os
 import sys as _sys
 from pathlib import Path as _Path
 from urllib.parse import urlparse as _urlparse
@@ -78,44 +79,77 @@ class Package(_conan.ConanFile):  # type: ignore
     def _manifest_path(self) -> _Path:
         return _Path(self.source_folder) / ".makepy" / "support" / "manifest.json"
 
-    def source(self) -> None:
-        manifest = _Manifest(self._manifest_path())
+    def _download_source_deps(self, destination: _Path) -> None:
         jobs = max(_multiprocessing.cpu_count(), 8)
-        _Git(self).run(f"submodule update --init --checkout --jobs {jobs}")
+        manifest = _Manifest(self._manifest_path())
 
         for dep in manifest:
+            dep_dst = destination / dep.name
             if isinstance(dep, _GitDependency):
                 shallow = not dep.full_clone
                 shallow_args = None
                 shallow_args_str = ""
                 if shallow:
-                    shallow_args = ["--depth", "1"]
+                    shallow_args = ["--depth", "1000"]
                     shallow_args_str = " ".join(shallow_args)
-                _Git(self).clone(url=dep.url, target=dep.path, args=shallow_args)
+                _Git(self).clone(url=dep.url, target=dep_dst, args=shallow_args)
                 if shallow:
-                    _Git(self, folder=dep.path).run(f"fetch origin {dep.version}")
-                _Git(self, folder=dep.path).checkout(dep.version)
-                _Git(self, folder=dep.path).run(f"submodule update --init --checkout --jobs {jobs} {shallow_args_str}")
+                    _Git(self, folder=dep_dst).run(
+                        f"fetch origin {dep.version}"
+                    )
+                _Git(self, folder=dep_dst).checkout(dep.version)
+                _Git(self, folder=dep_dst).run(
+                    f"submodule update --init --checkout --jobs {jobs} {shallow_args_str}"
+                )
 
-            elif isinstance(dep, _ArchiveDependency) and dep.url.startswith("ftp://"):
+            elif isinstance(dep, _ArchiveDependency) and dep.url.startswith(
+                "ftp://"
+            ):
                 parsed_url = _urlparse(dep.url)
                 archive = _Path(parsed_url.path).name
-                _conan.tools.files.ftp_download(self, parsed_url.netloc, parsed_url.path)
-                _conan.tools.files.unzip(self, archive, destination=dep.path, strip_root=dep.strip_root)
+                _conan.tools.files.ftp_download(
+                    self, parsed_url.netloc, parsed_url.path
+                )
+                _conan.tools.files.unzip(
+                    self,
+                    archive,
+                    destination=dep_dst,
+                    strip_root=dep.strip_root,
+                )
                 _Path(archive).unlink()
 
             elif isinstance(dep, _ArchiveDependency):
-                _conan.tools.files.get(self, dep.url, destination=dep.path, strip_root=dep.strip_root)
+                _conan.tools.files.get(
+                    self,
+                    dep.url,
+                    destination=dep_dst,
+                    strip_root=dep.strip_root,
+                )
 
             else:
                 assert False
 
             if dep.patch is not None:
-                self.run(f"patch --directory {dep.path} --input {dep.patch} --strip 1")
+                self.run(
+                    f"patch --directory {dep_dst} --input {dep.patch} --strip 1"
+                )
+
+    def source(self) -> None:
+        # NOTE: OpenOCD requires a dedicated "bootstrap" process. Usually this
+        # involves calling of ./bootstrap script which is part of OpenOCD
+        # source code. Currently our conan/make.py build system initializes the
+        # initializes submoudules separately and expect make.py-initiated
+        # bootstrapping to be call as `./bootstrap nosubmodule`
+        self.run("git submodule init")
+        self.run("git submodule update")
 
     def generate(self) -> None:
         toolchain = _CMakeToolchain(self)
 
+        external_deps_folder = (
+            _Path(self.generators_folder) / "external_dependencies"
+        )
+        self._download_source_deps(external_deps_folder / "sources")
         # TODO: remove this once conan is integrated into spike and riscb-binutils-gdb
         spike_urls = {
             "Ubuntu": (
@@ -133,10 +167,22 @@ class Package(_conan.ConanFile):  # type: ignore
         )
         if self.settings.os == "Linux":  # type: ignore
             spike_url = spike_urls[str(self.settings.os.distro)]  # type: ignore
-            _conan.tools.files.get(self, spike_url, destination=self.generators_folder, strip_root=True)
-            _conan.tools.files.get(self, riscv_binutils_gdb_url, destination=self.generators_folder)
-            toolchain.variables["RISCVSpike_DIR"] = f"{self.generators_folder}/spike"
-            toolchain.variables["RISCVGDB_DIR"] = f"{self.generators_folder}/binutils-gdb"
+            _conan.tools.files.get(
+                self,
+                spike_url,
+                destination=external_deps_folder,
+                strip_root=True,
+            )
+            _conan.tools.files.get(
+                self, riscv_binutils_gdb_url, destination=external_deps_folder
+            )
+            # FIXME: can we enforce **normalized** absolute paths here?
+            toolchain.variables[
+                "RISCVSpike_DIR"
+            ] = f"{external_deps_folder}/spike"
+            toolchain.variables[
+                "RISCVGDB_DIR"
+            ] = f"{external_deps_folder}/binutils-gdb"
             toolchain.variables["CMAKE_BUILD_TYPE"] = self.settings.build_type  # type: ignore
 
         toolchain.generate()

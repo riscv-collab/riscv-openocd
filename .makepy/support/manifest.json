@@ -3,28 +3,24 @@
     "name": "dejagnu",
     "kind": "archive",
     "url": "https://ftp.gnu.org/gnu/dejagnu/dejagnu-1.6.3.tar.gz",
-    "path": "../../external_sources/dejagnu",
     "strip_root": true
   },
   {
     "name": "libusb",
     "kind": "archive",
     "url": "https://github.com/libusb/libusb/releases/download/v1.0.26/libusb-1.0.26.tar.bz2",
-    "path": "../../external_sources/libusb",
     "strip_root": true
   },
   {
     "name": "libftdi",
     "kind": "archive",
     "url": "https://www.intra2net.com/en/developer/libftdi/download/libftdi1-1.5.tar.bz2",
-    "path": "../../external_sources/libftdi",
     "strip_root": true
   },
   {
     "name": "hidapi",
     "kind": "archive",
     "url": "https://github.com/libusb/hidapi/archive/refs/tags/hidapi-0.12.0.tar.gz",
-    "path": "../../external_sources/hidapi",
     "strip_root": true
   },
   {
@@ -32,7 +28,6 @@
     "kind": "git",
     "url": "https://github.com/riscv-software-src/riscv-tests.git",
     "version": "48491dadafcd59442c5bf22603fb0a7f1c589cb9",
-    "path": "../../external_sources/riscv_tests",
     "patch": "dependencies_support/memory_sample_thresholds.patch"
   }
 ]

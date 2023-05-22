@@ -142,7 +142,8 @@ class _ConfigCommand(_Command):
 
     def command(self, args: _Namespace) -> None:
         _shutil.rmtree(_repo_path / "build-aux", ignore_errors=True)
-        _run_shell(["./bootstrap"], cwd=_repo_path)
+        # NOTE: we expect OpenOCD submodules to be initialized at this point
+        _run_shell(["./bootstrap", "nosubmodule"], cwd=_repo_path)
         cmd = [
             "cmake",
             "-S",
