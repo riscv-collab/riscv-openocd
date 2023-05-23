@@ -31,12 +31,13 @@ get_property(
 set(TEST_BOARDS spike ${FPGA_TEST_BOARDS})
 
 set(TESTING_ROOT "${CMAKE_BINARY_DIR}/TestRun")
-function(addOpenOCDTestsForBoard board_config)
-  set(test_run_dir "${TESTING_ROOT}/${board_config}")
-  # TODO: implement separate working/summary dir for each tool
-  set(test_working_dir "${test_run_dir}/runs")
-  set(test_summary_dir "${test_run_dir}/SUMMARY")
-  file(MAKE_DIRECTORY ${test_working_dir} ${test_summary_dir})
+
+function(addNextToolToTestForBoard tool_name board_config_name)
+  set(tool_dir "${TESTING_ROOT}/${board_config_name}/${tool_name}")
+  set(tool_run_dir "${tool_dir}/runs")
+  set(tool_summary_dir "${tool_dir}/SUMMARY")
+
+  file(MAKE_DIRECTORY ${tool_run_dir} ${tool_summary_dir})
 
   if(board_config STREQUAL "spike")
     set(target_board_cmdline "")
@@ -48,22 +49,48 @@ function(addOpenOCDTestsForBoard board_config)
     set(target_board_cmdline "--target_board=${openocd_board}")
   endif()
 
-  set(test_target_name "OpenOCDTestsOn_${board_config}")
+  set(board_tests_target "OpenOCDTestsOn_${board_config}")
+  set(board_tool_target "Tool_${tool_name}_For_${board_tests_target}")
+
   # cmake-format: off
   add_custom_target(
-    ${test_target_name}
-    WORKING_DIRECTORY ${test_working_dir}
+    ${board_tool_target}
+    WORKING_DIRECTORY ${tool_run_dir}
     COMMAND
       env DEJAGNU=${OPENOCD_TESTSUITE_DIRECTORY}/site.exp
       ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
         --src_dir=${OPENOCD_TESTSUITE_DIRECTORY}
         ${target_board_cmdline}
-        --tool=ocd
-        --outdir=${test_summary_dir}
+        --tool=${tool_name}
+        --outdir=${tool_summary_dir}
         --local_init ${CMAKE_BINARY_DIR}/local_init.exp
     DEPENDS openocd dejagnu)
   # cmake-format: on
-  message(STATUS "test target ${test_target_name} defined")
+
+  if(NOT TARGET ${board_tests_target})
+    add_custom_target(${board_tests_target} DEPENDS ${board_tool_target})
+    message(STATUS "Primary ${board_tests_target} defined")
+  else()
+    get_property(
+      board_test_deps
+      TARGET ${board_tests_target}
+      PROPERTY TOOL_DEPENDENCIES)
+    list(GET board_test_deps -1 last_added_tool)
+    add_dependencies(${last_added_tool} ${board_tool_target})
+    message(DEBUG "  ${last_added_tool} depends on ${board_tool_target}")
+  endif()
+  message(STATUS "   test target for tool testing ${board_tool_target} defined")
+  set_property(
+    TARGET ${board_tests_target}
+    PROPERTY TOOL_DEPENDENCIES ${board_tool_target}
+    APPEND)
+endfunction()
+
+function(addOpenOCDTestsForBoard board_config)
+  # cmake-format: off
+  addNextToolToTestForBoard(ocd ${board_config})
+  addNextToolToTestForBoard(jtag ${board_config})
+  # cmake-format: on
 endfunction()
 
 foreach(test_board ${TEST_BOARDS})
