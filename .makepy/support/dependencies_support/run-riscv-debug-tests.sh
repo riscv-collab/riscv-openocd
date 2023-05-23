@@ -11,11 +11,10 @@ mkdir -p ${LOGS}/${TGT}
 ${ROOT}/gdbserver.py ${ROOT}/targets/RISC-V/${TGT}.py  \
   --isolate               \
   --logs "${LOGS}/${TGT}" \
-  --print-failures        \
   --gcc "${GCC}"          \
   --gdb "${GDB}"          \
   --sim_cmd "${SIM}"      \
-  --server_cmd "${OCD}" 2>&1 | tee "${LOGS}/${TGT}.log"
+  --server_cmd "${OCD} -d3" 2>&1 | tee "${LOGS}/${TGT}.log"
 
 TEST_STATUS=${PIPESTATUS[0]}
 if [[ $TEST_STATUS -ne 0 ]]; then
