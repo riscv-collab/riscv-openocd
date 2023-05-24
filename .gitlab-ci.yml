@@ -40,7 +40,7 @@ default:
     # Sometimes makepy fails to clean containers after the job. Clean them in
     # before_script for such case.
     - ./make.py container clean
-    - BUILD_DIR=$(readlink -f $(pwd)/../build)
+    - BUILD_DIR=$(readlink -f $(pwd)/build)
     - BUILD_PATH=$BUILD_DIR/Release
     - rm -rf $BUILD_DIR
     - mkdir $BUILD_DIR
@@ -66,6 +66,11 @@ main:
         IMAGE: [cpp_ubuntu_18, cpp_centos_7]
       - PROFILE: [makepy_sc_mingw]
         IMAGE: [cpp_ubuntu_18]
+  artifacts:
+    paths:
+      - build/Release/testing
+    when: on_failure
+
   script:
     - ./make.py --image $IMAGE just-config --profile:host $PROFILE --build-path $BUILD_PATH
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target openocd
