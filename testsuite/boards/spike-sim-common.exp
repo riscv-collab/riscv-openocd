@@ -3,9 +3,9 @@ load_generic_config "sim"
 
 load_base_board_description "basic-sim"
 
-set_board_info env,preferred_timeout 5
-set_board_info env,resume_timeout 0.05
-set_board_info env,exec_timeout 0.05
+set_board_info env,preferred_timeout 10
+set_board_info env,resume_delay 0.10
+set_board_info env,exec_delay 0.10
 
 set_board_info memory,reset_vector 0x1000
 

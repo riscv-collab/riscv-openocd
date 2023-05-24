@@ -1,16 +1,16 @@
 load_lib "lib_abi_compat.exp"
 
-proc ocd_scaled_timeout_value { per_core_timeout } {
+proc ocd_scaled_delay_value { per_core_delay } {
   set cores_num [target_info cpu,cores_num]
-  return [expr { $cores_num * $per_core_timeout} ]
+  return [expr { $cores_num * $per_core_delay} ]
 }
 
-proc ocd_resume_timeout {} {
-  return [ocd_scaled_timeout_value [target_info env,resume_timeout]]
+proc ocd_resume_delay {} {
+  return [ocd_scaled_delay_value [target_info env,resume_delay]]
 }
 
-proc ocd_exec_timeout {} {
-  return [ocd_scaled_timeout_value [target_info env,exec_timeout]]
+proc ocd_exec_delay {} {
+  return [ocd_scaled_delay_value [target_info env,exec_delay]]
 }
 
 proc tsuplib_ensure_target_properties { property_list } {
@@ -54,8 +54,8 @@ proc tsuplib_target_info_check {} {
     openocd,hidden_triggers \
     openocd,ide_cloak \
     env,preferred_timeout \
-    env,resume_timeout \
-    env,exec_timeout \
+    env,resume_delay \
+    env,exec_delay \
   ]]
 }
 
@@ -88,7 +88,7 @@ proc tsuplib_determine_openocd_version {} {
   return $OPENOCD_VARIANT
 }
 
-proc tsuplib_wait_for_file { filename max_retries wait_interval } {
+proc tsuplib_wait_for_file { filename max_retries poll_delay } {
   for {set retries_count 0} {![file exists $filename]} {incr retries_count} {
     verbose "waiting for the $filename to materialize... attempt #$retries_count" 2
 
@@ -96,12 +96,12 @@ proc tsuplib_wait_for_file { filename max_retries wait_interval } {
       error "failed to wait for $filename"
     }
 
-    sleep $wait_interval
+    sleep $poll_delay
   }
   verbose "$filename detected" 1
 }
 
-proc tsuplib_wait_for_acknowledge { tcl_log primary_pattern max_retry_count wait_interval } {
+proc tsuplib_wait_for_acknowledge { tcl_log primary_pattern max_retry_count poll_delay } {
   set ack_detected 0
   for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
     set listen_pattern "Listening on\\|error"
@@ -129,7 +129,7 @@ proc tsuplib_wait_for_acknowledge { tcl_log primary_pattern max_retry_count wait
       eof {
         verbose "EOF while waiting for ($primary_pattern), attempt #$it_count" 3
         wait -nowait
-        sleep $wait_interval
+        sleep $poll_delay
         continue
       }
       timeout  {
@@ -207,30 +207,31 @@ proc tsuplib_launch_openocd { tool_name \
 }
 
 proc tsuplib_internal_check_tclrpc_at_port \
-    { tcl_log port max_retry_count wait_interval } {
+    { tcl_log port max_retry_count poll_delay } {
   set ack_message "Listening on port $port for tcl connections"
-  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
+  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $poll_delay
 }
 
 proc tsuplib_internal_check_gdb_server_at_port \
-    { tcl_log port max_retry_count wait_interval } {
+    { tcl_log port max_retry_count poll_delay } {
   set ack_message "Listening on port $port for gdb connections"
-  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $wait_interval
+  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $poll_delay
 }
 
 proc tsuplib_wait_for_openocd_initialization {ocd_log_name tcl_port gdb_port} {
 
   set max_retries 150
-  set wait_time 0.1
+  # TODO: looks like this should be board(type)-specific
+  set poll_delay 0.2
 
-  if {[catch {tsuplib_wait_for_file $ocd_log_name $max_retries $wait_time} \
+  if {[catch {tsuplib_wait_for_file $ocd_log_name $max_retries $poll_delay} \
       ERROR_INFO]} {
     error "log-poll error: $ERROR_INFO"
   }
 
   if {![string match $tcl_port "none"] && \
        [catch {tsuplib_internal_check_tclrpc_at_port \
-              $ocd_log_name $tcl_port $max_retries $wait_time} \
+              $ocd_log_name $tcl_port $max_retries $poll_delay} \
        ERROR_INFO]} {
     # NOTE: log printing can be VERY expensive
     # puts [exec cat $ocd_log_name]
@@ -239,7 +240,7 @@ proc tsuplib_wait_for_openocd_initialization {ocd_log_name tcl_port gdb_port} {
 
   if {![string match $gdb_port "none"] && \
        [catch {tsuplib_internal_check_gdb_server_at_port \
-              $ocd_log_name $gdb_port $max_retries $wait_time} \
+              $ocd_log_name $gdb_port $max_retries $poll_delay} \
        ERROR_INFO]} {
     # NOTE: log printing can be VERY expensive
     # puts [exec cat $ocd_log_name]
@@ -269,7 +270,7 @@ proc tsuplib_shutdown_openocd { cleanup_type } {
   verbose "about to kill openocd instance" 2
   exec kill -s SIGINT [exp_pid -i $openocd_instance_spawn_id ]
   # wait a little bit to allow for a clean termination
-  sleep [ocd_exec_timeout]
+  sleep [ocd_exec_delay]
   exec kill -s SIGKILL [exp_pid -i $openocd_instance_spawn_id ]
 
   verbose "kill sent. closing connection to OpenOCD instance" 2

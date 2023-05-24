@@ -112,10 +112,10 @@ proc ocdtlb_do_byte_read_compare { base_addr expected_values } {
 }
 
 proc octdlb_wait_resume { {scale 1} } {
-  set resume_timeout [ocd_resume_timeout]
-  set scaled_timeout [expr $resume_timeout * $scale]
-  verbose "resume wait for $scaled_timeout seconds" 3
-  sleep $scaled_timeout
+  set resume_delay [ocd_resume_delay]
+  set scaled_delay [expr $resume_delay * $scale]
+  verbose "resume wait for $scaled_delay seconds" 3
+  sleep $scaled_delay
 }
 
 # NOTE: this function always does at least one step
