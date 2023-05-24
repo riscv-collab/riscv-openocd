@@ -12,7 +12,7 @@ def runTests(boards){
             dir ("$WD") {
               echo "${board}"
               sh "make prepare_board -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile TARGET_BOARD=${board}"
-              sh "${SOURCE_DIR}/make.py --image cpp_ubuntu_18 build -b ${BUILD_DIR}/Release --target OpenOCDTestsOn_${board}"
+              sh "${SOURCE_DIR}/make.py --image cpp_ubuntu_18 -l debug build -b ${BUILD_DIR}/Release --target OpenOCDTestsOn_${board}"
             }
          }
       }
