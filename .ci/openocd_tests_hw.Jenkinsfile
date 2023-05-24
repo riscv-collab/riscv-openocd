@@ -69,11 +69,6 @@ pipeline {
         }
       }
     }
-    stage('DockerClean') {
-      steps {
-        sh "${SOURCE_DIR}/.ci/utils/docker_clean.sh"
-      }
-    }
     stage('PythonBuild') {
       steps {
         dir("$PYTHON_DIR") {
@@ -116,7 +111,6 @@ pipeline {
       steps {
         echo "Building project"
         dir ("$BUILD_MOUNT") {
-          sh '${MAKE_PY} container clean'
           sh '${MAKE_PY} --image $DOCKER_IMAGE container run -p -m . --credentials ${WD}/credentials.json'
           sh '${MAKE_PY} --image $DOCKER_IMAGE conan-config --credentials ${WD}/credentials.json'
           sh '${MAKE_PY} --image $DOCKER_IMAGE just-config -b ${BUILD_DIR} --profile:host default'
@@ -173,6 +167,7 @@ pipeline {
   post {
     always {
       sh "${MAKE_PY} history"
+      sh "${MAKE_PY} container clean"
       sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/testing ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
     }
     success {
