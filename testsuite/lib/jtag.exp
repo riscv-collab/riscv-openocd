@@ -15,6 +15,10 @@ proc jtag_init {test_file_name} {
   set timeout [target_info env,preferred_timeout]
   verbose "/// ocd_jtag_init \\\\\\" 1
 
+  tsuplib_ensure_target_properties [list \
+    openocd,interface_flags\
+    openocd,jtag_tool_tap_definition_flags
+  ]
   tsuplib_launch_openocd jtag \
                          $test_file_name \
                          [target_info openocd,interface_flags] \

@@ -21,9 +21,14 @@ set_board_info openocd,interface_flags [list \
   -c "remote_bitbang port $SPIKE_BITBANG" \
 ]
 
-proc target_ocd_flags_for_spike { cfg_name } {
+# NOTE: for now every spike configuration we use has only one TAP
+# in general case this is not the case, so the code needs to be revised
+set_board_info openocd,jtag_tool_tap_definition_flags \
+  [list -f $testsuitedir/boards/support/ocd/jtag_1tap_irlen5.cfg]
+
+proc ocd_tool_target_definition_flags { cfg_name } {
   global testsuitedir
   return [list \
-    -f "$testsuitedir/boards/support/ocd/$cfg_name" \
+    -f $testsuitedir/boards/support/ocd/$cfg_name \
   ]
 }

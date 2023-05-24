@@ -22,6 +22,10 @@ proc ocd_init {test_file_name} {
   # puts [target_info sim,options]
   verbose "/// ocd_init \\\\\\" 1
 
+  tsuplib_ensure_target_properties [list \
+    openocd,interface_flags\
+    openocd,ocd_tool_target_flags
+  ]
   tsuplib_launch_openocd ocd \
                          $test_file_name \
                          [target_info openocd,interface_flags] \

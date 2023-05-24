@@ -13,9 +13,25 @@ proc ocd_exec_timeout {} {
   return [ocd_scaled_timeout_value [target_info env,exec_timeout]]
 }
 
-proc tsuplib_target_info_check {} {
+proc tsuplib_ensure_target_properties { property_list } {
   set error_detected 0
-  foreach property [list \
+  foreach property $property_list {
+    if {[target_info $property] == ""} {
+      perror "target definition does not have $property set"
+      set error_detected 1
+    }
+  }
+
+  if {$error_detected} {
+    set target_name [target_info name]
+    perror "currently selected target <$target_name> is not configured properly, aborting"
+    # FIXME: probably, exit 1 is too harsh
+    exit 1
+  }
+}
+
+proc tsuplib_target_info_check {} {
+  return [tsuplib_ensure_target_properties [list \
     cpu,xlen \
     cpu,name \
     cpu,cores_num \
@@ -40,19 +56,7 @@ proc tsuplib_target_info_check {} {
     env,preferred_timeout \
     env,resume_timeout \
     env,exec_timeout \
-  ] {
-    if {[target_info $property] == ""} {
-      perror "target definition does not have $property set"
-      set error_detected 1
-    }
-  }
-
-  if {$error_detected} {
-    set target_name [target_info name]
-    perror "currently selected target <$target_name> is not configured properly, aborting"
-    # FIXME: probably, exit 1 is too harsh
-    exit 1
-  }
+  ]]
 }
 
 proc tsuplib_determine_openocd_version {} {

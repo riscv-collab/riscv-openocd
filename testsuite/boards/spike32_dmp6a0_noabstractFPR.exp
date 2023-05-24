@@ -13,4 +13,4 @@ set_board_info openocd,hidden_triggers 0
 set_board_info openocd,ide_cloak 0
 
 set_board_info openocd,ocd_tool_target_flags \
-                 [target_ocd_flags_for_spike spike_default.cfg]
+    [ocd_tool_target_definition_flags spike_default.cfg]
