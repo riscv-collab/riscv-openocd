@@ -10,9 +10,17 @@ def runTests(boards){
       stage("${board}") {
          lock (resource: "${fpga_lock}") {
             dir ("$WD") {
+              sh """
+              #!/bin/bash
+              set +x
               echo "${board}"
-              sh "make prepare_board -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile TARGET_BOARD=${board}"
-              sh "${SOURCE_DIR}/make.py --image cpp_ubuntu_18 -l debug build -b ${BUILD_DIR}/Release --target OpenOCDTestsOn_${board}"
+              ${SOURCE_DIR}/make.py sh \
+                make prepare_board \
+                    -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile \
+                    TARGET_BOARD=${board}
+              ${SOURCE_DIR}/make.py --image cpp_ubuntu_18 -l debug build \
+                    -b ${BUILD_DIR}/Release --target OpenOCDTestsOn_${board}
+              """
             }
          }
       }
@@ -76,7 +84,7 @@ pipeline {
         }
       }
     }
-    stage('PrepareStupidCredentials') {
+    stage('PrepareCredentials') {
       steps {
         echo "Generating credential file"
         dir ("$WD") {
@@ -113,8 +121,8 @@ pipeline {
     stage('PrepareBoards') {
       steps {
         dir ("$WD") {
-          sh 'make fpga_configuration_registry -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile'
           // fpga_configuration_registry creates **fpga_info** directory
+          sh "${SOURCE_DIR}/make.py sh make fpga_configuration_registry -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile"
           script {
             platform_list = "NO_PLATFROM_LIST_SELECTED"
             switch(params.AGENT) {
@@ -158,6 +166,7 @@ pipeline {
   }
   post {
     always {
+      sh "${SOURCE_DIR}/make.py history"
       sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/Release/TestRun ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
     }
     success {
