@@ -85,6 +85,7 @@ if {[auto_execok $SPIKE_SIM] == ""} {
     spike64_rvv_dmp6a0_noabstractCSR
     spike64_rvv_dmp6a0_noabstractCSRFPR
     spike64_rvv_dmp6a0_noabstractFPR
+    spike64_rvv_dmp6a0_rti100
     spike64_rvv_bitmanip_dmp6a0
     spike64mcore4_rthw0_dmp6a0
     spike64mcore4_rthw4_dmp6a0
