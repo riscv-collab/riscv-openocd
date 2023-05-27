@@ -214,5 +214,11 @@ class Package(_conan.ConanFile):  # type: ignore
         )
 
     def package_info(self) -> None:
+        # TODO: regarding this **RISCV_OPENOCD_DIR** name.
+        # It's better to rename this to something like SC_RISCV_OPENOCD_DIR.
+        # Any other naming scheme (like omitting RISCV from the prefix) may
+        # introduce an unnecessary confusion in client codebase.
         self.buildenv_info.define("RISCV_OPENOCD_DIR", self.package_folder)
         self.runenv_info.define("RISCV_OPENOCD_DIR", self.package_folder)
+        self.cpp_info.includedirs = []  # no includes
+        self.cpp_info.libdirs = []  # no libraries to link against
