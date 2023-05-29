@@ -1,19 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2009 by Simon Qian                                      *
  *   SimonQian@SimonQian.com                                               *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -75,6 +64,7 @@ static const struct avrf_type avft_chips_info[] = {
 	{"atmega324pa", 0x9511, 128, 256, 4, 256},
 	{"atmega644p", 0x960a, 256, 256, 8, 256},
 	{"atmega1284p", 0x9705, 256, 512, 8, 512},
+	{"atmega32u4", 0x9587, 128, 256, 4, 256},
 };
 
 /* avr program functions */

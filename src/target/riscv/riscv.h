@@ -10,7 +10,10 @@ struct riscv_program;
 #include "gdb_regs.h"
 #include "jtag/jtag.h"
 #include "target/register.h"
+#include "target/semihosting_common.h"
 #include <helper/command.h>
+
+#define RISCV_COMMON_MAGIC	0x52495356U
 
 /* The register cache is statically allocated. */
 #define RISCV_MAX_HARTS 1024
@@ -23,6 +26,8 @@ struct riscv_program;
 
 #define RISCV_SATP_MODE(xlen)  ((xlen) == 32 ? SATP32_MODE : SATP64_MODE)
 #define RISCV_SATP_PPN(xlen)  ((xlen) == 32 ? SATP32_PPN : SATP64_PPN)
+#define RISCV_HGATP_MODE(xlen)  ((xlen) == 32 ? HGATP32_MODE : HGATP64_MODE)
+#define RISCV_HGATP_PPN(xlen)  ((xlen) == 32 ? HGATP32_PPN : HGATP64_PPN)
 #define RISCV_PGSHIFT 12
 
 # define PG_MAX_LEVEL 4
@@ -106,7 +111,9 @@ typedef struct {
 	char *name;
 } range_list_t;
 
-typedef struct {
+struct riscv_info {
+	unsigned int common_magic;
+
 	unsigned dtm_version;
 
 	struct command_context *cmd_ctx;
@@ -123,6 +130,9 @@ typedef struct {
 	 * Note that you can have vector support without misa.V set, because
 	 * Zve* extensions implement vector registers without setting misa.V. */
 	unsigned int vlenb;
+
+	bool mtopi_readable;
+	bool mtopei_readable;
 
 	/* The number of triggers per hart. */
 	unsigned int trigger_count;
@@ -168,10 +178,13 @@ typedef struct {
 
 	/* Helper functions that target the various RISC-V debug spec
 	 * implementations. */
-	int (*get_register)(struct target *target, riscv_reg_t *value, int regid);
-	int (*set_register)(struct target *target, int regid, uint64_t value);
-	int (*get_register_buf)(struct target *target, uint8_t *buf, int regno);
-	int (*set_register_buf)(struct target *target, int regno,
+	int (*get_register)(struct target *target, riscv_reg_t *value,
+			enum gdb_regno regno);
+	int (*set_register)(struct target *target, enum gdb_regno regno,
+			riscv_reg_t value);
+	int (*get_register_buf)(struct target *target, uint8_t *buf,
+			enum gdb_regno regno);
+	int (*set_register_buf)(struct target *target, enum gdb_regno regno,
 			const uint8_t *buf);
 	int (*select_target)(struct target *target);
 	int (*get_hart_state)(struct target *target, enum riscv_hart_state *state);
@@ -265,7 +278,7 @@ typedef struct {
 	int64_t last_activity;
 
 	yes_no_maybe_t vsew64_supported;
-} riscv_info_t;
+};
 
 COMMAND_HELPER(riscv_print_info_line, const char *section, const char *key,
 			   unsigned int value);
@@ -279,6 +292,7 @@ typedef struct {
 	const char *name;
 	int level;
 	unsigned va_bits;
+	/* log2(PTESIZE) */
 	unsigned pte_shift;
 	unsigned vpn_shift[PG_MAX_LEVEL];
 	unsigned vpn_mask[PG_MAX_LEVEL];
@@ -301,27 +315,27 @@ extern bool riscv_ebreaku;
 
 /* Everything needs the RISC-V specific info structure, so here's a nice macro
  * that provides that. */
-static inline riscv_info_t *riscv_info(const struct target *target) __attribute__((unused));
-static inline riscv_info_t *riscv_info(const struct target *target)
+static inline struct riscv_info *riscv_info(const struct target *target) __attribute__((unused));
+static inline struct riscv_info *riscv_info(const struct target *target)
 {
 	assert(target->arch_info);
 	return target->arch_info;
 }
-#define RISCV_INFO(R) riscv_info_t *R = riscv_info(target);
+#define RISCV_INFO(R) struct riscv_info *R = riscv_info(target);
 
-extern uint8_t ir_dtmcontrol[4];
+static inline bool is_riscv(const struct riscv_info *riscv_info)
+{
+	return riscv_info->common_magic == RISCV_COMMON_MAGIC;
+}
+
 extern struct scan_field select_dtmcontrol;
-extern uint8_t ir_dbus[4];
 extern struct scan_field select_dbus;
-extern uint8_t ir_idcode[4];
 extern struct scan_field select_idcode;
 
-extern struct scan_field select_user4;
 extern struct scan_field *bscan_tunneled_select_dmi;
 extern uint32_t bscan_tunneled_select_dmi_num_fields;
 typedef enum { BSCAN_TUNNEL_NESTED_TAP, BSCAN_TUNNEL_DATA_REGISTER } bscan_tunnel_type_t;
 extern int bscan_tunnel_ir_width;
-extern bscan_tunnel_type_t bscan_tunnel_type;
 
 uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out);
 void select_dmi_via_bscan(struct target *target);
@@ -330,15 +344,6 @@ void select_dmi_via_bscan(struct target *target);
 int riscv_openocd_poll(struct target *target);
 
 int riscv_halt(struct target *target);
-
-int riscv_resume(
-	struct target *target,
-	int current,
-	target_addr_t address,
-	int handle_breakpoints,
-	int debug_execution,
-	bool single_hart
-);
 
 int riscv_openocd_step(
 	struct target *target,
@@ -351,13 +356,6 @@ int riscv_openocd_assert_reset(struct target *target);
 int riscv_openocd_deassert_reset(struct target *target);
 
 /*** RISC-V Interface ***/
-
-/* Initializes the shared RISC-V structure. */
-void riscv_info_init(struct target *target, riscv_info_t *r);
-
-/* Steps the hart that's currently selected in the RTOS, or if there is no RTOS
- * then the only hart. */
-int riscv_step_rtos_hart(struct target *target);
 
 bool riscv_supports_extension(struct target *target, char letter);
 
@@ -378,8 +376,16 @@ int riscv_current_hartid(const struct target *target);
  * consecutive and start with mhartid=0. */
 unsigned int riscv_count_harts(struct target *target);
 
-/** Set register, updating the cache. */
+/**
+ * Set the register value. For cacheable registers, only the cache is updated
+ * (write-back mode).
+ */
 int riscv_set_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
+/**
+ * Set the register value and immediately write it to the target
+ * (write-through mode).
+ */
+int riscv_write_register(struct target *target, enum gdb_regno i, riscv_reg_t v);
 /** Get register, from the cache if it's in there. */
 int riscv_get_register(struct target *target, riscv_reg_t *value,
 		enum gdb_regno r);
@@ -392,7 +398,6 @@ int riscv_flush_registers(struct target *target);
 /* Checks the state of the current hart -- "is_halted" checks the actual
  * on-device register. */
 int riscv_get_hart_state(struct target *target, enum riscv_hart_state *state);
-enum riscv_halt_reason riscv_halt_reason(struct target *target);
 
 /* These helper functions let the generic program interface get target-specific
  * information. */
@@ -407,29 +412,17 @@ void riscv_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t 
 void riscv_fill_dmi_read_u64(struct target *target, char *buf, int a);
 int riscv_dmi_write_u64_bits(struct target *target);
 
-/* Invalidates the register cache. */
-void riscv_invalidate_register_cache(struct target *target);
-
 int riscv_enumerate_triggers(struct target *target);
 
-int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint);
-int riscv_remove_breakpoint(struct target *target,
-		struct breakpoint *breakpoint);
 int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint);
 int riscv_remove_watchpoint(struct target *target,
 		struct watchpoint *watchpoint);
-int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_wp_address);
 
 int riscv_init_registers(struct target *target);
 
 void riscv_semihosting_init(struct target *target);
-typedef enum {
-	SEMI_NONE,		/* Not halted for a semihosting call. */
-	SEMI_HANDLED,	/* Call handled, and target was resumed. */
-	SEMI_WAITING,	/* Call handled, target is halted waiting until we can resume. */
-	SEMI_ERROR		/* Something went wrong. */
-} semihosting_result_t;
-semihosting_result_t riscv_semihosting(struct target *target, int *retval);
+
+enum semihosting_result riscv_semihosting(struct target *target, int *retval);
 
 void riscv_add_bscan_tunneled_scan(struct target *target, struct scan_field *field,
 		riscv_bscan_tunneled_scan_context_t *ctxt);

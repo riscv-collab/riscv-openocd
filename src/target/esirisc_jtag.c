@@ -1,20 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2018 by Square, Inc.                                    *
  *   Steven Stallion <stallion@squareup.com>                               *
  *   James Zhao <hjz@squareup.com>                                         *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -141,7 +130,9 @@ static int esirisc_jtag_recv(struct esirisc_jtag *jtag_info,
 	int num_in_bytes = DIV_ROUND_UP(num_in_bits, 8);
 
 	struct scan_field fields[3];
-	uint8_t r[num_in_bytes * 2];
+	/* prevent zero-size variable length array */
+	int r_size = num_in_bytes ? num_in_bytes * 2 : 1;
+	uint8_t r[r_size];
 
 	esirisc_jtag_set_instr(jtag_info, INSTR_DEBUG);
 

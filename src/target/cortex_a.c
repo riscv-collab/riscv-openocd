@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
@@ -25,19 +27,6 @@
  *                                                                         *
  *   Copyright (C) 2016 Chengyu Zheng                                      *
  *   chengyu.zheng@polimi.it : watchpoint support                          *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  *                                                                         *
  *   Cortex-A8(tm) TRM, ARM DDI 0344H                                      *
  *   Cortex-A9(tm) TRM, ARM DDI 0407F                                      *
@@ -818,11 +807,11 @@ static int cortex_a_internal_restore(struct target *target, int current,
 		armv7m->core_cache->reg_list[ARMV7M_PRIMASK].valid = true;
 
 		/* Make sure we are in Thumb mode */
-		buf_set_u32(armv7m->core_cache->reg_list[ARMV7M_xPSR].value, 0, 32,
-			buf_get_u32(armv7m->core_cache->reg_list[ARMV7M_xPSR].value, 0,
+		buf_set_u32(armv7m->core_cache->reg_list[ARMV7M_XPSR].value, 0, 32,
+			buf_get_u32(armv7m->core_cache->reg_list[ARMV7M_XPSR].value, 0,
 			32) | (1 << 24));
-		armv7m->core_cache->reg_list[ARMV7M_xPSR].dirty = true;
-		armv7m->core_cache->reg_list[ARMV7M_xPSR].valid = true;
+		armv7m->core_cache->reg_list[ARMV7M_XPSR].dirty = true;
+		armv7m->core_cache->reg_list[ARMV7M_XPSR].valid = true;
 	}
 #endif
 
@@ -2257,7 +2246,7 @@ static int cortex_a_write_cpu_memory(struct target *target,
 	/* Switch to non-blocking mode if not already in that mode. */
 	retval = cortex_a_set_dcc_mode(target, DSCR_EXT_DCC_NON_BLOCKING, &dscr);
 	if (retval != ERROR_OK)
-		goto out;
+		return retval;
 
 	/* Mark R0 as dirty. */
 	arm_reg_current(arm, 0)->dirty = true;
@@ -2265,16 +2254,16 @@ static int cortex_a_write_cpu_memory(struct target *target,
 	/* Read DFAR and DFSR, as they will be modified in the event of a fault. */
 	retval = cortex_a_read_dfar_dfsr(target, &orig_dfar, &orig_dfsr, &dscr);
 	if (retval != ERROR_OK)
-		goto out;
+		return retval;
 
 	/* Get the memory address into R0. */
 	retval = mem_ap_write_atomic_u32(armv7a->debug_ap,
 			armv7a->debug_base + CPUDBG_DTRRX, address);
 	if (retval != ERROR_OK)
-		goto out;
+		return retval;
 	retval = cortex_a_exec_opcode(target, ARMV4_5_MRC(14, 0, 0, 0, 5, 0), &dscr);
 	if (retval != ERROR_OK)
-		goto out;
+		return retval;
 
 	if (size == 4 && (address % 4) == 0) {
 		/* We are doing a word-aligned transfer, so use fast mode. */
@@ -2299,7 +2288,6 @@ static int cortex_a_write_cpu_memory(struct target *target,
 		retval = cortex_a_write_cpu_memory_slow(target, size, count, buffer, &dscr);
 	}
 
-out:
 	final_retval = retval;
 
 	/* Switch to non-blocking mode if not already in that mode. */
@@ -2575,7 +2563,7 @@ static int cortex_a_read_cpu_memory(struct target *target,
 	/* Switch to non-blocking mode if not already in that mode. */
 	retval = cortex_a_set_dcc_mode(target, DSCR_EXT_DCC_NON_BLOCKING, &dscr);
 	if (retval != ERROR_OK)
-		goto out;
+		return retval;
 
 	/* Mark R0 as dirty. */
 	arm_reg_current(arm, 0)->dirty = true;
@@ -2583,16 +2571,16 @@ static int cortex_a_read_cpu_memory(struct target *target,
 	/* Read DFAR and DFSR, as they will be modified in the event of a fault. */
 	retval = cortex_a_read_dfar_dfsr(target, &orig_dfar, &orig_dfsr, &dscr);
 	if (retval != ERROR_OK)
-		goto out;
+		return retval;
 
 	/* Get the memory address into R0. */
 	retval = mem_ap_write_atomic_u32(armv7a->debug_ap,
 			armv7a->debug_base + CPUDBG_DTRRX, address);
 	if (retval != ERROR_OK)
-		goto out;
+		return retval;
 	retval = cortex_a_exec_opcode(target, ARMV4_5_MRC(14, 0, 0, 0, 5, 0), &dscr);
 	if (retval != ERROR_OK)
-		goto out;
+		return retval;
 
 	if (size == 4 && (address % 4) == 0) {
 		/* We are doing a word-aligned transfer, so use fast mode. */
@@ -2618,7 +2606,6 @@ static int cortex_a_read_cpu_memory(struct target *target,
 		retval = cortex_a_read_cpu_memory_slow(target, size, count, buffer, &dscr);
 	}
 
-out:
 	final_retval = retval;
 
 	/* Switch to non-blocking mode if not already in that mode. */
@@ -2885,15 +2872,21 @@ static int cortex_a_examine_first(struct target *target)
 	int retval = ERROR_OK;
 	uint32_t didr, cpuid, dbg_osreg, dbg_idpfr1;
 
-	if (pc->ap_num == DP_APSEL_INVALID) {
-		/* Search for the APB-AP - it is needed for access to debug registers */
-		retval = dap_find_ap(swjdp, AP_TYPE_APB_AP, &armv7a->debug_ap);
-		if (retval != ERROR_OK) {
-			LOG_ERROR("Could not find APB-AP for debug access");
-			return retval;
+	if (!armv7a->debug_ap) {
+		if (pc->ap_num == DP_APSEL_INVALID) {
+			/* Search for the APB-AP - it is needed for access to debug registers */
+			retval = dap_find_get_ap(swjdp, AP_TYPE_APB_AP, &armv7a->debug_ap);
+			if (retval != ERROR_OK) {
+				LOG_ERROR("Could not find APB-AP for debug access");
+				return retval;
+			}
+		} else {
+			armv7a->debug_ap = dap_get_ap(swjdp, pc->ap_num);
+			if (!armv7a->debug_ap) {
+				LOG_ERROR("Cannot get AP");
+				return ERROR_FAIL;
+			}
 		}
-	} else {
-		armv7a->debug_ap = dap_ap(swjdp, pc->ap_num);
 	}
 
 	retval = mem_ap_init(armv7a->debug_ap);
@@ -3171,6 +3164,9 @@ static void cortex_a_deinit_target(struct target *target)
 					armv7a->debug_base + CPUDBG_DSCR,
 					dscr & ~DSCR_HALT_DBG_MODE);
 	}
+
+	if (armv7a->debug_ap)
+		dap_put_ap(armv7a->debug_ap);
 
 	free(cortex_a->wrp_list);
 	free(cortex_a->brp_list);

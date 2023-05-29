@@ -1,22 +1,11 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2004, 2005 by Dominic Rath                              *
  *   Dominic.Rath@gmx.de                                                   *
  *                                                                         *
  *   Copyright (C) 2007,2008 Øyvind Harboe                                 *
  *   oyvind.harboe@zylin.com                                               *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifndef OPENOCD_HELPER_TYPES_H
@@ -162,7 +151,7 @@ static inline uint16_t be_to_h_u16(const uint8_t *buf)
 	return (uint16_t)((uint16_t)buf[1] | (uint16_t)buf[0] << 8);
 }
 
-static inline void h_u64_to_le(uint8_t *buf, int64_t val)
+static inline void h_u64_to_le(uint8_t *buf, uint64_t val)
 {
 	buf[7] = (uint8_t) (val >> 56);
 	buf[6] = (uint8_t) (val >> 48);
@@ -174,7 +163,7 @@ static inline void h_u64_to_le(uint8_t *buf, int64_t val)
 	buf[0] = (uint8_t) (val >> 0);
 }
 
-static inline void h_u64_to_be(uint8_t *buf, int64_t val)
+static inline void h_u64_to_be(uint8_t *buf, uint64_t val)
 {
 	buf[0] = (uint8_t) (val >> 56);
 	buf[1] = (uint8_t) (val >> 48);
@@ -186,7 +175,7 @@ static inline void h_u64_to_be(uint8_t *buf, int64_t val)
 	buf[7] = (uint8_t) (val >> 0);
 }
 
-static inline void h_u32_to_le(uint8_t *buf, int val)
+static inline void h_u32_to_le(uint8_t *buf, uint32_t val)
 {
 	buf[3] = (uint8_t) (val >> 24);
 	buf[2] = (uint8_t) (val >> 16);
@@ -194,7 +183,7 @@ static inline void h_u32_to_le(uint8_t *buf, int val)
 	buf[0] = (uint8_t) (val >> 0);
 }
 
-static inline void h_u32_to_be(uint8_t *buf, int val)
+static inline void h_u32_to_be(uint8_t *buf, uint32_t val)
 {
 	buf[0] = (uint8_t) (val >> 24);
 	buf[1] = (uint8_t) (val >> 16);
@@ -202,27 +191,27 @@ static inline void h_u32_to_be(uint8_t *buf, int val)
 	buf[3] = (uint8_t) (val >> 0);
 }
 
-static inline void h_u24_to_le(uint8_t *buf, int val)
+static inline void h_u24_to_le(uint8_t *buf, unsigned int val)
 {
 	buf[2] = (uint8_t) (val >> 16);
 	buf[1] = (uint8_t) (val >> 8);
 	buf[0] = (uint8_t) (val >> 0);
 }
 
-static inline void h_u24_to_be(uint8_t *buf, int val)
+static inline void h_u24_to_be(uint8_t *buf, unsigned int val)
 {
 	buf[0] = (uint8_t) (val >> 16);
 	buf[1] = (uint8_t) (val >> 8);
 	buf[2] = (uint8_t) (val >> 0);
 }
 
-static inline void h_u16_to_le(uint8_t *buf, int val)
+static inline void h_u16_to_le(uint8_t *buf, uint16_t val)
 {
 	buf[1] = (uint8_t) (val >> 8);
 	buf[0] = (uint8_t) (val >> 0);
 }
 
-static inline void h_u16_to_be(uint8_t *buf, int val)
+static inline void h_u16_to_be(uint8_t *buf, uint16_t val)
 {
 	buf[0] = (uint8_t) (val >> 8);
 	buf[1] = (uint8_t) (val >> 0);

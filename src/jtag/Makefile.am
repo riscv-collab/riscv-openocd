@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 noinst_LTLIBRARIES += %D%/libjtag.la
 
 %C%_libjtag_la_LIBADD =
@@ -5,11 +7,6 @@ noinst_LTLIBRARIES += %D%/libjtag.la
 if HLADAPTER
 include %D%/hla/Makefile.am
 %C%_libjtag_la_LIBADD += $(top_builddir)/%D%/hla/libocdhla.la
-endif
-
-if AICE
-include %D%/aice/Makefile.am
-%C%_libjtag_la_LIBADD += $(top_builddir)/%D%/aice/libocdaice.la
 endif
 
 include %D%/drivers/Makefile.am

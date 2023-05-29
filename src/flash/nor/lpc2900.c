@@ -1,19 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2009 by                                                 *
  *   Rolf Meeser <rolfm_9dq@yahoo.de>                                      *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -1143,9 +1132,9 @@ static int lpc2900_write(struct flash_bank *bank, const uint8_t *buffer,
 	 * reduced size if that fails. */
 	struct working_area *warea;
 	uint32_t buffer_size = lpc2900_info->max_ram_block - 1 * KiB;
-	while ((retval = target_alloc_working_area_try(target,
+	while (target_alloc_working_area_try(target,
 				 buffer_size + target_code_size,
-				 &warea)) != ERROR_OK) {
+				 &warea) != ERROR_OK) {
 		/* Try a smaller buffer now, and stop if it's too small. */
 		buffer_size -= 1 * KiB;
 		if (buffer_size < 2 * KiB) {

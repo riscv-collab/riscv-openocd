@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2013-2014 by Franck Jullien                             *
  *   elec4fun@gmail.com                                                    *
@@ -9,19 +11,6 @@
  *   And the Mohor interface version of this file which is:                *
  *   Copyright (C) 2011 by Julius Baxter                                   *
  *   julius@opencores.org                                                  *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -945,7 +934,7 @@ static int or1k_adv_jtag_write_memory(struct or1k_jtag *jtag_info,
 	void *t = NULL;
 	struct target *target = jtag_info->target;
 	if ((target->endianness == TARGET_BIG_ENDIAN) && (size != 1)) {
-		t = malloc(count * size * sizeof(uint8_t));
+		t = calloc(count * size, sizeof(uint8_t));
 		if (!t) {
 			LOG_ERROR("Out of memory");
 			return ERROR_FAIL;
@@ -958,6 +947,9 @@ static int or1k_adv_jtag_write_memory(struct or1k_jtag *jtag_info,
 		case 2:
 			buf_bswap16(t, buffer, size * count);
 			break;
+		default:
+			free(t);
+			return ERROR_TARGET_FAILURE;
 		}
 		buffer = t;
 	}

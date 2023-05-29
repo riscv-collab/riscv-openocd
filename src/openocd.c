@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
@@ -7,19 +9,6 @@
  *                                                                         *
  *   Copyright (C) 2008 Richard Missenden                                  *
  *   richard.missenden@googlemail.com                                      *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -130,6 +119,8 @@ COMMAND_HANDLER(handle_init_command)
 
 	initialized = 1;
 
+	bool save_poll_mask = jtag_poll_mask();
+
 	retval = command_run_line(CMD_CTX, "target init");
 	if (retval != ERROR_OK)
 		return ERROR_FAIL;
@@ -176,6 +167,8 @@ COMMAND_HANDLER(handle_init_command)
 	/* in COMMAND_EXEC, after target_examine(), only tpiu or only swo */
 	if (command_run_line(CMD_CTX, "tpiu init") != ERROR_OK)
 		return ERROR_FAIL;
+
+	jtag_poll_unmask(save_poll_mask);
 
 	/* initialize telnet subsystem */
 	gdb_target_add_all(all_targets);
@@ -237,65 +230,6 @@ static int openocd_register_commands(struct command_context *cmd_ctx)
 	return register_commands(cmd_ctx, NULL, openocd_command_handlers);
 }
 
-/*
- * TODO: to be removed after v0.12.0
- * workaround for syntax change of "expr" in jimtcl 0.81
- * replace "expr" with openocd version that prints the deprecated msg
- */
-struct jim_scriptobj {
-	void *token;
-	Jim_Obj *filename_obj;
-	int len;
-	int subst_flags;
-	int in_use;
-	int firstline;
-	int linenr;
-	int missing;
-};
-
-static int jim_expr_command(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
-{
-	if (argc == 2)
-		return Jim_EvalExpression(interp, argv[1]);
-
-	if (argc > 2) {
-		Jim_Obj *obj = Jim_ConcatObj(interp, argc - 1, argv + 1);
-		Jim_IncrRefCount(obj);
-		const char *s = Jim_String(obj);
-		struct jim_scriptobj *script = Jim_GetIntRepPtr(interp->currentScriptObj);
-		if (interp->currentScriptObj == interp->emptyObj ||
-				strcmp(interp->currentScriptObj->typePtr->name, "script") ||
-				script->subst_flags ||
-				script->filename_obj == interp->emptyObj)
-			LOG_WARNING("DEPRECATED! use 'expr { %s }' not 'expr %s'", s, s);
-		else
-			LOG_WARNING("DEPRECATED! (%s:%d) use 'expr { %s }' not 'expr %s'",
-						Jim_String(script->filename_obj), script->linenr, s, s);
-		int retcode = Jim_EvalExpression(interp, obj);
-		Jim_DecrRefCount(interp, obj);
-		return retcode;
-	}
-
-	Jim_WrongNumArgs(interp, 1, argv, "expression ?...?");
-	return JIM_ERR;
-}
-
-static const struct command_registration expr_handler[] = {
-	{
-		.name = "expr",
-		.jim_handler = jim_expr_command,
-		.mode = COMMAND_ANY,
-		.help = "",
-		.usage = "",
-	},
-	COMMAND_REGISTRATION_DONE
-};
-
-static int workaround_for_jimtcl_expr(struct command_context *cmd_ctx)
-{
-	return register_commands(cmd_ctx, NULL, expr_handler);
-}
-
 struct command_context *global_cmd_ctx;
 
 static struct command_context *setup_command_handler(Jim_Interp *interp)
@@ -308,7 +242,6 @@ static struct command_context *setup_command_handler(Jim_Interp *interp)
 	/* register subsystem commands */
 	typedef int (*command_registrant_t)(struct command_context *cmd_ctx_value);
 	static const command_registrant_t command_registrants[] = {
-		&workaround_for_jimtcl_expr,
 		&openocd_register_commands,
 		&server_register_commands,
 		&gdb_register_commands,
