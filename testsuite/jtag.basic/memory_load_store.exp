@@ -13,7 +13,9 @@ proc run_test {} {
 
     set true_data 0xdeadbeef
 
-    ocdjtag_riscv_store_memory 0 $ENTRY_ADDR 32 $true_data
+    if {[ocdjtag_riscv_store_memory 0 $ENTRY_ADDR 32 $true_data] == 0} {
+        return [ocd_test_fail]
+    }
 
     set result [ocdjtag_riscv_load_memory 0 $ENTRY_ADDR 32]
 

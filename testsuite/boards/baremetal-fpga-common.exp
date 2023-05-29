@@ -2,6 +2,9 @@ set_board_info env,preferred_timeout 15
 set_board_info env,resume_delay 1
 set_board_info env,exec_delay 2
 
+set_board_info env,ocdjtag_riscv_timeout 1
+set_board_info env,ocdjtag_riscv_dmi_delay 0
+
 proc jtag_tool_tap_definition_flags { tap_config { speed 500 } } {
   global testsuitedir
   return [list \

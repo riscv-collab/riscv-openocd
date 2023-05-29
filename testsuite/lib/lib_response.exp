@@ -477,3 +477,9 @@ proc parse_scan_chain { report } {
   return [internal_parse_success $TYPE $report \
           [list count $tap_count tap_list $tap_list]]
 }
+
+proc parse_runtest { report } {
+  set TYPE "runtest"
+  # For example: runtest 2
+  return [internal_parse_success $TYPE $report {info "runtest passed"}]
+}

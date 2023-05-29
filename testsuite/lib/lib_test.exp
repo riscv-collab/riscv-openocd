@@ -213,6 +213,7 @@ proc ocdtlb_run_expect {command {expect_op_fail 0} } {
     {^irscan +[^ ]+}        { set parser parse_irscan }
     {^drscan +[^ ]+}        { set parser parse_drscan }
     {^scan_chain}           { set parser parse_scan_chain }
+    {^runtest +[^ ]+}       { set parser parse_runtest }
     default {
       error "could not select parser for ($command), consider using *_raw call"
     }

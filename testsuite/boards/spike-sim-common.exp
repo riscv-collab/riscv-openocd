@@ -7,6 +7,9 @@ set_board_info env,preferred_timeout 10
 set_board_info env,resume_delay 0.10
 set_board_info env,exec_delay 0.10
 
+set_board_info env,ocdjtag_riscv_timeout 1.0
+set_board_info env,ocdjtag_riscv_dmi_delay 0
+
 set_board_info memory,reset_vector 0x1000
 
 set_board_info sim $SPIKE_SIM
