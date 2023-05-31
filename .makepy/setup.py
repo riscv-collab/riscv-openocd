@@ -224,30 +224,6 @@ def _sources(kind: str | list[str], path: _Path = _repo_path) -> list[_Path]:
     return sources
 
 
-class _RenderMagicLink(_Command):
-    def name(self) -> str:
-        return "conan-info magic-link"
-
-    def help(self) -> str:
-        return "Materialize the link to conan package binary archive"
-
-    def amend_parser(self, parser: _ArgumentParser) -> None:
-        parser.add_argument(
-            "-p",
-            "--package_info",
-            type=str,
-            default="nothing",
-            help="Package info string",
-        )
-
-    def command(self, args: _Namespace) -> None:
-        cmd = [
-            "./.makepy/support/utils/create_clickable_link.sh",
-            str(args.package_info),
-        ]
-        _run_shell(cmd, cwd=_repo_path)
-
-
 class _FormatCommand(_Command):
     def name(self) -> str:
         return "format"
@@ -259,11 +235,37 @@ class _FormatCommand(_Command):
         _run_shell(
             ["python3", "-m", "black", _repo_path / ".makepy" / "setup.py"]
         )
+        _run_shell(
+            [
+                "python3",
+                "-m",
+                "black",
+                _repo_path
+                / ".makepy"
+                / "support"
+                / "utils"
+                / "conan_the_deployer.py",
+            ]
+        )
         _run_shell(["python3", "-m", "black", _repo_path / "conanfile.py"])
+
         _run_shell(
             ["python3", "-m", "isort", _repo_path / ".makepy" / "setup.py"]
         )
+        _run_shell(
+            [
+                "python3",
+                "-m",
+                "isort",
+                _repo_path
+                / ".makepy"
+                / "support"
+                / "utils"
+                / "conan_the_deployer.py",
+            ]
+        )
         _run_shell(["python3", "-m", "isort", _repo_path / "conanfile.py"])
+
         for cmake_file in _sources(
             [".cmake", "CMakeLists.txt"], path=_repo_path / ".makepy"
         ):
@@ -297,6 +299,18 @@ class _LintCommand(_Command):
             ["python3", "-m", "mypy", _repo_path / ".makepy" / "setup.py"]
         )
         failed += self._out_on_fail(
+            [
+                "python3",
+                "-m",
+                "mypy",
+                _repo_path
+                / ".makepy"
+                / "support"
+                / "utils"
+                / "conan_the_deployer.py",
+            ]
+        )
+        failed += self._out_on_fail(
             ["python3", "-m", "mypy", _repo_path / "conanfile.py"]
         )
         failed += self._out_on_fail(
@@ -315,6 +329,20 @@ class _LintCommand(_Command):
                 "-m",
                 "pylint",
                 _repo_path / "conanfile.py",
+                "--jobs",
+                "0",
+            ]
+        )
+        failed += self._out_on_fail(
+            [
+                "python3",
+                "-m",
+                "pylint",
+                _repo_path
+                / ".makepy"
+                / "support"
+                / "utils"
+                / "conan_the_deployer.py",
                 "--jobs",
                 "0",
             ]
@@ -345,7 +373,6 @@ def _main() -> None:
     conductor.add(_JustConfigCommand())
     conductor.add(_ConfigCommand())
     conductor.add(_BuildCommand())
-    conductor.add(_RenderMagicLink())
     conductor.add(_FormatCommand())
     conductor.add(_LintCommand())
 

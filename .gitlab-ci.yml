@@ -96,8 +96,8 @@ deploy:
           exit;
         fi;
       fi
+    - API_KEY=$(cat "$MAKEPY_CREDS" | jq -r ".artifactory.api_key");
     - if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
-        API_KEY=$(cat "$MAKEPY_CREDS" | jq -r ".artifactory.api_key");
         if ! ./.ci/utils/check_nightly_status.sh $API_KEY; then
           echo "could not find recods indicating that nightly passed";
           echo "no artifacts for stable builds produced";
@@ -105,9 +105,12 @@ deploy:
         fi;
       fi
     - ./make.py --image $IMAGE conan create --profile:host $PROFILE --user $CONAN_USER --channel $CONAN_CHANNEL .
-    - ./make.py --image $IMAGE conan upload --remote syntacore --check "$PACKAGE_NAME" |& tee $BUILD_DIR/upload.log
-    - PACKAGE_INFO=$(cat $BUILD_DIR/upload.log | grep "Uploading package")
-    - ./make.py --image $IMAGE conan-info magic-link --package_info "$PACKAGE_INFO"
+    - ./make.py --image $IMAGE conan upload --remote syntacore --check "$PACKAGE_NAME"
+    - ./make.py --image $IMAGE conan install
+      --profile:host $PROFILE --remote syntacore --requires "$PACKAGE_NAME" --lockfile-partial
+      --output-folder $BUILD_DIR/deploy --deploy .makepy/support/utils/conan_the_deployer.py
+    - ./make.py sh .makepy/support/utils/upload_development_build.sh
+      $(find $BUILD_DIR/deploy -maxdepth 1 -name '*bundle*') $API_KEY
 
 deploy_tag:
   stage: deploy_tag
