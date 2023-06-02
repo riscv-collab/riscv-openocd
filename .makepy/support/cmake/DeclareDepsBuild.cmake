@@ -2,6 +2,7 @@ function(declare_build_dependencies target)
   set(libusb_src_code libusb)
   set(libftdi_src_code libftdi)
   set(libhidapi_src_code hidapi)
+  set(libjaylink_src_code libjaylink)
 
   # NOTE: pkg_config_path is used because modern distributions do not have
   # static version of libudev
@@ -26,7 +27,8 @@ function(declare_build_dependencies target)
         --with-pic &&
       touch
         ${CMAKE_BINARY_DIR}/libusb_Sources/Makefile.in
-        ${CMAKE_BINARY_DIR}/libusb_Sources/aclocal.m4)
+        ${CMAKE_BINARY_DIR}/libusb_Sources/aclocal.m4
+  )
   # cmake-format: on
 
   if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -72,7 +74,8 @@ function(declare_build_dependencies target)
       cp ${libhidapi_name} ${DEPENDENCIES_INSTALL_PATH}/lib &&
       cp hidapi/hidapi.h ${DEPENDENCIES_INSTALL_PATH}/include/hidapi &&
       cp ${CMAKE_CURRENT_BINARY_DIR}/${libhidapi_pc_tmp}
-        ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig/hidapi.pc)
+        ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig/hidapi.pc
+  )
   # cmake-format: on
 
   # LIBFTDI
@@ -102,8 +105,37 @@ function(declare_build_dependencies target)
       find ${DEPENDENCIES_INSTALL_PATH} -name libftdi*.dll* -delete &&
       find ${DEPENDENCIES_INSTALL_PATH} -name libftdipp* -delete &&
       :
-    DEPENDS libusb)
+    DEPENDS libusb
+  )
   # cmake-format: on
 
-  add_custom_target(${target} DEPENDS libusb libhidapi libftdi)
+  # LIBJAYLINK
+  # cmake-format: off
+  ExternalProject_Add(
+    libjaylink
+    PREFIX libjaylink_Build
+    SOURCE_DIR libjaylink_Sources
+    URL file://${DEPENDENCIES_LOCATION}/${libjaylink_src_code}
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    # NOTE: we use PATCH_COMMAND as a hack to run autogen.sh. The reason we need
+    # it is that this stupid autogen.sh requires us to be in the source code
+    # directory. We can't put it in CONFIGURE_COMMAND since we don't know how
+    # to return back to the original directory (without even more nastier
+    # hacks)
+    PATCH_COMMAND
+      cd ${CMAKE_BINARY_DIR}/libjaylink_Sources &&
+      env PKG_CONFIG_PATH=${pkg_config_path}
+          CC=${CMAKE_C_COMPILER}
+      ./autogen.sh
+    CONFIGURE_COMMAND
+      env PKG_CONFIG_PATH=${pkg_config_path}
+          CC=${CMAKE_C_COMPILER}
+      ${CMAKE_BINARY_DIR}/libjaylink_Sources/configure
+        --host=${CONFIGURE_HOST}
+        --prefix=${DEPENDENCIES_INSTALL_PATH}
+        --disable-shared
+  )
+  # cmake-format: on
+
+  add_custom_target(${target} DEPENDS libusb libhidapi libftdi libjaylink)
 endfunction()

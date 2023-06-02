@@ -24,6 +24,12 @@
     "strip_root": true
   },
   {
+    "name": "libjaylink",
+    "kind": "archive",
+    "url": "https://gitlab.zapb.de/libjaylink/libjaylink/-/archive/0.3.1/libjaylink-0.3.1.tar.bz2",
+    "strip_root": true
+  },
+  {
     "name": "riscv_tests",
     "kind": "git",
     "url": "https://github.com/riscv-software-src/riscv-tests.git",

@@ -23,9 +23,6 @@ set(OPENOCD_CONFIGURE_OPTIONS
     --enable-openjtag
     --enable-buspirate
     --enable-jlink
-    # cmake-format: off
-    --enable-internal-libjaylink #FIXME: See #29575
-    # cmake-format: on
     --enable-aice
     --enable-parport
     --disable-parport-ppdev
