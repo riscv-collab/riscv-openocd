@@ -1,19 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /***************************************************************************
  *   Copyright (C) 2015 by David Ung                                       *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
  ***************************************************************************/
 
 #ifndef OPENOCD_TARGET_ARMV8_H
@@ -61,7 +49,7 @@ enum {
 
 	ARMV8_SP = 31,
 	ARMV8_PC = 32,
-	ARMV8_xPSR = 33,
+	ARMV8_XPSR = 33,
 
 	ARMV8_V0 = 34,
 	ARMV8_V1,
@@ -110,6 +98,10 @@ enum {
 	ARMV8_ESR_EL3 = 75,
 	ARMV8_SPSR_EL3 = 76,
 
+	/* Pseudo registers defined by GDB to remove the pauth signature. */
+	ARMV8_PAUTH_DMASK = 77,
+	ARMV8_PAUTH_CMASK = 78,
+
 	ARMV8_LAST_REG,
 };
 
@@ -120,7 +112,7 @@ enum run_control_op {
 	ARMV8_RUNCONTROL_STEP = 3,
 };
 
-#define ARMV8_COMMON_MAGIC 0x0A450AAA
+#define ARMV8_COMMON_MAGIC 0x0A450AAAU
 
 /* VA to PA translation operations opc2 values*/
 #define V2PCWPR  0
@@ -190,8 +182,9 @@ struct armv8_mmu_common {
 };
 
 struct armv8_common {
+	unsigned int common_magic;
+
 	struct arm arm;
-	int common_magic;
 	struct reg_cache *core_cache;
 
 	/* Core Debug Unit */
@@ -215,6 +208,9 @@ struct armv8_common {
 	struct armv8_mmu_common armv8_mmu;
 
 	struct arm_cti *cti;
+
+	/* True if OpenOCD provides pointer auth related info to GDB */
+	bool enable_pauth;
 
 	/* last run-control command issued to this target (resume, halt, step) */
 	enum run_control_op last_run_control_op;

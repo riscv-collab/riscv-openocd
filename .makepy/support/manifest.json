@@ -27,7 +27,7 @@
     "name": "riscv_tests",
     "kind": "git",
     "url": "https://github.com/riscv-software-src/riscv-tests.git",
-    "version": "48491dadafcd59442c5bf22603fb0a7f1c589cb9",
+    "version": "466a4bec914b2b883d58b22193221106ffbc9be0",
     "patch": "dependencies_support/memory_sample_thresholds.patch"
   }
 ]

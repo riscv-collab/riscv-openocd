@@ -1,18 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2017 by Texas Instruments, Inc.                         *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -1365,11 +1354,13 @@ static void xds110_swd_queue_cmd(uint8_t cmd, uint32_t *value)
 static void xds110_swd_read_reg(uint8_t cmd, uint32_t *value,
 	uint32_t ap_delay_clk)
 {
+	assert(cmd & SWD_CMD_RNW);
 	xds110_swd_queue_cmd(cmd, value);
 }
 static void xds110_swd_write_reg(uint8_t cmd, uint32_t value,
 	uint32_t ap_delay_clk)
 {
+	assert(!(cmd & SWD_CMD_RNW));
 	xds110_swd_queue_cmd(cmd, &value);
 }
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *                                                                         *
  *   Copyright (C) 2009 by Cahya Wirawan <cahya@gmx.at>                    *
@@ -11,19 +13,6 @@
  *                                                                         *
  *   Copyright (C) 2008 by Spencer Oliver                                  *
  *   spen@spen-soft.co.uk                                                  *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -807,17 +796,12 @@ int opendous_usb_read(struct opendous_jtag *opendous_jtag)
 
 void opendous_debug_buffer(uint8_t *buffer, int length)
 {
-	char line[81];
-	char s[4];
-	int i;
-	int j;
+	char line[8 + 3 * BYTES_PER_LINE + 1];
 
-	for (i = 0; i < length; i += BYTES_PER_LINE) {
-		snprintf(line, 5, "%04x", i);
-		for (j = i; j < i + BYTES_PER_LINE && j < length; j++) {
-			snprintf(s, 4, " %02x", buffer[j]);
-			strcat(line, s);
-		}
+	for (int i = 0; i < length; i += BYTES_PER_LINE) {
+		int n = snprintf(line, 9, "%04x", i);
+		for (int j = i; j < i + BYTES_PER_LINE && j < length; j++)
+			n += snprintf(line + n, 4, " %02x", buffer[j]);
 		LOG_DEBUG("%s", line);
 	}
 }

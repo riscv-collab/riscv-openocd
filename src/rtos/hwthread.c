@@ -1,18 +1,4 @@
-/***************************************************************************
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
- ***************************************************************************/
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -101,6 +87,7 @@ static int hwthread_update_threads(struct rtos *rtos)
 	struct target_list *head;
 	struct target *target;
 	int64_t current_thread = 0;
+	int64_t current_threadid = rtos->current_threadid; /* thread selected by GDB */
 	enum target_debug_reason current_reason = DBG_REASON_UNDEFINED;
 
 	if (!rtos)
@@ -122,10 +109,14 @@ static int hwthread_update_threads(struct rtos *rtos)
 	} else
 		thread_list_size = 1;
 
-	/* Wipe out previous thread details if any, but preserve threadid. */
-	int64_t current_threadid = rtos->current_threadid;
-	rtos_free_threadlist(rtos);
-	rtos->current_threadid = current_threadid;
+	/* restore the threadid which is currently selected by GDB
+	 * because rtos_free_threadlist() wipes out it
+	 * (GDB thread id is 1-based indexing) */
+	if (current_threadid <= thread_list_size)
+		rtos->current_threadid = current_threadid;
+	else
+		LOG_WARNING("SMP node change, disconnect GDB from core/thread %" PRId64,
+			    current_threadid);
 
 	/* create space for new thread details */
 	rtos->thread_details = malloc(sizeof(struct thread_detail) * thread_list_size);
@@ -278,10 +269,19 @@ static int hwthread_get_thread_reg_list(struct rtos *rtos, int64_t thread_id,
 	for (int i = 0; i < reg_list_size; i++) {
 		if (!reg_list[i] || reg_list[i]->exist == false || reg_list[i]->hidden)
 			continue;
-		(*rtos_reg_list)[j].number = (*reg_list)[i].number;
-		(*rtos_reg_list)[j].size = (*reg_list)[i].size;
-		memcpy((*rtos_reg_list)[j].value, (*reg_list)[i].value,
-				((*reg_list)[i].size + 7) / 8);
+		if (!reg_list[i]->valid) {
+			retval = reg_list[i]->type->get(reg_list[i]);
+			if (retval != ERROR_OK) {
+				LOG_ERROR("Couldn't get register %s.", reg_list[i]->name);
+				free(reg_list);
+				free(*rtos_reg_list);
+				return retval;
+			}
+		}
+		(*rtos_reg_list)[j].number = reg_list[i]->number;
+		(*rtos_reg_list)[j].size = reg_list[i]->size;
+		memcpy((*rtos_reg_list)[j].value, reg_list[i]->value,
+				DIV_ROUND_UP(reg_list[i]->size, 8));
 		j++;
 	}
 	free(reg_list);

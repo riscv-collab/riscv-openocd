@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
@@ -22,19 +24,6 @@
  *                                                                         *
  *   Copyright (C) 2011 Andreas Fritiofson                                 *
  *   andreas.fritiofson@gmail.com                                          *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -88,6 +77,7 @@ extern struct target_type fa526_target;
 extern struct target_type feroceon_target;
 extern struct target_type dragonite_target;
 extern struct target_type xscale_target;
+extern struct target_type xtensa_chip_target;
 extern struct target_type cortexm_target;
 extern struct target_type cortexa_target;
 extern struct target_type aarch64_target;
@@ -102,10 +92,9 @@ extern struct target_type dsp5680xx_target;
 extern struct target_type testee_target;
 extern struct target_type avr32_ap7k_target;
 extern struct target_type hla_target;
-extern struct target_type nds32_v2_target;
-extern struct target_type nds32_v3_target;
-extern struct target_type nds32_v3m_target;
+extern struct target_type esp32_target;
 extern struct target_type esp32s2_target;
+extern struct target_type esp32s3_target;
 extern struct target_type or1k_target;
 extern struct target_type quark_x10xx_target;
 extern struct target_type quark_d20xx_target;
@@ -127,6 +116,7 @@ static struct target_type *target_types[] = {
 	&feroceon_target,
 	&dragonite_target,
 	&xscale_target,
+	&xtensa_chip_target,
 	&cortexm_target,
 	&cortexa_target,
 	&cortexr4_target,
@@ -139,10 +129,9 @@ static struct target_type *target_types[] = {
 	&testee_target,
 	&avr32_ap7k_target,
 	&hla_target,
-	&nds32_v2_target,
-	&nds32_v3_target,
-	&nds32_v3m_target,
+	&esp32_target,
 	&esp32s2_target,
+	&esp32s3_target,
 	&or1k_target,
 	&quark_x10xx_target,
 	&quark_d20xx_target,
@@ -241,14 +230,14 @@ static const struct jim_nvp nvp_target_event[] = {
 
 	{ .value = TARGET_EVENT_TRACE_CONFIG, .name = "trace-config" },
 
-	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0x100, .name = "semihosting-user-cmd-0x100" },
-	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0x101, .name = "semihosting-user-cmd-0x101" },
-	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0x102, .name = "semihosting-user-cmd-0x102" },
-	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0x103, .name = "semihosting-user-cmd-0x103" },
-	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0x104, .name = "semihosting-user-cmd-0x104" },
-	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0x105, .name = "semihosting-user-cmd-0x105" },
-	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0x106, .name = "semihosting-user-cmd-0x106" },
-	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0x107, .name = "semihosting-user-cmd-0x107" },
+	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0X100, .name = "semihosting-user-cmd-0x100" },
+	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0X101, .name = "semihosting-user-cmd-0x101" },
+	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0X102, .name = "semihosting-user-cmd-0x102" },
+	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0X103, .name = "semihosting-user-cmd-0x103" },
+	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0X104, .name = "semihosting-user-cmd-0x104" },
+	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0X105, .name = "semihosting-user-cmd-0x105" },
+	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0X106, .name = "semihosting-user-cmd-0x106" },
+	{ .value = TARGET_EVENT_SEMIHOSTING_USER_CMD_0X107, .name = "semihosting-user-cmd-0x107" },
 
 	{ .name = NULL, .value = -1 }
 };
@@ -662,10 +651,10 @@ int target_resume(struct target *target, int current, target_addr_t address,
 	 * Disable polling during resume() to guarantee the execution of handlers
 	 * in the correct order.
 	 */
-	bool save_poll = jtag_poll_get_enabled();
-	jtag_poll_set_enabled(false);
+	bool save_poll_mask = jtag_poll_mask();
 	retval = target->type->resume(target, current, address, handle_breakpoints, debug_execution);
-	jtag_poll_set_enabled(save_poll);
+	jtag_poll_unmask(save_poll_mask);
+
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -693,14 +682,12 @@ static int target_process_reset(struct command_invocation *cmd, enum target_rese
 	 * more predictable, i.e. dr/irscan & pathmove in events will
 	 * not have JTAG operations injected into the middle of a sequence.
 	 */
-	bool save_poll = jtag_poll_get_enabled();
-
-	jtag_poll_set_enabled(false);
+	bool save_poll_mask = jtag_poll_mask();
 
 	sprintf(buf, "ocd_process_reset %s", n->name);
 	retval = Jim_Eval(cmd->ctx->interp, buf);
 
-	jtag_poll_set_enabled(save_poll);
+	jtag_poll_unmask(save_poll_mask);
 
 	if (retval != JIM_OK) {
 		Jim_MakeErrorMessage(cmd->ctx->interp);
@@ -2088,7 +2075,7 @@ int target_alloc_working_area_try(struct target *target, uint32_t size, struct w
 		struct working_area *new_wa = malloc(sizeof(*new_wa));
 		if (new_wa) {
 			new_wa->next = NULL;
-			new_wa->size = target->working_area_size & ~3UL; /* 4-byte align */
+			new_wa->size = ALIGN_DOWN(target->working_area_size, 4); /* 4-byte align */
 			new_wa->address = target->working_area;
 			new_wa->backup = NULL;
 			new_wa->user = NULL;
@@ -2099,8 +2086,7 @@ int target_alloc_working_area_try(struct target *target, uint32_t size, struct w
 	}
 
 	/* only allocate multiples of 4 byte */
-	if (size % 4)
-		size = (size + 3) & (~3UL);
+	size = ALIGN_UP(size, 4);
 
 	struct working_area *c = target->working_areas;
 
@@ -2254,7 +2240,7 @@ uint32_t target_get_working_area_avail(struct target *target)
 	uint32_t max_size = 0;
 
 	if (!c)
-		return target->working_area_size;
+		return ALIGN_DOWN(target->working_area_size, 4);
 
 	while (c) {
 		if (c->free && max_size < c->size)
@@ -3115,23 +3101,21 @@ COMMAND_HANDLER(handle_reg_command)
 				if (reg->exist == false || reg->hidden)
 					continue;
 				/* only print cached values if they are valid */
-				if (reg->exist) {
-					if (reg->valid) {
-						char *value = buf_to_hex_str(reg->value,
-								reg->size);
-						command_print(CMD,
-								"(%i) %s (/%" PRIu32 "): 0x%s%s",
-								count, reg->name,
-								reg->size, value,
-								reg->dirty
-								? " (dirty)"
-								: "");
-						free(value);
-					} else {
-						command_print(CMD, "(%i) %s (/%" PRIu32 ")",
-								count, reg->name,
-								reg->size) ;
-					}
+				if (reg->valid) {
+					char *value = buf_to_hex_str(reg->value,
+							reg->size);
+					command_print(CMD,
+							"(%i) %s (/%" PRIu32 "): 0x%s%s",
+							count, reg->name,
+							reg->size, value,
+							reg->dirty
+							? " (dirty)"
+							: "");
+					free(value);
+				} else {
+					command_print(CMD, "(%i) %s (/%" PRIu32 ")",
+							count, reg->name,
+							reg->size);
 				}
 			}
 			cache = cache->next;
@@ -3187,8 +3171,8 @@ COMMAND_HANDLER(handle_reg_command)
 		if (reg->valid == 0) {
 			int retval = reg->type->get(reg);
 			if (retval != ERROR_OK) {
-			    LOG_DEBUG("Couldn't get register %s.", reg->name);
-			    return retval;
+				LOG_ERROR("Could not read register '%s'", reg->name);
+				return retval;
 			}
 		}
 		char *value = buf_to_hex_str(reg->value, reg->size);
@@ -3337,7 +3321,7 @@ COMMAND_HANDLER(handle_soft_reset_halt_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
 
-	LOG_USER("requesting target halt and executing a soft reset");
+	LOG_TARGET_INFO(target, "requesting target halt and executing a soft reset");
 
 	target_soft_reset_halt(target);
 
@@ -4261,11 +4245,19 @@ static void write_gmon(uint32_t *samples, uint32_t sample_num, const char *filen
 
 		/* max should be (largest sample + 1)
 		 * Refer to binutils/gprof/hist.c (find_histogram_for_pc) */
-		max++;
+		if (max < UINT32_MAX)
+			max++;
+
+		/* gprof requires (max - min) >= 2 */
+		while ((max - min) < 2) {
+			if (max < UINT32_MAX)
+				max++;
+			else
+				min--;
+		}
 	}
 
-	int address_space = max - min;
-	assert(address_space >= 2);
+	uint32_t address_space = max - min;
 
 	/* FIXME: What is the reasonable number of buckets?
 	 * The profiling result will be more accurate if there are enough buckets. */
@@ -4341,6 +4333,19 @@ COMMAND_HANDLER(handle_profile_command)
 
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], offset);
 
+	uint32_t start_address = 0;
+	uint32_t end_address = 0;
+	bool with_range = false;
+	if (CMD_ARGC == 4) {
+		with_range = true;
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], start_address);
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[3], end_address);
+		if (start_address > end_address || (end_address - start_address) < 2) {
+			command_print(CMD, "Error: end - start < 2");
+			return ERROR_COMMAND_ARGUMENT_INVALID;
+		}
+	}
+
 	uint32_t *samples = malloc(sizeof(uint32_t) * MAX_PROFILE_SAMPLE_NUM);
 	if (!samples) {
 		LOG_ERROR("No memory to store samples.");
@@ -4391,15 +4396,6 @@ COMMAND_HANDLER(handle_profile_command)
 	if (retval != ERROR_OK) {
 		free(samples);
 		return retval;
-	}
-
-	uint32_t start_address = 0;
-	uint32_t end_address = 0;
-	bool with_range = false;
-	if (CMD_ARGC == 4) {
-		with_range = true;
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], start_address);
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[3], end_address);
 	}
 
 	write_gmon(samples, num_of_samples, CMD_ARGV[1],
@@ -4727,9 +4723,6 @@ static int target_jim_read_memory(Jim_Interp *interp, int argc,
 				break;
 			}
 
-			// maximum number of hexadecimal characters needed to print 64-bit number
-			// is (64 / 4) = 16 + we need terminating null and 2 charactes for "0x"
-			// prefix. This results in 19 characters for the buffer.
 			char value_buf[19];
 			snprintf(value_buf, sizeof(value_buf), "0x%" PRIx64, v);
 

@@ -61,31 +61,25 @@ proc tsuplib_target_info_check {} {
 
 proc tsuplib_determine_openocd_version {} {
   global OPENOCD
-  set OPENOCD_VARIANT "unknown"
+  set OPENOCD_VERSION "unknown"
   spawn $OPENOCD "--version"
   expect {
-    -re "Open On-Chip Debugger \[0-9.\]+" {
-      if {[regexp "Open On-Chip Debugger 0.10.0" $expect_out(buffer)]} {
-        set OPENOCD_VARIANT "legacy"
-      } elseif {[regexp "Open On-Chip Debugger 0.11.0" $expect_out(buffer)]} {
-        set OPENOCD_VARIANT "latest"
-      } elseif {[regexp "Open On-Chip Debugger 0.12.0" $expect_out(buffer)]} {
-        set OPENOCD_VARIANT "bleeding_edge"
-      }
-      verbose "reported OpenOCD version: $expect_out(buffer)" 2
+    -re "Open On-Chip Debugger (\[0-9.\]+)" {
+      set OPENOCD_VERSION $expect_out(1,string)
+      verbose "reported OpenOCD version: $OPENOCD_VERSION" 2
     }
     eof {
-      error "could not identify openocd variant (unexpected EOF)"
+      error "could not identify openocd version (unexpected EOF)"
     }
     timeout {
-      perror "could not identify openocd variant (unexpected TIMEOUT)"
+      perror "could not identify openocd version (unexpected TIMEOUT)"
     }
   }
   # clean up resources from the version invocation
   close
   wait -nowait
 
-  return $OPENOCD_VARIANT
+  return $OPENOCD_VERSION
 }
 
 proc tsuplib_wait_for_file { filename max_retries poll_delay } {
@@ -156,23 +150,23 @@ proc tsuplib_launch_openocd { tool_name \
   tool_ensure_pristine_state
   tsuplib_target_info_check
 
-  if {[catch { tsuplib_determine_openocd_version } openocd_variant]} {
-    perror $openocd_variant
+  if {[catch { tsuplib_determine_openocd_version } openocd_version]} {
+    perror $openocd_version
     return
   }
 
-  verbose "selected OpenOCD variant: $openocd_variant" 1
+  verbose "selected OpenOCD : $openocd_version" 1
 
-  if {[string equal $openocd_variant "latest"]} {
+  if {[string compare $openocd_version "0.11"] >= 0} {
     if {[target_info openocd,abi_regnames] == 0} {
       build_forward_compat
     } else {
       build_backward_compat
     }
-  } elseif {[string equal $openocd_variant "legacy"]} {
+  } elseif {[string compare $openocd_version "0.10"] >= 0} {
     build_backward_compat
   } else {
-    perror "unexpected OpenOCD version $openocd_variant"
+    perror "unexpected OpenOCD version $openocd_version"
     return
   }
 
