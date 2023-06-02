@@ -1,0 +1,33 @@
+proc run_test {} {
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "wp_on_byte.S" "$default_bin_prefix.exe"
+
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set END_ADDR [tool_state_get_program_symbol self]
+  set ALIGNED_ADDRESS [tool_state_get_program_symbol aligned_address]
+  set STORE_ADDRESS [tool_state_get_program_symbol store_address]
+
+  set WP_ADDRESS [expr $ALIGNED_ADDRESS]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "wp $WP_ADDRESS 4 a"
+
+  ocdtlb_run_expect "resume"
+
+  octdlb_wait_resume
+  ocdtlb_do_expect_halted
+
+  set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+  ocdtlb_expect_equal $current_pc $STORE_ADDRESS
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
