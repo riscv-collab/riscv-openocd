@@ -1,6 +1,5 @@
 proc run_test {} {
   global ra
-  global perror_threshold
 
   set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "step_linkreg_clobber.S" "$default_bin_prefix.exe"
@@ -34,6 +33,7 @@ proc run_test {} {
 
   if {[lindex [split [target_info cpu,name] "_"] 0] eq "scr6"} {
     setup_kfail openocd_EMBARGO/20318 "*-*-*"
+    global perror_threshold
     set perror_threshold 2
   }
 

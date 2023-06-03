@@ -1,5 +1,4 @@
 proc run_test {} {
-  global perror_threshold
 
   set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "special.S" "$default_bin_prefix.exe"
