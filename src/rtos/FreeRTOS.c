@@ -523,7 +523,7 @@ static int freertos_update_threads(struct rtos *rtos)
 										rtos->symbols[FREERTOS_VAL_X_SCHEDULER_RUNNING].address,
 										scheduler_running);
 
-	if ((thread_list_size  == 0) || (rtos->current_thread == 0) || (scheduler_running != 1)) {
+	if ((thread_list_size  == 0) || (pxCurrentTCB == 0) || (scheduler_running != 1)) {
 		/* Either : No RTOS threads - there is always at least the current execution though */
 		/* OR     : No current thread - all threads suspended - show the current execution
 		 * of idling */
