@@ -268,7 +268,7 @@ struct symbols {
 };
 
 static const struct symbols freertos_symbol_list[] = {
-	{ "px_current_tcb", false },
+	{ "pxCurrentTCB", false },
 	{ "pxReadyTasksLists", false },
 	{ "xDelayedTaskList1", false },
 	{ "xDelayedTaskList2", false },
@@ -506,7 +506,7 @@ static int freertos_update_threads(struct rtos *rtos)
 		LOG_ERROR("Error reading current thread in FreeRTOS thread list");
 		return retval;
 	}
-	LOG_DEBUG("FreeRTOS: Read px_current_tcb at 0x%" PRIx64 ", value 0x%" PRIx64,
+	LOG_DEBUG("FreeRTOS: Read pxCurrentTCB at 0x%" PRIx64 ", value 0x%" PRIx64,
 										rtos->symbols[FREERTOS_VAL_PX_CURRENT_TCB].address,
 										px_current_tcb);
 
