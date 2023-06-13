@@ -75,6 +75,7 @@ function(declare_build_dependencies target)
       cp hidapi/hidapi.h ${DEPENDENCIES_INSTALL_PATH}/include/hidapi &&
       cp ${CMAKE_CURRENT_BINARY_DIR}/${libhidapi_pc_tmp}
         ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig/hidapi.pc
+    DEPENDS libusb
   )
   # cmake-format: on
 
@@ -134,6 +135,7 @@ function(declare_build_dependencies target)
         --host=${CONFIGURE_HOST}
         --prefix=${DEPENDENCIES_INSTALL_PATH}
         --disable-shared
+    DEPENDS libusb
   )
   # cmake-format: on
 
