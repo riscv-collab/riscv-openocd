@@ -195,12 +195,12 @@ registerFPGAConfiguration(arty100_scr4_32_imcafd
 
 # Twin stands
 registerFPGAConfiguration(twin_scr5_32
-  BITSTREAM rv32_cluster_single_scr5_l1_l2_plic_hiperf
+  BITSTREAM scr5_rv32
   OPENOCD_BOARD twin_scr5_32
   TWIN_NIGHTLY
 )
 registerFPGAConfiguration(twin_scr5_64
-  BITSTREAM rv64_cluster_single_scr5_tcm_l1_l2_plic_hiperf
+  BITSTREAM scr5_rv64_tcm
   OPENOCD_BOARD twin_scr5_64
   TWIN_NIGHTLY
 )
