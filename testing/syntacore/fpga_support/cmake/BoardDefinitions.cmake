@@ -254,22 +254,22 @@ addSCR7L2Config(scr7_rls_ww08.1.0
 )
 
 registerFPGAConfiguration(twin_scr7evalcluster_pseudoscore_nortos
-  BITSTREAM rv64_cluster_scr7_eval
+  BITSTREAM scr7_l2_mpu
   OPENOCD_BOARD twin_scr7_x_1core_nortos
   TWIN_UNSTABLE
 )
 registerFPGAConfiguration(twin_scr7evalcluster_mcore4_nortos
-  BITSTREAM rv64_cluster_scr7_eval
+  BITSTREAM scr7_l2_mpu
   OPENOCD_BOARD twin_scr7_x_mcore4_nortos
   TWIN_UNSTABLE
 )
 registerFPGAConfiguration(twin_scr7evalcluster_smp4_workarea
-  BITSTREAM rv64_cluster_scr7_eval
+  BITSTREAM scr7_l2_mpu
   OPENOCD_BOARD twin_scr7_x_smp4_workarea
   TWIN_UNSTABLE
 )
 registerFPGAConfiguration(twin_scr7evalcluster_smp4
-  BITSTREAM rv64_cluster_scr7_eval
+  BITSTREAM scr7_l2_mpu
   OPENOCD_BOARD twin_scr7_x_smp4
   TWIN_UNSTABLE
 )
