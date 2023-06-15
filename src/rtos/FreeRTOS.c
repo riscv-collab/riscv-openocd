@@ -521,7 +521,7 @@ static int freertos_update_threads(struct rtos *rtos)
 		LOG_ERROR("Error reading FreeRTOS scheduler state");
 		return retval;
 	}
-	LOG_DEBUG("FreeRTOS: Read xSchedulerRunning at 0x%" PRIx64 ", value 0x%" PRIx32,
+	LOG_DEBUG("FreeRTOS: Read xSchedulerRunning at 0x%" PRIx64 ", value 0x%" PRIx64,
 										rtos->symbols[FREERTOS_VAL_X_SCHEDULER_RUNNING].address,
 										scheduler_running);
 
