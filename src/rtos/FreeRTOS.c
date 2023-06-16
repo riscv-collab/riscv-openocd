@@ -22,6 +22,7 @@
 
 #define FREERTOS_MAX_PRIORITIES	63
 #define FREERTOS_THREAD_NAME_STR_SIZE 200
+#define FREERTOS_CURRENT_EXECUTION_ID 1
 
 struct freertos_params {
 	const char *target_name;
@@ -513,10 +514,10 @@ static int freertos_update_threads(struct rtos *rtos)
 	/* read scheduler running */
 	uint64_t scheduler_running;
 	retval = freertos_read_struct_value(rtos->target,
-										rtos->symbols[FREERTOS_VAL_X_SCHEDULER_RUNNING].address,
-										0,
-										freertos->ubasetype_size,
-										&scheduler_running);
+						rtos->symbols[FREERTOS_VAL_X_SCHEDULER_RUNNING].address,
+						0,
+						freertos->ubasetype_size,
+						&scheduler_running);
 	if (retval != ERROR_OK) {
 		LOG_ERROR("Error reading FreeRTOS scheduler state");
 		return retval;
@@ -538,8 +539,8 @@ static int freertos_update_threads(struct rtos *rtos)
 			LOG_ERROR("Error allocating memory for %" PRIu64 " threads", thread_list_size);
 			return ERROR_FAIL;
 		}
-		rtos->current_thread = 1;
-		rtos->thread_details->threadid = 1;
+		rtos->current_thread = FREERTOS_CURRENT_EXECUTION_ID;
+		rtos->thread_details->threadid = rtos->current_thread;
 		rtos->thread_details->exists = true;
 		rtos->thread_details->extra_info_str = NULL;
 		rtos->thread_details->thread_name_str = malloc(sizeof(tmp_str));
@@ -673,7 +674,7 @@ static int freertos_update_threads(struct rtos *rtos)
 				new_value->tcb = tcb;
 				/* threadid can't be 0.
 				 * plus 1 to avoid duplication with "Current Execution" */
-				new_value->threadid = ++freertos->last_threadid + 1;
+				new_value->threadid = ++freertos->last_threadid + FREERTOS_CURRENT_EXECUTION_ID;
 
 				LOG_DEBUG("FreeRTOS: new thread created, tcb=0x%" PRIx64 ", threadid=0x%" PRIx64,
 						new_value->tcb, new_value->threadid);
