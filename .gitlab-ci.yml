@@ -56,6 +56,13 @@ default:
     - echo "You can reproduce this pipeline with the following commands:"
     - ./make.py history
     - ./make.py container clean
+    - |
+      if [ $CI_JOB_STATUS != 'success' ]; then
+        echo "Testing directory size:"
+        du -hs build/Release/testing
+        time XZ_OPT="-T0 -9" tar -cJf testing_logs.tar.xz build/Release/testing
+        du -hs testing_logs.tar.xz
+      fi
 
 main:
   stage: main
@@ -68,7 +75,7 @@ main:
         IMAGE: [cpp_ubuntu_18]
   artifacts:
     paths:
-      - build/Release/testing
+      - testing_logs.tar.xz
     when: on_failure
 
   script:
