@@ -24,6 +24,7 @@ from support.manifest import Manifest as _Manifest
 class Package(_conan.ConanFile):  # type: ignore
     settings = "os", "arch", "build_type"
     options = None
+    name = "openocd"
     default_options = None
     revision_mode = "scm"
     cmake_find_mode = "both"
@@ -55,16 +56,6 @@ class Package(_conan.ConanFile):  # type: ignore
             return
         # pylint: disable-next=not-callable
         self.test_requires(deps["riscv-gcc"])
-
-    def set_name(self) -> None:
-        source_folder = _Path(__file__).parent
-        with _io.StringIO() as result:
-            self.run(
-                f"{source_folder}/make.py --no-history-dump --logging-level error conan-info name",
-                stdout=result,
-            )
-            name = result.getvalue().splitlines()[-1].strip()
-        self.name = name
 
     def set_version(self) -> None:
         source_folder = _Path(__file__).parent
