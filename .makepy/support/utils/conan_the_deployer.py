@@ -8,20 +8,7 @@ from pathlib import Path as _Path
 def deploy(graph, output_folder: str, **kwargs):  # type: ignore
     print("Behold! I am Conan the Deployer")
 
-    openocd_dep = None
-    for name, dep in graph.root.conanfile.dependencies.items():
-        if name.direct:
-            if openocd_dep is not None:
-                raise RuntimeError(
-                    f"only one direct dependency expected! (unexpected {name} found)"
-                )
-            openocd_dep = dep
-        else:
-            raise RuntimeError(
-                f"unexpected indirect dependency detected {name}"
-            )
-    if openocd_dep is None:
-        raise RuntimeError("bla")
+    openocd_dep = graph.root.conanfile.dependencies["openocd"]
 
     if not str(openocd_dep.ref).startswith("openocd"):
         raise RuntimeError(

@@ -55,7 +55,9 @@ class Package(_conan.ConanFile):  # type: ignore
         if self.settings.os != "Linux":  # type: ignore
             return
         # pylint: disable-next=not-callable
-        self.test_requires(deps["riscv-gcc"])
+        self.requires(
+            deps["riscv-gcc"], test=True, visible=True, package_id_mode=None
+        )
 
     def set_version(self) -> None:
         source_folder = _Path(__file__).parent
