@@ -4358,9 +4358,6 @@ static const struct command_registration riscv_command_handlers[] = {
 		.usage = "",
 		.chain = semihosting_common_handlers
 	},
-	{
-		.chain = smp_command_handlers
-	},
 	COMMAND_REGISTRATION_DONE
 };
 
