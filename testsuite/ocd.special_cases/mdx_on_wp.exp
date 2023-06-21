@@ -1,0 +1,64 @@
+proc doTestReadOnWP { PC WP_ADDRESS MEM_OP } {
+  verbose "Testing $MEM_OP at $WP_ADDRESS" 1
+
+  ocdtlb_run_expect "reg pc $PC"
+  set data_read1 [ocdtlb_rsp_get [ocdtlb_run_expect "$MEM_OP $WP_ADDRESS"] data]
+  ocdtlb_run_expect "wp $WP_ADDRESS 4"
+  ocdtlb_run_expect "step"
+
+
+  # set data_read2 [ocdtlb_rsp_get [ocdtlb_run_expect "$MEM_OP $WP_ADDRESS"] data]
+  if {[catch {ocdtlb_rsp_get [ocdtlb_run_expect "$MEM_OP $WP_ADDRESS"] data} data_read2]} {
+    error "unexecptected failure $data_read2 while WP is set"
+
+    set known_failures [scr6 scr7 scr9]
+    set target_name [target_info cpu,name]
+    if {[lsearch -exact $known_failures $target_name] != -1} {
+      global perror_threshold
+      set perror_threshold 2
+      setup_kfail openocd_EMBARGO/30822 "*-*-*"
+    }
+    perror "the target is not halted $target_not_halted ($target_name)"
+    return [ocd_test_fail]
+  }
+
+  ocdtlb_run_expect "$MEM_OP $WP_ADDRESS"
+
+  ocdtlb_run_expect "rwp $WP_ADDRESS"
+
+  if {$data_read1 ne $data_read2 } {
+    error "$MEM_OP: data from read1 ($data_read1) is not equal that of read2 ($data_read2)"
+  }
+}
+
+proc run_test {} {
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "wp_on_byte.S" "$default_bin_prefix.exe"
+
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set END_ADDR [tool_state_get_program_symbol self]
+  set ALIGNED_ADDRESS [tool_state_get_program_symbol aligned_address]
+  set STORE_ADDRESS [tool_state_get_program_symbol store_address]
+
+  set WP_ADDRESS [expr $ALIGNED_ADDRESS]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdb
+  doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdh
+  doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdw
+
+  if {[target_info cpu,xlen] == 64} {
+    doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdd
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
