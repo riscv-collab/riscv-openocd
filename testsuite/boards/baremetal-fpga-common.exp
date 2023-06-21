@@ -1,3 +1,4 @@
+set_board_info env,scripting_timeout 2
 set_board_info env,preferred_timeout 15
 set_board_info env,resume_delay 1
 set_board_info env,exec_delay 2

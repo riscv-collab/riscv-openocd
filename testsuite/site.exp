@@ -96,3 +96,12 @@ if {[auto_execok $SPIKE_SIM] == ""} {
   }
 }
 
+proc getScriptDirectory {} {
+  set dispScriptFile [file normalize [info script]]
+  set scriptFolder [file dirname $dispScriptFile]
+  return $scriptFolder
+}
+
+set STAND_DB_PATH [getScriptDirectory]/boards/support/stand_db/stand_db.tcl
+puts "Loading stand_db from: $STAND_DB_PATH"
+source "$STAND_DB_PATH"

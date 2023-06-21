@@ -11,7 +11,7 @@ proc run_test {} {
 
     set default_bin_prefix [tool_state_get default_bin_prefix]
     # TODO: env is unused for now
-    set openocd_adapter_flags [target_info openocd,interface_flags]
+    set openocd_adapter_flags [standInfoGetInterfaceFlags]
 
     set target_cfg_flags [list \
       -f ${OPENOCD_ROOT}/share/openocd/scripts/target/syntacore_target.cfg \

@@ -3,6 +3,7 @@ load_generic_config "sim"
 
 load_base_board_description "basic-sim"
 
+set_board_info env,scripting_timeout 10
 set_board_info env,preferred_timeout 10
 set_board_info env,resume_delay 0.10
 set_board_info env,exec_delay 0.10
@@ -16,13 +17,6 @@ set_board_info sim $SPIKE_SIM
 add_board_info sim,options --rbb-port=$SPIKE_BITBANG
 
 set_board_info ldscript "-T$testsuitedir/boards/support/ldscripts/spike.ld"
-
-set_board_info openocd,interface_flags [list \
-  -c "telnet_port disabled" \
-  -c "adapter driver remote_bitbang" \
-  -c "remote_bitbang host 127.0.0.1" \
-  -c "remote_bitbang port $SPIKE_BITBANG" \
-]
 
 # NOTE: for now every spike configuration we use has only one TAP
 # in general case this is not the case, so the code needs to be revised

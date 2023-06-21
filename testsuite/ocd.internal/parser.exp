@@ -4,7 +4,9 @@ proc run_test {} {
   global RUN_OCD_INTERNAL_ON_HW
 
   if {!$RUN_OCD_INTERNAL_ON_HW} {
-    if {[target_info sim] == ""} { return [ocd_test_unsupported] }
+    if {[target_info sim] eq ""} {
+      return [ocd_test_unsupported]
+    }
   }
 
   set default_bin_prefix [tool_state_get default_bin_prefix]

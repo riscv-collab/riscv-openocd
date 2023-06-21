@@ -140,6 +140,15 @@ proc tsuplib_wait_for_acknowledge { tcl_log primary_pattern max_retry_count poll
   error "could not get initial ack while waiting for $primary_pattern (it num: $it_count)"
 }
 
+proc tsuplib_update_binary_prefix { tool_name test_file_name } {
+  set test_name [file rootname [file tail $test_file_name]]
+  tool_state_update test_name $test_name
+
+  # format is #{tool_name}_${board_name}_${test_name}
+  set test_identifier "${tool_name}_[target_info name]_${test_name}"
+  tool_state_update default_bin_prefix $test_identifier
+}
+
 proc tsuplib_launch_openocd { tool_name \
                               test_file_name \
                               interface_flags \
@@ -170,14 +179,9 @@ proc tsuplib_launch_openocd { tool_name \
     return
   }
 
-  set ocd_test_name [file rootname [file tail $test_file_name]]
-  tool_state_update test_name $ocd_test_name
+  tsuplib_update_binary_prefix $tool_name $test_file_name
 
-  # format is #{tool_name}_${board_name}_${test_name}
-  set test_identifier "${tool_name}_[target_info name]_${ocd_test_name}"
-  tool_state_update default_bin_prefix $test_identifier
-
-  set ocd_test_log "${test_identifier}.log"
+  set ocd_test_log "[tool_state_get default_bin_prefix].log"
   tool_state_update openocd_log $ocd_test_log
 
   if {[catch {exec rm ${ocd_test_log}} result]} {
