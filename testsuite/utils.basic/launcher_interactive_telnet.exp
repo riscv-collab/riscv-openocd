@@ -1,0 +1,99 @@
+proc expectExpr { spawn_id expr reason } {
+  expect {
+    -ex $expr {
+    }
+    eof {
+      set EofResult [wait]
+      error "unexpected termination while waiting for $reason ($EofResult)"
+    }
+    timeout {
+      close
+      wait
+      error "unexpected timeout while waiting for $reason"
+    }
+  }
+}
+
+proc expectTelnetStartup { spawn_id } {
+  expectExpr $spawn_id "Target successfully examined" "target examine"
+  expectExpr $spawn_id "Open On-Chip Debugger" "telnet signature"
+  expectExpr $spawn_id "\r\n\r>" "telnet prompt"
+}
+
+proc expectTelnetTargetListing { spawn_id } {
+  send "targets\n"
+  expectExpr $spawn_id \
+    "    TargetName         Type       Endian TapName            State" \
+    "targets command header"
+  send "reset halt ; targets \n"
+  expectExpr $spawn_id \
+    "    TargetName         Type       Endian TapName            State" \
+    "targets command header"
+
+  set NUM_CORES [target_info cpu,cores_num]
+  for { set CoreIndex 0 } { $CoreIndex < $NUM_CORES } { incr CoreIndex } {
+    expectExpr $spawn_id "halted\r\n" "target state"
+  }
+  expectExpr $spawn_id "\r\n" "target newlines"
+  send "help\n"
+  expectExpr $spawn_id "\r\n\r>" "prompt after help"
+  send "shutdown\n"
+  # Could not figure out why this does not work, so ignoring this for now
+  #expectExpr $spawn_id "shutdown command invoked" "shutdown result"
+  expect {
+    eof {
+      # No-op
+    }
+    timeout {
+      close
+      wait
+      error "unexpected timeout while waiting for shutdown"
+    }
+  }
+}
+
+proc expectScriptCleanup { spawn_id } {
+  set ScriptResults [wait]
+  verbose "script result: $ScriptResults"
+  set Status [lindex $ScriptResults 3]
+  if { $Status != 0 } {
+    error "script reports failure (unexpected)"
+  }
+}
+
+proc run_test {} {
+
+  set TelnetLog [utils_spawn_universal_launcher \
+    [list --telnet] \
+    telnet  \
+    interactive]
+  expectTelnetStartup $spawn_id
+  expectTelnetTargetListing $spawn_id
+  expectScriptCleanup $spawn_id
+  if {![file exists "${TelnetLog}"]} {
+    error "could not detect session file <$TelnetLog>"
+  }
+  set OpenOCDInternalLog "${TelnetLog}.openocd.log"
+  if {![file exists "$OpenOCDInternalLog"]} {
+    error "could not detect openocd session file <$OpenOCDInternalLog>"
+  }
+
+  set TelnetLog [utils_spawn_universal_launcher \
+    [list --verbose --telnet --log-session ""] \
+    telnet_no_session_log  \
+    interactive]
+  expectTelnetStartup $spawn_id
+  expectTelnetTargetListing $spawn_id
+  expectScriptCleanup $spawn_id
+  if {[file exists "${TelnetLog}"]} {
+    error "unexpected session file <$TelnetLog>"
+  }
+  set OpenOCDInternalLog "${TelnetLog}.openocd.log"
+  if {[file exists "$OpenOCDInternalLog"]} {
+    error "unexpected openocd session file <$OpenOCDInternalLog>"
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

@@ -1,0 +1,11 @@
+proc run_test {} {
+  set test "echo this_is_just_a_test"
+  set LogFile [utils_spawn_universal_launcher \
+    [list --run-command $test --run-command shutdown] \
+    run_command \
+    expect_success]
+  exec grep --text -F this_is_just_a_test $LogFile
+  return [ocd_test_pass]
+}
+
+return [run_test]

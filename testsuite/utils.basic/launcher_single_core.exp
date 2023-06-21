@@ -1,0 +1,16 @@
+proc run_test {} {
+  set LogFile [utils_spawn_universal_launcher \
+    [list --single-core --run-command shutdown] \
+    single_core \
+    expect_success]
+  set GdbPortsCount [llength [split \
+    [exec grep --text -E "Listening on port .* gdb connections" $LogFile] "\n"]]
+
+  if {$GdbPortsCount == 1} {
+    return [ocd_test_pass]
+  }
+
+  error "Unexpected number of gdb ports for target(s): $GdbPortsCount"
+}
+
+return [run_test]

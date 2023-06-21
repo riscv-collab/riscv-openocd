@@ -1,0 +1,57 @@
+proc run_test {} {
+  # Note: these come from expect framework
+  global srcdir
+  global subdir
+
+  set configure_hook_file  "$srcdir/$subdir/lib/configure_hook.tcl"
+  set LogFile [utils_spawn_universal_launcher \
+    [list --configure-hook $configure_hook_file --run-command shutdown] \
+    configure_hook \
+    expect_success]
+
+  set NUM_CORES [target_info cpu,cores_num]
+
+  set PreTapHook \
+    [exec grep --text -n -F "CONFIGURE-HOOK: sc_pre_tap_hook" $LogFile]
+  set TargetHookList \
+    [split [exec grep --text -n -F "CONFIGURE-HOOK: sc_target_configuration_hook: target=" $LogFile] "\n"]
+  set TargetsReadyHook \
+    [exec grep --text -n -F "CONFIGURE-HOOK: sc_targets_ready_hook: targets_num=$NUM_CORES" $LogFile]
+  set PreInitMarker \
+    [exec grep --text -n -F "CONFIGURE-HOOK: pre-init printing" $LogFile]
+  set AtLeastOneMarker \
+    [exec grep --text -n -F "Target successfully examined" $LogFile]
+
+  set NumAtLeastOneEvent [lindex [split $AtLeastOneMarker ":"] 0]
+  set NumPreInitEvent [lindex [split $PreInitMarker ":"] 0]
+
+  set NumPreTap [lindex [split $PreTapHook ":"] 0]
+  set NumTargetsReady [lindex [split $TargetsReadyHook ":"] 0]
+
+  foreach TargetHook $TargetHookList {
+    set NumTargetHook [lindex [split $TargetHook ":"] 0]
+    if {[expr {$NumPreTap >= $NumTargetHook}]} {
+      error "unexpected ordering of pre-tap and target-hook calls: $PreTapHook vs $TargetHook"
+    }
+    if {[expr {$NumPreInitEvent >= $NumPreTap}]} {
+      error "unexpected ordering of pre-init printing and pre-tap: $InitTargetsMarker vs $PreTapHook"
+    }
+  }
+
+  if {[expr {$NumTargetHook >= $NumTargetsReady}]} {
+    error "unexpected ordering of target-hook and targets_ready calls: $TargetHook vs $TargetsReadyHook"
+  }
+
+  if {[expr {$NumTargetsReady >= $NumAtLeastOneEvent}]} {
+    error "unexpected ordering of targets_ready and examine_marker calls: $TargetsReadyHook vs $AtLeastOneMarker"
+  }
+
+  set non_existent_file  "$srcdir/$subdir/lib/non_existent.missing"
+  set LogFile [utils_spawn_universal_launcher \
+    [list --configure-hook $non_existent_file] configure_hook_missing expect_failure]
+  exec grep --text -F "unable to locate user-specified configuration hook: $non_existent_file" $LogFile
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

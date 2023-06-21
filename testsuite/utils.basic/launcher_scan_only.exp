@@ -1,0 +1,20 @@
+proc run_test {} {
+  set LogFile [utils_spawn_universal_launcher \
+    [list --scan-only] scan_only expect_success]
+  set MatchedLines [split \
+    [exec grep --text -F -A 3 "Command line to run OpenOCD:" $LogFile] "\n"]
+  set OpenOCDCmd [lindex $MatchedLines 1]
+  if {[string first openocd $OpenOCDCmd] == -1} {
+    error "Could not identify run string in $OpenOCDCmd"
+  }
+  set ExitMsg [lindex $MatchedLines 2]
+  if {[string first "scan-only mode requested, exiting" $ExitMsg] == -1} {
+    error "Could not identify exit message: $ExitMsg"
+  }
+  if {[llength $MatchedLines] != 3} {
+    error "unexpected number of matched lines $MatchedLines"
+  }
+  return [ocd_test_pass]
+}
+
+return [run_test]

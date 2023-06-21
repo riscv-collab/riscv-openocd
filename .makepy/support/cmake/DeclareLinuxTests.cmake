@@ -91,6 +91,7 @@ function(addOpenOCDTestsForBoard board_config)
   # cmake-format: off
   addNextToolToTestForBoard(ocd ${board_config})
   addNextToolToTestForBoard(jtag ${board_config})
+  addNextToolToTestForBoard(utils ${board_config})
   # cmake-format: on
 endfunction()
 

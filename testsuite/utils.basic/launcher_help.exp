@@ -1,0 +1,34 @@
+proc run_test {} {
+  set log_path [utils_spawn_universal_launcher \
+    [list --help]  help  expect_success]
+  set options [list \
+    help \
+    disable-interactive-mode \
+    speed \
+    smp \
+    save \
+    load \
+    bitbang-port \
+    spike-harts \
+    debug-adapter-index \
+    debug-adapter-serial \
+    run-script \
+    run-command \
+    scan-only \
+    single-core \
+    ide-mode \
+    bindto \
+    configure-hook \
+    log-session \
+    telnet \
+    i-know-what-im-doing \
+    verbose \
+  ]
+  foreach option $options {
+    exec grep --text -F -- "--$option" $log_path
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

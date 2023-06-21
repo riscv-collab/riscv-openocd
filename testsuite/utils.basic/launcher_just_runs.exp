@@ -1,0 +1,60 @@
+# [--disable-interactive-mode] disables interactive selection of debug adapter
+# [--load config_path] loads selected configuration (disables interactive mode automatically)
+
+proc just_run_with_command { args log_suffix} {
+  return [utils_spawn_universal_launcher \
+    [list {*}$args --run-command shutdown] \
+    $log_suffix \
+    expect_success]
+}
+
+proc run_test {} {
+  set bin_prefix [tool_state_get default_bin_prefix]
+  set Logs [list]
+
+  set ShutdownCommand [list]
+
+  set run_type expect_success
+
+  lappend ShutdownCommand --run-command
+  lappend ShutdownCommand shutdown
+
+  lappend Logs [just_run_with_command \
+    [list] just_run]
+
+  lappend Logs [just_run_with_command \
+    [list --verbose] verbose]
+
+  lappend Logs [just_run_with_command \
+    [list --single-core] single_core]
+
+  lappend Logs [just_run_with_command \
+    [list --ide-mode]    ide_mode]
+
+  lappend Logs [just_run_with_command \
+    [list --bindto 0.0.0.0] bindto]
+
+  lappend Logs [just_run_with_command \
+    [list --save ${bin_prefix}_cfg.dat] save_cfg]
+
+  lappend Logs [just_run_with_command \
+    [list --load ${bin_prefix}_cfg.dat] load_cfg]
+
+  lappend Logs [just_run_with_command \
+    [list --smp] smp]
+
+  lappend Logs [just_run_with_command \
+    [list --speed 100] speeed]
+
+  lappend Logs [just_run_with_command \
+    [list --disable-interactive-mode] interactive_flag]
+
+  foreach Log $Logs {
+    exec grep --text -F "Target successfully examined" $Log
+    exec grep --text -F "Listening on port 3333 for gdb connections" $Log
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

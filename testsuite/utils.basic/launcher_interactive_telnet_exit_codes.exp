@@ -1,0 +1,85 @@
+proc expectExpr { spawn_id expr reason } {
+  expect {
+    -ex $expr {
+    }
+    eof {
+      set EofResult [wait]
+      error "unexpected termination while waiting for $reason ($EofResult)"
+    }
+    timeout {
+      close
+      wait
+      error "unexpected timeout while waiting for $reason"
+    }
+  }
+}
+
+proc expectOpenOCDPIDExpr { spawn_id } {
+  expect {
+    -re "--- OPENOCD PID=(\[0-9\]+) ---" {
+      return "$expect_out(1,string)"
+    }
+    eof {
+      error "unexpected eof while waiting for OpenOCD PID"
+    }
+    timeout {
+      error "unexpected timeout while waiting for OpenOCD PID"
+    }
+  }
+}
+
+proc expectTelnetStartup { spawn_id } {
+  expectExpr $spawn_id "Target successfully examined" "target examine"
+  expectExpr $spawn_id "Open On-Chip Debugger" "telnet signature"
+  expectExpr $spawn_id "\r\n\r>" "telnet prompt"
+}
+
+proc expectScriptCleanup { spawn_id } {
+  # close will result in SIGHUP beeing sent, so we reverse the standart order
+  # of operations to get a true exit code/status
+  set ScriptResults [wait]
+  close
+  verbose "script result: $ScriptResults"
+  set Status [lindex $ScriptResults 3]
+  if { $Status == 0 } {
+    error "script reports success (unexpected)"
+  }
+}
+
+proc run_test {} {
+
+  set TelnetLog [utils_spawn_universal_launcher \
+    [list --telnet] \
+    telnet  \
+    interactive]
+  expectTelnetStartup $spawn_id
+  send "shutdown error\n"
+  expectExpr $spawn_id "Error: OpenOCD exit code indicates FAILURE (1)" "expecting exit code"
+  expectScriptCleanup $spawn_id
+
+  set KilledBySIGTERMLog [utils_spawn_universal_launcher \
+    [list --telnet] \
+    telnet  \
+    interactive]
+  expectTelnetStartup $spawn_id
+  send "echo \"--- OPENOCD PID=\[pid\] ---\"\n"
+  set OpenOCDPID [expectOpenOCDPIDExpr $spawn_id]
+  exec kill $OpenOCDPID
+  expectExpr $spawn_id "OpenOCD was killed by SIGTERM" "expecting killed by info (SIGTERM)"
+  expectScriptCleanup $spawn_id
+
+  set KilledBySIGKILLLog [utils_spawn_universal_launcher \
+    [list --telnet] \
+    telnet  \
+    interactive]
+  expectTelnetStartup $spawn_id
+  send "echo \"--- OPENOCD PID=\[pid\] ---\"\n"
+  set OpenOCDPID [expectOpenOCDPIDExpr $spawn_id]
+  exec kill -9 $OpenOCDPID
+  expectExpr $spawn_id "OpenOCD was killed by SIGKILL" "expecting killed by info (SIGKILL)"
+  expectScriptCleanup $spawn_id
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

@@ -1,0 +1,19 @@
+proc run_test {} {
+  set LogFile [utils_spawn_universal_launcher \
+    [list --verbose --speed 100 --run-command shutdown] \
+    speed  \
+    expect_success]
+  exec grep --text -F "command - adapter speed 100" $LogFile
+
+  # NOTE: in case of an fpga run we are done here
+  if {[target_info sim] eq ""} {
+    return [ocd_test_pass]
+  }
+
+  # NOTE: in case of a simulator run we can do a little better
+  exec grep --text -F "This adapter doesn't support configurable speed" $LogFile
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

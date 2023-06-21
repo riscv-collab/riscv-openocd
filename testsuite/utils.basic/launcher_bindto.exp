@@ -1,0 +1,11 @@
+proc run_test {} {
+  set LogFile [utils_spawn_universal_launcher \
+    [list --verbose --bindto 0.0.0.0 --run-command shutdown] \
+    bindto \
+    expect_success]
+
+  exec grep --text -F "command - bindto 0.0.0.0" $LogFile
+  return [ocd_test_pass]
+}
+
+return [run_test]

@@ -1,0 +1,34 @@
+proc run_test {} {
+  # Note: these come from expect framework
+  global srcdir
+  global subdir
+
+  set script_to_run "$srcdir/$subdir/lib/calculate_number_of_registers.tcl"
+  set LogFileIDE [utils_spawn_universal_launcher \
+    [list --ide-mode --run-script $script_to_run --run-command shutdown] \
+    ide \
+    expect_success]
+  set LogFileNoIDE [utils_spawn_universal_launcher \
+    [list --run-script $script_to_run --run-command shutdown] \
+    no_ide \
+    expect_success]
+
+  set IDE_INFO [exec grep --text -F "IDE-TEST" $LogFileIDE]
+  set NO_IDE_INFO [exec grep --text -F "IDE-TEST" $LogFileNoIDE]
+  if { $IDE_INFO == $NO_IDE_INFO } {
+    error "looks like cloak script does not work: IDE: $IDE_INFO vs NO_IDE: $NO_IDE_INFO"
+  }
+  # "IDE-TEST: This target has $RegsNum REGISTERS"
+  if {![regexp {This target has (\d+) REGISTERS} $IDE_INFO m IDE_NUM]} {
+    error "could not match number of registers for $IDE_INFO"
+  }
+  if {![regexp {This target has (\d+) REGISTERS} $NO_IDE_INFO m NO_IDE_NUM]} {
+    error "could not match number of registers for $NO_IDE_INFO"
+  }
+  if {$IDE_NUM >= $NO_IDE_NUM} {
+    error "number of registers in IDE mode greater or equal to non-IDE ($IDE_NUM vs $NO_IDE_NUM)"
+  }
+  return [ocd_test_pass]
+}
+
+return [run_test]

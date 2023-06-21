@@ -1,0 +1,108 @@
+load_lib "lib_elf_ripper.exp"
+load_lib "lib_abi_compat.exp"
+load_lib "lib_response.exp"
+load_lib "lib_test.exp"
+load_lib "lib_tool_support.exp"
+load_lib "lib_tool_state.exp"
+
+proc utils_init {test_file_name} {
+  global ENABLE_EXP_INTERNAL
+  global timeout
+
+  exp_internal $ENABLE_EXP_INTERNAL
+  match_max -d 1000000
+  set timeout [target_info env,preferred_timeout]
+  verbose "/// ocd_utils_init \\\\\\" 1
+
+  tool_ensure_pristine_state
+  tsuplib_update_binary_prefix utils $test_file_name
+
+  verbose "\\\\\\ ocd_utils_init ///\n   _______" 1
+}
+
+proc utils_get_universal_launcher {} {
+  global OPENOCD_ROOT
+  set utils_dir "${OPENOCD_ROOT}/share/openocd/scripts/syntacore"
+  return "${utils_dir}/openocd_run.exp"
+}
+
+proc utils_build_ul_args { args } {
+  global SPIKE_BITBANG
+  set target_args []
+  if {[target_info sim] eq ""} {
+    lappend target_args --debug-adapter-serial
+    lappend target_args [standInfoGet adapter_id]
+  } else {
+    # if we run on a simulator (spike) we have to supply rbb port and number
+    # of harts
+    lappend target_args --bitbang-port
+    lappend target_args $SPIKE_BITBANG
+    lappend target_args --spike-harts
+    lappend target_args [target_info cpu,cores_num]
+  }
+  set ul_args [list {*}$target_args {*}$args]
+  return $ul_args
+}
+
+proc utils_get_log_name { log } {
+  set bin_prefix [tool_state_get default_bin_prefix]
+  return ${bin_prefix}_${log}.log
+}
+
+proc utils_spawn_universal_launcher { args log {termination_policy expect_timeout}} {
+  set args [utils_build_ul_args {*}$args]
+  set openocd_launcher [utils_get_universal_launcher]
+  set log_name [utils_get_log_name $log]
+
+  upvar spawn_id spawn_id
+  spawn $openocd_launcher --log-session $log_name {*}$args
+  verbose "running $openocd_launcher $args" 1
+  verbose "  logfile should be at $log_name" 1
+  if { $termination_policy eq "interactive" } {
+    verbose "interactive launch" 1
+    return $log_name
+  }
+  set timeout [target_info env,scripting_timeout]
+  expect {
+    eof {
+      verbose "  universal launcher execution terminated" 1
+      set result [wait]
+      if { $termination_policy == "expect_timeout" } {
+        error "unexpected termination for args: $args"
+      }
+      set status [lindex $result 3]
+      if { $termination_policy == "expect_success" } {
+        if { $status != 0} {
+          error "unexpected failure for args: $args"
+        }
+        return $log_name
+      }
+      if { $termination_policy == "expect_failure" } {
+        if { $status == 0 } {
+          if {[lindex $result 5] ne "SIGHUP"} {
+            error "unexpected success ($result) for args: $args"
+          }
+        }
+        return $log_name
+      }
+      error "unexpected termination_policy ($termination_policy) specified"
+    }
+    timeout {
+      verbose "  universal launcher execution resulted in timeout" 1
+      close
+      wait
+      sleep [target_info env,exec_delay]
+      if { $termination_policy != "expect_timeout" } {
+        error "unexpected timeout for args: $args"
+      }
+      return $log_name
+    }
+  }
+}
+
+proc utils_finish {{ cleanup_type "immediate" }} {
+  verbose "/// ocd_utils_finish \\\\\\" 1
+  tool_state_clear
+  verbose "\\\\\\ ocd_utils_finish ///\n   _______" 1
+}
+

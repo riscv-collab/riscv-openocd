@@ -1,0 +1,31 @@
+proc run_test {} {
+  set RunOptions [list --verbose --run-command shutdown]
+  if {[expr {[target_info openocd,smp_target] == 1}]} {
+    lappend RunOptions --smp
+  }
+
+  set LogFile [utils_spawn_universal_launcher \
+    $RunOptions \
+    smp \
+    expect_success]
+  set NUM_CORES [target_info cpu,cores_num]
+  set GdbPortsCount [llength [split \
+    [exec grep --text -E "Listening on port .* gdb connections" $LogFile] "\n"]]
+
+  if {[expr {[target_info openocd,smp_target] == 1}]} {
+    exec grep --text -F "Hardware thread awareness created" $LogFile
+    exec grep --text -F "command - target smp " $LogFile
+    if {$GdbPortsCount == 1} {
+      return [ocd_test_pass]
+    }
+    error "Unexpected number of gdb ports for smp/hwthread target: $GdbPortsCount"
+  }
+
+  if {$GdbPortsCount == $NUM_CORES} {
+    return [ocd_test_pass]
+  }
+
+  error "Unexpected number of gdb ports for target(s): $GdbPortsCount"
+}
+
+return [run_test]

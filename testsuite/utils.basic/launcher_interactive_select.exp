@@ -1,0 +1,136 @@
+proc interactiveTestFindAdapterIndex { AdapterList ExpectedID } {
+  set Index 0
+  foreach DebugAdapter $AdapterList {
+    if {[regexp { +[0-9]+ - ([^|]+)} $DebugAdapter m AdapterID]} {
+      if { $AdapterID eq $ExpectedID } {
+        return $Index
+      }
+    }
+    incr Index
+  }
+  error "could not find adapter index for $ExpectedID"
+}
+
+proc interactiveTestExtractAdapterList { spawn_id } {
+  set DebugAdaptersList ""
+  expect {
+    -re "Found Debug Adapters:\r\n(.*)\r\nPlease, select Debug Adapter: " {
+      set DebugAdaptersList [split $expect_out(1,string) "\n"]
+    }
+    eof {
+      wait
+      error "unexpected EOF (no adapters detected?)"
+    }
+    timeout {
+      close
+      wait
+      error "unexpected timeout (no adapters detected?)"
+    }
+  }
+  foreach Adapter $DebugAdaptersList {
+    puts $Adapter
+  }
+  return $DebugAdaptersList
+}
+
+proc interactiveTestSelectAdapterAndInspect { spawn_id DebugAdaptersList {enforce_config ""}} {
+  set ExpectedID [standInfoGet adapter_id]
+  if {[catch {interactiveTestFindAdapterIndex $DebugAdaptersList $ExpectedID} Index]} {
+    close
+    wait
+    error "could not derive adapter index in interactive session for $ExpectedID"
+  }
+  send "$Index\n"
+  if {$enforce_config ne ""} {
+    expect {
+      "Please, specify the configuration file for debug adapter: " {
+        send "$enforce_config\n"
+      }
+      eof {
+        wait
+        error "unexpected termination during interactive session (config request)"
+      }
+      timeout {
+        close
+        wait
+        error "unexpected timeout during config request"
+      }
+    }
+  }
+  expect {
+    "Target successfully examined" {
+    }
+    eof {
+      wait
+      error "unexpected termination during interactive session"
+    }
+    timeout {
+      close
+      wait
+      error "looks like OpenOCD could not examine target"
+    }
+  }
+  expect {
+    eof {
+      wait
+    }
+    timeout {
+      close
+      wait
+      error "target was examined, but could not terminate"
+    }
+  }
+}
+
+proc run_test {} {
+  # not supported on simulator runs
+  if {[target_info sim] ne ""} {
+    return [ocd_test_unsupported]
+  }
+
+  global OPENOCD_ROOT
+
+  set AdapterConfig [standInfoGet adapter_config]
+
+  set Log [utils_spawn_universal_launcher \
+    [list --i-know-what-im-doing - --disable-interactive-mode --debug-adapter-serial ""]  \
+    interactive_disabled1 \
+    expect_failure]
+
+  set Log [utils_spawn_universal_launcher \
+    [list --i-know-what-im-doing $AdapterConfig --disable-interactive-mode --debug-adapter-serial ""]  \
+    interactive_disabled2 \
+    expect_failure]
+
+  set SimpleInteractiveLog [utils_spawn_universal_launcher \
+    [list --run-command shutdown --debug-adapter-serial ""] \
+    interactive_simple  \
+    interactive]
+  set AdapterList [interactiveTestExtractAdapterList $spawn_id]
+  interactiveTestSelectAdapterAndInspect $spawn_id $AdapterList
+
+  set ExtendedInteractiveLog [utils_spawn_universal_launcher \
+    [list --i-know-what-im-doing - --run-command shutdown --debug-adapter-serial ""] \
+    interactive_extended_relative \
+    interactive]
+  set AdapterList [interactiveTestExtractAdapterList $spawn_id]
+  interactiveTestSelectAdapterAndInspect $spawn_id $AdapterList $AdapterConfig
+
+  set ExtendedInteractiveLog [utils_spawn_universal_launcher \
+    [list --i-know-what-im-doing - --run-command shutdown --debug-adapter-serial ""] \
+    interactive_extended_absolute \
+    interactive]
+  set AdapterList [interactiveTestExtractAdapterList $spawn_id]
+  interactiveTestSelectAdapterAndInspect $spawn_id $AdapterList "${OPENOCD_ROOT}/$AdapterConfig"
+
+  set ExtendedInteractiveLog [utils_spawn_universal_launcher \
+    [list --i-know-what-im-doing $AdapterConfig --run-command shutdown --debug-adapter-serial ""] \
+    interactive_extended_parameter \
+    interactive]
+  set AdapterList [interactiveTestExtractAdapterList $spawn_id]
+  interactiveTestSelectAdapterAndInspect $spawn_id $AdapterList
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
