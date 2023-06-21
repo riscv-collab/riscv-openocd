@@ -61,7 +61,9 @@ ExternalProject_Add(
   INSTALL_COMMAND
     ${CMAKE_STRIP} --strip-all
       ${OPENOCD_INSTALL_PATH}/bin/openocd${CMAKE_EXECUTABLE_SUFFIX} &&
-    mkdir ${OPENOCD_SCRIPTS_INSTALL_DIR} -p &&
+    mkdir -p -- ${OPENOCD_SCRIPTS_INSTALL_DIR} &&
+    cp ${OPENOCD_SOURCES}/tools/syntacore/openocd_run.exp
+       ${OPENOCD_SCRIPTS_INSTALL_DIR}/ &&
     ${OPENOCD_SOURCES}/tools/syntacore/ide_cloak.tcl
       ${OPENOCD_SCRIPTS_INSTALL_DIR}/syntacore_ide_csr_cloak.cfg
   DEPENDS openocd_deps)

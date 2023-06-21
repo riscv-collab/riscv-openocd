@@ -1,0 +1,800 @@
+#!/usr/bin/env expect
+
+# Expect script to help with launching OpenOCD in various lab environments
+#
+# Currently supported some debug adapters from:
+#   * Digilent (digilent-hs2a.cfg)
+#   * Olimex (olimex-arm-usb-ocd-h.cfg)
+#   * SEGGER (jlink.cfg)
+#
+# If you need to extend the set above, take a look at `deriveAdapterConfig` and
+# `detectDebugAdapters` functions. They are quite easy to modify.
+#
+# If you experience difficulties using the tool or would like to introduce new
+# functionality - feel free to contact OpenOCD maintainer at Syntacore.
+
+set COMMAND_LINE_OPTIONS [dict create \
+  --bindto "value:value. issue bindto configuration command. Typically this is something like 0.0.0.0" \
+  --bitbang-port "value:port. rbb port (to connect to spike simulator)" \
+  --configure-hook "value:script_file. script to execute during configuration phase. The file is loaded right before init" \
+  --debug-adapter-index "value:index. specify selected adapter" \
+  --debug-adapter-serial "value:serial. specify serial of debug adapter" \
+  --disable-interactive-mode "flag. disables interactive selection of debug adapter" \
+  --help "flag. prints this help" \
+  --ide-mode "flag. hide most of CSRs. Useful if you want to debug an application with for IDE (like Eclipse)" \
+  --i-know-what-im-doing "value:config_file. Use only if your really understand the purpose of this flag" \
+  --load "value:config_path. loads selected configuration (disables interactive mode automatically)" \
+  --log-session "value:log_path. Path to session log" \
+  --run-command "value:openocd_command. extra command to run (can be specified multiple times)" \
+  --run-script "value:script_file. additional script(s) to run (can be specified multiple times)" \
+  --save "value:config_path. save selected configuration to the file (see --load)" \
+  --scan-only "flag. do not launch OpenOCD, only show the final command" \
+  --single-core "flag. enforce single-hart configuration even if we know that other harts available" \
+  --smp "flag. if several harts are detected, combine them to an smp target" \
+  --speed "value:kHz. adapter speed" \
+  --spike-harts "value:harts_num. number of harts in spike model" \
+  --telnet "flag. Once OpenOCD is started connect with telnet client to the server" \
+  --verbose "flag. run OpenOCD with -d3 flag"
+]
+
+foreach OptKey [dict keys $COMMAND_LINE_OPTIONS] {
+  set COMMAND_LINE_ARG($OptKey) $OptKey
+}
+
+set SETTINGS(help_mode) 0
+set SETTINGS(interactive) 1
+set SETTINGS(smp) 0
+set SETTINGS(spike_mode) 0
+set SETTINGS(spike_harts) 0
+set SETTINGS(bitbang_port) 0
+set SETTINGS(adapter_index) ""
+set SETTINGS(adapter_serial) ""
+set SETTINGS(save_at) ""
+set SETTINGS(load_from) ""
+set SETTINGS(adapter_speed) 0
+set SETTINGS(save_selection) 0
+set SETTINGS(scan_only) 0
+set SETTINGS(enforce_single_core) 0
+set SETTINGS(verbose_logs) 0
+set SETTINGS(log_session) ""
+set SETTINGS(telnet) 0
+set SETTINGS(telnet_port) 4444
+set SETTINGS(ide_mode) 0
+set SETTINGS(unlock_usb_devices) ""
+set SETTINGS(bindto) ""
+set SETTINGS(configure_hook) ""
+set SETTINGS(extra_run_commands) []
+
+set DEBUG_ADAPTER_INFO(adapter_id) ""
+set DEBUG_ADAPTER_INFO(selected_speed) 0
+set DEBUG_ADAPTER_INFO(adapter_serial) 0
+set DEBUG_ADAPTER_INFO(openocd_config) 0
+
+proc debugModeEnabled {} {
+  return [info exists ::env(SYNTACORE_OPENOCD_LAUNCHER_DEBUG)]
+}
+
+proc printErrorMessage { msg } {
+  send_user -- "Error: $msg\n"
+}
+
+proc fatalError { msg }  {
+  printErrorMessage $msg
+  exit 1
+}
+
+proc printUsage {} {
+  global COMMAND_LINE_OPTIONS
+  send_user -- "openocd_run.exp\n"
+  send_user -- "  universal script for launching OpenOCD\n"
+  send_user -- "Options:\n"
+  foreach OptKey [dict keys $COMMAND_LINE_OPTIONS] {
+    set OptHelp [dict get $COMMAND_LINE_OPTIONS $OptKey]
+    if {[regexp {([^.]+)\.(.+)} $OptHelp dummy OptType HelpString]} {
+      set HelpString [string trim $HelpString]
+      if { $OptType == "flag" } {
+        send_user -- "  \[$OptKey\] $HelpString\n"
+      } elseif { [string first "value:" $OptType] == 0 } {
+        set ValueInfo [split $OptType ":"]
+        set ArgPattern [lindex $ValueInfo 1]
+        send_user -- "  \[$OptKey $ArgPattern\] $HelpString\n"
+      } else {
+        fatalError "inconsistent option type ($OptKey/$OptType) description (internal error)"
+      }
+    } else {
+      fatalError "inconsistent option ($OptKey) description (internal error)"
+    }
+  }
+}
+
+# YES! this is how we roll in 2023...
+for { set i 0 } { $i < $argc } { incr i } {
+  set option [ lindex $argv $i ]
+
+  # make all options have two hyphens
+  switch -glob -- $option {
+    "--*" { }
+    "-*" { set option "-$option" }
+  }
+
+  # split out the argument for options that take them
+  switch -glob -- $option {
+    "--*=*" {
+      regexp {^[^=]*=(.*)$} $option nil optarg
+    }
+  }
+
+  foreach OptKey [dict keys $COMMAND_LINE_OPTIONS] {
+    if { $OptKey != $option } {
+      continue
+    }
+    set OptDescr [dict get $COMMAND_LINE_OPTIONS $OptKey]
+    if { [string first "value:" $OptDescr] == 0 } {
+      incr i
+      set optarg [lindex $argv $i]
+    }
+    break
+  }
+
+  if { $option == $COMMAND_LINE_ARG(--disable-interactive-mode)} {
+    set SETTINGS(interactive) 0
+    send_user -- "interactive mode disabled\n"
+  } elseif { $option == $COMMAND_LINE_ARG(--scan-only) } {
+    set SETTINGS(scan_only) 1
+    send_user -- "scan-only mode selected\n"
+  } elseif { $option == $COMMAND_LINE_ARG(--smp) } {
+    set SETTINGS(smp) 1
+    send_user -- "smp targets should be created\n"
+  } elseif { $option == $COMMAND_LINE_ARG(--verbose) } {
+    set SETTINGS(verbose_logs) 1
+  } elseif { $option == $COMMAND_LINE_ARG(--telnet) } {
+    set SETTINGS(telnet) 1
+  } elseif { $option == $COMMAND_LINE_ARG(--ide-mode) } {
+    set SETTINGS(ide_mode) 1
+  } elseif { $option == $COMMAND_LINE_ARG(--run-script)} {
+    lappend SETTINGS(extra_run_commands) -f
+    lappend SETTINGS(extra_run_commands) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--run-command) } {
+    lappend SETTINGS(extra_run_commands) -c
+    lappend SETTINGS(extra_run_commands) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--save) } {
+    set SETTINGS(save_at) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--load) } {
+    set SETTINGS(load_from) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--bitbang-port) } {
+    set SETTINGS(spike_mode) 1
+    set SETTINGS(bitbang_port) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--spike-harts) } {
+    set SETTINGS(spike_mode) 1
+    set SETTINGS(spike_harts) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--bindto) } {
+    set SETTINGS(bindto) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--speed) } {
+    set SETTINGS(adapter_speed) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--single-core) } {
+    set SETTINGS(enforce_single_core) 1
+  } elseif { $option == $COMMAND_LINE_ARG(--debug-adapter-serial) } {
+    set SETTINGS(adapter_serial) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--debug-adapter-index) } {
+    set SETTINGS(adapter_index) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--configure-hook) } {
+    set SETTINGS(configure_hook) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--i-know-what-im-doing) } {
+    set SETTINGS(unlock_usb_devices) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--log-session) } {
+    set SETTINGS(log_session) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--help) } {
+    set SETTINGS(help_mode) 1
+  } else {
+    fatalError "unsupported option \"$option\""
+  }
+}
+if {$SETTINGS(log_session) ne ""} {
+  log_file -noappend $SETTINGS(log_session)
+}
+
+if {$SETTINGS(help_mode) == 1} {
+  printUsage
+  exit 0
+}
+
+if { [debugModeEnabled] } {
+  send_user -- "Internal Settings Information:\n"
+  parray SETTINGS
+  send_user -- "----\n"
+}
+
+set myLocation [file normalize [info script]]
+proc getResourceDirectory {} {
+    global myLocation
+    return [file dirname $myLocation]
+}
+
+proc getOpenOCDRootDir {} {
+  set OcdRootDir [file normalize "[getResourceDirectory]/../../../.."]
+  if {[file exists "$OcdRootDir/bin/openocd"]} {
+    return $OcdRootDir
+  }
+  fatalError "could not derive OpenOCD root dir"
+}
+
+proc openocdBinary {} {
+  return "[getOpenOCDRootDir]/bin/openocd"
+}
+
+proc deriveAdapterConfig { Adapter } {
+  global SETTINGS
+  set DebugInterfaceFiles "[getOpenOCDRootDir]/share/openocd/scripts/interface"
+
+  set KNOWN_CONFIGS(digilent) "ftdi/digilent-hs2a.cfg"
+  set KNOWN_CONFIGS(olimex) "ftdi/olimex-arm-usb-ocd-h.cfg"
+  set KNOWN_CONFIGS(jlink) "jlink.cfg"
+
+  set SelectedConfig ""
+  if { $SETTINGS(unlock_usb_devices) != "" } {
+    send_user -- "WARNING: direct specification of debug adapter activated!\n"
+    send_user -- "Note: Debug Interface Configurations are located here:\n"
+    send_user -- "    ${DebugInterfaceFiles}\n"
+    if { $SETTINGS(unlock_usb_devices) == "-" } {
+
+      if { $SETTINGS(interactive) == 0 } {
+        fatalError "interactive mode disabled, while interactive config specification requested"
+      }
+
+      send_user -- "Interactive config selection mode activated\n"
+      send_user -- "Typically used adapter configs:\n"
+      foreach {key value} [array get KNOWN_CONFIGS] {
+        send_user -- "  - $key: $value\n"
+      }
+      send_user -- "Please, specify the configuration file for debug adapter: "
+      set timeout -1
+      expect_user -re "(.*)\n"
+      set SelectedConfig $expect_out(1,string)
+    } else {
+      set SelectedConfig $SETTINGS(unlock_usb_devices)
+    }
+  } else {
+    switch -glob -- "$Adapter" {
+      "*Future*" { set SelectedConfig $KNOWN_CONFIGS(digilent) }
+      "*Olimex*" { set SelectedConfig $KNOWN_CONFIGS(olimex) }
+      "*SEGGER*" { set SelectedConfig $KNOWN_CONFIGS(jlink) }
+      "*Intel*"  { set SelectedConfig "OnlyForInternalScriptDebugMode" }
+      default {
+        fatalError "could not derive adapter configuration for $Adapter"
+      }
+    }
+  }
+
+  # we always specify absolute paths to configuration files
+  if {[string first / $SelectedConfig] != 0} {
+    if {[string first share $SelectedConfig] == 0} {
+      set SelectedConfig "[getOpenOCDRootDir]/$SelectedConfig"
+    } else {
+      set SelectedConfig "${DebugInterfaceFiles}/$SelectedConfig"
+    }
+  }
+
+  send_user -- "selected debug interface config: $SelectedConfig\n"
+  if {[file exists $SelectedConfig]} {
+    return $SelectedConfig
+  }
+  fatalError "could not find selected debug interface config"
+}
+
+proc deriveAdapterInformation { Device } {
+  # Bus 001 Device 003
+  if {![regexp {Bus ([0-9]+) Device ([0-9]+)} $Device m BusId DevId ]} {
+    fatalError "could not figure out BusID/DevID for ${Device}"
+  }
+  set SerialString [exec -ignorestderr -- lsusb -s ${BusId}:${DevId} -v | grep -E "^ +iSerial +"]
+  set Components [split $SerialString " "]
+  set Serial [lindex $Components end]
+  if { $Serial == "" } {
+    set Serial "iSerial_UNAVAILABLE_(sudo_required?)"
+  }
+  return "$Serial| $Device"
+}
+
+proc detectDebugAdapters { UsbDevices } {
+  global SETTINGS
+  # Not tested: Future Technology Devices International, Ltd FT2232C/D/H
+  set ExprDigilent "Future Technology Devices International, Ltd FT232H"
+  set ExprOlimex "Olimex Ltd. ARM-USB-OCD-H JTAG+RS232"
+  # NOTE: I've seen both "SEGGER J-Link" and "SEGGER"
+  set ExprJlink "SEGGER"
+  # For internal debug, do not use in production
+  set ExprDebugOnlyIntel "Intel"
+  set AdapterExpressions [list \
+    $ExprDigilent \
+    $ExprOlimex \
+    $ExprJlink \
+  ]
+  if { [debugModeEnabled] } {
+    lappend AdapterExpressions $ExprDebugOnlyIntel
+  }
+
+  set ResultList {}
+  set Devices [split $UsbDevices "\n"]
+  foreach Device $Devices {
+    if { $SETTINGS(unlock_usb_devices) != "" } {
+      lappend ResultList [deriveAdapterInformation $Device]
+      continue
+    }
+    # todo: maybe switch -glob?
+    foreach Expr $AdapterExpressions {
+      if {[string first $Expr $Device] != -1} {
+        lappend ResultList [deriveAdapterInformation $Device]
+        break
+      }
+    }
+  }
+
+  return $ResultList
+}
+
+proc selectDebugAdapter { DebugAdapters } {
+  global SETTINGS
+
+  if {[llength $DebugAdapters] == 0} {
+    fatalError "No Debug Adapters Found"
+  }
+
+  send_user -- "Found Debug Adapters:\n"
+  for { set i 0 } { $i < [llength $DebugAdapters] } { incr i } {
+    set Adapter [lindex $DebugAdapters $i]
+    send_user -- "  $i - $Adapter\n"
+  }
+
+  if { $SETTINGS(adapter_serial) != "" } {
+
+    if { $SETTINGS(adapter_index) != "" } {
+      send_user -- [string cat [join [list \
+        "Warning: both Adapter Index $SETTINGS(adapter_index) " \
+        "and Adapter Serial $SETTINGS(adapter_serial) " \
+        "specified! Adapter Index ignored"] " "] "\n"]
+    }
+
+    set AdapterIndex 0
+    foreach Adapter $DebugAdapters {
+      if {[string first "$SETTINGS(adapter_serial)|" $Adapter] == 0} {
+        send_user -- "Adapter Index: $AdapterIndex selected by Adapter Serial match\n"
+        return $AdapterIndex
+      }
+      incr AdapterIndex
+    }
+    fatalError "could not match existing adapters against the specified serial $SETTINGS(adapter_serial)"
+  }
+
+  if { $SETTINGS(adapter_index) != "" } {
+    set AdapterIndex $SETTINGS(adapter_index)
+    if { [expr { $AdapterIndex >= [llength $DebugAdapters] }] } {
+      fatalError "$AdapterIndex is not a corect index"
+    }
+    send_user -- "Adapter Index: $AdapterIndex (derived from command line or loaded from config)\n"
+    return $AdapterIndex
+  }
+
+  if {[llength $DebugAdapters] == 1} {
+    send_user -- "Debug Adapter auto-selected, since it is the only one\n"
+    return 0
+  }
+
+  if { $SETTINGS(interactive) == 0 } {
+    fatalError "several debug adapters detected, but none selected (interactive mode disabled)"
+  }
+
+  send_user -- "Please, select Debug Adapter: "
+  set timeout -1
+  expect_user -re "(.*)\n"
+  set AdapterIdx $expect_out(1,string)
+  if {[scan $AdapterIdx %d Index] != 1} {
+    fatalError "could not convert input \"$AdapterIdx\" to index"
+  }
+  if {[expr { $Index < 0 }] || [expr { $Index >= [llength $DebugAdapters] }]} {
+    fatalError "Invalid Adapter Index: $Index"
+  }
+  return $Index
+}
+
+proc detectNumberOfTaps {DebugInterface AdapterSerial} {
+  global SETTINGS
+  if {$SETTINGS(spike_mode) == 1} {
+    return 1
+  }
+  set TapListCommand [list \
+    -f $DebugInterface \
+    -c "transport select jtag" \
+    -c "adapter speed 500" \
+    -c "adapter serial $AdapterSerial" \
+    -c "noinit" \
+    -c "jtag init" \
+    -c "echo \"detected number of taps: \[llength \[jtag names\]\]\"" \
+    -c "shutdown" \
+  ]
+  spawn [openocdBinary] {*}$TapListCommand
+  expect {
+    -re "detected number of taps: (\[0-9.\]+)\r" {
+      set TapCount $expect_out(1,string)
+      send_user -- "detected taps: $TapCount\n"
+      close
+      wait
+      return $TapCount
+    }
+    eof {
+      printErrorMessage "unexpected EOF (while waiting for TAP count)"
+      wait
+      exit 1
+    }
+    timeout {
+      printErrorMessage "unexpected timeout (while waiting for TAP count)"
+      exec kill -s SIGKILL [exp_pid -i $spawn_id ]
+      close
+      wait
+      exit 1
+    }
+  }
+}
+
+proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
+  global SETTINGS
+
+  set SyntacoreConfigFile "[getOpenOCDRootDir]/share/openocd/scripts/target/syntacore_target.cfg"
+  if {![file exists "$SyntacoreConfigFile"]} {
+    fatalError "unable to locate Syntacore Target Config: $SyntacoreConfigFile"
+  }
+
+  if { $SETTINGS(spike_mode) == 0 } {
+    set NumberOfHarts $TapCount
+
+    if {![file exists "$DebugInterfaceCfg"]} {
+      fatalError "unable to locate Debug Interface Config: $DebugInterfaceCfg"
+    }
+    if {$SETTINGS(enforce_single_core) == 1} {
+      set NumberOfHarts 1
+    }
+    set OpenOCDArgs [list \
+      -f "$DebugInterfaceCfg" \
+      -c "transport select jtag" \
+      -c "adapter speed 500" \
+      -c "adapter serial $AdapterSerial" \
+      -f "$SyntacoreConfigFile" \
+      -c "sc_target_config harts_num $NumberOfHarts"]
+  } else {
+    send_user -- "spike mode selected\n"
+    if { $SETTINGS(spike_harts) == 0 } {
+      fatalError "number of harts for spike model must be specified"
+    }
+    if { $SETTINGS(bitbang_port) == 0 } {
+      fatalError "bitbang port must be specified"
+    }
+    set NumberOfHarts $SETTINGS(spike_harts)
+    if {$SETTINGS(enforce_single_core) == 1} {
+      set NumberOfHarts 1
+    }
+
+    set OpenOCDArgs [list \
+      -f "$SyntacoreConfigFile" \
+      -c "adapter driver remote_bitbang" \
+      -c "remote_bitbang port $SETTINGS(bitbang_port)" \
+      -c "remote_bitbang host 127.0.0.1" \
+      -c "sc_target_config new_tap_for_each_target 0" \
+      -c "sc_target_config harts_num $NumberOfHarts"]
+  }
+
+  if {$SETTINGS(ide_mode) == 1} {
+    set CloakConfigurationFile "[getOpenOCDRootDir]/share/openocd/scripts/syntacore/syntacore_ide_csr_cloak.cfg"
+    if {![file exists "$CloakConfigurationFile"]} {
+      fatalError "unable to locate cloak configuration file: $CloakConfigurationFile"
+    }
+    lappend OpenOCDArgs -f
+    lappend OpenOCDArgs "$CloakConfigurationFile"
+  }
+
+  if {[expr {$SETTINGS(adapter_speed) > 0}]} {
+    lappend OpenOCDArgs -c
+    lappend OpenOCDArgs "sc_target_config adapter_speed $SETTINGS(adapter_speed)"
+  }
+  if {$SETTINGS(smp) == 1} {
+    lappend OpenOCDArgs -c
+    lappend OpenOCDArgs "sc_target_config smp_configuration 1"
+  }
+  if {$SETTINGS(bindto) != ""} {
+    lappend OpenOCDArgs -c
+    lappend OpenOCDArgs "bindto $SETTINGS(bindto)"
+  }
+  if {$SETTINGS(configure_hook) != ""} {
+    lappend OpenOCDArgs -f
+    lappend OpenOCDArgs "$SETTINGS(configure_hook)"
+
+    if {![file exists "$SETTINGS(configure_hook)"]} {
+      fatalError "unable to locate user-specified configuration hook: $SETTINGS(configure_hook)"
+    }
+  }
+
+  if {$SETTINGS(verbose_logs) == 1} {
+    lappend OpenOCDArgs -d3
+  }
+
+  # Apparently, depending on the presence -c "init" command OpenOCD behaves
+  # a little bit differently. If init is specified then:
+  #   1. targets are examined
+  #   2. gdb servers are created
+  #   3. tcl server is created
+  # If no `init` was requested, then telnet server is created first
+  lappend OpenOCDArgs -c
+  lappend OpenOCDArgs init
+
+  foreach Command $SETTINGS(extra_run_commands) {
+    lappend OpenOCDArgs $Command
+  }
+
+  return $OpenOCDArgs
+}
+
+proc expectForTargetExamination { OpenOCDSpawnID TimeoutValue } {
+  # We should ensure that at least one target was examined successfully
+  set timeout $TimeoutValue
+  expect {
+    -i $OpenOCDSpawnID
+    "Target successfully examined." {
+    }
+    timeout {
+      printErrorMessage "timeout detected during target examine"
+      close
+      wait
+      exit 1
+    }
+    eof {
+      printErrorMessage "EOF while waiting for examine"
+      wait
+      exit 1
+    }
+  }
+}
+
+proc expectForTelnetServer { OpenOCDSpawnID TimeoutValue } {
+  global SETTINGS
+  set timeout $TimeoutValue
+  expect {
+    -i $OpenOCDSpawnID
+    -re "Listening on port (\[0-9\]+) for telnet connections" {
+       set SETTINGS(telnet_port) $expect_out(1,string)
+    }
+    timeout {
+      printErrorMessage "timeout detected while waiting for Telnet server"
+      close
+      wait
+      exit 1
+    }
+    eof {
+      printErrorMessage "EOF while waiting for Telnet server"
+      wait
+      exit 1
+    }
+  }
+}
+
+proc interactWithTelnetClient { OpenOCDSpawnID TelnetID OpenOCDLogID } {
+  global user_spawn_id
+  # Note: the juggling with spawn_id descriptors is needed so we can discard
+  # printouts that OpenOCD produces under some circumstances
+  interact {
+    -input $user_spawn_id -output $TelnetID
+    -input $OpenOCDSpawnID eof { return $OpenOCDSpawnID } -output $OpenOCDLogID
+    -input $TelnetID eof { return $TelnetID } -output $user_spawn_id
+  }
+}
+
+proc runTelnetClient { OpenOCDSpawnID } {
+  global SETTINGS
+
+  if {$SETTINGS(log_session) ne "" } {
+    set OpenOCDLogPath $SETTINGS(log_session).openocd.log
+  } else {
+    set OpenOCDLogPath /dev/null
+  }
+
+  set OpenOCDLogFD [open $OpenOCDLogPath "w"]
+  chan configure $OpenOCDLogFD -buffering none
+  chan configure $OpenOCDLogFD -buffersize 0
+  spawn -open $OpenOCDLogFD
+  set OpenOCDLogID $spawn_id
+
+  spawn telnet localhost $SETTINGS(telnet_port)
+  set TelnetID $spawn_id
+  global user_spawn_id
+
+  set ClosedID [interactWithTelnetClient $OpenOCDSpawnID $TelnetID $OpenOCDLogID]
+
+  # close/wait redirected OpenOCD log, exit code is irrelevant
+  close -i $OpenOCDLogID
+  wait -i $OpenOCDLogID
+  send_user -- "Stopped OpenOCD logs redirection\n"
+
+  # Telnet exit code is irrelevant
+  wait -i $TelnetID
+  send_user -- "Telnet proccess terminated (OpenOCD is going to be terminated too)\n"
+
+  if { $OpenOCDSpawnID eq $ClosedID } {
+    send_user -- "OpenOCD process terminated\n"
+    close -i $TelnetID
+  } else {
+    set WaitPeriod 2
+    send_user -- "waiting for OpenOCD to finish (up to $WaitPeriod seconds)\n"
+    set timeout $WaitPeriod
+    expect {
+      -i $OpenOCDSpawnID
+      eof {
+        send_user -- "OpenOCD process terminated\n"
+        return
+      }
+      timeout {
+        send_user -- "OpenOCD is still running, sending SIGINT signal\n"
+        exec kill -s SIGINT [exp_pid -i $OpenOCDSpawnID]
+      }
+    }
+    expect {
+      -i $OpenOCDSpawnID
+      eof { send_user -- "OpenOCD process terminated\n" }
+    }
+  }
+}
+
+proc runOpenOCD {DebugInterfaceCfg AdapterSerial TapCount} {
+  global SETTINGS
+
+  set OpenOCDArgs [buildOpenOCDCommandLine $DebugInterfaceCfg $AdapterSerial $TapCount]
+
+  set Commands "[openocdBinary]"
+  foreach Arg $OpenOCDArgs {
+    append Commands " "
+    if {[regexp {\s+} $Arg dummy]} {
+      append Commands "\"$Arg\""
+    } else {
+      append Commands "$Arg"
+    }
+  }
+
+  send_user -- "Command line to run OpenOCD:\n"
+  send_user -- "$Commands\n"
+  if {$SETTINGS(scan_only) == 1} {
+    send_user -- "scan-only mode requested, exiting\n"
+    exit 0
+  }
+
+  spawn [openocdBinary] {*}$OpenOCDArgs
+  set OpenOCDSpawnID $spawn_id
+  send_user -- "==== Spawned OpenOCD PID=[exp_pid -i $OpenOCDSpawnID] ====\n"
+
+  # 10 seconds should be enough to examine all targets
+  set TARGETS_EXAMINE_TIMEOUT 10
+
+  expectForTargetExamination $OpenOCDSpawnID $TARGETS_EXAMINE_TIMEOUT
+  if {$SETTINGS(telnet) == 1} {
+    expectForTelnetServer $OpenOCDSpawnID $TARGETS_EXAMINE_TIMEOUT
+  }
+
+  if { $SETTINGS(save_at) ne "" } {
+    if {[catch {saveAdapterConfiguration $SETTINGS(save_at)} result]} {
+      printErrorMessage "$result"
+      close
+      wait
+      exit 1
+    }
+  }
+
+  if {$SETTINGS(telnet) == 1} {
+    runTelnetClient $OpenOCDSpawnID
+  } else {
+    set timeout -1
+    expect {
+      -i $OpenOCDSpawnID
+      eof {
+        send_user -- "OpenOCD process terminated\n"
+      }
+    }
+  }
+
+  set WaitResult [wait -i $OpenOCDSpawnID]
+  if {[lindex $WaitResult 4] ne ""} {
+    fatalError "OpenOCD was killed by [lindex $WaitResult 5]\n"
+  }
+  set ExitCode [lindex $WaitResult 3]
+  if { $ExitCode != 0 } {
+    fatalError "OpenOCD exit code indicates FAILURE ($ExitCode)"
+  }
+  send_user -- "OpenOCD exit code indicates SUCCESS\n"
+  exit 0
+}
+
+proc fetchConfigurationValueFromFileString { Prefix Line } {
+  if {[string first $Prefix $Line] == 0} {
+    set PrefixLen [string length $Prefix]
+    return [string range $Line $PrefixLen end]
+  }
+  fatalError "could not find prefix $Prefix in configuration line $Line"
+}
+
+proc getWarningPrefixForConfig {} {
+  return "# WARNING!"
+}
+proc getAdapterIDPrefixForConfig {} {
+  return "ADAPTER_ID="
+}
+proc getAdapterSpeedPrefixForConfig {} {
+  return "ADAPTER_SPEED="
+}
+
+proc saveAdapterConfiguration { FilePath } {
+  global DEBUG_ADAPTER_INFO
+  set AdapterID "[getAdapterIDPrefixForConfig]$DEBUG_ADAPTER_INFO(adapter_id)"
+  set AdapterSpeed "[getAdapterSpeedPrefixForConfig]$DEBUG_ADAPTER_INFO(selected_speed)"
+  set WarningMessage "[getWarningPrefixForConfig] This file was auto-generated. Do not edit"
+  set ConfigData [join [list $WarningMessage $AdapterID $AdapterSpeed] \n]
+  if {[catch {exec echo $ConfigData >$FilePath} r]} {
+    error "could not save adapter information"
+  }
+  send_user -- [string cat [join \
+    [list "adapter information saved to $FilePath" \
+       "---" \
+       "   $WarningMessage" \
+       "   $AdapterID" \
+       "   $AdapterSpeed" \
+       "---"] "\n"] "\n"]
+}
+
+proc deriveAdapterConfiguration { } {
+  global SETTINGS
+  global DEBUG_ADAPTER_INFO
+  if {$SETTINGS(spike_mode) == 1} {
+    return
+  }
+  if {$SETTINGS(load_from) != ""} {
+    if {[catch {exec cat "$SETTINGS(load_from)"} AdapterInfo]} {
+      fatalError "could not load adapter info from $SETTINGS(load_from)"
+    }
+    set Lines [split $AdapterInfo \n]
+    if {[llength $Lines] != 3} {
+      fatalError "incorrect format for adapter configuration"
+    }
+    set Skip \
+      [fetchConfigurationValueFromFileString [getWarningPrefixForConfig] [lindex $Lines 0]]
+    set Adapter \
+      [fetchConfigurationValueFromFileString [getAdapterIDPrefixForConfig] [lindex $Lines 1]]
+    set DEBUG_ADAPTER_INFO(selected_speed) \
+      [fetchConfigurationValueFromFileString [getAdapterSpeedPrefixForConfig] [lindex $Lines 2]]
+    send_user -- "adapter information loaded from $SETTINGS(load_from)\n"
+    send_user -- "  adapter id: $Adapter\n"
+    send_user -- "  adapter speed: $DEBUG_ADAPTER_INFO(selected_speed)\n"
+    send_user -- "---\n"
+  } else {
+    set USB_LISTING [exec lsusb]
+    set DebugAdapters [detectDebugAdapters "${USB_LISTING}"]
+    set AdapterIndex [selectDebugAdapter $DebugAdapters]
+    set Adapter [lindex $DebugAdapters $AdapterIndex]
+  }
+  set DEBUG_ADAPTER_INFO(adapter_id) $Adapter
+  if {[expr {$SETTINGS(adapter_speed) > 0}]} {
+    set DEBUG_ADAPTER_INFO(selected_speed) $SETTINGS(adapter_speed)
+  }
+  set DEBUG_ADAPTER_INFO(adapter_serial) [lindex [split $Adapter "|"] 0]
+  set DEBUG_ADAPTER_INFO(openocd_config) [deriveAdapterConfig $Adapter]
+
+  if { [debugModeEnabled] } {
+    send_user -- "Internal DEBUG ADAPTER Information:\n"
+    parray DEBUG_ADAPTER_INFO
+    send_user -- "----\n"
+  }
+}
+
+deriveAdapterConfiguration
+
+set AdapterConfig $DEBUG_ADAPTER_INFO(openocd_config)
+set AdapterSerial $DEBUG_ADAPTER_INFO(adapter_serial)
+
+set TapCount [detectNumberOfTaps $AdapterConfig $AdapterSerial]
+runOpenOCD $AdapterConfig $AdapterSerial $TapCount
+
+# TODO:
+# Automatically load OS-provided scripts (once they are integrated)
+# CHECK for pre-requisites: lsubsb, cat, kill
