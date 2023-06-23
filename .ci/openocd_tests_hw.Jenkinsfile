@@ -112,7 +112,6 @@ pipeline {
         echo "Building project"
         dir ("$BUILD_MOUNT") {
           sh '${MAKE_PY} --image $DOCKER_IMAGE container run -p -m . --credentials ${WD}/credentials.json'
-          sh '${MAKE_PY} --image $DOCKER_IMAGE sh --container-user root apt-get install telnet'
           sh '${MAKE_PY} --image $DOCKER_IMAGE conan-config --credentials ${WD}/credentials.json'
           sh '${MAKE_PY} --image $DOCKER_IMAGE just-config -b ${BUILD_DIR} --profile:host default'
           sh '${MAKE_PY} --image $DOCKER_IMAGE build -b ${BUILD_DIR} --target openocd'
