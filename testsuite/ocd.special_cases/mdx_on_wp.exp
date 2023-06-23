@@ -7,27 +7,24 @@ proc doTestReadOnWP { PC WP_ADDRESS MEM_OP } {
   ocdtlb_run_expect "step"
 
 
-  # set data_read2 [ocdtlb_rsp_get [ocdtlb_run_expect "$MEM_OP $WP_ADDRESS"] data]
-  if {[catch {ocdtlb_rsp_get [ocdtlb_run_expect "$MEM_OP $WP_ADDRESS"] data} data_read2]} {
-    error "unexecptected failure $data_read2 while WP is set"
-
-    set known_failures [scr6 scr7 scr9]
-    set target_name [target_info cpu,name]
-    if {[lsearch -exact $known_failures $target_name] != -1} {
-      global perror_threshold
-      set perror_threshold 2
-      setup_kfail openocd_EMBARGO/30822 "*-*-*"
-    }
-    perror "the target is not halted $target_not_halted ($target_name)"
-    return [ocd_test_fail]
-  }
-
+  set data_read2 [ocdtlb_rsp_get [ocdtlb_run_expect "$MEM_OP $WP_ADDRESS"] data]
   ocdtlb_run_expect "$MEM_OP $WP_ADDRESS"
 
   ocdtlb_run_expect "rwp $WP_ADDRESS"
 
   if {$data_read1 ne $data_read2 } {
     error "$MEM_OP: data from read1 ($data_read1) is not equal that of read2 ($data_read2)"
+  }
+}
+
+proc doTesting { ENTRY_ADDR WP_ADDRESS } {
+
+  doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdb
+  doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdh
+  doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdw
+
+  if {[target_info cpu,xlen] == 64} {
+    doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdd
   }
 }
 
@@ -50,12 +47,16 @@ proc run_test {} {
 
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 
-  doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdb
-  doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdh
-  doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdw
-
-  if {[target_info cpu,xlen] == 64} {
-    doTestReadOnWP $ENTRY_ADDR $WP_ADDRESS mdd
+  if {[catch {doTesting $ENTRY_ADDR $WP_ADDRESS} Err]} {
+    set known_failures [list scr6 scr7 scr7_2cpu scr7_4cpu scr9 scr9_norvv]
+    set target_name [target_info cpu,name]
+    if {[lsearch -exact $known_failures $target_name] != -1} {
+      global perror_threshold
+      set perror_threshold 2
+      setup_kfail openocd_EMBARGO/30822 "*-*-*"
+    }
+    perror $Err
+    return [ocd_test_fail]
   }
 
   return [ocd_test_pass]
