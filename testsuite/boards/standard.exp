@@ -1,10 +1,12 @@
-proc set_board_cpu { cpu_name } {
+proc set_board_cpu { cpu_name { harts_num 1} } {
   set dirname [file dirname [info script]]
   set cpu_def [file join $dirname support cpu ${cpu_name}.exp]
   verbose "loading cpu: $cpu_name from $cpu_def" 1
   source $cpu_def
 
   set_board_info cpu,name $cpu_name
+  set_board_info cpu,cores_num $harts_num
+  add_board_info sim,options -p$harts_num
 }
 
 set_board_info ldflags "-nostdlib -nostartfiles"

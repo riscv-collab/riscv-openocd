@@ -1,7 +1,6 @@
 set TGT_ARCH "rv32gc"
 
 add_board_info cpu,xlen 32
-set_board_info cpu,cores_num 1
 set_board_info cpu,has_floats 0
 set_board_info cpu,has_doubles 0
 set_board_info cpu,has_u_mode 0

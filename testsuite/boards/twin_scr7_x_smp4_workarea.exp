@@ -1,6 +1,6 @@
 load_board_description "baremetal-fpga-common"
 
-set_board_cpu scr7_4cpu
+set_board_cpu scr7 4
 
 set_board_info memory,has_high_pa 0
 set_board_info memory,ocd_work_area 1
