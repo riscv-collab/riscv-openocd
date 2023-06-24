@@ -1,0 +1,61 @@
+proc exect_smp_status { expected_status } {
+    set status [ocdtlb_rsp_get [ocdtlb_run_expect "smp"]]
+    ocdtlb_expect_equal $status $expected_status
+}
+
+proc run_test {} {
+
+  set NUM_CORES [target_info cpu,cores_num]
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "smp.S" "$default_bin_prefix.exe" [list -DNCORES=$NUM_CORES]
+
+  # created by compile executable
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+
+  if {[target_info openocd,smp_target]} {
+    exect_smp_status on
+
+    ocdtlb_run_expect "smp on"
+    exect_smp_status on
+
+    ocdtlb_run_expect "smp on"
+    exect_smp_status on
+
+    ocdtlb_run_expect "smp off"
+    exect_smp_status off
+
+    ocdtlb_run_expect "smp off"
+    exect_smp_status off
+
+    ocdtlb_run_expect "smp on"
+    exect_smp_status on
+
+  } else {
+    exect_smp_status off
+
+    ocdtlb_run_expect "smp on"
+    exect_smp_status off
+
+    ocdtlb_run_expect "smp on"
+    exect_smp_status off
+
+    ocdtlb_run_expect "smp off"
+    exect_smp_status off
+
+    ocdtlb_run_expect "smp off"
+    exect_smp_status off
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
+

@@ -358,6 +358,23 @@ proc parse_step { report } {
   return [internal_parse_empty_on_success $TYPE $report]
 }
 
+proc parse_smp_status { report } {
+  set TYPE "smp_status"
+  set Trimmed [string trim $report "\n\r\x1a"]
+  if {[regexp {([^ ]+)} $Trimmed m status]} {
+    if { $status eq "on" || $status eq "off" } {
+       return [internal_parse_success $TYPE $report \
+              [list value $status]]
+    }
+    return [internal_parse_error $TYPE $report "unknown response"]
+  }
+  return [internal_parse_error $TYPE $report "empty response"]
+}
+
+proc parse_smp_update { report } {
+  set TYPE "smp_update"
+  return [internal_parse_empty_on_success $TYPE $report]
+}
 
 proc parse_gdb_info_threads { report } {
   #   Id   Target Id ...  Frame

@@ -210,6 +210,8 @@ proc ocdtlb_run_expect {command {expect_op_fail 0} } {
     {^wp$}                  { set parser parse_wp_listing }
     {^wp +[^ ]+ +[0-9]}     { set parser parse_wp_set }
     {^rwp +[^ ]+}           { set parser parse_wp_clear }
+    {^smp$}                 { set parser parse_smp_status }
+    {^smp +[^ ]+}           { set parser parse_smp_update }
     {^irscan +[^ ]+}        { set parser parse_irscan }
     {^drscan +[^ ]+}        { set parser parse_drscan }
     {^scan_chain}           { set parser parse_scan_chain }

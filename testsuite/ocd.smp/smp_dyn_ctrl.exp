@@ -1,0 +1,68 @@
+proc testIndividualCoreResume { entry core_index NUM_CORES} {
+
+  ocdtlb_run_expect "reset halt"
+  for { set i 0}  {$i < $NUM_CORES} {incr i} {
+    ocdtlb_run_expect "targets $i"
+    ocdtlb_run_expect "reg pc $entry"
+  }
+  ocdtlb_run_expect "targets $core_index"
+  ocdtlb_run_expect "resume"
+
+  set tgts [ocdtlb_run_expect "targets"]
+  set STATES [ocdtlb_rsp_get $tgts states]
+
+  set HALTED_COUNT 0
+  set RUNNING_COUNT 0
+
+  for { set i 0}  {$i < $NUM_CORES} {incr i} {
+    set state [lindex $STATES $i]
+    if {$state == "halted"} {
+      incr HALTED_COUNT
+    } elseif { $state == "running" } {
+      incr RUNNING_COUNT
+      if { $i != $core_index} {
+        error "hart ($i) is running, while only hart($core_index) should"
+      }
+    } else {
+      error "unexpected state ($state) detected for target $i"
+    }
+  }
+  if {$RUNNING_COUNT != 1} {
+    error "unexpected number of running harts"
+  }
+
+  set HALT_EXPECTED [expr {$NUM_CORES - 1}]
+  if {$HALTED_COUNT != $HALT_EXPECTED} {
+    error "unexpected number of halted harts ($HALTED_COUNT), expecting $HALT_EXPECTED"
+  }
+}
+
+proc run_test {} {
+
+  set NUM_CORES [target_info cpu,cores_num]
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "smp.S" "$default_bin_prefix.exe" [list -DNCORES=$NUM_CORES]
+
+  # created by compile executable
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  if {[target_info openocd,smp_target]} {
+    ocdtlb_run_expect "smp off"
+  }
+
+  for { set i 0}  {$i < $NUM_CORES} {incr i} {
+    testIndividualCoreResume $ENTRY_ADDR $i $NUM_CORES
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
+
