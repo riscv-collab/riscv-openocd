@@ -8,14 +8,14 @@ set INTERNAL_PARSEFAIL_STATUS "parsing_failure"
 proc parse_none { report } {
   global INTERNAL_SUCCESS_STATUS
   return [dict create \
-    type "none" \
-    status $INTERNAL_SUCCESS_STATUS \
-    dbg_str "\n$report" \
+    _type "none" \
+    _status $INTERNAL_SUCCESS_STATUS \
+    _dbg_str "\n$report" \
   ]
 }
 
 proc internal_make_parsed_response { type status raw_string extra_fields } {
-  set kv_pairs [list type $type status $status dbg_str "\n**$raw_string**"]
+  set kv_pairs [list _type $type _status $status _dbg_str "\n**$raw_string**"]
   lappend kv_pairs {*}$extra_fields
   return [dict create {*}$kv_pairs]
 }
@@ -51,12 +51,12 @@ proc internal_parse_empty_on_success { type response } {
 
 proc response_is_op_failure { response } {
   global INTERNAL_OPFAIL_STATUS
-  return [string match [dict get $response status] $INTERNAL_OPFAIL_STATUS]
+  return [string match [dict get $response _status] $INTERNAL_OPFAIL_STATUS]
 }
 
 proc response_is_success { response } {
   global INTERNAL_SUCCESS_STATUS
-  return [string match [dict get $response status] $INTERNAL_SUCCESS_STATUS]
+  return [string match [dict get $response _status] $INTERNAL_SUCCESS_STATUS]
 }
 
 proc parse_load_image { report } {
@@ -131,9 +131,9 @@ proc parse_reset { report } {
   set TYPE "reset"
   global INTERNAL_SUCCESS_STATUS
   return [dict create \
-    type $TYPE \
-    status $INTERNAL_SUCCESS_STATUS \
-    dbg_str "\n$report" \
+    _type $TYPE \
+    _status $INTERNAL_SUCCESS_STATUS \
+    _dbg_str "\n$report" \
   ]
 }
 
