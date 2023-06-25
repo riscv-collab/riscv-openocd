@@ -32,9 +32,11 @@ set COMMAND_LINE_OPTIONS [dict create \
   --single-core "flag. enforce single-hart configuration even if we know that other harts available" \
   --smp "flag. if several harts are detected, combine them to an smp target" \
   --speed "value:kHz. adapter speed" \
+  --spike-arg "value:arg. command line element to append to spike options list" \
+  --spike-bin "value:spike_bin_and_executable. spike_binary:executable to run" \
   --spike-harts "value:harts_num. number of harts in spike model" \
   --telnet "flag. Once OpenOCD is started connect with telnet client to the server" \
-  --verbose "flag. run OpenOCD with -d3 flag"
+  --verbose "flag. run OpenOCD with -d3 flag" \
 ]
 
 foreach OptKey [dict keys $COMMAND_LINE_OPTIONS] {
@@ -45,8 +47,9 @@ set SETTINGS(help_mode) 0
 set SETTINGS(interactive) 1
 set SETTINGS(smp) 0
 set SETTINGS(spike_mode) 0
-set SETTINGS(spike_harts) 0
+set SETTINGS(spike_harts) 1
 set SETTINGS(bitbang_port) 0
+set SETTINGS(spike_bin) ""
 set SETTINGS(adapter_index) ""
 set SETTINGS(adapter_serial) ""
 set SETTINGS(save_at) ""
@@ -64,6 +67,7 @@ set SETTINGS(unlock_usb_devices) ""
 set SETTINGS(bindto) ""
 set SETTINGS(configure_hook) ""
 set SETTINGS(extra_run_commands) []
+set SETTINGS(extra_spike_args) []
 
 set DEBUG_ADAPTER_INFO(adapter_id) ""
 set DEBUG_ADAPTER_INFO(selected_speed) 0
@@ -164,6 +168,12 @@ for { set i 0 } { $i < $argc } { incr i } {
   } elseif { $option == $COMMAND_LINE_ARG(--bitbang-port) } {
     set SETTINGS(spike_mode) 1
     set SETTINGS(bitbang_port) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--spike-arg) } {
+    set SETTINGS(spike_mode) 1
+    lappend SETTINGS(extra_spike_args) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--spike-bin) } {
+    set SETTINGS(spike_mode) 1
+    set SETTINGS(spike_bin) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--spike-harts) } {
     set SETTINGS(spike_mode) 1
     set SETTINGS(spike_harts) $optarg
@@ -574,6 +584,78 @@ proc expectForTelnetServer { OpenOCDSpawnID TimeoutValue } {
   }
 }
 
+proc runSpikeIfNeeded {} {
+  global SETTINGS
+
+  if {$SETTINGS(spike_mode) != 1} {
+    return
+  }
+  if {$SETTINGS(spike_bin) eq ""} {
+    if {[llength $SETTINGS(extra_spike_args)] != 0} {
+      fatalError "--spike-arg should not be specified without --spike-bin"
+    }
+    return
+  }
+  set SpikeInfo [split $SETTINGS(spike_bin) :]
+  set SpikeBinary [lindex $SpikeInfo 0]
+  set ElfToRun [lindex $SpikeInfo 1]
+
+  if {[auto_execok "$SpikeBinary"] eq ""} {
+    fatalError "not a spike binary $SpikeBinary"
+  }
+  if {![file exists "$ElfToRun"]} {
+    fatalError "could not find .elf file to run on spike $ElfToRun"
+  }
+  if { $SETTINGS(spike_harts) <= 0 } {
+    fatalError "number of harts must be greater than zero"
+  }
+
+  set MandatorySpikeArgs [list \
+    --rbb-port=$SETTINGS(bitbang_port) \
+    -p$SETTINGS(spike_harts) \
+  ]
+  # these are resonable defaults if no extra args specified
+  set ExtraSpikeArgs [list \
+    --isa=rv64gcv \
+    --dm-progsize=6 \
+    --dm-sba=0 \
+    --dm-abstract-rti=100 \
+    -m0x80000000:0xa00000 \
+  ]
+  if {[llength $SETTINGS(extra_spike_args)] != 0} {
+    set ExtraSpikeArgs $SETTINGS(extra_spike_args)
+  }
+
+  set SpikeArgs [list {*}$MandatorySpikeArgs {*}$ExtraSpikeArgs $ElfToRun]
+  spawn $SpikeBinary {*}$SpikeArgs
+  send_user -- "==== Spawned Spike PID=[exp_pid -i $spawn_id] ====\n"
+  expect {
+    -re "Listening for remote bitbang connection on port (\[0-9\]+)" {
+      set MatchedBitbangPort $expect_out(1,string)
+      send_user -- "spike launched successfully! bitbang_port = $MatchedBitbangPort\n"
+      if {$SETTINGS(bitbang_port) == 0} {
+        set SETTINGS(bitbang_port) $MatchedBitbangPort
+      }
+      if {$SETTINGS(bitbang_port) != $MatchedBitbangPort} {
+        close
+        wait
+        fatalError "spike listens on an unexpected $MatchedBitbangPort bitbang port!"
+      }
+    }
+    eof {
+      printErrorMessage "EOF detected while waiting for spike startup"
+      wait
+      exit 1
+    }
+    timeout {
+      printErrorMessage "timeout detected while waiting for spike startup"
+      close
+      wait
+      exit 1
+    }
+  }
+}
+
 proc interactWithTelnetClient { OpenOCDSpawnID TelnetID OpenOCDLogID } {
   global user_spawn_id
   # Note: the juggling with spawn_id descriptors is needed so we can discard
@@ -793,6 +875,7 @@ set AdapterConfig $DEBUG_ADAPTER_INFO(openocd_config)
 set AdapterSerial $DEBUG_ADAPTER_INFO(adapter_serial)
 
 set TapCount [detectNumberOfTaps $AdapterConfig $AdapterSerial]
+runSpikeIfNeeded
 runOpenOCD $AdapterConfig $AdapterSerial $TapCount
 
 # TODO:
