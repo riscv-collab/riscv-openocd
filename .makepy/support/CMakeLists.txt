@@ -62,6 +62,8 @@ ExternalProject_Add(
     ${CMAKE_STRIP} --strip-all
       ${OPENOCD_INSTALL_PATH}/bin/openocd${CMAKE_EXECUTABLE_SUFFIX} &&
     mkdir -p -- ${OPENOCD_SCRIPTS_INSTALL_DIR} &&
+    cp ${OPENOCD_SOURCES}/tcl/tools/syntacore/sc_fpga_lib.tcl
+       ${OPENOCD_SCRIPTS_INSTALL_DIR}/ &&
     cp ${OPENOCD_SOURCES}/tools/syntacore/openocd_run.exp
        ${OPENOCD_SCRIPTS_INSTALL_DIR}/ &&
     ${OPENOCD_SOURCES}/tools/syntacore/ide_cloak.tcl
