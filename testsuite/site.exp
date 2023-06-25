@@ -43,13 +43,13 @@ set OCD_PORT_GDBSRV 3333
 # NOTE: environment queries below are not conventional, but should work
 # fine for OpenOCD testing
 puts "Checking for testsuite requirements..."
-if {[auto_execok $OPENOCD] == ""} {
+if {[auto_execok $OPENOCD] eq ""} {
   puts "ERROR: could not find openocd binary at $OPENOCD"
   puts "   check your OPENOCD_ROOT ($OPENOCD_ROOT) is specified correctly"
   exit 1
 }
 
-if {[auto_execok $CC_FOR_TARGET] == ""} {
+if {[auto_execok $CC_FOR_TARGET] eq ""} {
   puts "ERROR: could not find target compiler ($CC_FOR_TARGET), check your PATH"
   exit 1
 } else {
@@ -59,12 +59,12 @@ if {[auto_execok $CC_FOR_TARGET] == ""} {
   set ::env(PATH) "$::env(PATH):[file dirname [auto_execok $CC_FOR_TARGET]]"
 }
 
-if {[auto_execok $GDB_BIN]== "" } {
+if {[auto_execok $GDB_BIN] eq "" } {
   puts "ERROR: could not find GDB for target ($GDB_BIN), check your PATH"
   exit 1
 }
 
-if {[auto_execok $SPIKE_SIM] == ""} {
+if {[auto_execok $SPIKE_SIM] eq ""} {
   puts "WARNING: could not detect $SPIKE_SIM simulator in PATH"
 } else {
   set target_list {
