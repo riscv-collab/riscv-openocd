@@ -1,0 +1,98 @@
+proc run_test {} {
+  # NOTE: we run spike test only if target board is actually spike-based
+  # since we are unable to construct memory map/boot code easily
+  if {[target_info sim] eq ""} {
+    return [ocd_test_unsupported]
+  }
+
+  global SPIKE_BITBANG
+  global srcdir
+  global subdir
+
+  set script_to_run "$srcdir/$subdir/lib/run_script_get_misa.tcl"
+
+  set SpikeBin [target_info sim]
+  set MemoryMap [spike_get_target_memory_map]
+  set BinPrefix [tool_state_get default_bin_prefix]
+
+  set BitbangPort [expr {$SPIKE_BITBANG + 1}]
+  set SpikeBoot "${BinPrefix}_spike_run.elf"
+  compile_boot_code $SpikeBoot
+
+  if  { [compile_boot_code $SpikeBoot] != "" } {
+    error "could not compile boot binary"
+  }
+
+  set XlenPrefix rv64
+  if {[target_info cpu,xlen] == 32} {
+    set XlenPrefix rv32
+  }
+
+  set HartsNum 8
+  set LogFileGCV [utils_spawn_universal_launcher \
+    [list --spike-bin "$SpikeBin:$SpikeBoot" \
+          --bitbang-port $BitbangPort \
+          --spike-harts $HartsNum \
+          --spike-arg --isa=${XlenPrefix}gcv \
+          --spike-arg $MemoryMap \
+          --run-script "$script_to_run" \
+          --run-command shutdown] \
+    spike_gcv  \
+    expect_success]
+  set MisaGCV [exec grep --text -F MISA: ${LogFileGCV}]
+  regexp "0x\[0-9\]+" $MisaGCV GCVMisa
+  set ExpectedMisa 0x800000000034112
+  if {[target_info cpu,xlen] == 32} {
+    set ExpectedMisa 0x4034112
+  }
+  if { $GCVMisa != $ExpectedMisa} {
+    error "unexpected GCVMisa($GCVMisa) value vs $ExpectedMisa"
+  }
+
+  set GdbNumGCV [exec grep --text -c -E "Listening on port .* for gdb connections"  $LogFileGCV]
+  if { $GdbNumGCV != $HartsNum } {
+    error "unexpected number of gdb servers launched $GdbNumGCV vs $HartsNum"
+  }
+
+  # delay so spike can die as a result of SIGHUP
+  # sleep 0.1
+
+  set LogFileGV [utils_spawn_universal_launcher \
+    [list --spike-bin "$SpikeBin:$SpikeBoot" \
+          --bitbang-port $BitbangPort \
+          --spike-harts 8 \
+          --spike-arg --isa=${XlenPrefix}gv \
+          --spike-arg $MemoryMap \
+          --run-script "$script_to_run" \
+          --run-command shutdown] \
+    spike_gv  \
+    expect_success]
+  set MisaGV [exec grep --text -F MISA: ${LogFileGV}]
+  regexp "0x\[0-9\]+" $MisaGV GVMisa
+  set ExpectedMisa 0x8000000000341129
+  if {[target_info cpu,xlen] == 32} {
+    set ExpectedMisa 0x40341129
+  }
+  if { $GVMisa != $ExpectedMisa } {
+    error "unexpected GVMisa($GVMisa) value vs $ExpectedMisa"
+  }
+  set GdbNumGV [exec grep --text -c -E "Listening on port .* for gdb connections"  $LogFileGV]
+  if { $GdbNumGV != $HartsNum } {
+    error "unexpected number of gdb servers launched $GdbNumGV vs $HartsNum"
+  }
+
+  set LogFileGVBB0 [utils_spawn_universal_launcher \
+    [list --spike-bin "$SpikeBin:$SpikeBoot" \
+          --bitbang-port 0 \
+          --spike-harts 8 \
+          --spike-arg --isa=${XlenPrefix}gv \
+          --spike-arg $MemoryMap \
+          --run-script "$script_to_run" \
+          --run-command shutdown] \
+    spike_gv_bb0  \
+    expect_success]
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

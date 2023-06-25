@@ -3,9 +3,9 @@ proc run_test {} {
     [list --single-core --run-command shutdown] \
     single_core \
     expect_success]
-  set GdbPortsCount [llength [split \
-    [exec grep --text -E "Listening on port .* gdb connections" $LogFile] "\n"]]
+  set GdbPortsCount [exec grep --text -c -E "Listening on port .* gdb connections" $LogFile]
 
+  verbose "GdbPortsCount: $GdbPortsCount" 1
   if {$GdbPortsCount == 1} {
     return [ocd_test_pass]
   }
