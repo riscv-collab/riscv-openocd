@@ -24,6 +24,7 @@ set COMMAND_LINE_OPTIONS [dict create \
   --ide-mode "flag. hide most of CSRs. Useful if you want to debug an application with for IDE (like Eclipse)" \
   --i-know-what-im-doing "value:config_file. Use only if your really understand the purpose of this flag" \
   --load "value:config_path. loads selected configuration (disables interactive mode automatically)" \
+  --load-extra-scripts "flag. loads extra scripts to help with common debugging scenarios" \
   --log-session "value:log_path. Path to session log" \
   --run-command "value:openocd_command. extra command to run (can be specified multiple times)" \
   --run-script "value:script_file. additional script(s) to run (can be specified multiple times)" \
@@ -66,6 +67,7 @@ set SETTINGS(ide_mode) 0
 set SETTINGS(unlock_usb_devices) ""
 set SETTINGS(bindto) ""
 set SETTINGS(configure_hook) ""
+set SETTINGS(load_extra_scripts) 0
 set SETTINGS(extra_run_commands) []
 set SETTINGS(extra_spike_args) []
 
@@ -181,6 +183,8 @@ for { set i 0 } { $i < $argc } { incr i } {
     set SETTINGS(bindto) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--speed) } {
     set SETTINGS(adapter_speed) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--load-extra-scripts) } {
+    set SETTINGS(load_extra_scripts) 1
   } elseif { $option == $COMMAND_LINE_ARG(--single-core) } {
     set SETTINGS(enforce_single_core) 1
   } elseif { $option == $COMMAND_LINE_ARG(--debug-adapter-serial) } {
@@ -493,6 +497,18 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
       -c "remote_bitbang host 127.0.0.1" \
       -c "sc_target_config new_tap_for_each_target 0" \
       -c "sc_target_config harts_num $NumberOfHarts"]
+  }
+
+  if {$SETTINGS(load_extra_scripts) == 1} {
+    set ExtraLibraries [list]
+    lappend ExtraLibraries "[getOpenOCDRootDir]/share/openocd/scripts/syntacore/sc_fpga_lib.tcl"
+    foreach Lib $ExtraLibraries {
+      if {![file exists "$Lib"]} {
+        fatalError "unable to locate extra library: $Lib"
+      }
+      lappend OpenOCDArgs -f
+      lappend OpenOCDArgs "$Lib"
+    }
   }
 
   if {$SETTINGS(ide_mode) == 1} {
