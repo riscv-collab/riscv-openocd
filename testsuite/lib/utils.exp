@@ -58,7 +58,7 @@ proc utils_spawn_universal_launcher { args \
   set log_name [utils_get_log_name $log]
 
   upvar spawn_id spawn_id
-  spawn $openocd_launcher --log-session $log_name {*}$args
+  spawn -ignore HUP $openocd_launcher --log-session $log_name {*}$args
   verbose "running $openocd_launcher $args" 1
   verbose "  logfile should be at $log_name" 1
   if { $termination_policy eq "interactive" } {
@@ -72,6 +72,7 @@ proc utils_spawn_universal_launcher { args \
     eof {
       verbose "  universal launcher execution terminated" 1
       set result [wait]
+      verbose "  termination status: $result"
       if { $termination_policy == "expect_timeout" } {
         error "unexpected termination for args: $args"
       }
@@ -79,6 +80,9 @@ proc utils_spawn_universal_launcher { args \
       if { $termination_policy == "expect_success" } {
         if { $status != 0} {
           error "unexpected failure for args: $args"
+        }
+        if {[lindex $result 4] eq "CHILDKILLED" } {
+          error "child is killed by signal ($result) while expecting success"
         }
         return $log_name
       }

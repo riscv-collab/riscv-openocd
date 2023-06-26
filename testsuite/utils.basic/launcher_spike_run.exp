@@ -17,7 +17,6 @@ proc run_test {} {
 
   set BitbangPort [expr {$SPIKE_BITBANG + 1}]
   set SpikeBoot "${BinPrefix}_spike_run.elf"
-  compile_boot_code $SpikeBoot
 
   if  { [compile_boot_code $SpikeBoot] != "" } {
     error "could not compile boot binary"

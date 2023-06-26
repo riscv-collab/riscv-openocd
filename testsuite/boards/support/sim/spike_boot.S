@@ -1,4 +1,3 @@
-
 .global main
 .global _entry
 

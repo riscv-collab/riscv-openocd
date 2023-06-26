@@ -73,6 +73,7 @@ namespace eval _SC_INTERNALS {
         } else {
             resume $entry_point
         }
+        return $entry_point
     }
 }
 
