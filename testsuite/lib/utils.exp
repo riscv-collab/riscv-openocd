@@ -49,7 +49,10 @@ proc utils_get_log_name { log } {
   return ${bin_prefix}_${log}.log
 }
 
-proc utils_spawn_universal_launcher { args log {termination_policy expect_timeout}} {
+proc utils_spawn_universal_launcher { args \
+                                      log \
+                                      {termination_policy expect_timeout} \
+                                      {script_timeout_multiplier 1} } {
   set args [utils_build_ul_args {*}$args]
   set openocd_launcher [utils_get_universal_launcher]
   set log_name [utils_get_log_name $log]
@@ -62,7 +65,9 @@ proc utils_spawn_universal_launcher { args log {termination_policy expect_timeou
     verbose "interactive launch" 1
     return $log_name
   }
-  set timeout [target_info env,scripting_timeout]
+  set script_timeout [expr {[target_info env,scripting_timeout] * $script_timeout_multiplier}]
+  verbose "launcher timeout: $script_timeout"
+  set timeout $script_timeout
   expect {
     eof {
       verbose "  universal launcher execution terminated" 1
