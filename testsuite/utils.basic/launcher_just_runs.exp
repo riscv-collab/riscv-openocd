@@ -1,6 +1,3 @@
-# [--disable-interactive-mode] disables interactive selection of debug adapter
-# [--load config_path] loads selected configuration (disables interactive mode automatically)
-
 proc just_run_with_command { args log_suffix} {
   return [utils_spawn_universal_launcher \
     [list {*}$args --run-command shutdown] \
@@ -48,6 +45,9 @@ proc run_test {} {
 
   lappend Logs [just_run_with_command \
     [list --disable-interactive-mode] interactive_flag]
+
+  lappend Logs [just_run_with_command \
+    [list --no-extra-scripts] no_extra_scripts]
 
   foreach Log $Logs {
     exec grep --text -F "Target successfully examined" $Log

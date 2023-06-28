@@ -1,6 +1,7 @@
 proc run_test {} {
   set log_path [utils_spawn_universal_launcher \
     [list --help]  help  expect_success]
+
   set options [list \
     help \
     disable-interactive-mode \
@@ -9,12 +10,15 @@ proc run_test {} {
     save \
     load \
     bitbang-port \
-    spike-harts \
     debug-adapter-index \
     debug-adapter-serial \
+    no-extra-scripts \
     run-script \
     run-command \
     scan-only \
+    spike-arg \
+    spike-bin \
+    spike-harts \
     single-core \
     ide-mode \
     bindto \

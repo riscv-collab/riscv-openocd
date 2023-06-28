@@ -12,7 +12,7 @@ proc run_test {} {
   set script_to_run "$srcdir/$subdir/lib/fpga_lib_test.tcl"
   set script_timeout_multiplier 10
   set LogFile [utils_spawn_universal_launcher \
-    [list --load-extra-scripts \
+    [list \
       --run-script $script_to_run \
       --run-command \
         "run_test_with_elf_and_bin $BinFile $ElfFile $LOAD_ADDR $ENTRY_ADDR"] \
