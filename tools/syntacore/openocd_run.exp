@@ -24,8 +24,8 @@ set COMMAND_LINE_OPTIONS [dict create \
   --ide-mode "flag. hide most of CSRs. Useful if you want to debug an application with for IDE (like Eclipse)" \
   --i-know-what-im-doing "value:config_file. Use only if your really understand the purpose of this flag" \
   --load "value:config_path. loads selected configuration (disables interactive mode automatically)" \
-  --load-extra-scripts "flag. loads extra scripts to help with common debugging scenarios" \
   --log-session "value:log_path. Path to session log" \
+  --no-extra-scripts "flag. avoid loading of extra scripts (common routines to help with debugging)" \
   --run-command "value:openocd_command. extra command to run (can be specified multiple times)" \
   --run-script "value:script_file. additional script(s) to run (can be specified multiple times)" \
   --save "value:config_path. save selected configuration to the file (see --load)" \
@@ -67,7 +67,7 @@ set SETTINGS(ide_mode) 0
 set SETTINGS(unlock_usb_devices) ""
 set SETTINGS(bindto) ""
 set SETTINGS(configure_hook) ""
-set SETTINGS(load_extra_scripts) 0
+set SETTINGS(load_extra_scripts) 1
 set SETTINGS(extra_run_commands) []
 set SETTINGS(extra_spike_args) []
 
@@ -183,8 +183,8 @@ for { set i 0 } { $i < $argc } { incr i } {
     set SETTINGS(bindto) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--speed) } {
     set SETTINGS(adapter_speed) $optarg
-  } elseif { $option == $COMMAND_LINE_ARG(--load-extra-scripts) } {
-    set SETTINGS(load_extra_scripts) 1
+  } elseif { $option == $COMMAND_LINE_ARG(--no-extra-scripts) } {
+    set SETTINGS(load_extra_scripts) 0
   } elseif { $option == $COMMAND_LINE_ARG(--single-core) } {
     set SETTINGS(enforce_single_core) 1
   } elseif { $option == $COMMAND_LINE_ARG(--debug-adapter-serial) } {
