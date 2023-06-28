@@ -15,13 +15,13 @@
 
 set COMMAND_LINE_OPTIONS [dict create \
   --bindto "value:value. issue bindto configuration command. Typically this is something like 0.0.0.0" \
-  --bitbang-port "value:port. rbb port (to connect to spike simulator)" \
+  --bitbang-port "devel:value:port. rbb port (for connection to spike simulator)" \
   --configure-hook "value:script_file. script to execute during configuration phase. The file is loaded right before init" \
   --debug-adapter-index "value:index. specify selected adapter" \
-  --debug-adapter-serial "value:serial. specify serial of debug adapter" \
+  --debug-adapter-serial "value:serial. specify serial number of debug adapter" \
   --disable-interactive-mode "flag. disables interactive selection of debug adapter" \
   --help "flag. prints this help" \
-  --ide-mode "flag. hide most of CSRs. Useful if you want to debug an application with for IDE (like Eclipse)" \
+  --ide-mode "flag. hide most of CSRs. Useful if you want to debug an application using IDE (like Eclipse)" \
   --i-know-what-im-doing "value:config_file. Use only if your really understand the purpose of this flag" \
   --load "value:config_path. loads selected configuration (disables interactive mode automatically)" \
   --log-session "value:log_path. Path to session log" \
@@ -29,14 +29,14 @@ set COMMAND_LINE_OPTIONS [dict create \
   --run-command "value:openocd_command. extra command to run (can be specified multiple times)" \
   --run-script "value:script_file. additional script(s) to run (can be specified multiple times)" \
   --save "value:config_path. save selected configuration to the file (see --load)" \
-  --scan-only "flag. do not launch OpenOCD, only show the final command" \
-  --single-core "flag. enforce single-hart configuration even if we know that other harts available" \
+  --scan-only "flag. do not launch OpenOCD server, only show the resulting command" \
+  --single-core "flag. enforce single-hart configuration even if we know that other harts are available" \
   --smp "flag. if several harts are detected, combine them to an smp target" \
   --speed "value:kHz. adapter speed" \
-  --spike-arg "value:arg. command line element to append to spike options list" \
-  --spike-bin "value:spike_bin_and_executable. spike_binary:executable to run" \
-  --spike-harts "value:harts_num. number of harts in spike model" \
-  --telnet "flag. Once OpenOCD is started connect with telnet client to the server" \
+  --spike-arg "devel:value:arg. command line element to append to spike options list" \
+  --spike-bin "devel:value:spike_bin_and_executable. spike_binary:executable to run" \
+  --spike-harts "devel:value:harts_num. number of harts spike should create" \
+  --telnet "flag. connect with telnet client to the OpenOCD server when any hart is examined successfully" \
   --verbose "flag. run OpenOCD with -d3 flag" \
 ]
 
@@ -144,13 +144,10 @@ for { set i 0 } { $i < $argc } { incr i } {
 
   if { $option == $COMMAND_LINE_ARG(--disable-interactive-mode)} {
     set SETTINGS(interactive) 0
-    send_user -- "interactive mode disabled\n"
   } elseif { $option == $COMMAND_LINE_ARG(--scan-only) } {
     set SETTINGS(scan_only) 1
-    send_user -- "scan-only mode selected\n"
   } elseif { $option == $COMMAND_LINE_ARG(--smp) } {
     set SETTINGS(smp) 1
-    send_user -- "smp targets should be created\n"
   } elseif { $option == $COMMAND_LINE_ARG(--verbose) } {
     set SETTINGS(verbose_logs) 1
   } elseif { $option == $COMMAND_LINE_ARG(--telnet) } {
@@ -210,6 +207,14 @@ if {$SETTINGS(log_session) ne ""} {
 if {$SETTINGS(help_mode) == 1} {
   printUsage
   exit 0
+}
+
+if {$SETTINGS(interactive) == 0} {
+  send_user -- "interactive mode disabled\n"
+}
+
+if {$SETTINGS(scan_only) == 1} {
+  send_user -- "scan-only mode selected\n"
 }
 
 if { [debugModeEnabled] } {
