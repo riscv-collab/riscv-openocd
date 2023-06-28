@@ -76,7 +76,7 @@ pipeline {
             sh """
             #!/bin/bash
             wget 'https://www.python.org/ftp/python/3.10.0/Python-3.10.0.tar.xz'
-            tar -xvf Python-3.10.0.tar.xz
+            tar -xf Python-3.10.0.tar.xz
             cd Python-3.10.0
             ./configure --prefix=$PYTHON_INSTALL
             make install -j8

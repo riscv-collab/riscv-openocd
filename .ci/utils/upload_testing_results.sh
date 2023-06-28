@@ -15,13 +15,13 @@ ARTIFACTORY_URL="http://artifactory.dev.syntacore.com:8082/artifactory"
 ARTIFACTORY_DIR=${ARTIFACTORY_DIR:-openocd_build_dependencies/test_logs}
 ARTIFACTORY_BASEPATH="$ARTIFACTORY_URL/$ARTIFACTORY_DIR"
 
-ARCHIVE_NAME=${BUILD_ID:-${COMMIT}_test}.tar.gz
+ARCHIVE_NAME=${BUILD_ID:-${COMMIT}_test}.tar.xz
 ARTIFACTORY_PATH="$ARTIFACTORY_BASEPATH/$ARCHIVE_NAME"
 
 LOGS_PARENT=$(dirname "$LOGS_PATH")
 LOGS_DIR=$(basename "$LOGS_PATH")
 
-tar -czvf "$ARCHIVE_NAME" -C "$LOGS_PARENT" "$LOGS_DIR"
+XZ_OPT='-9' tar -cJf "$ARCHIVE_NAME" -C "$LOGS_PARENT" "$LOGS_DIR"
 echo "Uploading \"$ARCHIVE_NAME\" to \"$ARTIFACTORY_PATH\"..."
 curl  -H "X-JFrog-Art-Api:$API_KEY" -T "$ARCHIVE_NAME" "$ARTIFACTORY_PATH"
 rm "$ARCHIVE_NAME"
