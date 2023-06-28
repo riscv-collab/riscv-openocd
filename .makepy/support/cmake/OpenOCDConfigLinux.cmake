@@ -1,7 +1,10 @@
 set(OPENOCD_CONFIGURE_OPTIONS
+    --enable-verbose
+    --enable-verbose-usb-io
+    --enable-verbose-usb-comms
     --enable-rshim
     --enable-ftdi
-    --enable-ftdi-oscan1
+    --enable-ftdi-cjtag
     --enable-stlink
     --enable-ti-icdi
     --enable-ulink
@@ -15,6 +18,7 @@ set(OPENOCD_CONFIGURE_OPTIONS
     --enable-armjtagew
     --enable-rlink
     --enable-usbprog
+    --enable-esp-usb-jtag
     --enable-cmsis-dap
     --enable-nulink
     --enable-kitprog
@@ -32,6 +36,7 @@ set(OPENOCD_CONFIGURE_OPTIONS
     --enable-amtjtagaccel
     --enable-bcm2835gpio
     --enable-imx_gpio
+    --enable-am335xgpio
     --enable-ep93xx
     --enable-at91rm9200
     --enable-gw16012
