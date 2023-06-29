@@ -26,6 +26,12 @@ namespace eval _SC_INTERNALS {
         echo "[sc_fpga_fname]: $msg"
     }
 
+    proc fill_gprs_with_zero {} {
+        for { set reg_idx 1 } { $reg_idx < 32 } { incr reg_idx } {
+            reg $reg_idx 0
+        }
+    }
+
     proc sc_lib_do_resume_impl { addr } {
         if { $addr eq ""} {
             resume
@@ -45,7 +51,7 @@ namespace eval _SC_INTERNALS {
         sc_lib_do_resume_impl $addr
     }
 
-    proc sc_lib_run_impl { file_path type load_address entry_point mode { primary_target ""} } {
+    proc sc_lib_run_impl { file_path file_type load_address entry_point mode { primary_target ""} } {
         sc_fpga_halt_all
         if { $primary_target eq "" } {
             set primary_target [lindex [target names] 0]
@@ -56,7 +62,7 @@ namespace eval _SC_INTERNALS {
         set load_image_args [list $file_path]
         if { $load_address ne "" } {
             lappend load_image_args $load_address
-            lappend load_image_args $type
+            lappend load_image_args $file_type
         }
         _SC_INTERNALS::sc_lib_print "load_image $load_image_args"
         set load_result [load_image {*}$load_image_args]
@@ -75,18 +81,26 @@ namespace eval _SC_INTERNALS {
         }
         return $entry_point
     }
+
+    proc apply_for_each_target { function_name args } {
+        set current_target [target current]
+        foreach t [target names] {
+            targets $t
+            if {[llength $args] == 0} {
+                $function_name
+            } else {
+                $function_name {*}$args
+            }
+        }
+        targets $current_target
+    }
 }
 
 proc sc_fpga_halt_all {} {
     # TODO: take into account cases when several SMP groups are present or
     # there are targets that does not belong to any SMP group
     if {[string trim [smp]] eq "off"} {
-        set current_target [target current]
-        foreach t [target names] {
-            targets $t
-            halt
-        }
-        targets $current_target
+        _SC_INTERNALS::apply_for_each_target halt
     } else {
         halt
     }
@@ -97,12 +111,7 @@ proc sc_fpga_resume_all { { addr "" } } {
     # TODO: take into account cases when several SMP groups are present or
     # there are targets that does not belong to any SMP group
     if {[string trim [smp]] eq "off"} {
-        set current_target [target current]
-        foreach t [target names] {
-            targets $t
-            _SC_INTERNALS::sc_lib_do_resume $addr
-        }
-        targets $current_target
+        _SC_INTERNALS::apply_for_each_target _SC_INTERNALS::sc_lib_do_resume $addr
     } else {
         _SC_INTERNALS::sc_lib_do_resume $addr
     }
@@ -114,14 +123,7 @@ proc sc_fpga_resume_all { { addr "" } } {
 }
 
 proc sc_fpga_zero_regs {} {
-    set current_target [target current]
-    foreach t [target names] {
-        targets $t
-        for { set reg_idx 1 } { $reg_idx < 32 } { incr reg_idx } {
-            reg $reg_idx 0
-        }
-    }
-    targets $current_target
+    _SC_INTERNALS::apply_for_each_target _SC_INTERNALS::fill_gprs_with_zero
     _SC_INTERNALS::sc_lib_print "all general-purpose registers are zero-out"
 }
 
