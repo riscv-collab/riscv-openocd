@@ -22,7 +22,7 @@ proc utils_init {test_file_name} {
 
 proc utils_get_universal_launcher {} {
   global OPENOCD_ROOT
-  set utils_dir "${OPENOCD_ROOT}/share/openocd/scripts/syntacore"
+  set utils_dir "${OPENOCD_ROOT}/bin"
   return "${utils_dir}/openocd_run.exp"
 }
 

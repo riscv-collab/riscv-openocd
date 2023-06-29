@@ -247,7 +247,7 @@ proc getResourceDirectory {} {
 }
 
 proc getOpenOCDRootDir {} {
-  set OcdRootDir [file normalize "[getResourceDirectory]/../../../.."]
+  set OcdRootDir [file normalize "[getResourceDirectory]/.."]
   if {[file exists "$OcdRootDir/bin/openocd"]} {
     return $OcdRootDir
   }
