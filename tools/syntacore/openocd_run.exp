@@ -221,6 +221,7 @@ for { set i 0 } { $i < $argc } { incr i } {
     fatalError "unsupported option \"$option\""
   }
 }
+
 if {$SETTINGS(log_session) ne ""} {
   log_file -noappend $SETTINGS(log_session)
 }
@@ -228,6 +229,14 @@ if {$SETTINGS(log_session) ne ""} {
 if {$SETTINGS(help_mode) == 1} {
   printUsage
   exit 0
+}
+
+if {[auto_execok lsusb] eq ""} {
+  fatalError "the script requires 'lsusb' utility to work properly"
+}
+
+if {[auto_execok telnet] eq ""} {
+  fatalError "the script requires 'telnet' utility to work properly"
 }
 
 if {$SETTINGS(interactive) == 0} {
