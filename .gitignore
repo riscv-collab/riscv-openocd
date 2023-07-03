@@ -106,5 +106,4 @@ GTAGS
 
 # makepy
 .makepy/artifacts
-external_sources/
 build/
