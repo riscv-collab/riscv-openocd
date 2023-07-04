@@ -252,6 +252,7 @@ proc tsuplib_shutdown_openocd { cleanup_type } {
 
   if {![tool_state_has openocd_spawn_id]} {
     perror "unexpected tool_finish (no openocd session is active)"
+    tool_state_clear
     return
   }
 
