@@ -23,5 +23,6 @@ class TestPackage(_ConanFile):  # type: ignore
                 self.run("$RISCV_OPENOCD_DIR/bin/openocd --version 2>&1",
                     env="conanrun", stdout=out_stream)
                 version_string = out_stream.getvalue()
+            print(f"version: {version_string}")
             if "dirty" in version_string:
-                raise Exception(f"unexpected dirty version: {version_string}")
+                raise Exception("unexpected dirty version")
