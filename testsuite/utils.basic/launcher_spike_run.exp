@@ -39,7 +39,9 @@ proc run_test {} {
     spike_gcv  \
     expect_success]
   set MisaGCV [exec grep --text -F MISA: ${LogFileGCV}]
-  regexp "0x\[0-9\]+" $MisaGCV GCVMisa
+  if {![regexp "0x\[0-9\]+" $MisaGCV GCVMisa]} {
+    error "could not find MISA value in $MisaGCV"
+  }
   set ExpectedMisa 0x800000000034112
   if {[target_info cpu,xlen] == 32} {
     set ExpectedMisa 0x4034112
