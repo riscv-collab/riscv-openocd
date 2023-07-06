@@ -79,7 +79,7 @@ main:
     when: on_failure
 
   script:
-    - ./make.py --image $IMAGE just-config --profile:host $PROFILE --build-path $BUILD_PATH
+    - ./make.py --image $IMAGE just-config --profile:host $PROFILE --build-path $BUILD_PATH --options:host test=True
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target openocd
     - if [[ "$PROFILE" == "makepy_sc_mingw" ]]; then exit; fi
     - if [[ "$IMAGE" == "cpp_centos_7" ]]; then exit; fi # TODO: fix tests on CentOS

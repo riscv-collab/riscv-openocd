@@ -80,6 +80,26 @@ class _JustConfigCommand(_Command):
             help=conan_help,
         )
         parser.add_argument(
+            "-o",
+            "--options",
+            "-o:h",
+            "--options:host",
+            dest="host_options",
+            type=str,
+            default=[],
+            action="append",
+            help=conan_help,
+        )
+        parser.add_argument(
+            "-o:b",
+            "--options:build",
+            dest="build_options",
+            type=str,
+            default=[],
+            action="append",
+            help=conan_help,
+        )
+        parser.add_argument(
             "-s",
             "--settings",
             "-s:h",
@@ -136,6 +156,16 @@ class _JustConfigCommand(_Command):
         install_cmd.extend(
             _itertools.chain.from_iterable(
                 ["--settings:build", setting] for setting in args.build_settings
+            )
+        )
+        install_cmd.extend(
+            _itertools.chain.from_iterable(
+                ["--options:host", setting] for setting in args.host_options
+            )
+        )
+        install_cmd.extend(
+            _itertools.chain.from_iterable(
+                ["--options:build", setting] for setting in args.build_options
             )
         )
         install_cmd.append(_repo_path)

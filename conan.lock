@@ -1,8 +1,16 @@
 {
     "version": "0.5",
     "requires": [
-        "riscv-gcc/0.1.0-rc.0.2@sc/main#0bdcd6f3e84969d071412cdb77229f146fe36a8b%1683200607.634"
+        "zlib/1.2.13#13c96f538b52e1600c40b88994de240f%1682597484.674",
+        "sail-riscv/0.1.0-rc.0.9@sc/main#79dff4c1e058862e81b9000f2e5cbf95967578a2%1687820718.337",
+        "riscv-isa-sim/0.1.0-rc.0.121@sc/main#42d27020b82b2b802a3481d34d315843eee632b6%1688616720.989",
+        "riscv-gcc/13.1.0-rc.0.12@sc/main#5efd7e29b180ec2992d852a06719c8390605f038%1688129725.919",
+        "gmp/6.2.1#9cd6e4a851f6ffd6ea5b5d563f23abcc%1678897585.752"
     ],
-    "build_requires": [],
+    "build_requires": [
+        "sail/0.1.0-rc.0.12@sc/main#9db10f2a2d1b987111e34bf78ab53ec4b7046b34%1687831642.025",
+        "m4/1.4.19#c1c4b1ee919e34630bb9b50046253d3c%1676610086.39",
+        "gmp/6.2.1#9cd6e4a851f6ffd6ea5b5d563f23abcc%1678897585.752"
+    ],
     "python_requires": []
 }

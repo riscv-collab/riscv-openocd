@@ -5,6 +5,8 @@ include(ProcessorCount)
 
 project(OpenOCD)
 
+option(SC_OPENOCD_ENABLE_TESTS "Enable tests")
+
 ProcessorCount(CPU_COUNT)
 
 execute_process(
@@ -71,6 +73,6 @@ ExternalProject_Add(
   DEPENDS openocd_deps)
 # cmake-format: on
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND SC_OPENOCD_ENABLE_TESTS)
   include(cmake/DeclareLinuxTests.cmake)
 endif()

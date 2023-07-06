@@ -1,6 +1,7 @@
-find_package(riscv-gcc REQUIRED)
+if(NOT DEFINED RISCVGCC_DIR)
+  message(FATAL_ERROR "RISCVGCC_DIR is not defined")
+endif()
 
-set(RISCVGCC_DIR "${riscv-gcc_PACKAGE_FOLDER_RELEASE}")
 set(DEJAGNU_SRC_CODE dejagnu)
 
 # cmake-format: off

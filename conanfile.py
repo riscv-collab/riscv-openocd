@@ -1,14 +1,12 @@
 import io as _io
 import json as _json
 import multiprocessing as _multiprocessing
-import os as _os
 import sys as _sys
 from pathlib import Path as _Path
 from urllib.parse import urlparse as _urlparse
 
 import conan as _conan  # type: ignore
-from conan.tools.cmake import CMakeDeps as _CMakeDeps  # type: ignore
-from conan.tools.cmake import CMakeToolchain as _CMakeToolchain
+from conan.tools.cmake import CMakeToolchain as _CMakeToolchain  # type: ignore
 from conan.tools.scm import Git as _Git  # type: ignore
 
 # isort: off
@@ -22,10 +20,10 @@ from support.manifest import Manifest as _Manifest
 
 
 class Package(_conan.ConanFile):  # type: ignore
-    settings = "os", "arch", "build_type"
-    options = None
     name = "openocd"
-    default_options = None
+    settings = "os", "arch"
+    options = {"test": [True, False], "build_type": ["Release", "Debug"]}
+    default_options = {"test": False, "build_type": "Release"}
     revision_mode = "scm"
     cmake_find_mode = "both"
     package_type = "application"
@@ -54,10 +52,11 @@ class Package(_conan.ConanFile):  # type: ignore
             deps = _json.loads(file.read())
         if self.settings.os != "Linux":  # type: ignore
             return
+        if self.options.test != "True":  # type: ignore
+            return
         # pylint: disable-next=not-callable
-        self.requires(
-            deps["riscv-gcc"], test=True, visible=True, package_id_mode=None
-        )
+        self.requires(deps["riscv-gcc"])
+        self.requires(deps["riscv-isa-sim"])
 
     def set_version(self) -> None:
         source_folder = _Path(__file__).parent
@@ -71,7 +70,7 @@ class Package(_conan.ConanFile):  # type: ignore
         self.version = version
 
     def layout(self) -> None:
-        build_folder = _Path("build") / str(self.settings.build_type)  # type: ignore
+        build_folder = _Path("build") / str(self.options.build_type)  # type: ignore
         self.folders.generators = build_folder
         self.folders.build = build_folder
 
@@ -144,6 +143,14 @@ class Package(_conan.ConanFile):  # type: ignore
         self.run("git submodule init")
         self.run("git submodule update")
 
+    def _var(self, name: str) -> str:
+        for _, info in self.dependencies.items():
+            run_vars = info.runenv_info.vars(self)
+            for var, val in run_vars.items():
+                if var == name:
+                    return str(val)
+        assert False
+
     def generate(self) -> None:
         toolchain = _CMakeToolchain(self)
 
@@ -151,44 +158,25 @@ class Package(_conan.ConanFile):  # type: ignore
             _Path(self.generators_folder) / "external_dependencies"
         )
         self._download_source_deps(external_deps_folder / "sources")
-        # TODO: remove this once conan is integrated into spike and riscb-binutils-gdb
-        spike_urls = {
-            "Ubuntu": (
+
+        if self.settings.os == "Linux" and self.options.test:  # type: ignore
+            riscv_binutils_gdb_url = (
                 "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts/"
-                "spike/sc_main/230426-120908_b58d783f/spike-23_04_26-x86_64-ubuntu-18.04-b58d783fb0e2.tar.gz"
-            ),
-            "CentOS": (
-                "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts/"
-                "spike/sc_main/230426-120908_b58d783f/spike-23_04_26-x86_64-centos-7-b58d783fb0e2.tar.gz"
-            ),
-        }
-        riscv_binutils_gdb_url = (
-            "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts/"
-            "riscv-binutils-gdb/197d5a51/x86_Lin-x86_Lin-RISCV64_Elf_binutils-gdb.tar.gz"
-        )
-        if self.settings.os == "Linux":  # type: ignore
-            spike_url = spike_urls[str(self.settings.os.distro)]  # type: ignore
-            _conan.tools.files.get(
-                self,
-                spike_url,
-                destination=external_deps_folder,
-                strip_root=True,
+                "riscv-binutils-gdb/197d5a51/x86_Lin-x86_Lin-RISCV64_Elf_binutils-gdb.tar.gz"
             )
             _conan.tools.files.get(
                 self, riscv_binutils_gdb_url, destination=external_deps_folder
             )
             # FIXME: can we enforce **normalized** absolute paths here?
-            toolchain.variables[
-                "RISCVSpike_DIR"
-            ] = f"{external_deps_folder}/spike"
+            toolchain.variables["RISCVSpike_DIR"] = self._var("SC_SPIKE_PATH")
+            toolchain.variables["RISCVGCC_DIR"] = self._var("SC_GCC_PATH")
             toolchain.variables[
                 "RISCVGDB_DIR"
             ] = f"{external_deps_folder}/binutils-gdb"
-            toolchain.variables["CMAKE_BUILD_TYPE"] = self.settings.build_type  # type: ignore
+            toolchain.variables["CMAKE_BUILD_TYPE"] = self.options.build_type  # type: ignore
+            toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
 
         toolchain.generate()
-        deps = _CMakeDeps(self)
-        deps.generate()
 
     def build(self) -> None:
         self.run(
