@@ -37,6 +37,7 @@ set(OCD_PKG_CONFIG_LIB64 ${DEPENDENCIES_INSTALL_PATH}/lib64/pkgconfig)
 set(OPENOCD_SCRIPTS_INSTALL_DIR
   ${OPENOCD_INSTALL_PATH}/share/openocd/scripts/syntacore)
 
+set(OPENOCD_CFLAGS "$<$<CONFIG:Debug>:-O0 -g>")
 ExternalProject_Add(
   openocd
   PREFIX OpenOCDBuild
@@ -52,6 +53,7 @@ ExternalProject_Add(
     env
       PKG_CONFIG_PATH=${OCD_PKG_CONFIG_LIB}:${OCD_PKG_CONFIG_LIB64}
       CC=${CMAKE_C_COMPILER}
+      CFLAGS=${OPENOCD_CFLAGS}
     ${OPENOCD_SOURCES}/configure
       --prefix=${OPENOCD_INSTALL_PATH}
       --host=$<$<BOOL:${CMAKE_CROSSCOMPILING}>:${CONFIGURE_HOST}>
@@ -59,10 +61,8 @@ ExternalProject_Add(
   # NOTE: it seems that cmake has a bug - it does not propagate the requested
   # number of cores, causing extreme number of threads to be created during the
   # build process
-  BUILD_COMMAND make install -j${CPU_COUNT}
+  BUILD_COMMAND make $<IF:$<CONFIG:DEBUG>,install,install-strip> -j${CPU_COUNT}
   INSTALL_COMMAND
-    ${CMAKE_STRIP} --strip-all
-      ${OPENOCD_INSTALL_PATH}/bin/openocd${CMAKE_EXECUTABLE_SUFFIX} &&
     mkdir -p -- ${OPENOCD_SCRIPTS_INSTALL_DIR} &&
     cp ${OPENOCD_SOURCES}/tcl/tools/syntacore/sc_fpga_lib.tcl
        ${OPENOCD_SCRIPTS_INSTALL_DIR}/ &&
