@@ -23,6 +23,8 @@ from makepy import Conductor as _Conductor
 from makepy.generic import GenericSuite as _GenericSuite
 from makepy.generic import ParallelHook as _ParallelHook
 from makepy.generic import PrivilegedContainerHook as _PrivilegedContainerHook
+from makepy.lint import FormatCommand as _FormatCommand
+from makepy.lint import LintCommand as _LintCommand
 from makepy.syntacore import ConanSuite as _ConanSuite
 from makepy.syntacore import SyntacoreSuite as _SyntacoreSuite
 from makepy.utils import main as _main_decorator
@@ -269,136 +271,25 @@ def _sources(kind: str | list[str], path: _Path = _repo_path) -> list[_Path]:
     return sources
 
 
-class _FormatCommand(_Command):
-    def name(self) -> str:
-        return "format"
+def _build_formatter_and_linter() -> tuple[_FormatCommand, _LintCommand]:
+    python_files = [
+        _repo_path / "make.py",
+        _repo_path / ".makepy" / "setup.py",
+        _repo_path / ".makepy" / "support" / "utils" / "conan_the_deployer.py",
+        _repo_path / "conanfile.py",
+    ]
 
-    def help(self) -> str:
-        return "Run formatter."
+    format_cmd = _FormatCommand(default_revision="origin/sc/main")
+    # format_cmd.add_cmake_format() # Do not forget to add .cmake-format.py
+    format_cmd.add_black([*python_files])
+    format_cmd.add_isort([*python_files])
 
-    def command(self, args: _Namespace) -> None:
-        _run_shell(
-            ["python3", "-m", "black", _repo_path / ".makepy" / "setup.py"]
-        )
-        _run_shell(
-            [
-                "python3",
-                "-m",
-                "black",
-                _repo_path
-                / ".makepy"
-                / "support"
-                / "utils"
-                / "conan_the_deployer.py",
-            ]
-        )
-        _run_shell(["python3", "-m", "black", _repo_path / "conanfile.py"])
+    lint_cmd = _LintCommand(default_revision="origin/sc/main")
+    lint_cmd.add_pylint([*python_files])
+    lint_cmd.add_mypy([*python_files])
+    lint_cmd.add_yamllint([_repo_path / ".gitlab-ci.yml"])
 
-        _run_shell(
-            ["python3", "-m", "isort", _repo_path / ".makepy" / "setup.py"]
-        )
-        _run_shell(
-            [
-                "python3",
-                "-m",
-                "isort",
-                _repo_path
-                / ".makepy"
-                / "support"
-                / "utils"
-                / "conan_the_deployer.py",
-            ]
-        )
-        _run_shell(["python3", "-m", "isort", _repo_path / "conanfile.py"])
-
-        for cmake_file in _sources(
-            [".cmake", "CMakeLists.txt"], path=_repo_path / ".makepy"
-        ):
-            _run_shell(
-                [
-                    "cmake-format",
-                    _repo_path / cmake_file,
-                    "--in-place",
-                ]
-            )
-
-
-class _LintCommand(_Command):
-    def name(self) -> str:
-        return "lint"
-
-    def help(self) -> str:
-        return "Run python linters."
-
-    def _out_on_fail(self, cmd: list[str | _Path]) -> bool:
-        process = _run_shell(cmd, check=False, capture_output=True)
-        if process.returncode != 0:
-            print(process.stdout)
-            print(process.stderr, file=_sys.stderr)
-            return True
-        return False
-
-    def command(self, args: _Namespace) -> None:
-        failed = 0
-        failed += self._out_on_fail(
-            ["python3", "-m", "mypy", _repo_path / ".makepy" / "setup.py"]
-        )
-        failed += self._out_on_fail(
-            [
-                "python3",
-                "-m",
-                "mypy",
-                _repo_path
-                / ".makepy"
-                / "support"
-                / "utils"
-                / "conan_the_deployer.py",
-            ]
-        )
-        failed += self._out_on_fail(
-            ["python3", "-m", "mypy", _repo_path / "conanfile.py"]
-        )
-        failed += self._out_on_fail(
-            [
-                "python3",
-                "-m",
-                "pylint",
-                _repo_path / ".makepy" / "setup.py",
-                "--jobs",
-                "0",
-            ]
-        )
-        failed += self._out_on_fail(
-            [
-                "python3",
-                "-m",
-                "pylint",
-                _repo_path / "conanfile.py",
-                "--jobs",
-                "0",
-            ]
-        )
-        failed += self._out_on_fail(
-            [
-                "python3",
-                "-m",
-                "pylint",
-                _repo_path
-                / ".makepy"
-                / "support"
-                / "utils"
-                / "conan_the_deployer.py",
-                "--jobs",
-                "0",
-            ]
-        )
-        for cmake_file in _sources(
-            [".cmake", "CMakeLists.txt"], path=_repo_path / ".makepy"
-        ):
-            failed += self._out_on_fail(["cmake-lint", cmake_file])
-
-        if failed > 0:
-            raise RuntimeError(f"Failed {failed} linters.")
+    return format_cmd, lint_cmd
 
 
 @_main_decorator()
@@ -418,12 +309,14 @@ def _main() -> None:
     conductor.add(_JustConfigCommand())
     conductor.add(_ConfigCommand())
     conductor.add(_BuildCommand())
-    conductor.add(_FormatCommand())
-    conductor.add(_LintCommand())
 
     conductor.add(_PrivilegedContainerHook())
     conductor.add(_BuildArgsHook())
     conductor.add(_ParallelHook(commands=["build"]))
+
+    format_cmd, lint_cmd = _build_formatter_and_linter()
+    conductor.add(format_cmd)
+    conductor.add(lint_cmd)
 
     conductor.process_shell_args()
 

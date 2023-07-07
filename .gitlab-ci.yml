@@ -46,7 +46,8 @@ default:
     - mkdir $BUILD_DIR
     # Create container with cache-mount-base local to this repo,
     # eliminating its interference with other jobs and pipelines.
-    - ./make.py --image $IMAGE container run -m $BUILD_DIR --cache-mount-base .makepy/artifacts/cache --credentials "$MAKEPY_CREDS"
+    - ./make.py --image $IMAGE container run
+      -m $BUILD_DIR --cache-mount-base .makepy/artifacts/cache --credentials "$MAKEPY_CREDS"
     # Install conan settings, profiles, remotes, toolchains and login to the registry.
     - ./make.py --image $IMAGE conan-config --credentials "$MAKEPY_CREDS"
     - CONAN_USER=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info user)
@@ -79,7 +80,8 @@ main:
     when: on_failure
 
   script:
-    - ./make.py --image $IMAGE just-config --profile:host $PROFILE --build-path $BUILD_PATH --options:host test=True
+    - ./make.py --image $IMAGE just-config
+      --profile:host $PROFILE --build-path $BUILD_PATH --options:host test=True
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target openocd
     - if [[ "$PROFILE" == "makepy_sc_mingw" ]]; then exit; fi
     - if [[ "$IMAGE" == "cpp_centos_7" ]]; then exit; fi # TODO: fix tests on CentOS
@@ -111,7 +113,8 @@ deploy:
           exit 1;
         fi;
       fi
-    - ./make.py --image $IMAGE conan create --profile:host $PROFILE --user $CONAN_USER --channel $CONAN_CHANNEL .
+    - ./make.py --image $IMAGE conan create
+      --profile:host $PROFILE --user $CONAN_USER --channel $CONAN_CHANNEL .
     - ./make.py --image $IMAGE conan upload --remote syntacore --check "$PACKAGE_NAME"
     - ./make.py --image $IMAGE conan install
       --profile:host $PROFILE --remote syntacore --requires "$PACKAGE_NAME" --lockfile-partial

@@ -1,3 +1,4 @@
+# type: ignore
 import io as _io
 import json as _json
 import multiprocessing as _multiprocessing
@@ -5,21 +6,21 @@ import sys as _sys
 from pathlib import Path as _Path
 from urllib.parse import urlparse as _urlparse
 
-import conan as _conan  # type: ignore
-from conan.tools.cmake import CMakeToolchain as _CMakeToolchain  # type: ignore
-from conan.tools.scm import Git as _Git  # type: ignore
+import conan as _conan
+from conan.tools.cmake import CMakeToolchain as _CMakeToolchain
+from conan.tools.scm import Git as _Git
 
 # isort: off
 # pylint: disable=import-error
 # pylint: disable=wrong-import-position
 # pylint: disable=no-member
 _sys.path.append(str(_Path(__file__).parent / ".makepy"))
-from support.manifest import ArchiveDependency as _ArchiveDependency  # type: ignore
+from support.manifest import ArchiveDependency as _ArchiveDependency
 from support.manifest import GitDependency as _GitDependency
 from support.manifest import Manifest as _Manifest
 
 
-class Package(_conan.ConanFile):  # type: ignore
+class Package(_conan.ConanFile):
     name = "openocd"
     settings = "os", "arch"
     options = {"test": [True, False], "build_type": ["Release", "Debug"]}
@@ -50,9 +51,9 @@ class Package(_conan.ConanFile):  # type: ignore
         )
         with open(conanfile_json, "r", encoding="UTF-8") as file:
             deps = _json.loads(file.read())
-        if self.settings.os != "Linux":  # type: ignore
+        if self.settings.os != "Linux":
             return
-        if self.options.test != "True":  # type: ignore
+        if self.options.test != "True":
             return
         # pylint: disable-next=not-callable
         self.requires(deps["riscv-gcc"])
@@ -70,7 +71,7 @@ class Package(_conan.ConanFile):  # type: ignore
         self.version = version
 
     def layout(self) -> None:
-        build_folder = _Path("build") / str(self.options.build_type)  # type: ignore
+        build_folder = _Path("build") / str(self.options.build_type)
         self.folders.generators = build_folder
         self.folders.build = build_folder
 
@@ -159,7 +160,7 @@ class Package(_conan.ConanFile):  # type: ignore
         )
         self._download_source_deps(external_deps_folder / "sources")
 
-        if self.settings.os == "Linux" and self.options.test:  # type: ignore
+        if self.settings.os == "Linux" and self.options.test:
             riscv_binutils_gdb_url = (
                 "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts/"
                 "riscv-binutils-gdb/197d5a51/x86_Lin-x86_Lin-RISCV64_Elf_binutils-gdb.tar.gz"
@@ -173,7 +174,7 @@ class Package(_conan.ConanFile):  # type: ignore
             toolchain.variables[
                 "RISCVGDB_DIR"
             ] = f"{external_deps_folder}/binutils-gdb"
-            toolchain.variables["CMAKE_BUILD_TYPE"] = self.options.build_type  # type: ignore
+            toolchain.variables["CMAKE_BUILD_TYPE"] = self.options.build_type
             toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
 
         toolchain.generate()

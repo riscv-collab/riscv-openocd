@@ -30,7 +30,9 @@ def run_in_venv(
     env["PATH"] = f"{venv_path}/bin:" + env["PATH"]
     env["VIRTUAL_ENV"] = str(venv_path)
     if ssh_path:
-        env["GIT_SSH_COMMAND"] = f"ssh -o StrictHostKeyChecking=no -i {ssh_path}"
+        env[
+            "GIT_SSH_COMMAND"
+        ] = f"ssh -o StrictHostKeyChecking=no -i {ssh_path}"
 
     if not activate_path.exists():
         _logger.info("Creating virtual environment...")
@@ -41,7 +43,9 @@ def run_in_venv(
             capture_output=False,
             text=True,
         )
-    if not venv_requirements.exists() or not _filecmp.cmp(requirements_path, venv_requirements):
+    if not venv_requirements.exists() or not _filecmp.cmp(
+        requirements_path, venv_requirements
+    ):
         _logger.info("Updating virtual environment...")
         _subprocess.run(
             ["python3", "-m", "pip", "install", "-r", requirements_path],
@@ -62,7 +66,9 @@ def run_in_venv(
     shell_args.pop(0)
     shell_args = setup + shell_args
     try:
-        _subprocess.run(shell_args, capture_output=False, text=True, check=True, env=env)
+        _subprocess.run(
+            shell_args, capture_output=False, text=True, check=True, env=env
+        )
     # pylint: disable=broad-except
     except (Exception, KeyboardInterrupt):
         # Intercept printing exception info:
@@ -85,11 +91,17 @@ def _main() -> None:
     templated_setup_path = _Path("{{ setup_path }}")
     templated_ssh_path = _Path("{{ ssh_path }}")
 
-    requirements_path = _choose_alternative(templated_requirements_path, default_makepy_path / "requirements.txt")
+    requirements_path = _choose_alternative(
+        templated_requirements_path, default_makepy_path / "requirements.txt"
+    )
     assert requirements_path is not None
-    artifacts_path = _choose_alternative(templated_artifacts_path, default_makepy_path / "artifacts")
+    artifacts_path = _choose_alternative(
+        templated_artifacts_path, default_makepy_path / "artifacts"
+    )
     assert artifacts_path is not None
-    setup_path = _choose_alternative(templated_setup_path, default_makepy_path / "setup.py", None)
+    setup_path = _choose_alternative(
+        templated_setup_path, default_makepy_path / "setup.py", None
+    )
     ssh_path = _choose_alternative(templated_ssh_path, None)
 
     run_in_venv(
