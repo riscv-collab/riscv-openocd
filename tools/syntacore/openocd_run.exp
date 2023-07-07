@@ -166,7 +166,7 @@ for { set i 0 } { $i < $argc } { incr i } {
   } elseif { $option == $COMMAND_LINE_ARG(--smp) } {
     set SETTINGS(smp) 1
   } elseif { $option == $COMMAND_LINE_ARG(--verbose) } {
-    set SETTINGS(verbose_logs) 1
+    incr SETTINGS(verbose_logs)
   } elseif { $option == $COMMAND_LINE_ARG(--telnet) } {
     set SETTINGS(telnet) 1
   } elseif { $option == $COMMAND_LINE_ARG(--ide-mode) } {
@@ -256,6 +256,17 @@ proc getOpenOCDRootDir {} {
 
 proc openocdBinary {} {
   return "[getOpenOCDRootDir]/bin/openocd"
+}
+
+proc deriveDesiredVerbosityOption {} {
+  global SETTINGS
+  if {$SETTINGS(verbose_logs) == 0} {
+    return "-d2"
+  } elseif {$SETTINGS(verbose_logs) == 1} {
+    return "-d3"
+  } else {
+    return "-d4"
+  }
 }
 
 proc deriveAdapterConfig { Adapter } {
@@ -447,6 +458,7 @@ proc detectNumberOfTaps {DebugInterface AdapterSerial} {
     -c "adapter speed 500" \
     -c "adapter serial $AdapterSerial" \
     -c "noinit" \
+    "[deriveDesiredVerbosityOption]" \
     -c "jtag init" \
     -c "echo \"detected number of taps: \[llength \[jtag names\]\]\"" \
     -c "shutdown" \
@@ -563,9 +575,7 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
     }
   }
 
-  if {$SETTINGS(verbose_logs) == 1} {
-    lappend OpenOCDArgs -d3
-  }
+  lappend OpenOCDArgs [deriveDesiredVerbosityOption]
 
   # Apparently, depending on the presence -c "init" command OpenOCD behaves
   # a little bit differently. If init is specified then:
