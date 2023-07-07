@@ -37,7 +37,15 @@ set(OCD_PKG_CONFIG_LIB64 ${DEPENDENCIES_INSTALL_PATH}/lib64/pkgconfig)
 set(OPENOCD_SCRIPTS_INSTALL_DIR
   ${OPENOCD_INSTALL_PATH}/share/openocd/scripts/syntacore)
 
-set(OPENOCD_CFLAGS "$<$<CONFIG:Debug>:-O0 -g>")
+set(OPENOCD_EXTRA_CFLAGS "")
+
+option(SC_OPENOCD_ENABLE_SANITIZERS "Enable sanitizers")
+if (SC_OPENOCD_ENABLE_SANITIZERS)
+  set(OPENOCD_EXTRA_CFLAGS
+    "${OPENOCD_EXTRA_CFLAGS} -fsanitize=address,undefined -Wl,-ldl")
+endif()
+
+set(OPENOCD_CFLAGS "$<$<CONFIG:Debug>:-O0 -g> ${OPENOCD_EXTRA_CFLAGS}")
 ExternalProject_Add(
   openocd
   PREFIX OpenOCDBuild
@@ -46,10 +54,10 @@ ExternalProject_Add(
   CONFIGURE_COMMAND
     # NOTE: we can't use PKG_CONFIG_LIBDIR because of udev dependency: when we
     # set PKG_CONFIG_LIBDIR libraries are searched only at that directory.
-    # Since in modern linux distributions udev is part of systemd - this will
+    # Since in modern Linux distributions udev is part of systemd - this would
     # require us to have the whole systemd distribution at that location. This
-    # is an overkill. So we choose to link dynamically with whatever library we
-    # have in the build environment.
+    # is an overkill. So we link with udev dynamically using the library found
+    # in the build environment.
     env
       PKG_CONFIG_PATH=${OCD_PKG_CONFIG_LIB}:${OCD_PKG_CONFIG_LIB64}
       CC=${CMAKE_C_COMPILER}
@@ -58,9 +66,6 @@ ExternalProject_Add(
       --prefix=${OPENOCD_INSTALL_PATH}
       --host=$<$<BOOL:${CMAKE_CROSSCOMPILING}>:${CONFIGURE_HOST}>
       ${OPENOCD_CONFIGURE_OPTIONS}
-  # NOTE: it seems that cmake has a bug - it does not propagate the requested
-  # number of cores, causing extreme number of threads to be created during the
-  # build process
   BUILD_COMMAND make $<IF:$<CONFIG:DEBUG>,install,install-strip> -j${CPU_COUNT}
   INSTALL_COMMAND
     mkdir -p -- ${OPENOCD_SCRIPTS_INSTALL_DIR} &&
