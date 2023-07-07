@@ -383,14 +383,23 @@ struct mpsse_ctx *mpsse_open(const uint16_t *vid, const uint16_t *pid, const cha
 
 	return ctx;
 error:
-	mpsse_close(ctx);
-	return 0;
+	mpsse_close(ctx, false);
+	return NULL;
 }
 
-void mpsse_close(struct mpsse_ctx *ctx)
+void mpsse_close(struct mpsse_ctx *ctx, bool reset_device)
 {
-	if (ctx->usb_dev)
+	assert(ctx);
+	if (ctx->usb_dev) {
+		if (reset_device) {
+			int err = libusb_reset_device(ctx->usb_dev);
+			if (err != LIBUSB_SUCCESS && err != LIBUSB_ERROR_NOT_FOUND)
+				LOG_ERROR("could not reset device before closing descriptor");
+			else
+				LOG_INFO("usb device reset successful");
+		}
 		libusb_close(ctx->usb_dev);
+	}
 	if (ctx->usb_ctx)
 		libusb_exit(ctx->usb_ctx);
 	bit_copy_discard(&ctx->read_queue);
