@@ -107,3 +107,6 @@ GTAGS
 # makepy
 .makepy/artifacts
 build/
+
+conaninfo.txt
+conanmanifest.txt
