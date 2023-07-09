@@ -1,16 +1,32 @@
 proc run_test {} {
+  # Note: these come from expect framework
+  global srcdir
+  global subdir
+
   set VerboseLogFile [utils_spawn_universal_launcher \
-    [list --verbose --run-command shutdown] \
+    [list --verbose \
+      --run-script "$srcdir/$subdir/lib/run_script_debug_level.tcl" --run-command shutdown] \
     verbose  \
     expect_success]
+  set VeryVerboseLogFile [utils_spawn_universal_launcher \
+    [list --verbose --verbose \
+      --run-script "$srcdir/$subdir/lib/run_script_debug_level.tcl" --run-command shutdown] \
+    very_verbose  \
+    expect_success]
   set NormalLogFile [utils_spawn_universal_launcher \
-    [list --run-command shutdown] \
+    [list --run-script "$srcdir/$subdir/lib/run_script_debug_level.tcl" --run-command shutdown] \
     no_verbose  \
     expect_success]
 
+  exec grep --text -m 1 -E "==== RUN_SCRIPT_TEST ==== debug level: debug_level: 3\r" $VerboseLogFile
   exec grep --text -m 1 -E "^Debug:" $VerboseLogFile
   exec grep --text -m 1 -E "^Info :" $VerboseLogFile
 
+  exec grep --text -m 1 -E "==== RUN_SCRIPT_TEST ==== debug level: debug_level: 4\r" $VeryVerboseLogFile
+  exec grep --text -m 1 -E "^Debug:" $VeryVerboseLogFile
+  exec grep --text -m 1 -E "^Info :" $VeryVerboseLogFile
+
+  exec grep --text -m 1 -E "==== RUN_SCRIPT_TEST ==== debug level: debug_level: 2\r" $NormalLogFile
   exec grep --text -m 1 -E "^Info :" $NormalLogFile
   if {![catch { exec grep -m 1 -E "^Debug :" $NormalLogFile } result]} {
     error "Unexpected Debug: log pattern found"
