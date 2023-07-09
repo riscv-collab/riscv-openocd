@@ -1,16 +1,12 @@
 proc run_test {} {
-  # Note: these come from expect framework
-  global srcdir
-  global subdir
-
-  set script_to_run "$srcdir/$subdir/lib/run_script_openocd.tcl"
+  set script_to_run "[ocdtlb_test_resource_path run_script_openocd.tcl]"
   set LogFile [utils_spawn_universal_launcher \
     [list --run-script $script_to_run --run-command shutdown] \
     run_script \
     expect_success]
   exec grep --text -F "I'll need some information first" $LogFile
 
-  set non_existent_file  "$srcdir/$subdir/lib/non_existent.missing"
+  set non_existent_file  "[ocdtlb_test_resource_dir]/non_existent.missing"
   set LogFile [utils_spawn_universal_launcher \
     [list --run-script $non_existent_file] run_script_missing expect_failure]
   exec grep --text -F "Error: Can't find $non_existent_file" $LogFile

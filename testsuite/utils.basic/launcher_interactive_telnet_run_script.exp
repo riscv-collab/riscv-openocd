@@ -60,11 +60,7 @@ proc expectScriptCleanup { spawn_id } {
 }
 
 proc run_test {} {
-  # Note: these come from expect framework
-  global srcdir
-  global subdir
-
-  set script_to_run "$srcdir/$subdir/lib/run_script_targets.tcl"
+  set script_to_run "[ocdtlb_test_resource_path run_script_targets.tcl]"
 
   set TelnetLog [utils_spawn_universal_launcher \
     [list --run-script $script_to_run --telnet] \

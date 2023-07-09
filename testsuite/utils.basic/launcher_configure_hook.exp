@@ -1,9 +1,5 @@
 proc run_test {} {
-  # Note: these come from expect framework
-  global srcdir
-  global subdir
-
-  set configure_hook_file  "$srcdir/$subdir/lib/configure_hook.tcl"
+  set configure_hook_file  "[ocdtlb_test_resource_path configure_hook.tcl]"
   set LogFile [utils_spawn_universal_launcher \
     [list --configure-hook $configure_hook_file --run-command shutdown] \
     configure_hook \
@@ -46,7 +42,7 @@ proc run_test {} {
     error "unexpected ordering of targets_ready and examine_marker calls: $TargetsReadyHook vs $AtLeastOneMarker"
   }
 
-  set non_existent_file  "$srcdir/$subdir/lib/non_existent.missing"
+  set non_existent_file  "[ocdtlb_test_resource_dir]/non_existent.missing"
   set LogFile [utils_spawn_universal_launcher \
     [list --configure-hook $non_existent_file] configure_hook_missing expect_failure]
   exec grep --text -F "unable to locate user-specified configuration hook: $non_existent_file" $LogFile

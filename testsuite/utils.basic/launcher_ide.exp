@@ -1,9 +1,5 @@
 proc run_test {} {
-  # Note: these come from expect framework
-  global srcdir
-  global subdir
-
-  set script_to_run "$srcdir/$subdir/lib/calculate_number_of_registers.tcl"
+  set script_to_run "[ocdtlb_test_resource_path calculate_number_of_registers.tcl]"
   set LogFileIDE [utils_spawn_universal_launcher \
     [list --ide-mode --run-script $script_to_run --run-command shutdown] \
     ide \

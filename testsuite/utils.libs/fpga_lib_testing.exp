@@ -1,15 +1,12 @@
 proc run_test {} {
-  global srcdir
-  global subdir
-
-  set BinFile "$srcdir/$subdir/lib/BINARY_FILE.bin"
+  set BinFile [ocdtlb_test_resource_path BINARY_FILE.bin]
   set ElfFile "[tool_state_get default_bin_prefix]_spike_run.elf"
   ocd_compile_executable "lib/simple.S" "$ElfFile"
 
   set LOAD_ADDR [tool_state_get_program_symbol load_address]
   set ENTRY_ADDR [tool_state_get_program_symbol _entry]
 
-  set script_to_run "$srcdir/$subdir/lib/fpga_lib_test.tcl"
+  set script_to_run [ocdtlb_test_resource_path fpga_lib_test.tcl]
   set script_timeout_multiplier 10
   set LogFile [utils_spawn_universal_launcher \
     [list \

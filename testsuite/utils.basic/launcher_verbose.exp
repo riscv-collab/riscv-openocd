@@ -1,20 +1,16 @@
 proc run_test {} {
-  # Note: these come from expect framework
-  global srcdir
-  global subdir
-
   set VerboseLogFile [utils_spawn_universal_launcher \
     [list --verbose \
-      --run-script "$srcdir/$subdir/lib/run_script_debug_level.tcl" --run-command shutdown] \
+      --run-script "[ocdtlb_test_resource_path run_script_debug_level.tcl]" --run-command shutdown] \
     verbose  \
     expect_success]
   set VeryVerboseLogFile [utils_spawn_universal_launcher \
     [list --verbose --verbose \
-      --run-script "$srcdir/$subdir/lib/run_script_debug_level.tcl" --run-command shutdown] \
+      --run-script "[ocdtlb_test_resource_path run_script_debug_level.tcl]" --run-command shutdown] \
     very_verbose  \
     expect_success]
   set NormalLogFile [utils_spawn_universal_launcher \
-    [list --run-script "$srcdir/$subdir/lib/run_script_debug_level.tcl" --run-command shutdown] \
+    [list --run-script "[ocdtlb_test_resource_path run_script_debug_level.tcl]" --run-command shutdown] \
     no_verbose  \
     expect_success]
 

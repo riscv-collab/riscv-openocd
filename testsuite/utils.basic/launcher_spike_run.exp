@@ -5,10 +5,7 @@ proc run_test {} {
     return [ocd_test_unsupported]
   }
 
-  global srcdir
-  global subdir
-
-  set script_to_run "$srcdir/$subdir/lib/run_script_get_misa.tcl"
+  set script_to_run "[ocdtlb_test_resource_path run_script_get_misa.tcl]"
 
   set SpikeBin [target_info sim]
   set MemoryMap [spike_get_target_memory_map]

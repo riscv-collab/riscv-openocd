@@ -1,3 +1,18 @@
+proc ocdtlb_test_resource_dir {} {
+  # Note: these come from expect framework
+  global srcdir
+  global subdir
+  return "$srcdir/$subdir/lib"
+}
+
+proc ocdtlb_test_resource_path { name } {
+  set resource_path "[ocdtlb_test_resource_dir]/$name"
+  if {![file exists "$resource_path"]} {
+    fatalError "could not find test resource at $resource_path"
+  }
+  return $resource_path
+}
+
 proc ocdtlb_expect_present {where what} {
   if {[lsearch -exact $where $what] == -1} {
     error "$what NOT found"
