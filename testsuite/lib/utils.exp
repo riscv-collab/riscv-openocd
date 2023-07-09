@@ -78,6 +78,9 @@ proc utils_spawn_universal_launcher { args \
     eof {
       verbose "  universal launcher execution terminated" 1
       set result [wait]
+      # Even though the script was terminated, it could still spawn processes
+      # that must be given time to respond to the SIGHUP signal
+      sleep [target_info env,exec_delay]
       verbose "  termination status: $result"
       if { $termination_policy == "expect_timeout" } {
         error "unexpected termination for args: $args"
