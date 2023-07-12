@@ -14,7 +14,18 @@ set_board_info env,ocdjtag_riscv_dmi_delay 0
 set_board_info memory,reset_vector 0x1000
 
 set_board_info sim $SPIKE_SIM
-add_board_info sim,options --rbb-port=$SPIKE_BITBANG
+add_board_info sim,options --rbb-port=0 
+
+proc spike_update_active_rbb_port { value } {
+  global RBB_PORT
+  set RBB_PORT $value
+  verbose "rbb_port: $value" 1
+}
+
+proc spike_get_active_rbb_port {} {
+  global RBB_PORT
+  return $RBB_PORT
+}
 
 set_board_info ldscript "-T$testsuitedir/boards/support/ldscripts/spike.ld"
 

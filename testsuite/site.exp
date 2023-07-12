@@ -35,11 +35,6 @@ set ENABLE_EXP_INTERNAL 0
 
 set RUN_OCD_INTERNAL_ON_HW 0
 
-set SPIKE_BITBANG 7777
-
-set OCD_PORT_TCLRPC 6666
-set OCD_PORT_GDBSRV 3333
-
 # NOTE: environment queries below are not conventional, but should work
 # fine for OpenOCD testing
 puts "Checking for testsuite requirements..."

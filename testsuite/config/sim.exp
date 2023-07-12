@@ -40,8 +40,13 @@ proc ${board}_init { name } {
 
   verbose "running spike: $SPIKE_SIM $sim_args" 1
   spawn $SPIKE_SIM {*}$sim_args
+  
+  set rbb_port 0
+  
   expect {
-    "Listening for remote bitbang connection on port" {
+    -re {Listening for remote bitbang connection on port ([1-9][0-9]*).} {
+      set rbb_port $expect_out(1,string)
+      
       verbose "spike launched successfully" 1
       set spike_board_spawn_id $spawn_id
     }
@@ -52,6 +57,8 @@ proc ${board}_init { name } {
       ${name}_initialization_abort "no acknowledge from $name board"
     }
   }
+
+  spike_update_active_rbb_port $rbb_port
 }
 
 proc ${board}_close { name } {

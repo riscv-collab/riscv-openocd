@@ -25,13 +25,15 @@ proc standInfoGet { parameter } {
 }
 
 proc standInfoGetInterfaceFlags { } {
-  global SPIKE_BITBANG
   if {[target_info sim] ne ""} {
+    set rbb_port [spike_get_active_rbb_port]
     return [list \
       -c "telnet_port disabled" \
       -c "adapter driver remote_bitbang" \
       -c "remote_bitbang host 127.0.0.1" \
-      -c "remote_bitbang port $SPIKE_BITBANG" \
+      -c "remote_bitbang port $rbb_port" \
+      -c "tcl_port 0" \
+      -c "gdb_port 0" \
     ]
   }
 

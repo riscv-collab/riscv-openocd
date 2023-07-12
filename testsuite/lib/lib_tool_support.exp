@@ -95,51 +95,6 @@ proc tsuplib_wait_for_file { filename max_retries poll_delay } {
   verbose "$filename detected" 1
 }
 
-proc tsuplib_wait_for_acknowledge { tcl_log primary_pattern max_retry_count poll_delay } {
-  set ack_detected 0
-  for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
-    set listen_pattern "Listening on\\|error"
-    spawn grep -i $listen_pattern $tcl_log
-    expect {
-      -re "LIBUSB_ERROR_BUSY" {
-        close
-        wait -nowait
-        error "LIBUSB_ERROR_BUSY encountered while waiting for ($primary_pattern)"
-      }
-      -re "EXAMINATION FAILURE\n" {
-        close
-        wait -nowait
-        error "target examination failed unexpectedly"
-      }
-      -re "Timed out after" {
-        close
-        wait -nowait
-        error "target examination (?) resulted in timeout"
-      }
-      -re "$primary_pattern" {
-        verbose "ack_detected! ($primary_pattern)" 1
-        set ack_detected 1
-      }
-      eof {
-        verbose "EOF while waiting for ($primary_pattern), attempt #$it_count" 3
-        wait -nowait
-        sleep $poll_delay
-        continue
-      }
-      timeout  {
-        verbose "could not scan log while waiting for ($primary_pattern), attempt #$it_count" 3
-      }
-    }
-    close
-    wait -nowait
-
-    if { $ack_detected } {
-      return
-    }
-  }
-  error "could not get initial ack while waiting for $primary_pattern (it num: $it_count)"
-}
-
 proc tsuplib_update_binary_prefix { tool_name test_file_name } {
   set test_name [file rootname [file tail $test_file_name]]
   tool_state_update test_name $test_name
@@ -204,48 +159,66 @@ proc tsuplib_launch_openocd { tool_name \
   tool_state_update openocd_spawn_id $spawn_id
 }
 
-proc tsuplib_internal_check_tclrpc_at_port \
-    { tcl_log port max_retry_count poll_delay } {
-  set ack_message "Listening on port $port for tcl connections"
-  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $poll_delay
+proc tsuplib_receive_tclrpc_port \
+    { tcl_log max_retry_count poll_delay } {
+  set ack_message {Listening on port [1-9][0-9]* for tcl connections}
+  set pattern [tsuplib_wait_for_pattern $tcl_log $ack_message $max_retry_count $poll_delay]
+  set port [regexp -all -inline -- {[0-9]+} $pattern]
+  return $port
 }
 
-proc tsuplib_internal_check_gdb_server_at_port \
-    { tcl_log port max_retry_count poll_delay } {
-  set ack_message "Listening on port $port for gdb connections"
-  tsuplib_wait_for_acknowledge $tcl_log $ack_message $max_retry_count $poll_delay
+proc tsuplib_receive_gdb_port \
+    { tcl_log max_retry_count poll_delay } {
+  set ack_message {Listening on port [1-9][0-9]* for gdb connections}
+  set pattern [tsuplib_wait_for_pattern $tcl_log $ack_message $max_retry_count $poll_delay]
+  set port [regexp -all -inline -- {[0-9]+} $pattern]
+  return $port
 }
 
-proc tsuplib_wait_for_openocd_initialization {ocd_log_name tcl_port gdb_port} {
+proc tsuplib_wait_for_pattern \
+    { tcl_log primary_pattern max_retry_count poll_delay } {
+  set pattern 0
 
-  set max_retries 150
-  # TODO: looks like this should be board(type)-specific
-  set poll_delay 0.2
+  for { set it_count 0 } { $it_count < $max_retry_count } { incr it_count } {
+    set listen_pattern "Listening on\\|error"
+    spawn grep -i $listen_pattern $tcl_log
+    expect {
+      -re "LIBUSB_ERROR_BUSY" {
+        close
+        wait -nowait
+        error "LIBUSB_ERROR_BUSY encountered while getting tcl_port"
+      }
+      -re "EXAMINATION FAILURE\n" {
+        close
+        wait -nowait
+        error "target examination failed unexpectedly"
+      }
+      -re "Timed out after" {
+        close
+        wait -nowait
+        error "target examination (?) resulted in timeout"
+      }
+      -re "$primary_pattern" {
+        set pattern $expect_out(0,string)
+      }
+      eof {
+        verbose "EOF while getting tcl_port, attempt #$it_count" 3
+        wait -nowait
+        sleep $poll_delay
+        continue
+      }
+      timeout  {
+        verbose "could not scan log while receiving ports, attempt #$it_count" 3
+      }
+    }
+    close
+    wait -nowait
 
-  if {[catch {tsuplib_wait_for_file $ocd_log_name $max_retries $poll_delay} \
-      ERROR_INFO]} {
-    error "log-poll error: $ERROR_INFO"
+    if { $pattern != 0 } {
+      return $pattern
+    }
   }
-
-  if {![string match $tcl_port "none"] && \
-       [catch {tsuplib_internal_check_tclrpc_at_port \
-              $ocd_log_name $tcl_port $max_retries $poll_delay} \
-       ERROR_INFO]} {
-    # NOTE: log printing can be VERY expensive
-    # puts [exec cat $ocd_log_name]
-    error "OpenOCD/TclServer: $ERROR_INFO"
-  }
-
-  if {![string match $gdb_port "none"] && \
-       [catch {tsuplib_internal_check_gdb_server_at_port \
-              $ocd_log_name $gdb_port $max_retries $poll_delay} \
-       ERROR_INFO]} {
-    # NOTE: log printing can be VERY expensive
-    # puts [exec cat $ocd_log_name]
-    error "OpenOCD/GdbServer: $ERROR_INFO"
-  }
-
-  verbose "openocd is up and running" 1
+  error "could not find pattern: $pattern (it num: $it_count)"
 }
 
 proc tsuplib_shutdown_openocd { cleanup_type } {
@@ -325,7 +298,7 @@ proc tsuplib_tclrcp_connect {} {
       tsuplib_internal_error "OpenOCD: unexpected EOF while expecting acknowledge"
     }
     timeout {
-      tsuplib_internal_error "OpenOCD: could not recieve acknowledge"
+      tsuplib_internal_error "OpenOCD: could not receive acknowledge"
     }
   }
 
@@ -335,7 +308,7 @@ proc tsuplib_tclrcp_connect {} {
       verbose "OpenOCD: targets list received" 1
     }
     eof {
-      tsuplib_internal_error "OpenOCD: could not recieve targets list from OpenOCD"
+      tsuplib_internal_error "OpenOCD: could not receive targets list from OpenOCD"
     }
     timeout {
       tsuplib_internal_error "OpenOCD: unexpected timeout while waiting for initial targets listing"

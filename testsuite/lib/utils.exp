@@ -27,7 +27,6 @@ proc utils_get_universal_launcher {} {
 }
 
 proc utils_build_ul_args { args } {
-  global SPIKE_BITBANG
   set target_args []
   if {[target_info sim] eq ""} {
     lappend target_args --debug-adapter-serial
@@ -41,8 +40,9 @@ proc utils_build_ul_args { args } {
   } else {
     # if we run on a simulator (spike) we have to supply rbb port and number
     # of harts
+    set rbb_port [spike_get_active_rbb_port]
     lappend target_args --bitbang-port
-    lappend target_args $SPIKE_BITBANG
+    lappend target_args $rbb_port
     lappend target_args --spike-harts
     lappend target_args [target_info cpu,cores_num]
   }

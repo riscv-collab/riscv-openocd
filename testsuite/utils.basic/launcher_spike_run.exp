@@ -5,7 +5,6 @@ proc run_test {} {
     return [ocd_test_unsupported]
   }
 
-  global SPIKE_BITBANG
   global srcdir
   global subdir
 
@@ -15,7 +14,6 @@ proc run_test {} {
   set MemoryMap [spike_get_target_memory_map]
   set BinPrefix [tool_state_get default_bin_prefix]
 
-  set BitbangPort [expr {$SPIKE_BITBANG + 1}]
   set SpikeBoot "${BinPrefix}_spike_run.elf"
 
   if  { [compile_boot_code $SpikeBoot] != "" } {
@@ -30,7 +28,7 @@ proc run_test {} {
   set HartsNum 8
   set LogFileGCV [utils_spawn_universal_launcher \
     [list --spike-bin "$SpikeBin:$SpikeBoot" \
-          --bitbang-port $BitbangPort \
+          --bitbang-port 0 \
           --spike-harts $HartsNum \
           --spike-arg --isa=${XlenPrefix}gcv \
           --spike-arg $MemoryMap \
@@ -60,7 +58,7 @@ proc run_test {} {
 
   set LogFileGV [utils_spawn_universal_launcher \
     [list --spike-bin "$SpikeBin:$SpikeBoot" \
-          --bitbang-port $BitbangPort \
+          --bitbang-port 0 \
           --spike-harts 8 \
           --spike-arg --isa=${XlenPrefix}gv \
           --spike-arg $MemoryMap \

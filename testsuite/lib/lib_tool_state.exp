@@ -24,6 +24,7 @@ proc tool_state_update { property value } {
     default_bin_prefix -
     test_name {
       set TOOL_STATE($property) $value
+      verbose "Tool state update: $property = $value" 1
     }
     default {
       error "FATAL: unsupported TOOL_STATE property $property specified (value: $value)"

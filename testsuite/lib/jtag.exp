@@ -7,7 +7,6 @@ load_lib "lib_tool_state.exp"
 load_lib "lib_lowlevel_jtag.exp"
 
 proc jtag_init {test_file_name} {
-  global OCD_PORT_TCLRPC
   global ENABLE_EXP_INTERNAL
   global timeout
 
@@ -24,10 +23,16 @@ proc jtag_init {test_file_name} {
                          [standInfoGetInterfaceFlags] \
                          [target_info openocd,jtag_tool_tap_definition_flags]
 
+  set max_retries 150
+  set poll_delay 0.2
+  set ocd_log_name [tool_state_get openocd_log]
+
+  set tcl_port 0
+
   if {[catch { \
-        tsuplib_wait_for_openocd_initialization [tool_state_get openocd_log] \
-                                                 $OCD_PORT_TCLRPC \
-                                                 none} \
+      tsuplib_wait_for_file $ocd_log_name $max_retries $poll_delay
+      set tcl_port [tsuplib_receive_tclrpc_port $ocd_log_name $max_retries $poll_delay]
+              } \
       ERR_INFO]} {
     perror "$ERR_INFO"
     puts "looks like OpenOCD does not respond. Sending kill signal"
@@ -39,7 +44,9 @@ proc jtag_init {test_file_name} {
     return
   }
 
-  tool_state_update openocd_tclrpc_port $OCD_PORT_TCLRPC
+  verbose "openocd is up and running" 1
+
+  tool_state_update openocd_tclrpc_port $tcl_port
 
   verbose "\\\\\\ ocd_jtag_init ///\n   _______" 1
 }
