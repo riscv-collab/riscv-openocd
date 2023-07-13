@@ -598,10 +598,6 @@ static bool usb_send_command(uint16_t size)
 	/* Send the data via the USB connection */
 	success = usb_write(xds110.write_packet, (int)size, &written);
 
-	/* Check if the correct number of bytes was written */
-	if (written != (int)size)
-		success = false;
-
 	return success;
 }
 
