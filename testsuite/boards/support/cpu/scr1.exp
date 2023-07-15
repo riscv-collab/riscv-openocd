@@ -8,6 +8,14 @@ set_board_info cpu,has_s_mode 0
 set_board_info cpu,has_h_ext 0
 
 set_board_info cpu,has_v_ext 0
+set_board_info cpu,v_ext_vlen 0
+set_board_info cpu,v_ext_elen 0
+
+set_board_info cpu,has_watchpoints 1
+set_board_info cpu,has_watchpoints_equal 1
+set_board_info cpu,has_watchpoints_napot 0
+set_board_info cpu,has_watchpoints_gelt 0
+set_board_info cpu,has_watchpoints_data_mask 0
 
 set_board_info cpu,misaligned_access_support 0
 

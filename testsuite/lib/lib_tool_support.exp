@@ -41,6 +41,13 @@ proc tsuplib_target_info_check {} {
     cpu,has_s_mode \
     cpu,has_h_ext \
     cpu,has_v_ext \
+    cpu,v_ext_vlen \
+    cpu,v_ext_elen \
+    cpu,has_watchpoints \
+    cpu,has_watchpoints_equal \
+    cpu,has_watchpoints_napot \
+    cpu,has_watchpoints_gelt \
+    cpu,has_watchpoints_data_mask \
     cpu,misaligned_access_support \
     cpu,dm_abstract_csr \
     cpu,dm_abstract_fpr \
