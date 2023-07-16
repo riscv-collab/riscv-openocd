@@ -212,18 +212,18 @@ registerFPGAConfiguration(twin_scr6
 
 # SCR7 testing
 
-addSCR7L2Config(scr7_rls_ww08.2.1
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
+addSCR7L2Config(scr7_l2_23ww28.6.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww28.6.0/SCR7WR_23WW28.6.0_Dual_65MHz.bit
   TWIN_NIGHTLY
 )
 
-addSCR7L2Config(scr7_rls_ww15.3.0
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW15.3.0/SCR7WR_23WW15.3.0.bit
+addSCR7L2Config(scr7_l2_23ww29.4.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww29.4.0/SCR7WR_23WW29.4.0_Dual_65MHz.bit
   TWIN_NIGHTLY
 )
 
-addSCR7L2Config(scr7_rls_ww22.3.1
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW22.3.1/SCR7WR_23WW22.3.1_Dual_65MHz.bit
+addSCR7L2Config(scr7_l2_23ww29.5.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww29.5.0/SCR7WR_23WW29.5.0_Dual_65MHz.bit
   TWIN_NIGHTLY
 )
 
@@ -233,16 +233,16 @@ addSCR7L2Config(scr7_dev
 
 # SCR9 testing
 
-addSCR9L2Config(scr9_23WW14.5.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_rls_23ww14.5.0/scr9_rls_23ww14.5.0.bit
+addSCR9L2Config(scr9_l2_23ww27.6.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww27.6.0/scr9_l2_23ww27.6.0.bit
 )
 
-addSCR9L2Config(scr9_23WW18.5.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_rls_23ww18.5.0/scr9_rls_23ww18.5.0.bit
+addSCR9L2Config(scr9_l2_23ww28.5.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww28.5.0/scr9_l2_23ww28.5.0.bit
 )
 
-addSCR9L2Config(scr9_23WW25.3.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_rls_23ww25.3.0/scr9_rls_23ww25.3.0.bit
+addSCR9L2Config(scr9_l2_23ww29.5.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww29.5.0/scr9_l2_23ww29.5.0.bit
 )
 
 addSCR9L2Config(scr9_dev
@@ -251,17 +251,6 @@ addSCR9L2Config(scr9_dev
 
 
 # Legacy platforms (for historic interest)
-
-addSCR7L2Config(scr7_rls_ww04.1.0
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW04.1.0/scr7_rls_ww04.1.0.bit
-)
-addSCR7L2Config(scr7_rls_ww05.4.0
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
-)
-addSCR7L2Config(scr7_rls_ww08.1.0
-  /home/stand/users/aap-sc/BITSTREAMS/SCR7WR_23WW08.2.1/SCR7WR_23WW08.2.1_Dual_65MHz.bit
-)
-
 registerFPGAConfiguration(twin_scr7evalcluster_pseudoscore_nortos
   BITSTREAM scr7_l2_mpu
   OPENOCD_BOARD twin_scr7_x_1core_nortos
