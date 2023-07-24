@@ -55,21 +55,21 @@ namespace eval _SC_INTERNALS {
         sc_fpga_halt_all
         if { $primary_target eq "" } {
             set primary_target [lindex [target names] 0]
-            _SC_INTERNALS::sc_lib_print "$primary_target derived as primary target"
+            sc_lib_print "$primary_target derived as primary target"
         }
-        _SC_INTERNALS::sc_lib_print "switching active target to $primary_target"
+        sc_lib_print "switching active target to $primary_target"
         targets $primary_target
         set load_image_args [list $file_path]
         if { $load_address ne "" } {
             lappend load_image_args $load_address
             lappend load_image_args $file_type
         }
-        _SC_INTERNALS::sc_lib_print "load_image $load_image_args"
+        sc_lib_print "load_image $load_image_args"
         set load_result [load_image {*}$load_image_args]
-        _SC_INTERNALS::sc_lib_print "$load_result"
+        sc_lib_print "$load_result"
 
         if { $entry_point eq "" && $load_address ne "" } {
-            _SC_INTERNALS::sc_lib_print \
+            sc_lib_print \
                 "no entry point was specified, using load address ($load_address) as one"
             set entry_point $load_address
         }
@@ -93,6 +93,73 @@ namespace eval _SC_INTERNALS {
             }
         }
         targets $current_target
+    }
+
+    proc sc_lib_read_csr_hex {reg_name} {
+        return [string trim [lindex [split [reg $reg_name] :] 1]]
+    }
+
+    proc sc_lib_read_csr {reg_name} {
+        set hex_value [sc_lib_read_csr_hex $reg_name]
+        return [expr $hex_value]
+    }
+
+    proc sc_lib_write_csr { reg_name value } {
+        return [string trim [reg $reg_name $value]]
+    }
+
+    proc sc_lib_require_halted {} {
+        poll
+        set current_state [[target current] curstate]
+        if {$current_state ne "halted"} {
+            error "current state $current_state for [target current] is not halted"
+        }
+    }
+
+    proc sc_lib_experimental_reset_pmu_subsystem { pmu_ctrs_max } {
+        set k_inhibit_all 0xffffffff
+        # should re-program mcountinhibit/mcycle/minstret
+        sc_lib_print "[sc_lib_write_csr mcountinhibit $k_inhibit_all]"
+        sc_lib_print "[sc_lib_write_csr mcycle 0]"
+        sc_lib_print "[sc_lib_write_csr minstret 0]"
+        # drop mhpmevent selectors and mhpmcounter
+        for { set ev_idx 0 } { $ev_idx < $pmu_ctrs_max } { incr ev_idx } {
+            set EventSelector [expr {3 + $ev_idx}]
+            sc_lib_print "[sc_lib_write_csr mhpmevent${EventSelector} 0]"
+            sc_lib_print "[sc_lib_write_csr mhpmcounter${EventSelector} 0]"
+        }
+        sc_lib_print "[sc_lib_write_csr mcounteren 0xffffffff]"
+        sc_lib_print "[sc_lib_write_csr scounteren 0xffffffff]"
+    }
+
+    proc sc_lib_experimental_enable_pmu_counters { selectors_list
+                                                   pmu_ctrs_max
+                                                   en_cy
+                                                   en_ir
+                                                   pmu_ctrs } {
+        set pmu_ctrs [lsort -unique $pmu_ctrs]
+        if {[llength pmu_ctrs] > $pmu_ctrs_max} {
+            error "too many PMU counters requested was requested"
+        }
+        set inhibit_value 0xffffffff
+        if { $en_cy != 0 } {
+            set inhibit_value [expr { $inhibit_value ^ 1 }]
+        }
+        if { $en_ir != 0 } {
+            set inhibit_value [expr { $inhibit_value ^ 4 }]
+        }
+        set pmu_counter_idx 0
+        foreach pmu_event $pmu_ctrs {
+            set event_selector [dict get $selectors_list $pmu_event]
+            # Set OF flag
+            set mhpmevent_val [expr { $event_selector | (1 << 63)}]
+            set selector_reg "mhpmevent[expr {3 + $pmu_counter_idx}]"
+            set mhpmevent_hex [format "0x%016x" $mhpmevent_val]
+            set inhibit_value [expr { $inhibit_value ^ (1 << ($pmu_counter_idx + 3))}]
+            sc_lib_print "$pmu_event - [sc_lib_write_csr $selector_reg $mhpmevent_hex]"
+            incr pmu_counter_idx
+        }
+        sc_lib_print "[sc_lib_write_csr mcountinhibit [format "0x%08x" $inhibit_value]]"
     }
 }
 
@@ -148,12 +215,11 @@ proc sc_fpga_find_target_by_hartid { hartid } {
     set current_target [target current]
     foreach t [target names] {
         targets $t
-        if {[catch { reg mhartid } mhartid]} {
+        if {[catch { _SC_INTERNALS::sc_lib_read_csr_hex mhartid } mhartid]} {
             targets $current_target
             return -code error "could not not read mhartid from $t ($mhartid)"
         }
-        set hex_value [string trim [lindex [split $mhartid :] 1]]
-        set decimal_val [expr $hex_value]
+        set decimal_val [expr $mhartid]
         if { $decimal_val == $hartid } {
             _SC_INTERNALS::sc_lib_print "$t has mhartid of $hartid"
             targets $current_target
@@ -199,6 +265,76 @@ proc sc_fpga_info {} {
             "Number of harts: [llength [target names]]" \
             "SMP status: [string trim [smp]]" \
         ] "\n"]
+}
+
+## @return value of a counter corresponding to the specified event
+## @param[in] "context" object returned by sc_experimental_pmu_setup
+## @param[in] name of PMU event
+##
+## NOTE/TODO: DO NOT use this function on 32-bit targets
+proc sc_experimental_pmu_get { ctx pmu_ctr } {
+    _SC_INTERNALS::sc_lib_require_halted
+    if {$pmu_ctr eq "CY"} {
+        return [_SC_INTERNALS::sc_lib_read_csr mcycle]
+    }
+    if {$pmu_ctr eq "TIME"} {
+        return [_SC_INTERNALS::sc_lib_read_csr time]
+    }
+    if {$pmu_ctr eq "IR"} {
+        return [_SC_INTERNALS::sc_lib_read_csr minstret]
+    }
+    set pmu_ctr_idx [lsearch -nocase $ctx $pmu_ctr]
+    if {$pmu_ctr_idx == -1} {
+        error "could not find $pmu_ctr in the pmu context"
+    }
+    set reg_idx [expr { 3 + $pmu_ctr_idx } ]
+    set counter_reg_name mhpmcounter${reg_idx}
+    _SC_INTERNALS::sc_lib_print "reading $counter_reg_name as $pmu_ctr counter"
+    return [_SC_INTERNALS::sc_lib_read_csr $counter_reg_name]
+}
+
+## @return "context" object. This object should be passed to
+##       sc_experimental_pmu_get, to read PMU counter
+## @param[in] dictionary representing supported PMU counters and corresponding
+##       selectors.
+## @param[in] maximum number of PMU counters implemented by target
+##
+## NOTE/TODO: DO NOT use this function on 32-bit targets
+## TODO: we may want to implement S/U/M-mode filtering
+proc sc_experimental_pmu_setup { pmu_selectors pmu_ctrs_max args } {
+    set pmu_ctrs_max [expr { $pmu_ctrs_max + 0}]
+    if {$pmu_ctrs_max > 32} {
+        error "maximum number of PMU registers should not be greater than 32 ($pmu_ctrs_max)!"
+    }
+    set cy_enable 0
+    set ir_enable 0
+    set pmu_ctrs [list]
+    set counters $args
+    foreach counter $counters {
+        if {[dict exists $pmu_selectors $counter]} {
+            lappend pmu_ctrs $counter
+            continue
+        }
+        if { $counter eq "CY" } {
+            set cy_enable 1
+            continue
+        }
+        if {$counter eq "IR" } {
+            set ir_enable 1
+            continue
+        }
+        error "unsupported PMU counter: $counter"
+    }
+    set pmu_ctrs [lsort -unique $pmu_ctrs]
+    if {[llength $pmu_ctrs] > $pmu_ctrs_max} {
+        error "too many PMU counters requested was requested (max is $pmu_ctrs_max)"
+    }
+    _SC_INTERNALS::sc_lib_require_halted
+    _SC_INTERNALS::sc_lib_experimental_reset_pmu_subsystem $pmu_ctrs_max
+    _SC_INTERNALS::sc_lib_experimental_enable_pmu_counters \
+        $pmu_selectors $pmu_ctrs_max $cy_enable $ir_enable $pmu_ctrs
+    _SC_INTERNALS::sc_lib_print "PMU counters { $pmu_ctrs } (CY: $cy_enable, IR: $ir_enable) configured!"
+    return $pmu_ctrs
 }
 
 echo "--- LOADED SC FPGA LIBRARY ---"
