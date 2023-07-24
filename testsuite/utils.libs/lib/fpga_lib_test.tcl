@@ -23,7 +23,7 @@ proc testHartIdSearch { } {
       error "unexpected hart id $HartID, expected $HartIdx, target: $Target"
     }
   }
-  puts "HartID search validated"
+  echo "HartID search validated"
 }
 
 proc testAllTargetsHalted {} {
@@ -32,7 +32,7 @@ proc testAllTargetsHalted {} {
       error "sc_fpga_halt_all should halt all targets, but $t is [$t curstate]"
     }
   }
-  puts "all targets are halted"
+  echo "all targets are halted"
 }
 
 proc testAllTargetsRunning {} {
@@ -41,7 +41,7 @@ proc testAllTargetsRunning {} {
       error "sc_fpga_resume_all should resume all targets, but $t is [$t curstate]"
     }
   }
-  puts "all targets are running"
+  echo "all targets are running"
 }
 
 proc testCurrentTargetRunning {} {
@@ -91,7 +91,7 @@ proc testZeroOutRegs {} {
       }
     }
   }
-  puts "testZeroOutRegs passed"
+  echo "testZeroOutRegs passed"
 }
 
 proc run_basic_tests {} {
@@ -111,11 +111,11 @@ proc run_basic_tests {} {
   if {![catch {sc_fpga_resume_all} r]} {
     error "sc_fpga_resume_all should report an error when targets already running"
   }
-  puts "sc_fpga_resume_all reported expected error: $r"
+  echo "sc_fpga_resume_all reported expected error: $r"
   if {![catch {sc_fpga_resume_all $EntryAddr} r]} {
     error "sc_fpga_resume_all should report an error when targets already running"
   }
-  puts "sc_fpga_resume_all reported expected error: $r"
+  echo "sc_fpga_resume_all reported expected error: $r"
   testHartIdSearch
   testZeroOutRegs
 
@@ -327,25 +327,25 @@ proc run_test_with_elf_and_bin { bin elf load_address entry_point } {
   set load_address [expr $load_address]
   set entry_point [expr $entry_point]
   if {[catch { run_basic_tests } r] } {
-    puts "basic tests failed: $r"
+    echo "basic tests failed: $r"
     shutdown error
   }
 
   if {[catch { run_binary_tests $bin $load_address $entry_point } r]} {
-    puts "bin-run tests failed: $r"
+    echo "bin-run tests failed: $r"
     shutdown error
   }
 
   if {[catch { run_elf_tests $elf $entry_point } r] } {
-    puts "elf-run tests failed: $r"
+    echo "elf-run tests failed: $r"
     shutdown error
   }
 
   if {[catch { run_psedo_semihosting_test } r]} {
-    puts "unexpected error during semihosting enable/disable: $r"
+    echo "unexpected error during semihosting enable/disable: $r"
     shutdown error
   }
 
-  puts "Great Success"
+  echo "Great Success"
   shutdown
 }

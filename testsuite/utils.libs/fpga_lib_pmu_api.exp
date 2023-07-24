@@ -1,0 +1,27 @@
+proc run_test {} {
+  # NOTE: SCR1 does not support mcountinhibit
+  if {[target_info cpu,name] eq "scr1"} {
+    return [ocd_test_unsupported]
+  }
+  set BinFile [ocdtlb_test_resource_path BINARY_FILE.bin]
+  set ElfFile "[tool_state_get default_bin_prefix]_spike_run.elf"
+  ocd_compile_executable "lib/simple.S" "$ElfFile"
+
+  set LOAD_ADDR [tool_state_get_program_symbol load_address]
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+  set script_to_run [ocdtlb_test_resource_path fpga_pmu_test.tcl]
+  set script_timeout_multiplier 10
+  set LogFile [utils_spawn_universal_launcher \
+    [list \
+      --run-script $script_to_run \
+      --run-command "run_pmu_test $ElfFile $ENTRY_ADDR"] \
+    fpga_lib_test \
+    expect_success \
+    $script_timeout_multiplier]
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
+
