@@ -197,13 +197,7 @@ class _ConfigCommand(_Command):
     def command(self, args: _Namespace) -> None:
         _shutil.rmtree(_repo_path / "build-aux", ignore_errors=True)
         # NOTE: we expect OpenOCD submodules to be initialized at this point
-        _run_shell(
-            ["git", "diff-index", "--compact-summary", "HEAD"], cwd=_repo_path
-        )
         _run_shell(["./bootstrap", "nosubmodule"], cwd=_repo_path)
-        _run_shell(
-            ["git", "diff-index", "--compact-summary", "HEAD"], cwd=_repo_path
-        )
         cmd = [
             "cmake",
             "-S",
@@ -214,9 +208,6 @@ class _ConfigCommand(_Command):
             (args.build_path / "conan_toolchain.cmake").absolute(),
         ]
         _run_shell(cmd)
-        _run_shell(
-            ["git", "diff-index", "--compact-summary", "HEAD"], cwd=_repo_path
-        )
 
 
 class _BuildCommand(_Command):
@@ -248,13 +239,7 @@ class _BuildCommand(_Command):
         ]
         if args.logging_level == "DEBUG":
             cmd.append("--verbose")
-        _run_shell(
-            ["git", "diff-index", "--compact-summary", "HEAD"], cwd=_repo_path
-        )
         _run_shell(cmd)
-        _run_shell(
-            ["git", "diff-index", "--compact-summary", "HEAD"], cwd=_repo_path
-        )
 
 
 def _sources(kind: str | list[str], path: _Path = _repo_path) -> list[_Path]:
