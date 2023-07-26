@@ -115,6 +115,8 @@ deploy:
           exit 1;
         fi;
       fi
+    - ./make.py --image $IMAGE sh git submodule init
+    - ./make.py --image $IMAGE sh git submodule update
     - ./make.py --image $IMAGE conan create
       --profile:host $PROFILE --user $CONAN_USER --channel $CONAN_CHANNEL .
     - ./make.py --image $IMAGE conan upload --remote syntacore --check "$PACKAGE_NAME"

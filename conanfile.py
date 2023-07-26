@@ -2,6 +2,7 @@
 import io as _io
 import json as _json
 import multiprocessing as _multiprocessing
+import os as _os
 import sys as _sys
 from pathlib import Path as _Path
 from urllib.parse import urlparse as _urlparse
@@ -37,7 +38,7 @@ class Package(_conan.ConanFile):
 
     exports_sources = [
         "*",
-        # "!.git/*", # git is a part of current build system ¯\_(ツ)_/¯
+        "!.git/*",
         "!.makepy/artifacts/*",
         "!.mypy_cache/*",
         "!build/*",
@@ -141,8 +142,9 @@ class Package(_conan.ConanFile):
         # source code. Currently, our conan/make.py build system initializes
         # submoudules separately and expect make.py-initiated bootstrap to be
         # launched as `./bootstrap nosubmodule`
-        self.run("git submodule init")
-        self.run("git submodule update")
+        if _os.path.isdir(_Path(self.source_folder) / ".git"):
+            self.run("git submodule init")
+            self.run("git submodule update")
 
     def _var(self, name: str) -> str:
         for _, info in self.dependencies.items():
