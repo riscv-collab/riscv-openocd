@@ -110,3 +110,4 @@ build/
 
 conaninfo.txt
 conanmanifest.txt
+__sc_version.txt
