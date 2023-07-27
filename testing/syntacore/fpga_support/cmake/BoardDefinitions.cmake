@@ -91,12 +91,16 @@ function(addSCR7L2Config RELEASE_NAME BITSTREAM)
     set(TESTING_CYCLE TWIN_UNSTABLE)
   endif()
 
-  set(CONFIG_BASENAME "twin_${RELEASE_NAME}")
+  set(CONFIG_RVV_MCORE2_NORTOS "twin_rvv_${RELEASE_NAME}_mcore2_nortos")
+  set(CONFIG_MCORE2_NORTOS "twin_${RELEASE_NAME}_mcore2_nortos")
+  set(CONFIG_MCORE2_RTOSHW "twin_${RELEASE_NAME}_mcore2_rtoshw")
+  set(CONFIG_SMP2 "twin_${RELEASE_NAME}_smp2")
 
-  set(CONFIG_MCORE2_NORTOS "${CONFIG_BASENAME}_mcore2_nortos")
-  set(CONFIG_MCORE2_RTOSHW "${CONFIG_BASENAME}_mcore2_rtoshw")
-  set(CONFIG_SMP2 "${CONFIG_BASENAME}_smp2")
-
+  registerFPGAConfiguration(${CONFIG_RVV_MCORE2_NORTOS}
+    BITSTREAM ${BITSTREAM}
+    OPENOCD_BOARD twin_scr7rvv_x_mcore2_nortos
+    ${TESTING_CYCLE}
+  )
   registerFPGAConfiguration(${CONFIG_MCORE2_NORTOS}
     BITSTREAM ${BITSTREAM}
     OPENOCD_BOARD twin_scr7_x_mcore2_nortos
@@ -248,38 +252,3 @@ addSCR9L2Config(scr9_l2_23ww29.5.0
 addSCR9L2Config(scr9_dev
   scr9_dev
 )
-
-
-# Legacy platforms (for historic interest)
-registerFPGAConfiguration(twin_scr7evalcluster_pseudoscore_nortos
-  BITSTREAM scr7_l2_mpu
-  OPENOCD_BOARD twin_scr7_x_1core_nortos
-  TWIN_UNSTABLE
-)
-registerFPGAConfiguration(twin_scr7evalcluster_mcore4_nortos
-  BITSTREAM scr7_l2_mpu
-  OPENOCD_BOARD twin_scr7_x_mcore4_nortos
-  TWIN_UNSTABLE
-)
-registerFPGAConfiguration(twin_scr7evalcluster_smp4_workarea
-  BITSTREAM scr7_l2_mpu
-  OPENOCD_BOARD twin_scr7_x_smp4_workarea
-  TWIN_UNSTABLE
-)
-registerFPGAConfiguration(twin_scr7evalcluster_smp4
-  BITSTREAM scr7_l2_mpu
-  OPENOCD_BOARD twin_scr7_x_smp4
-  TWIN_UNSTABLE
-)
-
-registerFPGAConfiguration(twin_scr7bug21107_score_nortos
-  BITSTREAM /home/stand/users/aap-sc/bitstreams/bug_21107/1/22121300/top.bit
-  OPENOCD_BOARD twin_scr7_x_1core_nortos
-  TWIN_UNSTABLE
-)
-registerFPGAConfiguration(twin_scr7bug21107_score_rtoshw
-  BITSTREAM /home/stand/users/aap-sc/bitstreams/bug_21107/1/22121300/top.bit
-  OPENOCD_BOARD twin_scr7_x_1core_rtoshw
-  TWIN_UNSTABLE
-)
-
