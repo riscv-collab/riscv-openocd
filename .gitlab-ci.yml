@@ -53,7 +53,7 @@ default:
     - CONAN_USER=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info user)
     - CONAN_CHANNEL=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info channel)
     - PACKAGE_NAME=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info package)
-    - RELEASE_STRING=$(echo -e "$CI_COMMIT_MESSAGE" | sed -rn 's/^RELEASE_STRING'":"' (.*)/\1/p' | xargs)
+    - RELEASE_STRING=$(echo -e "$CI_COMMIT_MESSAGE" | sed -rn 's/^SYNTACORE_RELSTR'":"' (.*)/\1/p' | xargs)
     - ./make.py --image $IMAGE distr-prep -r "$RELEASE_STRING"
   after_script:
     - echo "You can reproduce this pipeline with the following commands:"
