@@ -165,7 +165,7 @@ class Package(_conan.ConanFile):
         if self.settings.os == "Linux" and self.options.test:
             riscv_binutils_gdb_url = (
                 "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts/"
-                "riscv-binutils-gdb/197d5a51/x86_Lin-x86_Lin-RISCV64_Elf_binutils-gdb.tar.gz"
+                "riscv-binutils-gdb/sc/main/230727-180158_6babcbd5/x86_Lin-x86_Lin-RISCV64_Elf_g6babcbd5_d230727-150158.tar.gz"
             )
             _conan.tools.files.get(
                 self, riscv_binutils_gdb_url, destination=external_deps_folder
@@ -175,7 +175,7 @@ class Package(_conan.ConanFile):
             toolchain.variables["RISCVGCC_DIR"] = self._var("SC_GCC_PATH")
             toolchain.variables[
                 "RISCVGDB_DIR"
-            ] = f"{external_deps_folder}/binutils-gdb"
+            ] = f"{external_deps_folder}/x86_Lin-x86_Lin-RISCV64_Elf/binutils-gdb"
             toolchain.variables["CMAKE_BUILD_TYPE"] = self.options.build_type
             toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
 
