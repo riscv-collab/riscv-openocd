@@ -12,12 +12,11 @@ struct riscv_program;
 #include "target/register.h"
 #include "target/semihosting_common.h"
 #include <helper/command.h>
+#include <helper/bits.h>
 
 #define RISCV_COMMON_MAGIC	0x52495356U
 
-/* The register cache is statically allocated. */
-#define RISCV_MAX_HARTS 1024
-#define RISCV_MAX_REGISTERS 5000
+#define RISCV_MAX_HARTS  ((int)BIT(20))
 #define RISCV_MAX_TRIGGERS 32
 #define RISCV_MAX_HWBPS 16
 
@@ -30,7 +29,7 @@ struct riscv_program;
 #define RISCV_HGATP_PPN(xlen)  ((xlen) == 32 ? HGATP32_PPN : HGATP64_PPN)
 #define RISCV_PGSHIFT 12
 
-# define PG_MAX_LEVEL 4
+#define PG_MAX_LEVEL 4
 
 #define RISCV_NUM_MEM_ACCESS_METHODS  3
 
@@ -193,7 +192,21 @@ struct riscv_info {
 	 * was resumed. */
 	int (*resume_go)(struct target *target);
 	int (*step_current_hart)(struct target *target);
-	int (*on_halt)(struct target *target);
+
+	/* These get called from riscv_poll_hart(), which is a house of cards
+	 * together with openocd_poll(), so be careful not to upset things too
+	 * much. */
+	int (*handle_became_halted)(struct target *target,
+		enum riscv_hart_state previous_riscv_state);
+	int (*handle_became_running)(struct target *target,
+		enum riscv_hart_state previous_riscv_state);
+	int (*handle_became_unavailable)(struct target *target,
+		enum riscv_hart_state previous_riscv_state);
+
+	/* Called periodically (no guarantees about frequency), while there's
+	 * nothing else going on. */
+	int (*tick)(struct target *target);
+
 	/* Get this target as ready as possible to resume, without actually
 	 * resuming. */
 	int (*resume_prep)(struct target *target);
@@ -352,22 +365,12 @@ int riscv_openocd_step(
 	int handle_breakpoints
 );
 
-int riscv_openocd_assert_reset(struct target *target);
-int riscv_openocd_deassert_reset(struct target *target);
-
 /*** RISC-V Interface ***/
 
 bool riscv_supports_extension(struct target *target, char letter);
 
 /* Returns XLEN for the given (or current) hart. */
 unsigned riscv_xlen(const struct target *target);
-int riscv_xlen_of_hart(const struct target *target);
-
-/* Sets the current hart, which is the hart that will actually be used when
- * issuing debug commands. */
-int riscv_set_current_hartid(struct target *target, int hartid);
-int riscv_select_current_hart(struct target *target);
-int riscv_current_hartid(const struct target *target);
 
 /*** Support functions for the RISC-V 'RTOS', which provides multihart support
  * without requiring multiple targets.  */

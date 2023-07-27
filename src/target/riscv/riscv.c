@@ -572,33 +572,46 @@ static int set_trigger(struct target *target, unsigned int idx, riscv_reg_t tdat
 	riscv_reg_t tdata1_ignore_mask)
 {
 	riscv_reg_t tdata1_rb, tdata2_rb;
+	// Select which trigger to use
 	if (riscv_set_register(target, GDB_REGNO_TSELECT, idx) != ERROR_OK)
 		return ERROR_FAIL;
+
+	// Disable the trigger by writing 0 to it
+	if (riscv_set_register(target, GDB_REGNO_TDATA1, 0) != ERROR_OK)
+		return ERROR_FAIL;
+
+	// Set trigger data for tdata2 (and tdata3 if it was supported)
+	if (riscv_set_register(target, GDB_REGNO_TDATA2, tdata2) != ERROR_OK)
+		return ERROR_FAIL;
+
+	// Set trigger data for tdata1
 	if (riscv_set_register(target, GDB_REGNO_TDATA1, tdata1) != ERROR_OK)
 		return ERROR_FAIL;
+
+	// Read back tdata1, tdata2, (tdata3), and check if the configuration is supported
 	if (riscv_get_register(target, &tdata1_rb, GDB_REGNO_TDATA1) != ERROR_OK)
-		return ERROR_FAIL;
-	if ((tdata1 & ~tdata1_ignore_mask) != (tdata1_rb & ~tdata1_ignore_mask)) {
-		LOG_TARGET_DEBUG(target,
-			"Trigger %u doesn't support what we need; After writing 0x%"
-			PRIx64 " to tdata1 it contains 0x%" PRIx64
-			"; tdata1_ignore_mask=0x%" PRIx64,
-			idx, tdata1, tdata1_rb, tdata1_ignore_mask);
-		riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
-	}
-	if (riscv_set_register(target, GDB_REGNO_TDATA2, tdata2) != ERROR_OK)
 		return ERROR_FAIL;
 	if (riscv_get_register(target, &tdata2_rb, GDB_REGNO_TDATA2) != ERROR_OK)
 		return ERROR_FAIL;
-	if (tdata2 != tdata2_rb) {
-		LOG_TARGET_DEBUG(target,
-			"Trigger %u doesn't support what we need; wrote 0x%"
-			PRIx64 " to tdata2 but read back 0x%" PRIx64,
-			idx, tdata2, tdata2_rb);
+	bool tdata1_config_denied = (tdata1 & ~tdata1_ignore_mask) != (tdata1_rb & ~tdata1_ignore_mask);
+	bool tdata2_config_denied = tdata2 != tdata2_rb;
+	if (tdata1_config_denied || tdata2_config_denied) {
+		LOG_TARGET_DEBUG(target, "Trigger %u doesn't support what we need.", idx);
+
+		if (tdata1_config_denied)
+			LOG_TARGET_DEBUG(target,
+				"After writing 0x%" PRIx64 " to tdata1 it contains 0x%" PRIx64 "; tdata1_ignore_mask=0x%" PRIx64,
+				tdata1, tdata1_rb, tdata1_ignore_mask);
+
+		if (tdata2_config_denied)
+			LOG_TARGET_DEBUG(target,
+				"wrote 0x%" PRIx64 " to tdata2 but read back 0x%" PRIx64,
+				tdata2, tdata2_rb);
+
 		riscv_set_register(target, GDB_REGNO_TDATA1, 0);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
+
 	return ERROR_OK;
 }
 
@@ -1511,7 +1524,7 @@ int riscv_flush_registers(struct target *target)
 	if (!target->reg_cache)
 		return ERROR_OK;
 
-	LOG_TARGET_DEBUG(target, "");
+	LOG_TARGET_DEBUG(target, "Flushing register cache");
 
 	/* Writing non-GPR registers may require progbuf execution, and some GPRs
 	 * may become dirty in the process (e.g. S0, S1). For that reason, flush
@@ -2751,7 +2764,9 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 					}
 				}
 
-				r->on_halt(target);
+				if (r->handle_became_halted &&
+						r->handle_became_halted(target, previous_riscv_state) != ERROR_OK)
+					return ERROR_FAIL;
 
 				/* We shouldn't do the callbacks yet. What if
 				 * there are multiple harts that halted at the
@@ -2770,12 +2785,18 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 				LOG_TARGET_DEBUG(target, "  triggered running");
 				target->state = TARGET_RUNNING;
 				target->debug_reason = DBG_REASON_NOTHALTED;
+				if (r->handle_became_running &&
+						r->handle_became_running(target, previous_riscv_state) != ERROR_OK)
+					return ERROR_FAIL;
 				break;
 
 			case RISCV_STATE_UNAVAILABLE:
 				LOG_TARGET_DEBUG(target, "  became unavailable");
 				LOG_TARGET_INFO(target, "became unavailable.");
 				target->state = TARGET_UNAVAILABLE;
+				if (r->handle_became_unavailable &&
+						r->handle_became_unavailable(target, previous_riscv_state) != ERROR_OK)
+					return ERROR_FAIL;
 				break;
 
 			case RISCV_STATE_NON_EXISTENT:
@@ -2923,6 +2944,17 @@ int riscv_openocd_poll(struct target *target)
 				info->halted_needs_event_callback = false;
 			}
 		}
+	}
+
+	/* Call tick() for every hart. What happens in tick() is opaque to this
+	 * layer. The reason it's outside the previous loop is that at this point
+	 * the state of every hart has settled, so any side effects happening in
+	 * tick() won't affect the delicate poll() code. */
+	foreach_smp_target(entry, targets) {
+		struct target *t = entry->target;
+		struct riscv_info *info = riscv_info(t);
+		if (info->tick && info->tick(t) != ERROR_OK)
+			return ERROR_FAIL;
 	}
 
 	/* Sample memory if any target is running. */
@@ -4077,10 +4109,17 @@ COMMAND_HANDLER(riscv_exec_progbuf)
 			return ERROR_FAIL;
 	}
 
-	if (riscv_program_exec(&prog, target) == ERROR_OK)
-		LOG_TARGET_DEBUG(target, "exec_progbuf: Program buffer execution successful.");
-	else
+	if (riscv_flush_registers(target) != ERROR_OK)
+		return ERROR_FAIL;
+	int error = riscv_program_exec(&prog, target);
+	riscv_invalidate_register_cache(target);
+
+	if (error != ERROR_OK) {
 		LOG_TARGET_ERROR(target, "exec_progbuf: Program buffer execution failed.");
+		return ERROR_FAIL;
+	}
+
+	LOG_TARGET_DEBUG(target, "exec_progbuf: Program buffer execution successful.");
 
 	return ERROR_OK;
 }
@@ -4533,7 +4572,6 @@ static int riscv_step_rtos_hart(struct target *target)
 	r->on_step(target);
 	if (r->step_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
-	r->on_halt(target);
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Hart was not halted after single step!");
 		return ERROR_FAIL;
@@ -4567,12 +4605,8 @@ static void riscv_invalidate_register_cache(struct target *target)
 	if (!target->reg_cache)
 		return;
 
-	LOG_DEBUG("[%d]", target->coreid);
+	LOG_TARGET_DEBUG(target, "Invalidating register cache");
 	register_cache_invalidate(target->reg_cache);
-	for (size_t i = 0; i < target->reg_cache->num_regs; ++i) {
-		struct reg *reg = &target->reg_cache->reg_list[i];
-		reg->valid = false;
-	}
 }
 
 

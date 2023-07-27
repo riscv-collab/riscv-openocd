@@ -22,6 +22,7 @@
 
 #define FREERTOS_MAX_PRIORITIES	63
 #define FREERTOS_THREAD_NAME_STR_SIZE 200
+#define FREERTOS_CURRENT_EXECUTION_ID 1
 
 struct freertos_params {
 	const char *target_name;
@@ -496,34 +497,36 @@ static int freertos_update_threads(struct rtos *rtos)
 	rtos_free_threadlist(rtos);
 
 	/* read the current thread */
-	target_addr_t pxCurrentTCB;
+	target_addr_t px_current_tcb;
 	retval = freertos_read_struct_value(rtos->target,
 										rtos->symbols[FREERTOS_VAL_PX_CURRENT_TCB].address,
 										0,
 										freertos->pointer_size,
-										&pxCurrentTCB);
+										&px_current_tcb);
 	if (retval != ERROR_OK) {
 		LOG_ERROR("Error reading current thread in FreeRTOS thread list");
 		return retval;
 	}
 	LOG_DEBUG("FreeRTOS: Read pxCurrentTCB at 0x%" PRIx64 ", value 0x%" PRIx64,
 										rtos->symbols[FREERTOS_VAL_PX_CURRENT_TCB].address,
-										pxCurrentTCB);
+										px_current_tcb);
 
 	/* read scheduler running */
-	uint32_t scheduler_running;
-	retval = target_read_u32(rtos->target,
-			rtos->symbols[FREERTOS_VAL_X_SCHEDULER_RUNNING].address,
-			&scheduler_running);
+	uint64_t scheduler_running;
+	retval = freertos_read_struct_value(rtos->target,
+						rtos->symbols[FREERTOS_VAL_X_SCHEDULER_RUNNING].address,
+						0,
+						freertos->ubasetype_size,
+						&scheduler_running);
 	if (retval != ERROR_OK) {
 		LOG_ERROR("Error reading FreeRTOS scheduler state");
 		return retval;
 	}
-	LOG_DEBUG("FreeRTOS: Read xSchedulerRunning at 0x%" PRIx64 ", value 0x%" PRIx32,
+	LOG_DEBUG("FreeRTOS: Read xSchedulerRunning at 0x%" PRIx64 ", value 0x%" PRIx64,
 										rtos->symbols[FREERTOS_VAL_X_SCHEDULER_RUNNING].address,
 										scheduler_running);
 
-	if ((thread_list_size  == 0) || (rtos->current_thread == 0) || (scheduler_running != 1)) {
+	if (thread_list_size  == 0 || px_current_tcb == 0 || scheduler_running != 1) {
 		/* Either : No RTOS threads - there is always at least the current execution though */
 		/* OR     : No current thread - all threads suspended - show the current execution
 		 * of idling */
@@ -536,8 +539,8 @@ static int freertos_update_threads(struct rtos *rtos)
 			LOG_ERROR("Error allocating memory for %" PRIu64 " threads", thread_list_size);
 			return ERROR_FAIL;
 		}
-		rtos->current_thread = 1;
-		rtos->thread_details->threadid = 1;
+		rtos->current_thread = FREERTOS_CURRENT_EXECUTION_ID;
+		rtos->thread_details->threadid = rtos->current_thread;
 		rtos->thread_details->exists = true;
 		rtos->thread_details->extra_info_str = NULL;
 		rtos->thread_details->thread_name_str = malloc(sizeof(tmp_str));
@@ -608,7 +611,6 @@ static int freertos_update_threads(struct rtos *rtos)
 	list_of_lists[num_lists++] = rtos->symbols[FREERTOS_VAL_X_SUSPENDED_TASK_LIST].address;
 	list_of_lists[num_lists++] = rtos->symbols[FREERTOS_VAL_X_TASKS_WAITING_TERMINATION].address;
 
-	rtos->current_thread = 0;
 	for (unsigned int i = 0; i < num_lists; i++) {
 		if (list_of_lists[i] == 0)
 			continue;
@@ -670,8 +672,12 @@ static int freertos_update_threads(struct rtos *rtos)
 			if (!value) {
 				struct freertos_thread_entry *new_value = calloc(1, sizeof(struct freertos_thread_entry));
 				new_value->tcb = tcb;
-				/* threadid can't be 0. */
-				new_value->threadid = ++freertos->last_threadid;
+				/* threadid can't be 0.
+				 * plus 1 to avoid duplication with "Current Execution" */
+				new_value->threadid = ++freertos->last_threadid + FREERTOS_CURRENT_EXECUTION_ID;
+
+				LOG_DEBUG("FreeRTOS: new thread created, tcb=0x%" PRIx64 ", threadid=0x%" PRIx64,
+						new_value->tcb, new_value->threadid);
 
 				list_add_tail(&new_value->list, &freertos->thread_entry_list);
 				value = new_value;
@@ -711,7 +717,7 @@ static int freertos_update_threads(struct rtos *rtos)
 			strcpy(rtos->thread_details[tasks_found].thread_name_str, tmp_str);
 			rtos->thread_details[tasks_found].exists = true;
 
-			if (value->tcb == pxCurrentTCB) {
+			if (value->tcb == px_current_tcb && rtos->current_thread != FREERTOS_CURRENT_EXECUTION_ID) {
 				char running_str[] = "State: Running";
 				rtos->current_thread = value->threadid;
 				rtos->thread_details[tasks_found].extra_info_str = malloc(
