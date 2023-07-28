@@ -71,6 +71,8 @@ ExternalProject_Add(
     mkdir -p -- ${OPENOCD_SCRIPTS_INSTALL_DIR} &&
     cp ${OPENOCD_SOURCES}/tcl/tools/syntacore/sc_fpga_lib.tcl
        ${OPENOCD_SCRIPTS_INSTALL_DIR}/ &&
+    cp ${OPENOCD_SOURCES}/tcl/tools/syntacore/sc_lowlevel_jtag.tcl
+       ${OPENOCD_SCRIPTS_INSTALL_DIR}/ &&
     cp ${OPENOCD_SOURCES}/tools/syntacore/openocd_run.exp
        ${OPENOCD_INSTALL_PATH}/bin &&
     ${OPENOCD_SOURCES}/tools/syntacore/ide_cloak.tcl
