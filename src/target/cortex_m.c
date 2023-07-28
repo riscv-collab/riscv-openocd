@@ -2049,7 +2049,7 @@ int cortex_m_add_watchpoint(struct target *target, struct watchpoint *watchpoint
 	}
 
 	/* hardware doesn't support data value masking */
-	if (watchpoint->mask != ~(uint32_t)0) {
+	if (watchpoint->mask != WATCHPOINT_IGNORE_DATA_VALUE_MASK) {
 		LOG_TARGET_DEBUG(target, "watchpoint value masks not supported");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
