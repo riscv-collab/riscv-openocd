@@ -241,12 +241,10 @@ addSCR9L2Config(scr9_l2_23ww27.6.0
   /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww27.6.0/scr9_l2_23ww27.6.0.bit
 )
 
-addSCR9L2Config(scr9_l2_23ww28.5.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww28.5.0/scr9_l2_23ww28.5.0.bit
-)
+# bitstreams between 27.6 and 30.5 have broken watchpoints
 
-addSCR9L2Config(scr9_l2_23ww29.5.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww29.5.0/scr9_l2_23ww29.5.0.bit
+addSCR9L2Config(scr9_l2_23ww30.5.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww30.5.0/scr9_l2_23ww30.5.0.bit
 )
 
 addSCR9L2Config(scr9_dev
