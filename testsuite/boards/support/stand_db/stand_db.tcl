@@ -10,7 +10,7 @@ registerStandInfo \
   twin \
   share/openocd/scripts/interface/ftdi/digilent-hs2a.cfg \
   210249B070B3 \
-  500
+  2000
 
 registerStandInfo \
   zalman \
