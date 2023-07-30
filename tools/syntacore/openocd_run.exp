@@ -467,9 +467,13 @@ proc detectNumberOfTaps {DebugInterface AdapterSerial} {
   expect {
     -re "detected number of taps: (\[0-9.\]+)\r" {
       set TapCount $expect_out(1,string)
-      send_user -- "detected taps: $TapCount\n"
+      send_user -- "Number of detected TAPs: $TapCount\n"
       close
       wait
+      if { $TapCount == 0 } {
+        send_user -- "Make sure that a correct debug adapter is selected or try to reset the device\n"
+        fatalError "No TAP detected! "
+      }
       return $TapCount
     }
     eof {
