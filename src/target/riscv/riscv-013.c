@@ -2837,16 +2837,44 @@ static int deassert_reset(struct target *target)
 
 static int execute_fence(struct target *target)
 {
+	int result;
+	riscv_reg_t saved_mtvec;
+	struct riscv_program program;
+	riscv013_info_t *info = get_info(target);
+
 	if (dm013_select_target(target) != ERROR_OK)
 		return ERROR_FAIL;
 
 	/* FIXME: For non-coherent systems we need to flush the caches right
 	 * here, but there's no ISA-defined way of doing that. */
-	struct riscv_program program;
+
+	/* backup mtvec */
+	result = riscv_get_register(target, &saved_mtvec, GDB_REGNO_MTVEC);
+	if (result != ERROR_OK)
+		return result;
+
+	/* set mtvec after fence.i */
+	result = riscv_set_register(target, GDB_REGNO_MTVEC, info->progbuf_address + 4);
+	if (result != ERROR_OK)
+		return result;
+
 	riscv_program_init(&program, target);
+
+	/* fence.i may cause exception， Because mtvec is set after fence.i,
+	 * triggering an exception does not affect the execution flow */
 	riscv_program_fence_i(&program);
+	result = riscv_program_exec(&program, target);
+	if (result != ERROR_OK)
+		LOG_TARGET_DEBUG(target, "Unable to execute pre-fence");
+
+	/* restore mtvec */
+	result = riscv_set_register(target, GDB_REGNO_MTVEC, saved_mtvec);
+	if (result != ERROR_OK)
+		return result;
+
+	riscv_program_init(&program, target);
 	riscv_program_fence_rw_rw(&program);
-	int result = riscv_program_exec(&program, target);
+	result = riscv_program_exec(&program, target);
 	if (result != ERROR_OK)
 		LOG_TARGET_DEBUG(target, "Unable to execute pre-fence");
 
