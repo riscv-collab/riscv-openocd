@@ -51,7 +51,7 @@ proc run_test {} {
 
   foreach Log $Logs {
     exec grep --text -F "Target successfully examined" $Log
-    exec grep --text -F "Listening on port 3333 for gdb connections" $Log
+    exec grep --text -E "Listening on port \[0-9\]+ for gdb connections" $Log
   }
 
   return [ocd_test_pass]

@@ -3,7 +3,6 @@ if(NOT DEFINED RISCVGCC_DIR)
 endif()
 
 set(DEJAGNU_SRC_CODE dejagnu)
-
 # cmake-format: off
 ExternalProject_Add(
   dejagnu
@@ -25,11 +24,49 @@ set(OPENOCD_TESTSUITE_DIRECTORY "${OPENOCD_SOURCES}/testsuite")
 # we expect that FpgaBoardInfo interface target is defined after this include
 set(FPGA_SUPPORT_PROJECT_PATH ${OPENOCD_SOURCES}/testing/syntacore/fpga_support)
 include("${FPGA_SUPPORT_PROJECT_PATH}/cmake/BoardDefinitions.cmake")
+
+add_custom_target("OpenOCDTestsOn_spike")
+add_library(SpikeBoardInfo INTERFACE)
+
+function(registerSpikeConfiguration SPIKE_CONFIGURATION_NAME)
+  add_library(${SPIKE_CONFIGURATION_NAME} INTERFACE)
+  set_property(TARGET ${SPIKE_CONFIGURATION_NAME}
+    PROPERTY OPENOCD_BOARD ${SPIKE_CONFIGURATION_NAME}
+  )
+
+  set_property(TARGET SpikeBoardInfo
+    PROPERTY ALL_SPIKE_CONFIGURATIONS ${SPIKE_CONFIGURATION_NAME}
+    APPEND
+  )
+endfunction()
+
+file(GLOB PATH_FOR_SPIKE_PLATFORMS
+  ${OPENOCD_TESTSUITE_DIRECTORY}/boards/spike32*.exp
+  ${OPENOCD_TESTSUITE_DIRECTORY}/boards/spike64*.exp
+)
+
+foreach(spike_platform_with_extension ${PATH_FOR_SPIKE_PLATFORMS})
+  file(RELATIVE_PATH
+    SPIKE_PLATFORMS
+    "${OPENOCD_TESTSUITE_DIRECTORY}/boards/"
+    ${spike_platform_with_extension}
+  )
+  string(REGEX REPLACE ".exp$" "" spike_platform ${SPIKE_PLATFORMS})
+  registerSpikeConfiguration("${spike_platform}")
+endforeach()
+
+get_property(
+  SPIKE_TEST_BOARDS
+  TARGET SpikeBoardInfo
+  PROPERTY ALL_SPIKE_CONFIGURATIONS)
+
 get_property(
   FPGA_TEST_BOARDS
   TARGET FpgaBoardInfo
   PROPERTY ALL_CONFIGURATIONS)
-set(TEST_BOARDS spike ${FPGA_TEST_BOARDS})
+
+set(TEST_BOARDS ${FPGA_TEST_BOARDS})
+list(APPEND TEST_BOARDS ${SPIKE_TEST_BOARDS})
 
 set(TESTING_ROOT "${CMAKE_BINARY_DIR}/testing")
 
@@ -41,16 +78,12 @@ function(addNextToolToTestForBoard tool_name board_config_name)
 
   file(MAKE_DIRECTORY ${tool_run_dir} ${tool_summary_dir})
 
-  if(board_config STREQUAL "spike")
-    set(target_board_cmdline "")
-  else()
-    get_property(
-      openocd_board
-      TARGET ${board_config}
-      PROPERTY OPENOCD_BOARD)
-    set(target_board_cmdline "--target_board=${openocd_board}")
-  endif()
+  get_property(
+    openocd_board
+    TARGET ${board_config}
+    PROPERTY OPENOCD_BOARD)
 
+  set(target_board_cmdline "--target_board=${openocd_board}")
   set(board_tests_target "OpenOCDTestsOn_${board_config}")
   set(board_tool_target "Tool_${tool_name}_For_${board_tests_target}")
 
@@ -72,6 +105,11 @@ function(addNextToolToTestForBoard tool_name board_config_name)
   if(NOT TARGET ${board_tests_target})
     add_custom_target(${board_tests_target} DEPENDS ${board_tool_target})
     message(STATUS "Primary ${board_tests_target} defined")
+
+    if(board_tests_target MATCHES "^OpenOCDTestsOn_spike")
+      add_dependencies("OpenOCDTestsOn_spike" ${board_tests_target})
+    endif()
+
   else()
     get_property(
       board_test_deps

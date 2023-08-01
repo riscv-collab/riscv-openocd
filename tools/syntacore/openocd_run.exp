@@ -533,6 +533,9 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
       -c "adapter driver remote_bitbang" \
       -c "remote_bitbang port $SETTINGS(bitbang_port)" \
       -c "remote_bitbang host 127.0.0.1" \
+      -c "gdb_port 0" \
+      -c "telnet_port 0" \
+      -c "tcl_port 0" \
       -c "sc_target_config new_tap_for_each_target 0" \
       -c "sc_target_config harts_num $NumberOfHarts"]
   }
