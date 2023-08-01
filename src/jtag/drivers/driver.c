@@ -115,8 +115,14 @@ int interface_jtag_add_dr_scan(struct jtag_tap *active, int in_num_fields,
 	for (struct jtag_tap *tap = jtag_tap_next_enabled(NULL); tap; tap = jtag_tap_next_enabled(tap)) {
 		all_devices++;
 
-		if (tap->bypass)
+		if (tap->bypass) {
 			bypass_devices++;
+
+			if (active == tap) {
+				LOG_ERROR("Active tap shouldn't be in BYPASS mode");
+				return ERROR_FAIL;
+			}
+		}
 	}
 
 	if (all_devices == bypass_devices) {
