@@ -1,0 +1,36 @@
+proc run_test {} {
+    set script_path [get_sc_lowlevel_jtag_lib_path]
+    set commands_path [ocdtlb_test_resource_path get_hart_registers_commands.tcl]
+    set runner_path [ocdtlb_test_resource_path command_runner.tcl]
+
+    set true_data 0xdeadbeef
+    set s0_reg 0x1008
+
+    set LogFile [utils_spawn_universal_launcher \
+        [list \
+            --no-targets \
+            --run-script $script_path \
+            --run-command "set true_data $true_data" \
+            --run-command "set s0_reg $s0_reg" \
+            --run-script $commands_path \
+            --run-script $runner_path \
+            --run-command shutdown] \
+        get_hart_registers \
+        expect_success]
+
+    if {![catch {exec grep --text -F "ERROR:" $LogFile} error_str]} {
+        error $error_str
+    }
+
+    set load_result_str [exec grep --text -F "load_register result:" $LogFile]
+
+    if {![regexp "0x\[0-9a-f\]+" $load_result_str load_result]} {
+        error "incorrect output of load_register"
+    } elseif { $true_data != $load_result } {
+        error "incorrect output of load_register: $load_result; should be $true_data"
+    }
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

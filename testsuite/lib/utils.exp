@@ -4,6 +4,7 @@ load_lib "lib_response.exp"
 load_lib "lib_test.exp"
 load_lib "lib_tool_support.exp"
 load_lib "lib_tool_state.exp"
+load_lib "lib_sc_lowlevel_jtag_support.exp"
 
 proc utils_init {test_file_name} {
   global ENABLE_EXP_INTERNAL
@@ -126,4 +127,3 @@ proc utils_finish {{ cleanup_type "immediate" }} {
   tool_state_clear
   verbose "\\\\\\ ocd_utils_finish ///\n   _______" 1
 }
-

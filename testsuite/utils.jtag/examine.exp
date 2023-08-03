@@ -1,0 +1,31 @@
+proc run_test {} {
+    set script_path [get_sc_lowlevel_jtag_lib_path]
+    set commands_path [ocdtlb_test_resource_path examine_commands.tcl]
+    set runner_path [ocdtlb_test_resource_path command_runner.tcl]
+
+    set LogFile [utils_spawn_universal_launcher \
+        [list \
+            --no-targets \
+            --run-script $script_path \
+            --run-script $commands_path \
+            --run-script $runner_path \
+            --run-command shutdown] \
+        examine \
+        expect_success]
+
+    if {![catch {exec grep --text -F "ERROR:" $LogFile} error_str]} {
+        error $error_str
+    }
+
+    set cpu_xlen     [target_info cpu,xlen]
+    set xlen_str [exec grep --text -F xlen: $LogFile]
+    if {![regexp {xlen: ([0-9]+)} $xlen_str dummy examine_xlen]} {
+        error "incorrect output of examine"
+    } elseif { $cpu_xlen != $examine_xlen } {
+        error "incorrect xlen: $examine_xlen; should be $cpu_xlen"
+    }
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

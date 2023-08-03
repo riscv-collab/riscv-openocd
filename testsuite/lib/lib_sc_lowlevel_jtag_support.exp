@@ -1,0 +1,4 @@
+proc get_sc_lowlevel_jtag_lib_path {} {
+    global OPENOCD_ROOT
+    return "$OPENOCD_ROOT/share/openocd/scripts/syntacore/sc_lowlevel_jtag.tcl"
+}

@@ -1,0 +1,24 @@
+proc run_test {} {
+    set script_path [get_sc_lowlevel_jtag_lib_path]
+    set commands_path [ocdtlb_test_resource_path reset_commands.tcl]
+    set runner_path [ocdtlb_test_resource_path command_runner.tcl]
+
+    set LogFile [utils_spawn_universal_launcher \
+        [list \
+            --no-targets \
+            --run-script $script_path \
+            --run-script $commands_path \
+            --run-script $runner_path \
+            --run-command shutdown] \
+        reset \
+        expect_success]
+
+    if {![catch {exec grep --text -F "ERROR:" $LogFile} error_str]} {
+        error $error_str
+    }
+
+    return [ocd_test_pass]
+}
+
+return [run_test]
+

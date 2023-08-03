@@ -3,8 +3,7 @@ proc run_test {} {
 
   set LogFile [utils_spawn_universal_launcher \
     [list --verbose --no-targets \
-      --run-script $test_script_path \
-      --run-command shutdown] \
+      --run-script $test_script_path] \
     no-targets \
     expect_success]
 
