@@ -199,6 +199,16 @@ proc sc_fpga_resume_all { { addr "" } } {
     }
 }
 
+proc sc_fpga_step_all { { addr "" } } {
+    if { $addr eq "" } {
+        _SC_INTERNALS::apply_for_each_target step
+        _SC_INTERNALS::sc_lib_print "done stepping all harts"
+    } else {
+        _SC_INTERNALS::apply_for_each_target step $addr
+        _SC_INTERNALS::sc_lib_print "done stepping all harts at [format 0x%08x $addr]"
+    }
+}
+
 proc sc_fpga_zero_regs {} {
     _SC_INTERNALS::apply_for_each_target _SC_INTERNALS::fill_gprs_with_zero
     _SC_INTERNALS::sc_lib_print "all general-purpose registers are zero-out"
