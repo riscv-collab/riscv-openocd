@@ -65,7 +65,7 @@ namespace eval _SC_INTERNALS {
             lappend load_image_args $file_type
         }
         sc_lib_print "load_image $load_image_args"
-        set load_result [load_image {*}$load_image_args]
+        set load_result [string trim [load_image {*}$load_image_args]]
         sc_lib_print "$load_result"
 
         if { $entry_point eq "" && $load_address ne "" } {
@@ -95,16 +95,13 @@ namespace eval _SC_INTERNALS {
         targets $current_target
     }
 
-    proc sc_lib_read_csr_hex {reg_name} {
-        return [string trim [lindex [split [reg $reg_name] :] 1]]
+    proc sc_lib_read_reg_hex {reg_name} {
+        set raw_reg_value [string trim [reg $reg_name]]
+        sc_lib_print "$raw_reg_value"
+        return [string trim [lindex [split $raw_reg_value :] 1]]
     }
 
-    proc sc_lib_read_csr {reg_name} {
-        set hex_value [sc_lib_read_csr_hex $reg_name]
-        return [expr $hex_value]
-    }
-
-    proc sc_lib_write_csr { reg_name value } {
+    proc sc_lib_write_reg { reg_name value } {
         return [string trim [reg $reg_name $value]]
     }
 
@@ -119,17 +116,17 @@ namespace eval _SC_INTERNALS {
     proc sc_lib_experimental_reset_pmu_subsystem { pmu_ctrs_max } {
         set k_inhibit_all 0xffffffff
         # should re-program mcountinhibit/mcycle/minstret
-        sc_lib_print "[sc_lib_write_csr mcountinhibit $k_inhibit_all]"
-        sc_lib_print "[sc_lib_write_csr mcycle 0]"
-        sc_lib_print "[sc_lib_write_csr minstret 0]"
+        sc_lib_print "[sc_lib_write_reg mcountinhibit $k_inhibit_all]"
+        sc_lib_print "[sc_lib_write_reg mcycle 0]"
+        sc_lib_print "[sc_lib_write_reg minstret 0]"
         # drop mhpmevent selectors and mhpmcounter
         for { set ev_idx 0 } { $ev_idx < $pmu_ctrs_max } { incr ev_idx } {
             set EventSelector [expr {3 + $ev_idx}]
-            sc_lib_print "[sc_lib_write_csr mhpmevent${EventSelector} 0]"
-            sc_lib_print "[sc_lib_write_csr mhpmcounter${EventSelector} 0]"
+            sc_lib_print "[sc_lib_write_reg mhpmevent${EventSelector} 0]"
+            sc_lib_print "[sc_lib_write_reg mhpmcounter${EventSelector} 0]"
         }
-        sc_lib_print "[sc_lib_write_csr mcounteren 0xffffffff]"
-        sc_lib_print "[sc_lib_write_csr scounteren 0xffffffff]"
+        sc_lib_print "[sc_lib_write_reg mcounteren 0xffffffff]"
+        sc_lib_print "[sc_lib_write_reg scounteren 0xffffffff]"
     }
 
     proc sc_lib_experimental_enable_pmu_counters { selectors_list
@@ -156,11 +153,24 @@ namespace eval _SC_INTERNALS {
             set selector_reg "mhpmevent[expr {3 + $pmu_counter_idx}]"
             set mhpmevent_hex [format "0x%016x" $mhpmevent_val]
             set inhibit_value [expr { $inhibit_value ^ (1 << ($pmu_counter_idx + 3))}]
-            sc_lib_print "$pmu_event - [sc_lib_write_csr $selector_reg $mhpmevent_hex]"
+            sc_lib_print "$pmu_event - [sc_lib_write_reg $selector_reg $mhpmevent_hex]"
             incr pmu_counter_idx
         }
-        sc_lib_print "[sc_lib_write_csr mcountinhibit [format "0x%08x" $inhibit_value]]"
+        sc_lib_print "[sc_lib_write_reg mcountinhibit [format "0x%08x" $inhibit_value]]"
     }
+}
+
+proc sc_fpga_read_reg {reg_name} {
+    set hex_value [_SC_INTERNALS::sc_lib_read_reg_hex $reg_name]
+    set result [format %u $hex_value]
+    _SC_INTERNALS::sc_lib_print "$reg_name: $result"
+    return $result
+}
+
+proc sc_fpga_write_reg { reg_name value } {
+    set result [__SC_INTERNALS::sc_lib_write_reg $reg_name $value]
+    _SC_INTERNALS::sc_lib_print "$result"
+    return $result
 }
 
 proc sc_fpga_halt_all {} {
@@ -215,7 +225,7 @@ proc sc_fpga_find_target_by_hartid { hartid } {
     set current_target [target current]
     foreach t [target names] {
         targets $t
-        if {[catch { _SC_INTERNALS::sc_lib_read_csr_hex mhartid } mhartid]} {
+        if {[catch { _SC_INTERNALS::sc_lib_read_reg_hex mhartid } mhartid]} {
             targets $current_target
             return -code error "could not not read mhartid from $t ($mhartid)"
         }
@@ -275,13 +285,13 @@ proc sc_fpga_info {} {
 proc sc_experimental_pmu_get { ctx pmu_ctr } {
     _SC_INTERNALS::sc_lib_require_halted
     if {$pmu_ctr eq "CY"} {
-        return [_SC_INTERNALS::sc_lib_read_csr mcycle]
+        return [sc_fpga_read_reg mcycle]
     }
     if {$pmu_ctr eq "TIME"} {
-        return [_SC_INTERNALS::sc_lib_read_csr time]
+        return [sc_fpga_read_reg time]
     }
     if {$pmu_ctr eq "IR"} {
-        return [_SC_INTERNALS::sc_lib_read_csr minstret]
+        return [sc_fpga_read_reg minstret]
     }
     set pmu_ctr_idx [lsearch -nocase $ctx $pmu_ctr]
     if {$pmu_ctr_idx == -1} {
@@ -290,7 +300,9 @@ proc sc_experimental_pmu_get { ctx pmu_ctr } {
     set reg_idx [expr { 3 + $pmu_ctr_idx } ]
     set counter_reg_name mhpmcounter${reg_idx}
     _SC_INTERNALS::sc_lib_print "reading $counter_reg_name as $pmu_ctr counter"
-    return [_SC_INTERNALS::sc_lib_read_csr $counter_reg_name]
+    set result [sc_fpga_read_reg $counter_reg_name]
+    _SC_INTERNALS::sc_lib_print "done"
+    return $result
 }
 
 ## @return "context" object. This object should be passed to
