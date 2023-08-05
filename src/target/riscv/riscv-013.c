@@ -1357,6 +1357,11 @@ static int register_read_progbuf(struct target *target, uint64_t *value,
 {
 	assert(target->state == TARGET_HALTED);
 
+	if (number >= GDB_REGNO_ZERO && number <= GDB_REGNO_XPR31) {
+		LOG_ERROR("GPR %s should not be read via progbuf", gdb_regno_name(number));
+		return ERROR_FAIL;
+	}
+
 	struct riscv_program program;
 	riscv_program_init(&program, target);
 
@@ -1431,8 +1436,12 @@ static int register_write_progbuf(struct target *target, enum gdb_regno number,
 {
 	assert(target->state == TARGET_HALTED);
 
-	struct riscv_program program;
+	if (number >= GDB_REGNO_ZERO && number <= GDB_REGNO_XPR31) {
+		LOG_ERROR("GPR %s should not be written via progbuf", gdb_regno_name(number));
+		return ERROR_FAIL;
+	}
 
+	struct riscv_program program;
 	riscv_program_init(&program, target);
 
 	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
