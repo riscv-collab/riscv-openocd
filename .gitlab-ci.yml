@@ -7,6 +7,7 @@ stages:
 variables:
   GIT_DEPTH: 5000
   IMAGE: cpp_ubuntu_18
+  ASSUME_RELEASE: "false"
 
 workflow:
   rules:
@@ -50,9 +51,12 @@ default:
       -m $BUILD_DIR --cache-mount-base .makepy/artifacts/cache --credentials "$MAKEPY_CREDS"
     # Install conan settings, profiles, remotes, toolchains and login to the registry.
     - ./make.py --image $IMAGE conan-config --credentials "$MAKEPY_CREDS"
+    - ASSUME_RELEASE_ARG=$([[ "$ASSUME_RELEASE" != "true" ]] || echo "--assume-release")
     - CONAN_USER=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info user)
-    - CONAN_CHANNEL=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info channel)
-    - PACKAGE_NAME=$(./make.py --no-history-dump --image $IMAGE --logging-level error conan-info package)
+    - CONAN_CHANNEL=$(./make.py --no-history-dump --image $IMAGE --logging-level error
+        conan-info channel $ASSUME_RELEASE_ARG)
+    - PACKAGE_NAME=$(./make.py --no-history-dump --image $IMAGE --logging-level error
+        conan-info package $ASSUME_RELEASE_ARG)
     - RELEASE_STRING=$(echo -e "$CI_COMMIT_MESSAGE" | sed -rn 's/^SYNTACORE_RELSTR'":"' (.*)/\1/p' | xargs)
     - ./make.py --image $IMAGE distr-prep -r "$RELEASE_STRING"
   after_script:
@@ -122,7 +126,7 @@ deploy:
     - ./make.py --image $IMAGE conan upload --remote syntacore --check "$PACKAGE_NAME"
     - ./make.py --image $IMAGE conan install
       --profile:host $PROFILE --remote syntacore --requires "$PACKAGE_NAME" --lockfile-partial
-      --output-folder $BUILD_DIR/deploy --deploy .makepy/support/utils/conan_the_deployer.py
+      --output-folder $BUILD_DIR/deploy --deployer .makepy/support/utils/conan_the_deployer.py
     - ./make.py sh .makepy/support/utils/upload_development_build.sh
       $(find $BUILD_DIR/deploy -maxdepth 1 -name '*bundle*') $API_KEY
 

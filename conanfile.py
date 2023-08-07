@@ -204,5 +204,7 @@ class Package(_conan.ConanFile):
         # introduce an unnecessary confusion in client codebase.
         self.buildenv_info.define("RISCV_OPENOCD_DIR", self.package_folder)
         self.runenv_info.define("RISCV_OPENOCD_DIR", self.package_folder)
+        self.buildenv_info.define("SC_RISCV_OPENOCD_PATH", self.package_folder)
+        self.runenv_info.define("SC_RISCV_OPENOCD_PATH", self.package_folder)
         self.cpp_info.includedirs = []  # no includes
         self.cpp_info.libdirs = []  # no libraries to link against
