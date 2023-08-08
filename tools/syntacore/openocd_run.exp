@@ -346,41 +346,38 @@ proc deriveAdapterInformation { Device } {
 
 proc detectDebugAdapters { UsbDevices } {
   global SETTINGS
-  # Not tested: Future Technology Devices International, Ltd FT2232C/D/H
-  set ExprDigilent "Future Technology Devices International, Ltd FT232H"
-  set ExprOlimex "Olimex Ltd. ARM-USB-OCD-H JTAG+RS232"
-  set ExprOlimexTiny "Olimex Ltd. ARM-USB-TINY-H JTAG"
-  # NOTE: I've seen both "SEGGER J-Link" and "SEGGER"
-  set ExprJlink "SEGGER"
-  # For internal debug, do not use in production
-  set ExprDebugOnlyIntel "Intel"
-  set AdapterExpressions [list \
-    $ExprDigilent \
-    $ExprOlimex \
-    $ExprOlimexTiny \
-    $ExprJlink \
-  ]
-  if { [debugModeEnabled] } {
-    lappend AdapterExpressions $ExprDebugOnlyIntel
-  }
-
-  set ResultList {}
+  set AdaptersList {}
   set Devices [split $UsbDevices "\n"]
   foreach Device $Devices {
-    if { $SETTINGS(unlock_usb_devices) != "" } {
-      lappend ResultList [deriveAdapterInformation $Device]
-      continue
-    }
-    # todo: maybe switch -glob?
+    lappend AdaptersList [deriveAdapterInformation $Device]
+  }
+  if { $SETTINGS(unlock_usb_devices) != "" } {
+    return $AdaptersList
+  }
+  # Not tested: Future Technology Devices International, Ltd FT2232C/D/H
+  set AdapterExpressions [list \
+    "Future Technology Devices International, Ltd FT232H" \
+    "Olimex Ltd. ARM-USB-OCD-H JTAG+RS232" \
+    "Olimex Ltd. ARM-USB-TINY-H JTAG" \
+    "SEGGER" \
+  ]
+  if { [debugModeEnabled] } {
+    # For internal debug, do not use in production
+    lappend AdapterExpressions "Intel"
+  }
+  set FilteredList {}
+  # now, AdaptersList contains serial numbers but we ignore this and just
+  # match
+  foreach Device $AdaptersList {
     foreach Expr $AdapterExpressions {
+      # todo: maybe switch -glob?
       if {[string first $Expr $Device] != -1} {
-        lappend ResultList [deriveAdapterInformation $Device]
+        lappend FilteredList $Device
         break
       }
     }
   }
-
-  return $ResultList
+  return $FilteredList
 }
 
 proc selectDebugAdapter { DebugAdapters } {
