@@ -269,9 +269,31 @@ proc deriveDesiredVerbosityOption {} {
   }
 }
 
+proc getAdapterInterfaceConfigDirectory {} {
+  return "[getOpenOCDRootDir]/share/openocd/scripts/interface"
+}
+
+proc findDebugInterfaceConfigPath {ConfigurationFile} {
+  # we always specify absolute paths to configuration files
+  if {[string first / $ConfigurationFile] != 0} {
+    if {[string first share $ConfigurationFile] == 0} {
+      set FullPath "[getOpenOCDRootDir]/$ConfigurationFile"
+    } else {
+      set DebugInterfaceFiles [getAdapterInterfaceConfigDirectory]
+      set FullPath "${DebugInterfaceFiles}/$ConfigurationFile"
+    }
+  }
+
+  if {[file exists $FullPath]} {
+    return $FullPath
+  }
+
+  error "could not derive path to debug interface config: $ConfigurationFile"
+}
+
 proc deriveAdapterConfig { Adapter } {
   global SETTINGS
-  set DebugInterfaceFiles "[getOpenOCDRootDir]/share/openocd/scripts/interface"
+  set DebugInterfaceFiles [getAdapterInterfaceConfigDirectory]
 
   set KNOWN_CONFIGS(digilent) "ftdi/digilent-hs2a.cfg"
   set KNOWN_CONFIGS(olimex) "ftdi/olimex-arm-usb-ocd-h.cfg"
@@ -314,20 +336,11 @@ proc deriveAdapterConfig { Adapter } {
     }
   }
 
-  # we always specify absolute paths to configuration files
-  if {[string first / $SelectedConfig] != 0} {
-    if {[string first share $SelectedConfig] == 0} {
-      set SelectedConfig "[getOpenOCDRootDir]/$SelectedConfig"
-    } else {
-      set SelectedConfig "${DebugInterfaceFiles}/$SelectedConfig"
-    }
-  }
-
   send_user -- "selected debug interface config: $SelectedConfig\n"
-  if {[file exists $SelectedConfig]} {
-    return $SelectedConfig
+  if {[catch {findDebugInterfaceConfigPath $SelectedConfig} FullConfigPath]} {
+    fatalError "$FullConfigPath"
   }
-  fatalError "could not find selected debug interface config"
+  return $FullConfigPath
 }
 
 proc deriveAdapterInformation { Device } {
