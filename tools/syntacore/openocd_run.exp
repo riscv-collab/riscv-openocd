@@ -13,12 +13,16 @@
 # If you experience difficulties using the tool or would like to introduce new
 # functionality - feel free to contact OpenOCD maintainer at Syntacore.
 
+set STAND_DB_DEFAULT_PATH ~/.stand_db/openocd_adapters
+
 set COMMAND_LINE_OPTIONS [dict create \
   --bindto "value:value. issue bindto configuration command. Typically this is something like 0.0.0.0" \
   --bitbang-port "devel:value:port. rbb port (for connection to spike simulator)" \
   --configure-hook "value:script_file. script to execute during configuration phase. The file is loaded right before init" \
   --debug-adapter-index "value:index. specify selected adapter" \
   --debug-adapter-serial "value:serial. specify serial number of debug adapter" \
+  --auto-config "flag. try to guess which configuration file should be used for debug adapter" \
+  --stand-db "value:path. path to stand database file. Defaults to `$STAND_DB_DEFAULT_PATH`. Use /dev/null to disable" \
   --disable-interactive-mode "flag. disables interactive selection of debug adapter" \
   --help "flag. prints this help" \
   --ide-mode "flag. hide most of CSRs. Useful if you want to debug an application using IDE (like Eclipse)" \
@@ -46,6 +50,8 @@ foreach OptKey [dict keys $COMMAND_LINE_OPTIONS] {
 
 set SETTINGS(help_mode) 0
 set SETTINGS(interactive) 1
+set SETTINGS(stand_db) $STAND_DB_DEFAULT_PATH
+set SETTINGS(autoconfig) 0
 set SETTINGS(smp) 0
 set SETTINGS(spike_mode) 0
 set SETTINGS(spike_harts) 1
@@ -53,8 +59,6 @@ set SETTINGS(bitbang_port) 0
 set SETTINGS(spike_bin) ""
 set SETTINGS(adapter_index) ""
 set SETTINGS(adapter_serial) ""
-set SETTINGS(save_at) ""
-set SETTINGS(load_from) ""
 set SETTINGS(adapter_speed) 0
 set SETTINGS(save_selection) 0
 set SETTINGS(scan_only) 0
@@ -161,6 +165,8 @@ for { set i 0 } { $i < $argc } { incr i } {
 
   if { $option == $COMMAND_LINE_ARG(--disable-interactive-mode)} {
     set SETTINGS(interactive) 0
+  } elseif { $option == $COMMAND_LINE_ARG(--auto-config) } {
+    set SETTINGS(autoconfig) 1
   } elseif { $option == $COMMAND_LINE_ARG(--scan-only) } {
     set SETTINGS(scan_only) 1
   } elseif { $option == $COMMAND_LINE_ARG(--smp) } {
@@ -177,10 +183,6 @@ for { set i 0 } { $i < $argc } { incr i } {
   } elseif { $option == $COMMAND_LINE_ARG(--run-command) } {
     lappend SETTINGS(extra_run_commands) -c
     lappend SETTINGS(extra_run_commands) $optarg
-  } elseif { $option == $COMMAND_LINE_ARG(--save) } {
-    set SETTINGS(save_at) $optarg
-  } elseif { $option == $COMMAND_LINE_ARG(--load) } {
-    set SETTINGS(load_from) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--bitbang-port) } {
     set SETTINGS(spike_mode) 1
     set SETTINGS(bitbang_port) $optarg
@@ -211,6 +213,8 @@ for { set i 0 } { $i < $argc } { incr i } {
     set SETTINGS(unlock_usb_devices) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--log-session) } {
     set SETTINGS(log_session) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--stand-db) } {
+    set SETTINGS(stand_db) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--help) } {
     set SETTINGS(help_mode) 1
   } else {
@@ -275,7 +279,7 @@ proc getAdapterInterfaceConfigDirectory {} {
 
 proc findDebugInterfaceConfigPath {ConfigurationFile} {
   # we always specify absolute paths to configuration files
-  set FullPath $ConfigurationFile
+  set FullPath "$ConfigurationFile"
   if {[string first / $ConfigurationFile] != 0} {
     if {[string first share $ConfigurationFile] == 0} {
       set FullPath "[getOpenOCDRootDir]/$ConfigurationFile"
@@ -289,7 +293,69 @@ proc findDebugInterfaceConfigPath {ConfigurationFile} {
     return $FullPath
   }
 
-  error "could not derive path to debug interface config: $ConfigurationFile"
+  error "could not derive path to debug interface config: `$ConfigurationFile`"
+}
+
+array set STAND_DB {}
+proc readStandDatabase {} {
+  global SETTINGS
+  global STAND_DB
+  if { $SETTINGS(stand_db) eq "/dev/null" } {
+    send_user -- "NOTE: stand database disabled (user request)\n"
+    return
+  }
+  send_user -- "NOTE: reading stand database from $SETTINGS(stand_db)\n"
+  set StandDatabasePath [file normalize $SETTINGS(stand_db)]
+  send_user -- "NOTE: reading stand database from ${StandDatabasePath}\n"
+  if {![file exists "$StandDatabasePath"]} {
+    send_user -- "NOTE: stand database not found, ignoring\n"
+    return
+  }
+  if {[catch {exec cat "$StandDatabasePath"} DatabaseContents]} {
+    send_user -- "NOTE: could not read stand database contents ($StandDatabasePath), ignoring\n"
+    return
+  }
+  set stand_db_records [split $DatabaseContents \n]
+  foreach record $stand_db_records {
+    set trimmed_string [string trim $record]
+    # treat these as comments
+    if {([string first "#" $trimmed_string] == 0) || ([string length $trimmed_string] == 0)} {
+      continue
+    }
+    set SpaceIdx [string first " " $trimmed_string]
+    if { $SpaceIdx == -1 } {
+      fatalError "incorrect format of stand_db entry! Expecting `serial config`...\n-->$record"
+    }
+    set Serial [string trim [string range $trimmed_string 0 $SpaceIdx]]
+    set ConfigPath [string trim [string range $trimmed_string $SpaceIdx end]]
+
+    if {[catch {findDebugInterfaceConfigPath $ConfigPath} ResolvedConfigPath]} {
+      fatalError "$ResolvedConfigPath (from stand_db file)\n-->$trimmed_string"
+    }
+    if {[info exists STAND_DB($Serial)]} {
+      fatalError "duplicated adapter serial ($Serial) detected while reading stand_db"
+    }
+    set STAND_DB($Serial) $ResolvedConfigPath
+  }
+  if {[debugModeEnabled]} {
+    send_user -- "Stand database contents:\n"
+    parray STAND_DB
+  }
+}
+
+proc checkIfStandDBActive {} {
+  global STAND_DB
+  return [expr [llength [array names STAND_DB]] > 0]
+}
+
+proc lookupAdapterInDatabase { Adapter } {
+  global STAND_DB
+  foreach Serial [array names STAND_DB] {
+    if {[string first "$Serial| " $Adapter] == 0} {
+      return $Serial
+    }
+  }
+  return ""
 }
 
 proc deriveAdapterConfig { Adapter } {
@@ -325,23 +391,29 @@ proc deriveAdapterConfig { Adapter } {
       set SelectedConfig $SETTINGS(unlock_usb_devices)
     }
   } else {
-    switch -nocase -glob -- "$Adapter" {
-      "*Future*" { set SelectedConfig $KNOWN_CONFIGS(digilent) }
-      "*Olimex*ARM-USB-TINY-H*" { set SelectedConfig $KNOWN_CONFIGS(olimex_tiny) }
-      "*Olimex*" { set SelectedConfig $KNOWN_CONFIGS(olimex) }
-      "*SEGGER*" { set SelectedConfig $KNOWN_CONFIGS(jlink) }
-      "*Intel*"  { set SelectedConfig "OnlyForInternalScriptDebugMode" }
-      default {
-        fatalError "could not derive adapter configuration for $Adapter"
+    set StandDBSerial [lookupAdapterInDatabase $Adapter]
+    if {$StandDBSerial ne "" } {
+      global STAND_DB
+      set SelectedConfig $STAND_DB($StandDBSerial)
+    } else {
+      switch -nocase -glob -- "$Adapter" {
+        "*Future*" { set SelectedConfig $KNOWN_CONFIGS(digilent) }
+        "*Olimex*ARM-USB-TINY-H*" { set SelectedConfig $KNOWN_CONFIGS(olimex_tiny) }
+        "*Olimex*" { set SelectedConfig $KNOWN_CONFIGS(olimex) }
+        "*SEGGER*" { set SelectedConfig $KNOWN_CONFIGS(jlink) }
+        "*Intel*"  { set SelectedConfig "OnlyForInternalScriptDebugMode" }
+        default {
+          fatalError "could not derive adapter configuration for $Adapter"
+        }
       }
     }
   }
 
   send_user -- "selected debug interface config: $SelectedConfig\n"
-  if {[catch {findDebugInterfaceConfigPath $SelectedConfig} FullConfigPath]} {
-    fatalError "$FullConfigPath"
+  if {[catch {findDebugInterfaceConfigPath $SelectedConfig} ResolvedConfigPath]} {
+    fatalError "$ResolvedConfigPath"
   }
-  return $FullConfigPath
+  return $ResolvedConfigPath
 }
 
 proc deriveAdapterInformation { Device } {
@@ -365,9 +437,21 @@ proc detectDebugAdapters { UsbDevices } {
   foreach Device $Devices {
     lappend AdaptersList [deriveAdapterInformation $Device]
   }
-  if { $SETTINGS(unlock_usb_devices) != "" } {
-    return $AdaptersList
+  return $AdaptersList
+}
+
+proc reportDroppedAdapters { OriginalList FilteredList Reason} {
+  set NumAdaptersLeft [llength $FilteredList]
+  set NumOriginalAdapters [llength $OriginalList]
+  if { $NumOriginalAdapters != $NumAdaptersLeft } {
+    set NumExcluded [expr $NumOriginalAdapters - $NumAdaptersLeft]
+    send_user -- "NOTE: $NumExcluded (of $NumOriginalAdapters) debug adapters excluded ($Reason)\n"
   }
+}
+
+# if user requested autoconf option, then by default display only "known"
+# adapters, that is the ones for which we have hard-coded configuration rules
+proc excludeNonAutoconfigurableAdapters { AdaptersList } {
   # Not tested: Future Technology Devices International, Ltd FT2232C/D/H
   set AdapterExpressions [list \
     "Future Technology Devices International, Ltd FT232H" \
@@ -391,6 +475,23 @@ proc detectDebugAdapters { UsbDevices } {
       }
     }
   }
+  reportDroppedAdapters $AdaptersList $FilteredList "not auto-configurable"
+  return $FilteredList
+}
+
+proc excludeAdaptersNotInDatabase { AdaptersList } {
+  global STAND_DB
+  if {![checkIfStandDBActive]} {
+    return $AdaptersList
+  }
+  set FilteredList {}
+  foreach Adapter $AdaptersList {
+    if {[lookupAdapterInDatabase $Adapter] ne ""} {
+      lappend FilteredList $Adapter
+      continue
+    }
+  }
+  reportDroppedAdapters $AdaptersList $FilteredList "stand_db filtering"
   return $FilteredList
 }
 
@@ -826,15 +927,6 @@ proc runOpenOCD {DebugInterfaceCfg AdapterSerial TapCount} {
     expectForTelnetServer $OpenOCDSpawnID $TARGETS_EXAMINE_TIMEOUT
   }
 
-  if { $SETTINGS(save_at) ne "" } {
-    if {[catch {saveAdapterConfiguration $SETTINGS(save_at)} result]} {
-      printErrorMessage "$result"
-      close
-      wait
-      exit 1
-    }
-  }
-
   if {$SETTINGS(telnet) == 1} {
     runTelnetClient $OpenOCDSpawnID
   } else {
@@ -901,30 +993,18 @@ proc deriveAdapterConfiguration { } {
   if {$SETTINGS(spike_mode) == 1} {
     return
   }
-  if {$SETTINGS(load_from) != ""} {
-    if {[catch {exec cat "$SETTINGS(load_from)"} AdapterInfo]} {
-      fatalError "could not load adapter info from $SETTINGS(load_from)"
-    }
-    set Lines [split $AdapterInfo \n]
-    if {[llength $Lines] != 3} {
-      fatalError "incorrect format for adapter configuration"
-    }
-    set Skip \
-      [fetchConfigurationValueFromFileString [getWarningPrefixForConfig] [lindex $Lines 0]]
-    set Adapter \
-      [fetchConfigurationValueFromFileString [getAdapterIDPrefixForConfig] [lindex $Lines 1]]
-    set DEBUG_ADAPTER_INFO(selected_speed) \
-      [fetchConfigurationValueFromFileString [getAdapterSpeedPrefixForConfig] [lindex $Lines 2]]
-    send_user -- "adapter information loaded from $SETTINGS(load_from)\n"
-    send_user -- "  adapter id: $Adapter\n"
-    send_user -- "  adapter speed: $DEBUG_ADAPTER_INFO(selected_speed)\n"
-    send_user -- "---\n"
+  set USB_LISTING [exec lsusb]
+  set DebugAdapters [detectDebugAdapters "${USB_LISTING}"]
+  if { $SETTINGS(autoconfig) == 1 } {
+    set DebugAdapters [excludeNonAutoconfigurableAdapters $DebugAdapters]
   } else {
-    set USB_LISTING [exec lsusb]
-    set DebugAdapters [detectDebugAdapters "${USB_LISTING}"]
-    set AdapterIndex [selectDebugAdapter $DebugAdapters]
-    set Adapter [lindex $DebugAdapters $AdapterIndex]
+    readStandDatabase
+    set DebugAdapters [excludeAdaptersNotInDatabase $DebugAdapters]
   }
+
+  set AdapterIndex [selectDebugAdapter $DebugAdapters]
+  set Adapter [lindex $DebugAdapters $AdapterIndex]
+
   set DEBUG_ADAPTER_INFO(adapter_id) $Adapter
   if {[expr {$SETTINGS(adapter_speed) > 0}]} {
     set DEBUG_ADAPTER_INFO(selected_speed) $SETTINGS(adapter_speed)
@@ -949,5 +1029,4 @@ runSpikeIfNeeded
 runOpenOCD $AdapterConfig $AdapterSerial $TapCount
 
 # TODO:
-# Automatically load OS-provided scripts (once they are integrated)
 # CHECK for pre-requisites: lsubsb, cat, kill

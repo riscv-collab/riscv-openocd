@@ -32,12 +32,6 @@ proc run_test {} {
     [list --bindto 0.0.0.0] bindto]
 
   lappend Logs [just_run_with_command \
-    [list --save ${bin_prefix}_cfg.dat] save_cfg]
-
-  lappend Logs [just_run_with_command \
-    [list --load ${bin_prefix}_cfg.dat] load_cfg]
-
-  lappend Logs [just_run_with_command \
     [list --smp] smp]
 
   lappend Logs [just_run_with_command \
