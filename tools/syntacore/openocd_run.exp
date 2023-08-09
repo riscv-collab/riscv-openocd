@@ -533,7 +533,7 @@ proc selectDebugAdapter { DebugAdapters } {
     if { [expr { $AdapterIndex >= [llength $DebugAdapters] }] } {
       fatalError "$AdapterIndex is not a corect index"
     }
-    send_user -- "Adapter Index: $AdapterIndex (derived from command line or loaded from config)\n"
+    send_user -- "Adapter Index: $AdapterIndex (derived from command line)\n"
     return $AdapterIndex
   }
 
@@ -949,42 +949,6 @@ proc runOpenOCD {DebugInterfaceCfg AdapterSerial TapCount} {
   }
   send_user -- "OpenOCD exit code indicates SUCCESS\n"
   exit 0
-}
-
-proc fetchConfigurationValueFromFileString { Prefix Line } {
-  if {[string first $Prefix $Line] == 0} {
-    set PrefixLen [string length $Prefix]
-    return [string range $Line $PrefixLen end]
-  }
-  fatalError "could not find prefix $Prefix in configuration line $Line"
-}
-
-proc getWarningPrefixForConfig {} {
-  return "# WARNING!"
-}
-proc getAdapterIDPrefixForConfig {} {
-  return "ADAPTER_ID="
-}
-proc getAdapterSpeedPrefixForConfig {} {
-  return "ADAPTER_SPEED="
-}
-
-proc saveAdapterConfiguration { FilePath } {
-  global DEBUG_ADAPTER_INFO
-  set AdapterID "[getAdapterIDPrefixForConfig]$DEBUG_ADAPTER_INFO(adapter_id)"
-  set AdapterSpeed "[getAdapterSpeedPrefixForConfig]$DEBUG_ADAPTER_INFO(selected_speed)"
-  set WarningMessage "[getWarningPrefixForConfig] This file was auto-generated. Do not edit"
-  set ConfigData [join [list $WarningMessage $AdapterID $AdapterSpeed] \n]
-  if {[catch {exec echo $ConfigData >$FilePath} r]} {
-    error "could not save adapter information"
-  }
-  send_user -- [string cat [join \
-    [list "adapter information saved to $FilePath" \
-       "---" \
-       "   $WarningMessage" \
-       "   $AdapterID" \
-       "   $AdapterSpeed" \
-       "---"] "\n"] "\n"]
 }
 
 proc deriveAdapterConfiguration { } {
