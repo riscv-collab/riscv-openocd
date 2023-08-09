@@ -1,0 +1,31 @@
+proc run_test {} {
+  # NOTE: if target is a simulator - this test is unsupported
+  if {[target_info sim] ne ""} {
+    return [ocd_test_unsupported]
+  }
+  # NOTE: implement board property to identify if stand supports auto-config
+
+  set LogSerialMismatch [utils_spawn_universal_launcher \
+    [list \
+      --stand-db /dev/null \
+      --debug-adapter-serial "[standInfoGet adapter_id]" \
+      --auto-config \
+      --run-command shutdown \
+    ] \
+    serial_match \
+    expect_success]
+
+  set LogSerialMismatch [utils_spawn_universal_launcher \
+    [list \
+      --stand-db /dev/null \
+      --auto-config \
+      --debug-adapter-serial DUMMY_SERIAL
+    ] \
+    serial_mismatch  \
+    expect_failure]
+  exec grep --text -F "Error: could not match existing adapters against the specified serial DUMMY_SERIAL" $LogSerialMismatch
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

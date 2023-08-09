@@ -1,0 +1,66 @@
+proc run_test {} {
+  # NOTE: if target is a simulator - this test is unsupported
+  if {[target_info sim] ne ""} {
+    return [ocd_test_unsupported]
+  }
+  set BoardSerial [standInfoGet adapter_id]
+  set AdapterConfig [standInfoGet adapter_config]
+  set BinPrefix [tool_state_get default_bin_prefix]
+  set TestStandDatabase "${BinPrefix}_test_stand_db.db"
+  exec echo "$BoardSerial $AdapterConfig\nDUMMY_SERIAL jlink.cfg" >$TestStandDatabase
+
+  set LogStandDBMatch [utils_spawn_universal_launcher \
+    [list --stand-db $TestStandDatabase --run-command shutdown] \
+    stand_db_match  \
+    expect_success]
+
+  set LogStandDBErrDuplicate [utils_spawn_universal_launcher \
+    [list \
+      --stand-db [ocdtlb_test_resource_path stand_db_err_duplicate_keys.db] \
+    ] \
+    duplicates  \
+    expect_failure]
+  exec grep --text -F "Error: duplicated adapter serial (2) detected while reading stand_db" $LogStandDBErrDuplicate
+
+  set LogStandDBNonExistentEntry [utils_spawn_universal_launcher \
+    [list \
+      --stand-db [ocdtlb_test_resource_path stand_db_err_non_existent_entry.db] \
+    ] \
+    non_existent_entry  \
+    expect_failure]
+  exec grep --text -F "Error: could not derive path to debug interface config: `non-existent-entry` (from stand_db file)" $LogStandDBNonExistentEntry
+
+  set LogStandDBNoMatch [utils_spawn_universal_launcher \
+    [list \
+      --stand-db [ocdtlb_test_resource_path stand_db_valid_nomatch.db] \
+    ] \
+    no_matched  \
+    expect_failure]
+  exec grep --text -F "No Debug Adapters Found" $LogStandDBNoMatch
+  # TODO: test with absolute path
+
+  # TODO: this should work only if auto-config supported (check board property)
+  set LogStandDBDisabled [utils_spawn_universal_launcher \
+    [list \
+      --stand-db /dev/null \
+      --debug-adapter-serial "[standInfoGet adapter_id]" \
+      --run-command shutdown \
+    ] \
+    stand_db_disabled \
+    expect_success]
+  exec grep --text -F "NOTE: stand database disabled (user request)" $LogStandDBDisabled
+
+  set LogStandDBNotFound [utils_spawn_universal_launcher \
+    [list \
+      --stand-db /tmp/blabla/bleh/bla/ble/bla/blue/really/not_found.db \
+      --debug-adapter-serial "[standInfoGet adapter_id]" \
+      --run-command shutdown \
+    ] \
+    stand_db_not_found \
+    expect_success]
+  exec grep --text -F "NOTE: stand database not found, ignoring" $LogStandDBNotFound
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

@@ -1,0 +1,4 @@
+SERIAL_1 chameleon.cfg
+SERIAL_2 beaglebone-jtag-native.cfg
+SERIAL_3 openjtag.cfg
+SERIAL_4 stlink.cfg

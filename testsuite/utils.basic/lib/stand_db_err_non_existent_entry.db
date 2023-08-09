@@ -1,0 +1,4 @@
+1 ftdi/digilent-hs2a.cfg
+2 jlink.cfg
+3 openjtag.cfg
+4 non-existent-entry
