@@ -76,7 +76,6 @@ set SETTINGS(extra_run_commands) []
 set SETTINGS(extra_spike_args) []
 
 set DEBUG_ADAPTER_INFO(adapter_id) ""
-set DEBUG_ADAPTER_INFO(selected_speed) 0
 set DEBUG_ADAPTER_INFO(adapter_serial) 0
 set DEBUG_ADAPTER_INFO(openocd_config) 0
 
@@ -267,6 +266,10 @@ proc getOpenOCDRootDir {} {
 
 proc openocdBinary {} {
   return "[getOpenOCDRootDir]/bin/openocd"
+}
+
+proc getDefaultJTAGSpeed {} {
+  return 500
 }
 
 proc deriveDesiredVerbosityOption {} {
@@ -571,10 +574,16 @@ proc detectNumberOfTaps {DebugInterface AdapterSerial} {
   if {$SETTINGS(spike_mode) == 1} {
     return 1
   }
+
+  set ScanSpeed [getDefaultJTAGSpeed]
+  if {$SETTINGS(adapter_speed) > 0 && $SETTINGS(adapter_speed) < $ScanSpeed} {
+    set ScanSpeed $SETTINGS(adapter_speed)
+  }
+
   set TapListCommand [list \
     -f $DebugInterface \
     -c "transport select jtag" \
-    -c "adapter speed 500" \
+    -c "adapter speed $ScanSpeed" \
     -c "adapter serial $AdapterSerial" \
     -c "noinit" \
     "[deriveDesiredVerbosityOption]" \
@@ -630,7 +639,7 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
     set OpenOCDArgs [list \
       -f "$DebugInterfaceCfg" \
       -c "transport select jtag" \
-      -c "adapter speed 500" \
+      -c "adapter speed [getDefaultJTAGSpeed]" \
       -c "adapter serial $AdapterSerial" \
       -f "$SyntacoreConfigFile" \
       -c "sc_target_config harts_num $NumberOfHarts"]
@@ -981,9 +990,6 @@ proc deriveAdapterConfiguration { } {
   set Adapter [lindex $DebugAdapters $AdapterIndex]
 
   set DEBUG_ADAPTER_INFO(adapter_id) $Adapter
-  if {[expr {$SETTINGS(adapter_speed) > 0}]} {
-    set DEBUG_ADAPTER_INFO(selected_speed) $SETTINGS(adapter_speed)
-  }
   set DEBUG_ADAPTER_INFO(adapter_serial) [lindex [split $Adapter "|"] 0]
   set DEBUG_ADAPTER_INFO(openocd_config) [deriveAdapterConfig $Adapter]
 
