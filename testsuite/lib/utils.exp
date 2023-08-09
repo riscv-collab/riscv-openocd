@@ -107,6 +107,7 @@ proc utils_spawn_universal_launcher { args \
     }
     timeout {
       verbose "  universal launcher execution resulted in timeout" 1
+      exec kill -s SIGINT [exp_pid -i $spawn_id]
       close
       wait
       sleep [target_info env,exec_delay]
