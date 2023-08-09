@@ -16,13 +16,12 @@
 set STAND_DB_DEFAULT_PATH ~/.stand_db/openocd_adapters
 
 set COMMAND_LINE_OPTIONS [dict create \
+  --auto-config "flag. try to guess which configuration file should be used for debug adapter" \
   --bindto "value:value. issue bindto configuration command. Typically this is something like 0.0.0.0" \
   --bitbang-port "devel:value:port. rbb port (for connection to spike simulator)" \
   --configure-hook "value:script_file. script to execute during configuration phase. The file is loaded right before init" \
   --debug-adapter-index "value:index. specify selected adapter" \
   --debug-adapter-serial "value:serial. specify serial number of debug adapter" \
-  --auto-config "flag. try to guess which configuration file should be used for debug adapter" \
-  --stand-db "value:path. path to stand database file. Defaults to `$STAND_DB_DEFAULT_PATH`. Use /dev/null to disable" \
   --disable-interactive-mode "flag. disables interactive selection of debug adapter" \
   --help "flag. prints this help" \
   --ide-mode "flag. hide most of CSRs. Useful if you want to debug an application using IDE (like Eclipse)" \
@@ -40,6 +39,7 @@ set COMMAND_LINE_OPTIONS [dict create \
   --spike-arg "devel:value:arg. command line element to append to spike options list" \
   --spike-bin "devel:value:spike_bin_and_executable. spike_binary:executable to run" \
   --spike-harts "devel:value:harts_num. number of harts spike should create" \
+  --stand-db "value:path. path to stand database file. Defaults to `$STAND_DB_DEFAULT_PATH`. Use /dev/null to disable" \
   --telnet "flag. connect with telnet client to the OpenOCD server when any hart is examined successfully" \
   --verbose "flag. run OpenOCD with -d3 flag" \
 ]
@@ -131,6 +131,8 @@ proc printUsage {} {
   printOptionList $UserOptions
   send_user -- "Development-only Options:\n"
   printOptionList $DevelOptions
+  send_user -- "Dependencies:\n"
+  send_user -- "  lsusb, telnet (optional)\n"
 }
 
 # YES! this is how we roll in 2023...
@@ -233,10 +235,6 @@ if {$SETTINGS(help_mode) == 1} {
 
 if {[auto_execok lsusb] eq ""} {
   fatalError "the script requires 'lsusb' utility to work properly"
-}
-
-if {[auto_execok telnet] eq ""} {
-  fatalError "the script requires 'telnet' utility to work properly"
 }
 
 if {$SETTINGS(interactive) == 0} {
@@ -850,6 +848,10 @@ proc interactWithTelnetClient { OpenOCDSpawnID TelnetID OpenOCDLogID } {
 proc runTelnetClient { OpenOCDSpawnID } {
   global SETTINGS
 
+  if {[auto_execok telnet] eq ""} {
+    fatalError "the script requires 'telnet' utility to work properly"
+  }
+
   if {$SETTINGS(log_session) ne "" } {
     set OpenOCDLogPath $SETTINGS(log_session).openocd.log
   } else {
@@ -1000,6 +1002,3 @@ set AdapterSerial $DEBUG_ADAPTER_INFO(adapter_serial)
 set TapCount [detectNumberOfTaps $AdapterConfig $AdapterSerial]
 runSpikeIfNeeded
 runOpenOCD $AdapterConfig $AdapterSerial $TapCount
-
-# TODO:
-# CHECK for pre-requisites: lsubsb, cat, kill
