@@ -17,6 +17,16 @@ set_board_info cpu,has_watchpoints_napot 0
 set_board_info cpu,has_watchpoints_gelt 0
 set_board_info cpu,has_watchpoints_data_mask 0
 
+set_board_info cpu,sv32 0
+set_board_info cpu,sv39 0
+set_board_info cpu,sv48 0
+set_board_info cpu,sv57 0
+
+set_board_info cpu,sv32x4 0
+set_board_info cpu,sv39x4 0
+set_board_info cpu,sv48x4 0
+set_board_info cpu,sv57x4 0
+
 set_board_info cpu,misaligned_access_support 0
 
 set_board_info cpu,dm_abstract_csr 1
@@ -24,4 +34,3 @@ set_board_info cpu,dm_abstract_fpr 0
 
 add_board_info cflags   -march=$TGT_ARCH
 add_board_info cflags   -mabi=ilp32d
-

@@ -48,6 +48,14 @@ proc tsuplib_target_info_check {} {
     cpu,has_watchpoints_napot \
     cpu,has_watchpoints_gelt \
     cpu,has_watchpoints_data_mask \
+    cpu,sv32 \
+    cpu,sv39 \
+    cpu,sv48 \
+    cpu,sv57 \
+    cpu,sv32x4 \
+    cpu,sv39x4 \
+    cpu,sv48x4 \
+    cpu,sv57x4 \
     cpu,misaligned_access_support \
     cpu,dm_abstract_csr \
     cpu,dm_abstract_fpr \
