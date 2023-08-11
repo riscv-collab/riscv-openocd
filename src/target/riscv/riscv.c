@@ -221,7 +221,7 @@ static const virt2phys_info_t sv48x4 = {
 	.pte_ppn_shift = {10, 19, 28, 37},
 	.pte_ppn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ffff},
 	.pa_ppn_shift = {12, 21, 30, 39},
-	.pa_ppn_mask = {0x1ff, 0x1ff, 0x1ff, 0x7ffff},
+	.pa_ppn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ffff},
 };
 
 static enum riscv_halt_reason riscv_halt_reason(struct target *target);
