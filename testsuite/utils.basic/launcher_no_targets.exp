@@ -1,0 +1,18 @@
+proc run_test {} {
+  set test_script_path [ocdtlb_test_resource_path run_script_no_targets.tcl]
+
+  set LogFile [utils_spawn_universal_launcher \
+    [list --verbose --no-targets \
+      --run-script $test_script_path \
+      --run-command shutdown] \
+    no-targets \
+    expect_success]
+
+  set key_phrase "SUCCESS: targets 0 command successfully failed"
+
+  exec grep --text -F "$key_phrase" $LogFile
+
+  return [ocd_test_pass]
+}
+
+  return [run_test]

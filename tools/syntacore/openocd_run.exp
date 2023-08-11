@@ -29,6 +29,7 @@ set COMMAND_LINE_OPTIONS [dict create \
   --load "value:config_path. loads selected configuration (disables interactive mode automatically)" \
   --log-session "value:log_path. Path to session log" \
   --no-extra-scripts "flag. avoid loading of extra scripts (common routines to help with debugging)" \
+  --no-targets "devel:flag. create only TAP, do not create OpenOCD targets" \
   --run-command "value:openocd_command. extra command to run (can be specified multiple times)" \
   --run-script "value:script_file. additional script(s) to run (can be specified multiple times)" \
   --save "value:config_path. save selected configuration to the file (see --load)" \
@@ -74,6 +75,7 @@ set SETTINGS(configure_hook) ""
 set SETTINGS(load_extra_scripts) 1
 set SETTINGS(extra_run_commands) []
 set SETTINGS(extra_spike_args) []
+set SETTINGS(no_openocd_targets) 0
 
 set DEBUG_ADAPTER_INFO(adapter_id) ""
 set DEBUG_ADAPTER_INFO(adapter_serial) 0
@@ -216,6 +218,8 @@ for { set i 0 } { $i < $argc } { incr i } {
     set SETTINGS(log_session) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--stand-db) } {
     set SETTINGS(stand_db) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--no-targets)} {
+    set SETTINGS(no_openocd_targets) 1
   } elseif { $option == $COMMAND_LINE_ARG(--help) } {
     set SETTINGS(help_mode) 1
   } else {
@@ -709,6 +713,10 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
       fatalError "unable to locate user-specified configuration hook: $SETTINGS(configure_hook)"
     }
   }
+  if {$SETTINGS(no_openocd_targets) == 1} {
+    lappend OpenOCDArgs -c
+    lappend OpenOCDArgs "sc_target_config no_ocd_targets 1"
+  }
 
   lappend OpenOCDArgs [deriveDesiredVerbosityOption]
 
@@ -729,6 +737,11 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
 }
 
 proc expectForTargetExamination { OpenOCDSpawnID TimeoutValue } {
+  global SETTINGS
+  if {$SETTINGS(no_openocd_targets) == 1} {
+    return
+  }
+
   # We should ensure that at least one target was examined successfully
   set timeout $TimeoutValue
   expect {
