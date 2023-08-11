@@ -224,6 +224,32 @@ static const virt2phys_info_t sv48x4 = {
 	.pa_ppn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ffff},
 };
 
+static const virt2phys_info_t sv57 = {
+	.name = "Sv57",
+	.va_bits = 57,
+	.level = 5,
+	.pte_shift = 3,
+	.vpn_shift = {12, 21, 30, 39, 48},
+	.vpn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ff, 0x1ff},
+	.pte_ppn_shift = {10, 19, 28, 37, 46},
+	.pte_ppn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ff, 0xff},
+	.pa_ppn_shift = {12, 21, 30, 39, 48},
+	.pa_ppn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ff, 0xff},
+};
+
+static const virt2phys_info_t sv57x4 = {
+	.name = "Sv57x4",
+	.va_bits = 59,
+	.level = 5,
+	.pte_shift = 3,
+	.vpn_shift = {12, 21, 30, 39, 48},
+	.vpn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ff, 0x7ff},
+	.pte_ppn_shift = {10, 19, 28, 37, 46},
+	.pte_ppn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ff, 0xff},
+	.pa_ppn_shift = {12, 21, 30, 39, 48},
+	.pa_ppn_mask = {0x1ff, 0x1ff, 0x1ff, 0x1ff, 0xff},
+};
+
 static enum riscv_halt_reason riscv_halt_reason(struct target *target);
 static void riscv_info_init(struct target *target, struct riscv_info *r);
 static void riscv_invalidate_register_cache(struct target *target);
@@ -2216,6 +2242,9 @@ static int riscv_virt2phys_v(struct target *target, target_addr_t virtual, targe
 		case SATP_MODE_SV48:
 			vsatp_info = &sv48;
 			break;
+		case SATP_MODE_SV57:
+			vsatp_info = &sv57;
+			break;
 		case SATP_MODE_OFF:
 			vsatp_info = NULL;
 			break;
@@ -2237,6 +2266,9 @@ static int riscv_virt2phys_v(struct target *target, target_addr_t virtual, targe
 			break;
 		case HGATP_MODE_SV48X4:
 			hgatp_info = &sv48x4;
+			break;
+		case HGATP_MODE_SV57X4:
+			hgatp_info = &sv57x4;
 			break;
 		case HGATP_MODE_OFF:
 			hgatp_info = NULL;
@@ -2320,6 +2352,9 @@ static int riscv_virt2phys(struct target *target, target_addr_t virtual, target_
 			break;
 		case SATP_MODE_SV48:
 			satp_info = &sv48;
+			break;
+		case SATP_MODE_SV57:
+			satp_info = &sv57;
 			break;
 		case SATP_MODE_OFF:
 			LOG_ERROR("No translation or protection."
