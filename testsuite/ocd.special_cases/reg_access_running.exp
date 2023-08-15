@@ -1,0 +1,41 @@
+proc run_test {} {
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "resume"
+
+  # TODO: implement proper board parameter
+  if {[target_info sim] ne ""} {
+    ocdtlb_run_expect "reg pc" expect_failure
+    ocdtlb_run_expect "reg pc $ENTRY_ADDR" expect_failure
+  } else {
+    ocdtlb_run_expect "reg pc"
+    ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  }
+
+  ocdtlb_run_expect "reg sp" expect_failure
+  ocdtlb_run_expect "reg s6 " expect_failure
+
+  if {[target_info cpu,has_floats]} {
+    ocdtlb_run_expect "reg ft1" expect_failure
+    ocdtlb_run_expect "reg ft2 0" expect_failure
+  }
+
+  if {[target_info cpu,has_v_ext]} {
+    ocdtlb_run_expect "reg v1" expect_failure
+    ocdtlb_run_expect "reg v2 0" expect_failure
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
