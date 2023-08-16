@@ -358,6 +358,11 @@ proc parse_step { report } {
   return [internal_parse_empty_on_success $TYPE $report]
 }
 
+proc parse_wait_halt { report } {
+  set TYPE "wait_halt"
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
 proc parse_smp_status { report } {
   set TYPE "smp_status"
   set Trimmed [string trim $report "\n\r\x1a"]
@@ -374,6 +379,12 @@ proc parse_smp_status { report } {
 proc parse_smp_update { report } {
   set TYPE "smp_update"
   return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_poll { report } {
+  set TYPE "poll"
+  # we just ignore output
+  return [internal_parse_success $TYPE $report {}]
 }
 
 proc parse_gdb_info_threads { report } {
