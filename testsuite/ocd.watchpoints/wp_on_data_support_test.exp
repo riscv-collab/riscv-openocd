@@ -1,0 +1,38 @@
+proc run_test {} {
+
+  if {![target_info cpu,has_watchpoints]} {
+    return [ocd_test_unsupported]
+  }
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "mem_read_write.S" "${default_bin_prefix}.exe"
+
+  # created by compile executable
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  if {[target_info cpu,has_watchpoints_data_mask]} {
+    ocdtlb_run_expect "wp $ENTRY_ADDR 4 a 0"
+    ocdtlb_run_expect "rwp $ENTRY_ADDR"
+    ocdtlb_run_expect "wp $ENTRY_ADDR 4 a 0 0xf"
+    ocdtlb_run_expect "rwp $ENTRY_ADDR"
+    ocdtlb_run_expect "wp $ENTRY_ADDR 4 a 0 0xffffffffffffffff"
+    ocdtlb_run_expect "rwp $ENTRY_ADDR"
+  } else {
+    set expect_failure 1
+    ocdtlb_run_expect "wp $ENTRY_ADDR 4 a 0" $expect_failure
+    ocdtlb_run_expect "wp [expr {$ENTRY_ADDR + 4}] 4 a 0 0xf" $expect_failure
+    # This is essetially an "ignore value", so it should pass
+    ocdtlb_run_expect "wp [expr {$ENTRY_ADDR + 16}] 4 a 0 0xffffffffffffffff"
+    ocdtlb_run_expect "rwp $ENTRY_ADDR"
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
