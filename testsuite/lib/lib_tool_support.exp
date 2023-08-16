@@ -1,6 +1,10 @@
 load_lib "lib_abi_compat.exp"
 
 proc ocd_scaled_delay_value { per_core_delay } {
+  if {[target_info sim] eq ""} {
+    # we need to scale only for simulator targets
+    return $per_core_delay
+  }
   set cores_num [target_info cpu,cores_num]
   return [expr { $cores_num * $per_core_delay} ]
 }
