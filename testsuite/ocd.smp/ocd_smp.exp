@@ -32,7 +32,7 @@ proc run_test {} {
     }
   }
 
-  octdlb_wait_resume
+  ocdtlb_wait_resume wait_halt
 
   set tgts [ocdtlb_run_expect "targets"]
   set states [ocdtlb_rsp_get $tgts states]

@@ -126,11 +126,18 @@ proc ocdtlb_do_byte_read_compare { base_addr expected_values } {
   }
 }
 
-proc octdlb_wait_resume { {scale 1} } {
-  set resume_delay [ocd_resume_delay]
-  set scaled_delay [expr $resume_delay * $scale]
-  verbose "resume wait for $scaled_delay seconds" 3
-  sleep $scaled_delay
+proc ocdtlb_wait_resume { {how ""} } {
+  if { $how eq "wait_halt" } {
+    ocdtlb_run_expect "wait_halt"
+  } else {
+    set resume_delay [ocd_resume_delay]
+    tsuplib_tclrpc_run_command \
+      "echo \"resume wait for $resume_delay seconds, current time: [exec date +%r]\""
+    verbose "expect: sleep $resume_delay"
+    sleep $resume_delay
+    # this poll is needed so targets have an updated state
+    ocdtlb_run_expect "poll"
+  }
 }
 
 # NOTE: this function always does at least one step

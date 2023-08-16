@@ -21,7 +21,7 @@ proc run_test {} {
   ocdtlb_run_expect "bp $END_ADDR 4"
   ocdtlb_run_expect "resume"
 
-  octdlb_wait_resume
+  ocdtlb_wait_resume wait_halt
 
   ocdtlb_do_expect_halted
 

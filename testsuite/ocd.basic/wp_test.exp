@@ -1,3 +1,18 @@
+proc run_wp_test_at_address { WP_ADDRESS WP_SIZE HALT_ADDR WAIT_TYPE} {
+  ocdtlb_run_expect "halt"
+  ocdtlb_run_expect "wp $WP_ADDRESS $WP_SIZE"
+  ocdtlb_run_expect "resume"
+  ocdtlb_wait_resume $WAIT_TYPE
+  ocdtlb_do_expect_halted
+  ocdtlb_run_expect "rwp $WP_ADDRESS"
+  set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+  ocdtlb_expect_equal_hex $pc $HALT_ADDR
+
+  ocdtlb_run_expect "resume"
+  ocdtlb_wait_resume
+  ocdtlb_do_expect_running
+}
+
 proc run_test {} {
   set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "wp_test.S" "$default_bin_prefix.exe"
@@ -18,29 +33,11 @@ proc run_test {} {
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
 
-  ocdtlb_run_expect "wp $LOAD_FROM_ADDR 4"
-  ocdtlb_run_expect "resume"
-  octdlb_wait_resume
-  ocdtlb_do_expect_halted
-  ocdtlb_run_expect "rwp $LOAD_FROM_ADDR"
-  set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
-  ocdtlb_expect_equal_hex $pc $LOAD_INSTR
+  run_wp_test_at_address $LOAD_FROM_ADDR 4 $LOAD_INSTR wait_halt
+  run_wp_test_at_address $LOAD_FROM_ADDR 4 $LOAD_INSTR ""
 
-  ocdtlb_run_expect "resume"
-  octdlb_wait_resume
-
-  ocdtlb_do_expect_running
-  ocdtlb_run_expect "halt"
-  ocdtlb_run_expect "wp $STORE_TO_ADDR 4"
-  ocdtlb_run_expect "resume"
-  octdlb_wait_resume
-  ocdtlb_do_expect_halted
-  ocdtlb_run_expect "rwp $STORE_TO_ADDR"
-  set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
-  ocdtlb_expect_equal_hex $pc $STORE_INSTR
-
-  ocdtlb_run_expect "resume"
-  ocdtlb_do_expect_running
+  run_wp_test_at_address $STORE_TO_ADDR 4 $STORE_INSTR wait_halt
+  run_wp_test_at_address $STORE_TO_ADDR 4 $STORE_INSTR ""
 
   return [ocd_test_pass]
 }

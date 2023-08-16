@@ -21,23 +21,15 @@ proc run_test {} {
 
   ocdtlb_run_expect "resume"
 
-  octdlb_wait_resume
-  # ocdtlb_do_expect_halted
-  if {[catch { ocdtlb_do_expect_halted } target_not_halted]} {
-    set target_name [target_info name]
-    if {$target_name == "arty100_scr1_32"} {
-      global perror_threshold
-      set perror_threshold 2
-      setup_kfail openocd_EMBARGO/29853 "*-*-*"
-    }
-    perror "the target is not halted $target_not_halted ($target_name)"
-    return [ocd_test_fail]
+  ocdtlb_wait_resume
+
+  if {[target_info cpu,has_watchpoints_napot] || [target_info cpu,has_watchpoints_gelt]} {
+    ocdtlb_do_expect_halted
+    set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+    ocdtlb_expect_equal $current_pc $STORE_ADDRESS
+  } else {
+    ocdtlb_do_expect_running
   }
-
-  set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
-  ocdtlb_expect_equal $current_pc $STORE_ADDRESS
-
-  ocdtlb_run_expect "rwp $WP_ADDRESS"
 
   return [ocd_test_pass]
 }

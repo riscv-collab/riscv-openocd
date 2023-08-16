@@ -15,7 +15,7 @@ proc show_state {state_idx} {
 
   ocdtlb_run_expect "bp $PRE_READ_VX 4"
   ocdtlb_run_expect "resume"
-  octdlb_wait_resume
+  ocdtlb_wait_resume wait_halt
   ocdtlb_do_expect_halted
   ocdtlb_run_expect "rbp $PRE_READ_VX"
 
@@ -25,7 +25,7 @@ proc show_state {state_idx} {
   ocdtlb_run_expect "bp $READ_VX 4"
 
   ocdtlb_run_expect "resume"
-  octdlb_wait_resume
+  ocdtlb_wait_resume wait_halt
   ocdtlb_do_expect_halted
 
   ocdtlb_run_expect "rbp $READ_VX"
@@ -65,7 +65,7 @@ proc run_test {} {
   ocdtlb_run_expect "bp $WRITE_DONE_ADDR 4"
   ocdtlb_run_expect "resume"
 
-  octdlb_wait_resume
+  ocdtlb_wait_resume wait_halt
 
   ocdtlb_do_expect_halted
 
@@ -80,7 +80,7 @@ proc run_test {} {
   # shows the state of iteration, use for debugging
   # show_state 31
   ocdtlb_run_expect "resume"
-  octdlb_wait_resume
+  ocdtlb_wait_resume wait_halt
   ocdtlb_do_expect_halted
 
   set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]

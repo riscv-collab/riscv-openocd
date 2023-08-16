@@ -16,7 +16,7 @@ proc run_test {} {
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
   ocdtlb_run_expect "resume"
 
-  octdlb_wait_resume
+  ocdtlb_wait_resume
 
   ocdtlb_run_expect "halt"
 

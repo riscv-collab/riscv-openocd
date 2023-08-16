@@ -1,10 +1,9 @@
 proc run_bp_step_test  { ENTRY_ADDR MAIN_ADDR END_ADDR TYPE } {
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
-
   ocdtlb_run_expect "bp $END_ADDR 4 $TYPE"
   ocdtlb_run_expect "resume"
 
-  octdlb_wait_resume
+  ocdtlb_wait_resume wait_halt
 
   set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
   ocdtlb_expect_equal $current_pc $END_ADDR
