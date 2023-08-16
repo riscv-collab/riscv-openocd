@@ -21,7 +21,8 @@ ARTIFACTORY_PATH="$ARTIFACTORY_BASEPATH/$ARCHIVE_NAME"
 LOGS_PARENT=$(dirname "$LOGS_PATH")
 LOGS_DIR=$(basename "$LOGS_PATH")
 
-XZ_OPT='-9' tar -cJf "$ARCHIVE_NAME" -C "$LOGS_PARENT" "$LOGS_DIR"
+CPU_COUNT=$(grep -c ^processor /proc/cpuinfo)
+XZ_OPT="-9 -T$CPU_COUNT" tar -cJf "$ARCHIVE_NAME" -C "$LOGS_PARENT" "$LOGS_DIR"
 echo "Uploading \"$ARCHIVE_NAME\" to \"$ARTIFACTORY_PATH\"..."
 curl  -H "X-JFrog-Art-Api:$API_KEY" -T "$ARCHIVE_NAME" "$ARTIFACTORY_PATH"
 rm "$ARCHIVE_NAME"
