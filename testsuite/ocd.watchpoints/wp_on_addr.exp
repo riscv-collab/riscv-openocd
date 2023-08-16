@@ -1,0 +1,52 @@
+proc wp_test_address_match { target_idx wp_address wp_length access_types start_pc end_pc } {
+  verbose "test_addr: $wp_address, ref_size: $wp_length"
+  foreach access_type $access_types {
+    WP_TESTS::wp_test_run $target_idx $wp_address $wp_length $access_type "" "" $start_pc $end_pc halted
+  }
+}
+
+proc wp_run_addr_match { wp_length offsets load store } {
+  foreach offset $offsets {
+    set target_idx 0
+    set WP_ADDR [tool_state_get_program_symbol address_$offset]
+
+    set LB_START [tool_state_get_program_symbol exec_${load}_${offset}]
+    set LB_END   [tool_state_get_program_symbol do_${load}_${offset}]
+    set SB_START [tool_state_get_program_symbol exec_${store}_${offset}]
+    set SB_END   [tool_state_get_program_symbol do_${store}_${offset}]
+
+    wp_test_address_match $target_idx $WP_ADDR $wp_length {"" "a" "r"} $LB_START $LB_END
+    wp_test_address_match $target_idx $WP_ADDR $wp_length {"" "a" "w"} $SB_START $SB_END
+  }
+}
+
+proc run_test {} {
+
+  if {![target_info cpu,has_watchpoints]} {
+    return [ocd_test_unsupported]
+  }
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "mem_read_write.S" "${default_bin_prefix}.exe"
+
+  source [ocdtlb_test_resource_path wp_tests_lib.tcl]
+
+  # created by compile executable
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  wp_run_addr_match 0 [WP_TESTS::offsets_b] lb sb
+  wp_run_addr_match 1 [WP_TESTS::offsets_b] lb sb
+  wp_run_addr_match 2 [WP_TESTS::offsets_h] lh sh
+  wp_run_addr_match 4 [WP_TESTS::offsets_w] lw sw
+  if {[target_info cpu,xlen] == 64} {
+    wp_run_addr_match 8 [WP_TESTS::offsets_d] ld sd
+  }
+  return [ocd_test_pass]
+}
+
+return [run_test]

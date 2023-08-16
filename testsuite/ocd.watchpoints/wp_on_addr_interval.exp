@@ -1,0 +1,70 @@
+proc wp_run_interval_address_match { BASE_OFFSETS WP_SIZE LOAD STORE OFFSETS } {
+  set target_idx 0
+  foreach BASE_OFFSET $BASE_OFFSETS {
+    set WP_ADDR [tool_state_get_program_symbol address_${BASE_OFFSET}]
+
+    foreach offset $OFFSETS {
+      set LOB_START [tool_state_get_program_symbol exec_${LOAD}_${offset}]
+      set LOB_END [tool_state_get_program_symbol do_${LOAD}_${offset}]
+      set SOB_START [tool_state_get_program_symbol exec_${STORE}_${offset}]
+      set SOB_END [tool_state_get_program_symbol do_${STORE}_${offset}]
+
+      WP_TESTS::wp_test_run $target_idx $WP_ADDR $WP_SIZE "" "" "" $LOB_START $LOB_END halted
+      WP_TESTS::wp_test_run $target_idx $WP_ADDR $WP_SIZE "" "" "" $SOB_START $SOB_END halted
+    }
+  }
+}
+
+proc run_test {} {
+
+  if {![target_info cpu,has_watchpoints]} {
+    return [ocd_test_unsupported]
+  }
+
+  if {![target_info cpu,has_watchpoints_napot] && ![target_info cpu,has_watchpoints_gelt]} {
+    return [ocd_test_unsupported]
+  }
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "mem_read_write.S" "${default_bin_prefix}.exe"
+
+  source [ocdtlb_test_resource_path wp_tests_lib.tcl]
+
+  # created by compile executable
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  # These can be represented by NAPOT regions
+  wp_run_interval_address_match {offset_0} 8 lw sw [WP_TESTS::offsets_w]
+  wp_run_interval_address_match {offset_0} 8 lh sh [WP_TESTS::offsets_h]
+  wp_run_interval_address_match {offset_0} 8 lb sb [WP_TESTS::offsets_b]
+
+  wp_run_interval_address_match {offset_0} 4 lh sh {offset_0 offset_2}
+  wp_run_interval_address_match {offset_0} 4 lb sb {offset_0 offset_1 offset_2 offset_3}
+
+  wp_run_interval_address_match {offset_0} 2 lb sb {offset_0 offset_1}
+
+  if {![target_info cpu,has_watchpoints_gelt]} {
+    return [ocd_test_pass]
+  }
+
+  # These are for non-NAPOT regions
+  wp_run_interval_address_match {offset_1} 8 lb sb {offset_1 offset_7 offset_8}
+  wp_run_interval_address_match {offset_1} 8 lh sb {offset_2 offset_6 offset_8}
+  wp_run_interval_address_match {offset_1} 6 lh sb {offset_2 offset_6}
+  wp_run_interval_address_match {offset_1} 8 lw sw {offset_4 offset_8}
+  wp_run_interval_address_match {offset_1} 5 lw sw {offset_4}
+
+  if {[target_info cpu,xlen] == 64} {
+    wp_run_interval_address_match {offset_1} 8 ld sd {offset_8}
+    wp_run_interval_address_match {offset_7} 5 ld sd {offset_8}
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

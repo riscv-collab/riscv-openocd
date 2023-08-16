@@ -1,0 +1,58 @@
+proc wp_test_access_match { wp_sizes offsets op accesses} {
+  foreach offset $offsets {
+    set target_idx 0
+    set WP_ADDR  [tool_state_get_program_symbol address_$offset]
+    set OP_START [tool_state_get_program_symbol exec_${op}_${offset}]
+    set OP_END   [tool_state_get_program_symbol do_${op}_${offset}]
+    foreach wp_size $wp_sizes {
+      foreach access $accesses {
+        WP_TESTS::wp_test_run $target_idx $WP_ADDR $wp_size $access "" "" $OP_START $OP_END halted
+      }
+    }
+  }
+}
+
+proc run_test {} {
+
+  if {![target_info cpu,has_watchpoints]} {
+    return [ocd_test_unsupported]
+  }
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "mem_read_write.S" "${default_bin_prefix}.exe"
+
+  source [ocdtlb_test_resource_path wp_tests_lib.tcl]
+
+  # created by compile executable
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  set WpLengths [list \
+    0 1 2 4 \
+  ]
+  if {[target_info cpu,xlen] == 64} {
+    lappend WP_LENGTHS 8
+  }
+
+  wp_test_access_match $WpLengths [WP_TESTS::offsets_b] sb {"w" "a" ""}
+  wp_test_access_match $WpLengths [WP_TESTS::offsets_h] sh {"w" "a" ""}
+  wp_test_access_match $WpLengths [WP_TESTS::offsets_w] sw {"w" "a" ""}
+  if {[target_info cpu,xlen] == 64} {
+    wp_test_access_match $WpLengths [WP_TESTS::offsets_d] sd {"w" "a" ""}
+  }
+
+  wp_test_access_match $WpLengths [WP_TESTS::offsets_b] lb {"r" "a" ""}
+  wp_test_access_match $WpLengths [WP_TESTS::offsets_h] lh {"r" "a" ""}
+  wp_test_access_match $WpLengths [WP_TESTS::offsets_w] lw {"r" "a" ""}
+  if {[target_info cpu,xlen] == 64} {
+    wp_test_access_match $WpLengths [WP_TESTS::offsets_d] ld {"r" "a" ""}
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

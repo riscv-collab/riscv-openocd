@@ -1,0 +1,129 @@
+proc wp_test_address_miss { target_idx wp_address ref_size start_pc end_pc } {
+  set access_types [list "" r w a]
+  set address_offset $ref_size
+  if { $ref_size == 0 } {
+    set address_offset 1
+  }
+  set address_before [ocdtlb_addr_add $wp_address "-$address_offset"]
+  set address_after  [ocdtlb_addr_add $wp_address "$address_offset"]
+  verbose "test_addr: $wp_address, ref_size: $ref_size, addr_before: $address_before, address_after: $address_after" 1
+  foreach access_type $access_types {
+    WP_TESTS::wp_test_run $target_idx $address_before $ref_size $access_type "" "" $start_pc $end_pc running
+    WP_TESTS::wp_test_run $target_idx $address_after $ref_size $access_type "" "" $start_pc $end_pc running
+  }
+}
+
+proc wp_run_addr_miss { wp_size offsets load store } {
+  foreach offset $offsets {
+    set target_idx 0
+    set WP_ADDR [tool_state_get_program_symbol address_$offset]
+
+    set LB_START [tool_state_get_program_symbol exec_${load}_${offset}]
+    set LB_END   [tool_state_get_program_symbol exec_${load}_${offset}_end]
+    set SB_START [tool_state_get_program_symbol exec_${store}_${offset}]
+    set SB_END   [tool_state_get_program_symbol exec_${store}_${offset}_end]
+
+    wp_test_address_miss $target_idx $WP_ADDR $wp_size $LB_START $LB_END
+    wp_test_address_miss $target_idx $WP_ADDR $wp_size $SB_START $SB_END
+  }
+}
+
+proc wp_run_interval_address_mismatch { BASE_OFFSETS WP_SIZE LOAD STORE OFFSETS { HAS_INTERSECTION 0 } } {
+  set target_idx 0
+  foreach BASE_OFFSET $BASE_OFFSETS {
+    set WP_ADDR [tool_state_get_program_symbol address_${BASE_OFFSET}]
+
+    foreach offset $OFFSETS {
+      set LOB_START [tool_state_get_program_symbol exec_${LOAD}_${offset}]
+      set LOB_EXEC  [tool_state_get_program_symbol do_${LOAD}_${offset}]
+      set LOB_END   [tool_state_get_program_symbol exec_${LOAD}_${offset}_end]
+
+      set SOB_START [tool_state_get_program_symbol exec_${STORE}_${offset}]
+      set SOB_EXEC  [tool_state_get_program_symbol do_${STORE}_${offset}]
+      set SOB_END   [tool_state_get_program_symbol exec_${STORE}_${offset}_end]
+
+      set L_END   $LOB_END
+      set S_END   $SOB_END
+      set EXPECTED_STATE running
+      # TODO: looks like current implementation does not use GE/LE for
+      # 1-byte watchpoints
+      if { $HAS_INTERSECTION == 1 && $WP_SIZE > 1} {
+        if {[target_info sim] eq "" && [target_info cpu,has_watchpoints_gelt]} {
+          set EXPECTED_STATE halted
+          set L_END   $LOB_EXEC
+          set S_END   $SOB_EXEC
+        }
+      }
+
+      WP_TESTS::wp_test_run $target_idx $WP_ADDR $WP_SIZE "" "" "" $LOB_START $L_END $EXPECTED_STATE
+      WP_TESTS::wp_test_run $target_idx $WP_ADDR $WP_SIZE "" "" "" $SOB_START $S_END $EXPECTED_STATE
+    }
+  }
+}
+
+proc wp_run_interval_mismatch_crossing { BASE_OFFSETS WP_SIZE LOAD STORE OFFSETS } {
+  wp_run_interval_address_mismatch $BASE_OFFSETS $WP_SIZE $LOAD $STORE $OFFSETS 1
+}
+
+proc run_test {} {
+
+  if {![target_info cpu,has_watchpoints]} {
+    return [ocd_test_unsupported]
+  }
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "mem_read_write.S" "${default_bin_prefix}.exe"
+
+  source [ocdtlb_test_resource_path wp_tests_lib.tcl]
+
+  # created by compile executable
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  wp_run_addr_miss 0 [WP_TESTS::offsets_b] lb sb
+  wp_run_addr_miss 1 [WP_TESTS::offsets_b] lb sb
+  wp_run_addr_miss 2 [WP_TESTS::offsets_h] lh sh
+  wp_run_addr_miss 4 [WP_TESTS::offsets_w] lw sw
+  if {[target_info cpu,xlen] == 64} {
+    wp_run_addr_miss 8 [WP_TESTS::offsets_d] ld sd
+  }
+
+  # tests for non-NAPOT intervals
+  wp_run_interval_address_mismatch {offset_1}  8 lb sb {offset_0 offset_9}
+  wp_run_interval_address_mismatch {offset_2} 10 lh sh {offset_0 offset_12}
+  wp_run_interval_address_mismatch {offset_4}  8 lw sw {offset_0 offset_12}
+  wp_run_interval_address_mismatch {offset_1}  9 lh sh {offset_10}
+  wp_run_interval_address_mismatch {offset_1} 11 lw sw {offset_12}
+
+  # intersections with non-NAPOT intervals
+  wp_run_interval_mismatch_crossing {offset_1}  9 lh sh {offset_0}
+  wp_run_interval_mismatch_crossing {offset_1} 11 lw sw {offset_0}
+  if {[target_info cpu,xlen] == 64} {
+    wp_run_interval_mismatch_crossing {offset_1} 8 ld sd {offset_0}
+  }
+
+  # intersections with NAPOT intervals
+  wp_run_interval_mismatch_crossing {offset_2}  2 lw sw {offset_0}
+  if {[target_info cpu,xlen] == 64} {
+    wp_run_interval_mismatch_crossing {offset_4} 4 ld sd {offset_0}
+  }
+
+  # tests for cases when an operation overlaps the whole interval
+  wp_run_interval_mismatch_crossing {offset_1}  1 lh sh {offset_0}
+  wp_run_interval_mismatch_crossing {offset_1}  1 lw sw {offset_0}
+  wp_run_interval_mismatch_crossing {offset_1}  2 lw sw {offset_0}
+  wp_run_interval_mismatch_crossing {offset_1}  0 lw sw {offset_0}
+  if {[target_info cpu,xlen] == 64} {
+    wp_run_interval_mismatch_crossing {offset_1}  6 ld ld {offset_0}
+    wp_run_interval_mismatch_crossing {offset_4}  4 ld ld {offset_0}
+    wp_run_interval_mismatch_crossing {offset_2}  2 ld ld {offset_0}
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
