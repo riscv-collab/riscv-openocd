@@ -15,7 +15,7 @@ proc run_test {} {
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 
   set extra_timeout [target_info env,long_op_timeout]
-  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 8 8192" "" $extra_timeout]
+  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 8 8192" expect_success $extra_timeout]
   set data8 [ocdtlb_rsp_get $rs data]
   set front(0) [lindex $data8 0]
   set front(3) [lindex $data8 3]
@@ -33,7 +33,7 @@ proc run_test {} {
   array unset front
   array unset back
 
-  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 16 4096" "" $extra_timeout]
+  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 16 4096" expect_success $extra_timeout]
   set data16 [ocdtlb_rsp_get $rs data]
   set front(0) [lindex $data16 0]
   set front(3) [lindex $data16 3]
@@ -45,7 +45,7 @@ proc run_test {} {
   array unset front
   array unset back
 
-  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 32 2048" "" $extra_timeout]
+  set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 32 2048" expect_success $extra_timeout]
   set data32 [ocdtlb_rsp_get $rs data]
   set front(0) [lindex $data32 0]
   set front(2) [lindex $data32 2]
@@ -58,7 +58,7 @@ proc run_test {} {
   array unset back
 
   if {$xlen64} {
-    set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 64 1024" "" $extra_timeout]
+    set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 64 1024" expect_success $extra_timeout]
     set data64 [ocdtlb_rsp_get $rs data]
     set front(0) [lindex $data64 0]
     set front(1) [lindex $data64 1]
