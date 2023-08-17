@@ -1,0 +1,43 @@
+proc run_test {} {
+    if {[target_info cpu,name] eq "scr6"} {
+        return [ocd_test_unsupported]
+    }
+
+    if {![target_info cpu,dm_abstract_fpr]} {
+        return [ocd_test_unsupported]
+    }
+
+    if {![target_info cpu,dm_abstract_csr]} {
+        return [ocd_test_unsupported]
+    }
+
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe"
+
+    set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+    set LogFile [utils_spawn_universal_launcher \
+        [list \
+            --run-command "reset halt" \
+            --run-command "load_image $default_bin_prefix.exe" \
+            --run-command "reg pc $ENTRY_ADDR" \
+            --run-command shutdown] \
+        fpr_gpr_access_init \
+        expect_success]
+
+    set script_path [get_sc_lowlevel_jtag_lib_path]
+    set commands_path [ocdtlb_test_resource_path fpr_gpr_access_commands.tcl]
+
+    set LogFile [utils_spawn_universal_launcher \
+        [list \
+            --no-targets \
+            --run-script $script_path \
+            --run-script $commands_path \
+            --run-command shutdown] \
+        fpr_gpr_access_main \
+        expect_success]
+
+    return [ocd_test_pass]
+}
+
+return [run_test]
