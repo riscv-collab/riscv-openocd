@@ -25,30 +25,31 @@ proc run_test {} {
 
   # created by compile executable
   set MEM_ADDR [tool_state_get_program_symbol work_area_start]
+  set extra_timeout [target_info env,long_op_timeout]
 
   ocdtlb_run_expect "targets 0"
   ocdtlb_run_expect "reset halt"
 
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 
-  ocdtlb_run_expect "write_memory $MEM_ADDR 8  {[generate_iota_list 8192 0xff] }"
+  ocdtlb_run_expect "write_memory $MEM_ADDR 8  {[generate_iota_list 8192 0xff] }" "" $extra_timeout
   set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdb $ADDR_LAST_BYTE"] data]
   set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdb [ocdtlb_addr_add $ADDR_LAST_BYTE -1]"] data]
   ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0xff 0xfe}
 
 
-  ocdtlb_run_expect "write_memory $MEM_ADDR 16 {[generate_iota_list 4096 0xffff] }"
+  ocdtlb_run_expect "write_memory $MEM_ADDR 16 {[generate_iota_list 4096 0xffff] }" "" $extra_timeout
   set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdh $ADDR_LAST_WCHAR"] data]
   set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdh [ocdtlb_addr_add $ADDR_LAST_WCHAR -2]"] data]
   ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0xfff 0xffe}
 
-  ocdtlb_run_expect "write_memory $MEM_ADDR 32 {[generate_iota_list 2048 0xffffffff] }"
+  ocdtlb_run_expect "write_memory $MEM_ADDR 32 {[generate_iota_list 2048 0xffffffff] }" "" $extra_timeout
   set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw $ADDR_LAST_WORD"] data]
   set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw [ocdtlb_addr_add $ADDR_LAST_WORD -4]"] data]
   ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0x000007ff 0x000007fe}
 
   if {$xlen64} {
-    ocdtlb_run_expect "write_memory $MEM_ADDR 64 {[generate_iota_list 1024 0xffffffff] }"
+    ocdtlb_run_expect "write_memory $MEM_ADDR 64 {[generate_iota_list 1024 0xffffffff] }" "" $extra_timeout
     set back(0) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw $ADDR_LAST_DWORD"] data]
     set back(1) [ocdtlb_rsp_get [ocdtlb_run_expect "mdw [ocdtlb_addr_add $ADDR_LAST_DWORD -8]"] data]
     ocdtlb_expect_equal_hex [list $back(0) $back(1)] { 0x000003ff 0x000003fe}

@@ -73,6 +73,7 @@ proc tsuplib_target_info_check {} {
     openocd,hidden_triggers \
     openocd,ide_cloak \
     env,preferred_timeout \
+    env,long_op_timeout \
     env,resume_delay \
     env,exec_delay \
   ]]
@@ -361,8 +362,13 @@ proc tsuplib_internal_tclrpc_send_command {msg {mode "catch"} } {
   }
 }
 
-proc tsuplib_tclrpc_run_command {msg} {
+proc tsuplib_tclrpc_run_command {msg {extra_timeout ""}} {
   tsuplib_internal_tclrpc_send_command $msg
+  if {$extra_timeout ne ""} {
+    set timeout $extra_timeout
+  } else {
+    set timeout [target_info env,preferred_timeout]
+  }
   expect {
     \x1a {
       return $expect_out(buffer)

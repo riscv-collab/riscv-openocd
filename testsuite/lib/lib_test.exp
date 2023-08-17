@@ -156,10 +156,10 @@ proc ocdtlb_do_expect_step_until { end_address iteration_limit } {
   }
 }
 
-proc ocdtlb_run_expect_raw {command parser_name {expect_op_fail 0}} {
+proc ocdtlb_run_expect_raw {command parser_name {expect_op_fail 0} {extra_timeout ""} } {
   verbose "cmd: ${command}" 1
 
-  set response [tsuplib_tclrpc_run_command $command]
+  set response [tsuplib_tclrpc_run_command $command $extra_timeout]
   verbose "\nRESPONSE:\n    $response\n" 3
 
   set status [string range $response 0 1]
@@ -190,7 +190,7 @@ proc ocdtlb_run_expect_raw {command parser_name {expect_op_fail 0}} {
   return $parsed
 }
 
-proc ocdtlb_run_expect {command {expect_op_fail 0} } {
+proc ocdtlb_run_expect {command {expect_op_fail 0}  {extra_timeout ""} } {
   set pruned_cmd [string trim $command]
   if {[llength [split $pruned_cmd "\n"]] != 1} {
     error "multiline commands are not supported ($command)"
@@ -244,7 +244,7 @@ proc ocdtlb_run_expect {command {expect_op_fail 0} } {
       error "could not select parser for ($command), consider using *_raw call"
     }
   }
-  return [ocdtlb_run_expect_raw $command $parser $expect_op_fail]
+  return [ocdtlb_run_expect_raw $command $parser $expect_op_fail $extra_timeout]
 }
 
 proc ocd_test_pass {} {
