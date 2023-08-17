@@ -17,6 +17,7 @@ proc run_test {} {
             --run-command "set true_data $true_data" \
             --run-script $commands_path \
             --run-script $runner_path \
+            --run-command "echo \"load_memory result: \[ocdjtag_riscv_load_memory 0 $ENTRY_ADDR 32 \]\"" \
             --run-command shutdown] \
         memory_access \
         expect_success]
@@ -25,7 +26,7 @@ proc run_test {} {
         error $error_str
     }
 
-    set load_result_str [exec grep --text -F "load_memory result:" $LogFile]
+    set load_result_str [exec grep --text -F "load_memory result: 0x" $LogFile]
 
     if {![regexp "0x\[0-9a-f\]+" $load_result_str load_result]} {
         error "incorrect output of load_memory"

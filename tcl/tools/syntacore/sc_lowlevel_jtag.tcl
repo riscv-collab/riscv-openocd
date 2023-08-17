@@ -511,7 +511,28 @@ proc ocdjtag_riscv_halt_hart { tap_num } {
     }
 }
 
-proc ocdjtag_riscv_resume_hart { tap_num } {
+proc ocdjtag_riscv_step_hart { tap_num } {
+    set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
+
+    if {![dict get $dmstatus allhalted]} {
+        error "step->Target is not halted"
+    }
+
+    set dcsr_reg 0x7b0
+    set dcsr_val [ocdjtag_riscv_load_register $tap_num $dcsr_reg]
+    #setting step bit
+    set dcsr_val [expr {$dcsr_val | (1 << 2)}]
+    ocdjtag_riscv_store_register $tap_num $dcsr_reg $dcsr_val
+
+    ocdjtag_riscv_resume_hart $tap_num 1
+
+    #clearing step bit
+    set dcsr_val [ocdjtag_riscv_load_register $tap_num $dcsr_reg]
+    set dcsr_val [expr {$dcsr_val & (0xffffffff & ~(1 << 2))}]
+    ocdjtag_riscv_store_register $tap_num $dcsr_reg $dcsr_val
+}
+
+proc ocdjtag_riscv_resume_hart { tap_num {for_step 0} } {
     set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
 
     if {[dict get $dmstatus anyrunning]} {
@@ -527,7 +548,7 @@ proc ocdjtag_riscv_resume_hart { tap_num } {
 
     set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
 
-    if {![dict get $dmstatus anyrunning]} {
+    if {![dict get $dmstatus anyrunning] && $for_step == 0} {
         error "resume_hart->Resume isn't successfull"
     }
 
@@ -709,7 +730,9 @@ proc ocdjtag_riscv_load_register { tap_num reg_num } {
         set load_result [expr {[ocdjtag_riscv_dmi_read $tap_num $data1_register] << 32 | $load_result}]
     }
 
-    return "load_register result: 0x[format %x $load_result]"
+    set load_result 0x[format %x $load_result]
+
+    return $load_result
 }
 
 proc ocdjtag_riscv_store_register { tap_num reg_num data } {
@@ -752,7 +775,7 @@ proc ocdjtag_riscv_store_register { tap_num reg_num data } {
 
 #functions for memory access using program buffer
 
-proc ocdjtag_riscv_load_memory { tap_num address size} {
+proc ocdjtag_riscv_load_memory { tap_num address size } {
     if {$size != 32} {
         error "load_memory->Unsupported size(only 32 bit is supported)"
     }
@@ -829,7 +852,9 @@ proc ocdjtag_riscv_load_memory { tap_num address size} {
     __SC_JTAGLIB_INTERNAL::sc_jtaglib_verbose "\[$tap_num\] load_memory:loading value from data0" 3
     set load_result [ocdjtag_riscv_dmi_read $tap_num $data0_register]
 
-    return "load_memory result: 0x[format %x $load_result]"
+    set load_result 0x[format %x $load_result]
+
+    return $load_result
 }
 
 proc ocdjtag_riscv_store_memory { tap_num address size data} {
