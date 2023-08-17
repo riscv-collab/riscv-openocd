@@ -49,7 +49,9 @@ proc run_one_config { mode table_addr } {
     set page_table_file [generate_page_table $config]
 
     ocdtlb_run_expect "reset halt"
-    ocdtlb_run_expect "load_image $page_table_file $table_addr bin"
+
+    ocdtlb_run_expect \
+      "load_image $page_table_file $table_addr bin" expect_success [target_info env,long_op_timeout]
 
     switch $mode {
         sv39 {set mode_val 8}
