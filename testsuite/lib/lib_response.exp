@@ -511,3 +511,14 @@ proc parse_runtest { report } {
   # For example: runtest 2
   return [internal_parse_success $TYPE $report {info "runtest passed"}]
 }
+
+proc parse_virt2phys { report } {
+  set TYPE "virt2phys"
+
+  if {[regexp {^Physical address (0x[0-9a-fA-F]+)} $report m value]} {
+    return [internal_parse_success $TYPE $report \
+           [list value $value]]
+  }
+
+  return [internal_parse_error $TYPE $report {info "regexp dont passed"}]
+}

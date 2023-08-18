@@ -1,0 +1,37 @@
+proc run_test {} {
+    if {[target_info cpu,xlen] != 64} {
+        return [ocd_test_unsupported]
+    }
+
+    set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
+    source $lib_translate_support
+
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe"
+
+    set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+    ocd_connect
+
+    set available_modes [list sv39 sv48 sv57]
+    set modes [list]
+
+    foreach mode $available_modes {
+        if {[target_info "cpu,$mode"]} {
+            lappend modes $mode
+        }
+    }
+
+    foreach mode $modes {
+        set addresses [init_with_config $mode $ENTRY_ADDR]
+        set virtual_address [dict get $addresses va]
+        set physical_address [dict get $addresses pa]
+
+        set received_physical_address [dict get [ocdtlb_run_expect "virt2phys $virtual_address"] value]
+        ocdtlb_expect_equal $physical_address $received_physical_address
+    }
+
+    return [ocd_test_pass]
+}
+
+return [run_test]
