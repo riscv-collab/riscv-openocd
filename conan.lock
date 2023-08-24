@@ -2,8 +2,8 @@
     "version": "0.5",
     "requires": [
         "zlib/1.2.13#13c96f538b52e1600c40b88994de240f%1682597484.674",
-        "sail-riscv/0.1.0-rc.0.9@sc/main#79dff4c1e058862e81b9000f2e5cbf95967578a2%1687820718.337",
-        "riscv-isa-sim/0.1.0-rc.0.121@sc/main#42d27020b82b2b802a3481d34d315843eee632b6%1688616720.989",
+        "sail-riscv/0.1.0-rc.0.10+sc.main@sc/main#ed8dc767669e76a33cd76ff857ec4e0607e9b192%1692194824.79",
+        "riscv-isa-sim/0.1.0-rc.0.123+sc.main@sc/main#cacd7049822718e59ea46e012996854abcfdc719%1692897450.01",
         "riscv-gcc/13.1.0-rc.0.12@sc/main#5efd7e29b180ec2992d852a06719c8390605f038%1688129725.919",
         "gmp/6.2.1#9cd6e4a851f6ffd6ea5b5d563f23abcc%1678897585.752"
     ],
