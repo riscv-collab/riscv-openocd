@@ -11,6 +11,8 @@ set_board_info cpu,has_v_ext 1
 set_board_info cpu,v_ext_vlen 128
 set_board_info cpu,v_ext_elen 64
 
+set_board_info cpu,trigger_count 8
+
 set_board_info cpu,has_watchpoints 1
 set_board_info cpu,has_watchpoints_equal 1
 set_board_info cpu,has_watchpoints_napot 1
