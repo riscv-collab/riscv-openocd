@@ -253,6 +253,7 @@ proc ocdtlb_run_expect {command {expect_op_fail 0}  {extra_timeout ""} } {
     {^wait_halt$}           { set parser parse_wait_halt }
     {^poll$}                { set parser parse_poll }
     {^virt2phys +[^ ]+}     { set parser parse_virt2phys }
+    {^riscv info}           { set parser parse_riscv_info }
     {^riscv +set_ebreak[m,s,u] +[^ ]+} { set parser parse_set_ebreak }
     {^riscv +set_ebreak[m,s,u]$}       { set parser parse_show_ebreak }
     default {

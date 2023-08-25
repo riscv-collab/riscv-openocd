@@ -520,6 +520,14 @@ proc parse_virt2phys { report } {
   return [internal_parse_error $TYPE $report {info "regexp dont passed"}]
 }
 
+proc parse_riscv_info { report } {
+  set TYPE "riscv_info"
+
+  array set info_array [string range $report 0 end-1]
+
+  return [internal_parse_success $TYPE $report [array get info_array]]
+}
+
 proc parse_set_ebreak { report } {
   set TYPE "set_ebreak*"
 
