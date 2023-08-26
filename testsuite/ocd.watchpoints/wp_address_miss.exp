@@ -28,6 +28,33 @@ proc wp_run_addr_miss { wp_size offsets load store } {
   }
 }
 
+proc is_wp_expected_to_match_on_crossing { HAS_INTERSECTION ADDRESS WP_SIZE } {
+  if { $HAS_INTERSECTION == 0} {
+    return 0
+  }
+  # FIXME: for now we expect that NAPOT should behave the same as GE/LE
+  if { [target_info cpu,wp_napot_matches_on_crossing] != [target_info cpu,wp_gelt_matches_on_crossing]} {
+    error "test does not support this configuration and needs to be fixed"
+  }
+  # FIXME: we should check this only for non-NAPOT requests
+  # TODO: looks like the current implementation does not use GE/LE for
+  # 1-byte watchpoints
+  if { $WP_SIZE > 1 && [target_info cpu,wp_gelt_matches_on_crossing] } {
+    return 1
+  }
+  if { $WP_SIZE == 1 } {
+    # TODO: probably, we should implement some special handling for WP_SIZE = 1
+    if {[target_info cpu,wp_eq_matches_on_crossing]} {
+      return 1
+    }
+  }
+  if { $WP_SIZE == 0 && [target_info cpu,wp_eq_matches_on_crossing] } {
+    return 1
+  }
+
+  return 0
+}
+
 proc wp_run_interval_address_mismatch { BASE_OFFSETS WP_SIZE LOAD STORE OFFSETS { HAS_INTERSECTION 0 } } {
   set target_idx 0
   foreach BASE_OFFSET $BASE_OFFSETS {
@@ -45,14 +72,10 @@ proc wp_run_interval_address_mismatch { BASE_OFFSETS WP_SIZE LOAD STORE OFFSETS 
       set L_END   $LOB_END
       set S_END   $SOB_END
       set EXPECTED_STATE running
-      # TODO: looks like current implementation does not use GE/LE for
-      # 1-byte watchpoints
-      if { $HAS_INTERSECTION == 1 && $WP_SIZE > 1} {
-        if {[target_info sim] eq "" && [target_info cpu,has_watchpoints_gelt]} {
-          set EXPECTED_STATE halted
-          set L_END   $LOB_EXEC
-          set S_END   $SOB_EXEC
-        }
+      if {[is_wp_expected_to_match_on_crossing $HAS_INTERSECTION $WP_ADDR $WP_SIZE]} {
+        set EXPECTED_STATE halted
+        set L_END   $LOB_EXEC
+        set S_END   $SOB_EXEC
       }
 
       WP_TESTS::wp_test_run $target_idx $WP_ADDR $WP_SIZE "" "" "" $LOB_START $L_END $EXPECTED_STATE
