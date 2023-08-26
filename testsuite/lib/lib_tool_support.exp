@@ -53,6 +53,9 @@ proc tsuplib_target_info_check {} {
     cpu,has_watchpoints_napot \
     cpu,has_watchpoints_gelt \
     cpu,has_watchpoints_data_mask \
+    cpu,wp_eq_matches_on_crossing \
+    cpu,wp_napot_matches_on_crossing \
+    cpu,wp_gelt_matches_on_crossing \
     cpu,sv32 \
     cpu,sv39 \
     cpu,sv48 \
