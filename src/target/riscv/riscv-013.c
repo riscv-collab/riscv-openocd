@@ -1893,7 +1893,6 @@ static int examine(struct target *target)
 
 	riscv013_info_t *info = get_info(target);
 
-	info->index = target->coreid;
 	info->abits = get_field(dtmcontrol, DTM_DTMCS_ABITS);
 	info->dtmcs_idle = get_field(dtmcontrol, DTM_DTMCS_IDLE);
 
@@ -2026,6 +2025,10 @@ static int examine(struct target *target)
 		LOG_TARGET_ERROR(target, "No harts found!");
 		return ERROR_FAIL;
 	}
+
+	/* The RISC-V hartid is sequential, and the index of each hart
+	 * on the Debug Module should start at 0 and be contiguous. */
+	info->index = target->coreid % dm->hart_count;
 
 	/* Don't call any riscv_* functions until after we've counted the number of
 	 * cores and initialized registers. */
