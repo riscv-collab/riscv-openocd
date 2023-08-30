@@ -1,0 +1,80 @@
+proc run_test {} {
+    if {[target_info cpu,xlen] != 64} {
+        return [ocd_test_unsupported]
+    }
+
+    set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
+    source $lib_translate_support
+
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe"
+
+    set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+    set true_data 0xdeadbeef
+
+    compile_page_table_generator
+
+    set available_modes [list sv39 sv48 sv57]
+    set available_modes_x4 [list sv39x4 sv48x4 sv57x4]
+    set modes [list]
+    set modes_x4 [list]
+
+    foreach mode $available_modes mode_x4 $available_modes_x4 {
+        if {[target_info "cpu,$mode"] && [target_info "cpu,$mode_x4"]} {
+            lappend modes $mode
+            lappend modes_x4 $mode_x4
+        }
+    }
+
+    if {[llength $modes] == 0} {
+        return [ocd_test_unsupported]
+    }
+
+    set table_addr $ENTRY_ADDR
+    set table_offset 0x8000
+    set table_addr_x4 0x[format %x [expr {$table_addr + $table_offset}]]
+
+    set va_offset 0xa0000
+    set virtual_address 0x[format %x [expr {$table_addr + $va_offset}]]
+
+    set ga_offset 0xb0000
+    set guest_address 0x[format %x [expr {$table_addr + $ga_offset}]]
+
+    set pa_offset 0xc0000
+    set physical_address 0x[format %x [expr {$table_addr + $pa_offset}]]
+
+    set va_list [list $virtual_address]
+    set ga_list [list $guest_address]
+
+    set extended_ga_list [list $guest_address]
+    set pa_list [list $physical_address]
+
+    for {set i 0} {$i < 8} {incr i} {
+        set pte 0x[format %x [expr {$table_addr + $i * 0x1000}]]
+        lappend extended_ga_list $pte
+        lappend pa_list $pte
+    }
+
+    ocd_connect
+
+    foreach mode $modes mode_x4 $modes_x4 {
+        ocdtlb_run_expect "reset halt"
+
+        init_with_config $mode $table_addr $va_list $ga_list
+        init_with_config $mode_x4 $table_addr_x4 $extended_ga_list $pa_list
+
+        turn_on_translation $mode $table_addr 1
+        turn_on_translation $mode_x4 $table_addr_x4
+
+        ocdtlb_run_expect "mdw $virtual_address"
+        ocdtlb_run_expect "mww phys $physical_address $true_data"
+        set data [dict get [ocdtlb_run_expect "mdw $virtual_address"] data ]
+
+        ocdtlb_expect_equal $data $true_data
+    }
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

@@ -20,6 +20,39 @@ proc spike_get_target_memory_map {} {
   return "-m$primary_region"
 }
 
+proc init_sim_args { boot_binary } {
+  set sim_options [target_info sim,options]
+
+  if {[target_info cpu,xlen] == 64} {
+    set isa_substring "rv64gc"
+    set replacement_substring "rv64gch"
+  } else {
+    set isa_substring "rv32gc"
+    set replacement_substring "rv32gch"
+  }
+
+  set list_index [lsearch -regexp $sim_options $isa_substring]
+
+  if {[target_info cpu,has_h_ext]} {
+    if {$list_index != -1} {
+      set isa [lindex $sim_options $list_index]
+
+      set substring_for_replace_start [string first $isa_substring $isa]
+      set substring_for_replace_end [expr {$substring_for_replace_start + [string length $isa_substring] - 1}]
+
+      set changed_isa [string replace $isa $substring_for_replace_start $substring_for_replace_end $replacement_substring]
+
+      set sim_options [lreplace $sim_options $list_index $list_index $changed_isa]
+    } else {
+      error "Can't find position to insert \"h\" (hypervisor extension) to $isa"
+    }
+  }
+
+  return [list {*}$sim_options \
+                     [spike_get_target_memory_map] \
+                     $boot_binary]
+}
+
 proc ${board}_init { name } {
   global SPIKE_SIM
   global spike_board_spawn_id
@@ -34,19 +67,17 @@ proc ${board}_init { name } {
   }
   verbose "boot code compiled successfully" 2
 
-  set sim_args [list {*}[target_info sim,options] \
-                     [spike_get_target_memory_map] \
-                     $boot_binary]
+  set sim_args [init_sim_args $boot_binary]
 
   verbose "running spike: $SPIKE_SIM $sim_args" 1
   spawn $SPIKE_SIM {*}$sim_args
-  
+
   set rbb_port 0
-  
+
   expect {
     -re {Listening for remote bitbang connection on port ([1-9][0-9]*).} {
       set rbb_port $expect_out(1,string)
-      
+
       verbose "spike launched successfully" 1
       set spike_board_spawn_id $spawn_id
     }
