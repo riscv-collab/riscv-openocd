@@ -14,19 +14,27 @@ proc ocd_init {test_file_name} {
   match_max -d 1000000
   set timeout [target_info env,preferred_timeout]
 
-  # puts [target_info name]
-  # puts [board_info target name]
-  # puts [board_info target sim,options]
-  # puts [target_info sim,options]
   verbose "/// ocd_init \\\\\\" 1
 
   tsuplib_ensure_target_properties [list \
     openocd,ocd_tool_target_flags
   ]
+  set target_flags [target_info openocd,ocd_tool_target_flags]
+
+  set test_dir [file dirname $test_file_name]
+  set test_name [file tail $test_file_name]
+  set target_hook "$test_dir/config_hooks/config_hook.$test_name.tcl"
+
+  verbose "searching target hook at $target_hook"
+  if {[file exists $target_hook]} {
+    lappend target_flags -f
+    lappend target_flags $target_hook
+  }
+
   tsuplib_launch_openocd ocd \
                          $test_file_name \
                          [standInfoGetInterfaceFlags] \
-                         [target_info openocd,ocd_tool_target_flags]
+                         $target_flags
 
   set max_retries 150
   set poll_delay 0.2

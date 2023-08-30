@@ -31,6 +31,10 @@ proc run_test {} {
   ocdtlb_do_expect_halted
 
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  set GlobalVarValue [tsuplib_tclrpc_run_command "capture { echo \"\$GLOBAL_VARIABLE_IN_HOOK\" }"]
+  if {[string first "GLOBAL_VARIABLE_IN_HOOK IS SET!" $GlobalVarValue] == -1} {
+    error "looks like configuration hook does not work ($GlobalVarValue)"
+  }
 
   # indicates that the test is passed
   return [ocd_test_pass]
