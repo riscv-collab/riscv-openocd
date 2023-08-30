@@ -732,10 +732,9 @@ static int wait_for_debugint_clear(struct target *target, bool ignore_first)
 			.haltnot = 0,
 			.interrupt = 0
 		};
-		if (read_bits(target, &bits) != ERROR_OK) {
-			LOG_ERROR("read_bits fails");
+		if (read_bits(target, &bits) != ERROR_OK)
 			return ERROR_FAIL;
-		}
+
 		if (!bits.interrupt)
 			return ERROR_OK;
 		if (time(NULL) - start > riscv_command_timeout_sec) {
@@ -1899,10 +1898,8 @@ static int poll_target(struct target *target, bool announce)
 		.haltnot = 0,
 		.interrupt = 0
 	};
-	if (read_bits(target, &bits) != ERROR_OK) {
-		LOG_ERROR("read_bits fails");
+	if (read_bits(target, &bits) != ERROR_OK)
 		return ERROR_FAIL;
-	}
 
 	debug_level = old_debug_level;
 
