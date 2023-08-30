@@ -11,7 +11,7 @@ proc run_test {} {
   }
 
   # NOTE: in case of a simulator run we can do a little better
-  exec grep --text -F "This adapter doesn't support configurable speed" $LogFile
+  exec grep --text -E "Note: The adapter .* doesn't support configurable speed" $LogFile
 
   return [ocd_test_pass]
 }
