@@ -11,7 +11,7 @@ proc run_test {} {
 
     set ENTRY_ADDR [tool_state_get_program_symbol _entry]
 
-    ocd_connect
+    compile_page_table_generator
 
     set available_modes [list sv39 sv48 sv57]
     set modes [list]
@@ -22,10 +22,28 @@ proc run_test {} {
         }
     }
 
+    if {[llength $modes] == 0} {
+        return [ocd_test_unsupported]
+    }
+
+    set table_addr $ENTRY_ADDR
+
+    set va_offset 0xa0000
+    set virtual_address 0x[format %x [expr {$table_addr + $va_offset}]]
+
+    set pa_offset 0xb0000
+    set physical_address 0x[format %x [expr {$table_addr + $pa_offset}]]
+
+    set va_list [list $virtual_address]
+    set pa_list [list $physical_address]
+
+    ocd_connect
+
     foreach mode $modes {
-        set addresses [init_with_config $mode $ENTRY_ADDR]
-        set virtual_address [dict get $addresses va]
-        set physical_address [dict get $addresses pa]
+        ocdtlb_run_expect "reset halt"
+
+        init_with_config $mode $ENTRY_ADDR $va_list $pa_list
+        turn_on_translation $mode $table_addr
 
         set received_physical_address [dict get [ocdtlb_run_expect "virt2phys $virtual_address"] value]
         ocdtlb_expect_equal $physical_address $received_physical_address
