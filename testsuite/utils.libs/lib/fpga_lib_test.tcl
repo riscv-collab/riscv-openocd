@@ -98,12 +98,6 @@ proc run_basic_tests {} {
   echo "=== SC FPGA INFO ===\n[sc_fpga_info]\n=== ------------ ==="
   set EntryAddr 0
 
-  # for reasons unknown and obscure tests fail on spike without this reset
-  # looks like this is something spike/examine-specific
-  # likely an existing OpenOCD bug
-  # minimal reproduction in container:
-  # --target_board spike64mcore4_rthw0_dmp6a0 launcher_just_runs.exp fpga_lib_testing.exp
-  safeReset
   sc_fpga_halt_all
   testAllTargetsHalted
   sc_fpga_resume_all
