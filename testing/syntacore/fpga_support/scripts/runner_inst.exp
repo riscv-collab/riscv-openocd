@@ -3,32 +3,46 @@
 set STAND_NAME [lindex $argv 0]
 set PLATFORM [lindex $argv 1]
 
-catch {system killall -9 openocd}
-catch {system killall -9 vivado_lab}
-catch {system killall -9 hw_server}
-catch {system rm /home/stand/hw_server.log}
+proc try_to_instantiate_bitstream {STAND_NAME PLATFORM} {
+  catch {system killall -9 openocd}
+  catch {system killall -9 vivado_lab}
+  catch {system killall -9 hw_server}
+  catch {system rm /home/stand/hw_server.log}
 
-system /home/stand/hw_server.sh
+  system /home/stand/hw_server.sh
 
-set timeout 120
+  set timeout 120
 
-# check if platform starts with "/"
-if {[string first / $PLATFORM] == 0} {
-  set EXPECTED_PATTERN "Flashing bitstream completed!"
-  spawn [pwd]/fpga.sh bit $STAND_NAME $PLATFORM
-} else {
-  set EXPECTED_PATTERN "Setting platform completed!"
-  spawn [pwd]/fpga.sh set $STAND_NAME $PLATFORM
+  # check if platform starts with "/"
+  if {[string first / $PLATFORM] == 0} {
+    set EXPECTED_PATTERN "Flashing bitstream completed!"
+    spawn [pwd]/fpga.sh bit $STAND_NAME $PLATFORM
+  } else {
+    set EXPECTED_PATTERN "Setting platform completed!"
+    spawn [pwd]/fpga.sh set $STAND_NAME $PLATFORM
+  }
+
+  expect {
+    $EXPECTED_PATTERN {
+      puts "bitstream instantiated!"
+    }
+    eof {
+      error "unexpected EOF (waiting for device programming)"
+    }
+    timeout {
+      error "unexpected timeout (waiting for device programming)"
+    }
+  }
 }
 
-expect {
-  $EXPECTED_PATTERN {
-    puts "bitstream instantiated!"
+set MAX_ATTEMPTS 3
+for { set attempt_num 1 } { $attempt_num <= $MAX_ATTEMPTS } { incr attempt_num } {
+  puts "attempting to instantiate bitstream, attempt $attempt_num"
+  if {![catch {try_to_instantiate_bitstream $STAND_NAME $PLATFORM} err]} {
+    puts "bitstream successfully instantiated"
+    return
   }
-  eof {
-    error "unexpected EOF (waiting for device programming)"
-  }
-  timeout {
-    error "unexpected timeout (waiting for device programming)"
-  }
+  puts "could not instantiate bitstream: $err"
 }
+
+error "$MAX_ATTEMPTS attempts to instantiate bitstream failed"
