@@ -11386,6 +11386,12 @@ riscv exec_progbuf 0x0330000f 0x0000100f
 riscv exec_progbuf 0x94a20405
 @end example
 
+@subsection RISC-V Syntacore hardware-specific Commands
+
+@deffn {Command} {riscv re_examine}
+Enforce (re)examination of target.
+@end deffn
+
 @section ARC Architecture
 @cindex ARC
 

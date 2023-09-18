@@ -4547,6 +4547,19 @@ COMMAND_HANDLER(riscv_set_enable_ge_lt_trigger)
 	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
+COMMAND_HANDLER(handle_re_examine_target)
+{
+	struct target *target = get_current_target(CMD_CTX);
+
+        if (riscv_flush_registers(target) != ERROR_OK) {
+                LOG_TARGET_ERROR(target, "Flush of register cache failed.");
+                return ERROR_FAIL;
+        }
+
+        target_reset_examined(target);
+	return target_examine_one(target);
+}
+
 static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "dump_sample_buf",
@@ -4813,6 +4826,13 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.mode = COMMAND_CONFIG,
 		.usage = "[on|off]",
 		.help = "When on, allow OpenOCD to use GE/LT triggers in wp."
+	},
+        {
+                .name = "re_examine",
+                .handler = handle_re_examine_target,
+                .mode = COMMAND_EXEC,
+                .help = "Enforce (re)examination of target",
+                .usage = "",
 	},
 	COMMAND_REGISTRATION_DONE
 };
