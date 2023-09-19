@@ -553,3 +553,9 @@ proc parse_set_enable_virt2phys { report } {
 
   return [internal_parse_success $TYPE $report {info "set_enable_virt2phys passed"}]
 }
+
+proc parse_re_examine { report } {
+  set TYPE "re_examine"
+
+  return [internal_parse_success $TYPE $report {info "re_examine passed"}]
+}

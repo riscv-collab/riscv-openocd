@@ -1,0 +1,18 @@
+proc run_test {} {
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  set first_value [string range [tsuplib_tclrpc_run_command "capture { echo \[set GLOBAL_VARIABLE_IN_HOOK\] }"] 2 3]
+
+  ocdtlb_run_expect "riscv re_examine"
+
+  set second_value [string range [tsuplib_tclrpc_run_command "capture { echo \[set GLOBAL_VARIABLE_IN_HOOK\] }"] 2 3]
+
+  ocdtlb_expect_equal [expr {$first_value + 1}] $second_value
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

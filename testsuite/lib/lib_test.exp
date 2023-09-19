@@ -257,6 +257,7 @@ proc ocdtlb_run_expect {command {expect_op_fail 0}  {extra_timeout ""} } {
     {^riscv +set_ebreak[m,s,u] +[^ ]+} { set parser parse_set_ebreak }
     {^riscv +set_ebreak[m,s,u]$}       { set parser parse_show_ebreak }
     {^riscv +set_enable_virt2phys +[^ ]+} { set parser parse_set_enable_virt2phys }
+    {^riscv +re_examine$}   { set parser parse_re_examine }
     default {
       error "could not select parser for ($command), consider using *_raw call"
     }
