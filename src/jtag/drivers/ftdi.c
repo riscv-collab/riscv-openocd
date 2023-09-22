@@ -197,6 +197,8 @@ static int ftdi_set_signal(const struct signal *s, char value)
 	bool data;
 	bool oe;
 
+	LOG_DEBUG_IO("set signal '%s' to '%c'", s->name, value);
+
 	if (s->data_mask == 0 && s->oe_mask == 0) {
 		LOG_ERROR("interface doesn't provide signal '%s'", s->name);
 		return ERROR_FAIL;

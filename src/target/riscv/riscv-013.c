@@ -2814,6 +2814,12 @@ static int assert_reset(struct target *target)
 
 	select_dmi(target);
 
+	/* When we get here, OpenOCD might just have done some reset, which may
+	 * have affected DMI or DM. Read a register just to make sure
+	 * everything's in sync again. */
+	if (dm_read(target, NULL, DM_DMSTATUS) != ERROR_OK)
+		return ERROR_FAIL;
+
 	if (target_has_event_action(target, TARGET_EVENT_RESET_ASSERT)) {
 		/* Run the user-supplied script if there is one. */
 		target_handle_event(target, TARGET_EVENT_RESET_ASSERT);
