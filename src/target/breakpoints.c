@@ -636,7 +636,7 @@ int watchpoint_remove(struct target *target, target_addr_t address)
 				num_found_watchpoints++;
 
 				if (status != ERROR_OK) {
-					LOG_TARGET_ERROR(curr, "failed to remove watchpoint at address" TARGET_ADDR_FMT, address);
+					LOG_TARGET_ERROR(curr, "failed to remove watchpoint at address " TARGET_ADDR_FMT, address);
 					retval = status;
 				}
 			}
@@ -648,12 +648,14 @@ int watchpoint_remove(struct target *target, target_addr_t address)
 			num_found_watchpoints++;
 
 			if (retval != ERROR_OK)
-				LOG_TARGET_ERROR(target, "failed to remove watchpoint at address" TARGET_ADDR_FMT, address);
+				LOG_TARGET_ERROR(target, "failed to remove watchpoint at address " TARGET_ADDR_FMT, address);
 		}
 	}
 
-	if (num_found_watchpoints == 0)
+	if (num_found_watchpoints == 0) {
 		LOG_TARGET_ERROR(target, "no watchpoint at address " TARGET_ADDR_FMT " found", address);
+		return ERROR_WATCHPOINT_NOT_FOUND;
+	}
 
 	return retval;
 }
