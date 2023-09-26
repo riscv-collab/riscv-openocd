@@ -1,0 +1,19 @@
+proc run_test {} {
+    if {[target_info openocd,smp_target] == 0} {
+        return [ocd_test_unsupported]
+    }
+
+    set WP_ADDR 0
+
+    ocd_connect
+
+    ocdtlb_run_expect "targets 0"
+    ocdtlb_run_expect "reset halt"
+
+    set expect_op_fail 1
+    ocdtlb_run_expect "rwp $WP_ADDR" $expect_op_fail
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

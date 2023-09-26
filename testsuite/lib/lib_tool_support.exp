@@ -67,6 +67,7 @@ proc tsuplib_target_info_check {} {
     cpu,misaligned_access_support \
     cpu,dm_abstract_csr \
     cpu,dm_abstract_fpr \
+    cpu,dm_sba_access_enable \
     memory,reset_vector \
     memory,has_high_pa \
     memory,ocd_work_area \

@@ -38,6 +38,8 @@ set_board_info cpu,dm_abstract_csr 0
 set_board_info cpu,dm_abstract_fpr 1
 set_board_info cpu,dm_is_slow 0
 
+set_board_info cpu,dm_sba_access_enable 0
+
 add_board_info cflags   -march=$TGT_ARCH
 add_board_info cflags   -mabi=ilp32d
 

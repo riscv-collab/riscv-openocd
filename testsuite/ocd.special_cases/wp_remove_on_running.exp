@@ -1,0 +1,35 @@
+proc run_test {} {
+
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+
+    # created by compile executable
+    set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+    set MAIN_ADDR [tool_state_get_program_symbol main]
+    set END_ADDR [tool_state_get_program_symbol end]
+    set xlen64 [expr [target_info cpu,xlen] == 64]
+    # to don't hit watchpoint during run
+    set WP_ADDR 0x[format %x [expr {$END_ADDR + 4}]]
+
+    ocd_connect
+
+    ocdtlb_run_expect "targets 0"
+    ocdtlb_run_expect "reset halt"
+
+    ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+    ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+
+    ocdtlb_run_expect "wp $WP_ADDR 4 a"
+    ocdtlb_run_expect "resume"
+
+    ocdtlb_wait_resume
+
+    ocdtlb_run_expect "targets"
+
+    set expect_op_fail 1
+    ocdtlb_run_expect "rwp $WP_ADDR" $expect_op_fail
+
+    return [ocd_test_pass]
+}
+
+return [run_test]
