@@ -29,7 +29,7 @@ proc run_test {} {
     ocdtlb_run_expect "wp [expr {$ENTRY_ADDR + 4}] 4 a 0 0xf" $expect_failure
     # This is essetially an "ignore value", so it should pass
     ocdtlb_run_expect "wp [expr {$ENTRY_ADDR + 16}] 4 a 0 0xffffffffffffffff"
-    ocdtlb_run_expect "rwp $ENTRY_ADDR"
+    ocdtlb_run_expect "rwp $ENTRY_ADDR" $expect_failure
   }
 
   return [ocd_test_pass]
