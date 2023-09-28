@@ -67,7 +67,15 @@ proc utils_spawn_universal_launcher { args \
   set log_name [utils_get_log_name $log]
 
   upvar spawn_id spawn_id
-  spawn -ignore HUP $openocd_launcher --log-session $log_name {*}$args
+
+  # fill arguments to specify session log and to reset debug adapter for HW targets
+  set launcher_args [list --log-session $log_name]
+  if {[target_info sim] eq ""} {
+    lappend launcher_args --reset-adapter
+  }
+  set launcher_args [list {*}$launcher_args {*}$args]
+  # run universal launcher
+  spawn -ignore HUP $openocd_launcher {*}$launcher_args
   verbose "running $openocd_launcher $args" 1
   verbose "  logfile should be at $log_name" 1
   if { $termination_policy eq "interactive" } {
