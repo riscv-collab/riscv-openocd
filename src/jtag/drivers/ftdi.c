@@ -738,12 +738,8 @@ static int ftdi_initialize(void)
 	for (int i = 0; ftdi_vid[i] || ftdi_pid[i]; i++) {
 		mpsse_ctx = mpsse_open(&ftdi_vid[i], &ftdi_pid[i], ftdi_device_desc,
 				adapter_get_required_serial(), adapter_usb_get_location(), ftdi_channel);
-		if (mpsse_ctx) {
-			mpsse_close(mpsse_ctx, true);
-			mpsse_ctx = mpsse_open(&ftdi_vid[i], &ftdi_pid[i], ftdi_device_desc,
-				adapter_get_required_serial(), adapter_usb_get_location(), ftdi_channel);
+		if (mpsse_ctx)
 			break;
-		}
 	}
 
 	if (!mpsse_ctx)
@@ -790,7 +786,7 @@ static int ftdi_initialize(void)
 
 static int ftdi_quit(void)
 {
-	mpsse_close(mpsse_ctx, false);
+	mpsse_close(mpsse_ctx);
 
 	struct signal *sig = signals;
 	while (sig) {
