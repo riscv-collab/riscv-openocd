@@ -30,6 +30,7 @@ set COMMAND_LINE_OPTIONS [dict create \
   --log-session "value:log_path. Path to session log" \
   --no-extra-scripts "flag. avoid loading of extra scripts (common routines to help with debugging)" \
   --no-targets "devel:flag. create only TAP, do not create OpenOCD targets" \
+  --reset-adapter "flag. enforce reset of debug adapter before use" \
   --run-command "value:openocd_command. extra command to run (can be specified multiple times)" \
   --run-script "value:script_file. additional script(s) to run (can be specified multiple times)" \
   --save "value:config_path. save selected configuration to the file (see --load)" \
@@ -76,10 +77,13 @@ set SETTINGS(load_extra_scripts) 1
 set SETTINGS(extra_run_commands) []
 set SETTINGS(extra_spike_args) []
 set SETTINGS(no_openocd_targets) 0
+set SETTINGS(reset_adapter) 0
 
 set DEBUG_ADAPTER_INFO(adapter_id) ""
 set DEBUG_ADAPTER_INFO(adapter_serial) 0
 set DEBUG_ADAPTER_INFO(openocd_config) 0
+set DEBUG_ADAPTER_INFO(usb_bus_id) ""
+set DEBUG_ADAPTER_INFO(usb_device_id) ""
 
 proc debugModeEnabled {} {
   return [info exists ::env(SYNTACORE_OPENOCD_LAUNCHER_DEBUG)]
@@ -166,7 +170,7 @@ for { set i 0 } { $i < $argc } { incr i } {
     break
   }
 
-  if { $option == $COMMAND_LINE_ARG(--disable-interactive-mode)} {
+  if { $option == $COMMAND_LINE_ARG(--disable-interactive-mode) } {
     set SETTINGS(interactive) 0
   } elseif { $option == $COMMAND_LINE_ARG(--auto-config) } {
     set SETTINGS(autoconfig) 1
@@ -180,7 +184,7 @@ for { set i 0 } { $i < $argc } { incr i } {
     set SETTINGS(telnet) 1
   } elseif { $option == $COMMAND_LINE_ARG(--ide-mode) } {
     set SETTINGS(ide_mode) 1
-  } elseif { $option == $COMMAND_LINE_ARG(--run-script)} {
+  } elseif { $option == $COMMAND_LINE_ARG(--run-script) } {
     lappend SETTINGS(extra_run_commands) -f
     lappend SETTINGS(extra_run_commands) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--run-command) } {
@@ -218,8 +222,10 @@ for { set i 0 } { $i < $argc } { incr i } {
     set SETTINGS(log_session) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--stand-db) } {
     set SETTINGS(stand_db) $optarg
-  } elseif { $option == $COMMAND_LINE_ARG(--no-targets)} {
+  } elseif { $option == $COMMAND_LINE_ARG(--no-targets) } {
     set SETTINGS(no_openocd_targets) 1
+  } elseif { $option == $COMMAND_LINE_ARG(--reset-adapter) } {
+    set SETTINGS(reset_adapter) 1
   } elseif { $option == $COMMAND_LINE_ARG(--help) } {
     set SETTINGS(help_mode) 1
   } else {
@@ -270,6 +276,10 @@ proc getOpenOCDRootDir {} {
 
 proc openocdBinary {} {
   return "[getOpenOCDRootDir]/bin/openocd"
+}
+
+proc usbresetBinary {} {
+  return "[getOpenOCDRootDir]/bin/usb_reset"
 }
 
 proc getDefaultJTAGSpeed {} {
@@ -1005,6 +1015,12 @@ proc deriveAdapterConfiguration { } {
   set DEBUG_ADAPTER_INFO(adapter_id) $Adapter
   set DEBUG_ADAPTER_INFO(adapter_serial) [lindex [split $Adapter "|"] 0]
   set DEBUG_ADAPTER_INFO(openocd_config) [deriveAdapterConfig $Adapter]
+  # SERIAL| Bus 001 Device 004: ID 0000:0000 Vendor/Adapter Name
+  if {![regexp {[^|]+\| Bus ([0-9]+) Device ([0-9]+)} $Adapter m BusId DevId ]} {
+    fatalError "could not figure out BusID/DevID for ${Adapter}"
+  }
+  set DEBUG_ADAPTER_INFO(usb_bus_id) $BusId
+  set DEBUG_ADAPTER_INFO(usb_device_id) $DevId
 
   if { [debugModeEnabled] } {
     send_user -- "Internal DEBUG ADAPTER Information:\n"
@@ -1013,11 +1029,29 @@ proc deriveAdapterConfiguration { } {
   }
 }
 
+proc resetDebugAdapterIfNeeded { UsbBusId UsbDeviceId } {
+  global SETTINGS
+  if { $SETTINGS(reset_adapter) != 1 } {
+    return
+  }
+  if { $UsbDeviceId eq "" } {
+    fatalError "unable to reset debug adapter, since it has no usb bus address!"
+  }
+  set DevicePath /dev/bus/usb/${UsbBusId}/${UsbDeviceId}
+  send_user -- "\nreseting usb adapter: [usbresetBinary] $DevicePath\n"
+  set ResetLog [exec [usbresetBinary] $DevicePath]
+  send_user -- "---\n$ResetLog\n---\n\n"
+}
+
 deriveAdapterConfiguration
+
+set UsbBusId $DEBUG_ADAPTER_INFO(usb_bus_id)
+set UsbDeviceId $DEBUG_ADAPTER_INFO(usb_device_id)
+resetDebugAdapterIfNeeded $UsbBusId $UsbDeviceId
 
 set AdapterConfig $DEBUG_ADAPTER_INFO(openocd_config)
 set AdapterSerial $DEBUG_ADAPTER_INFO(adapter_serial)
-
 set TapCount [detectNumberOfTaps $AdapterConfig $AdapterSerial]
+
 runSpikeIfNeeded
 runOpenOCD $AdapterConfig $AdapterSerial $TapCount
