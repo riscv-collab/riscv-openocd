@@ -37,6 +37,11 @@ set(OCD_PKG_CONFIG_LIB64 ${DEPENDENCIES_INSTALL_PATH}/lib64/pkgconfig)
 set(OPENOCD_SCRIPTS_INSTALL_DIR
   ${OPENOCD_INSTALL_PATH}/share/openocd/scripts/syntacore)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_executable(usb_reset ${OPENOCD_SOURCES}/tools/syntacore/debug_adapter_reset.c)
+  add_dependencies(openocd_deps usb_reset)
+endif()
+
 set(OPENOCD_EXTRA_CFLAGS "")
 
 option(SC_OPENOCD_ENABLE_SANITIZERS "Enable sanitizers")
@@ -68,6 +73,9 @@ ExternalProject_Add(
       ${OPENOCD_CONFIGURE_OPTIONS}
   BUILD_COMMAND make $<IF:$<CONFIG:DEBUG>,install,install-strip> -j${CPU_COUNT}
   INSTALL_COMMAND
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils/copy_optional_file.sh
+      "$<IF:$<TARGET_EXISTS:usb_reset>,${CMAKE_CURRENT_BINARY_DIR}/usb_reset,>"
+      "${OPENOCD_INSTALL_PATH}/bin" &&
     mkdir -p -- ${OPENOCD_SCRIPTS_INSTALL_DIR} &&
     cp ${OPENOCD_SOURCES}/tools/syntacore/openocd_run.exp
        ${OPENOCD_INSTALL_PATH}/bin &&
