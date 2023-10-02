@@ -522,3 +522,23 @@ proc parse_virt2phys { report } {
 
   return [internal_parse_error $TYPE $report {info "regexp dont passed"}]
 }
+
+proc parse_set_ebreak { report } {
+  set TYPE "set_ebreak*"
+
+  return [internal_parse_success $TYPE $report {info "set_ebreak passed"}]
+}
+
+proc parse_show_ebreak { report } {
+  set TYPE "show_ebreak*"
+
+  if {[regexp {^riscv_ebreak[m,s,u] enabled: on} $report m]} {
+    return [internal_parse_success $TYPE $report \
+      [list value 1]]
+  } elseif {[regexp {^riscv_ebreak[m,s,u] enabled: off} $report m]} {
+    return [internal_parse_success $TYPE $report \
+      [list value 0]]
+  }
+
+  return [internal_parse_error $TYPE $report {info "set_ebreak* dont passed"}]
+}

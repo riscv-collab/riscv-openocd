@@ -1,0 +1,26 @@
+proc test_riscv_set_ebreak* { type } {
+    ocdtlb_run_expect "riscv set_ebreak$type on"
+    ocdtlb_expect_equal [dict get [ocdtlb_run_expect "riscv set_ebreak$type"] value] 1
+
+    ocdtlb_run_expect "riscv set_ebreak$type off"
+    ocdtlb_expect_equal [dict get [ocdtlb_run_expect "riscv set_ebreak$type"] value] 0
+}
+
+proc run_test {} {
+    if {[target_info cpu,name] eq "scr6"} {
+        return [ocd_test_unsupported]
+    }
+
+    ocd_connect
+
+    ocdtlb_run_expect "targets 0"
+    ocdtlb_run_expect "reset halt"
+
+    test_riscv_set_ebreak* m
+    test_riscv_set_ebreak* s
+    test_riscv_set_ebreak* u
+
+    return [ocd_test_pass]
+}
+
+return [run_test]
