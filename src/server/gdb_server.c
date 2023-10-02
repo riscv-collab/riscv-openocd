@@ -1037,7 +1037,11 @@ static int gdb_new_connection(struct connection *connection)
 	gdb_connection->output_flag = GDB_OUTPUT_NO;
 
 	/* send ACK to GDB for debug request */
-	gdb_write(connection, "+", 1);
+	retval = gdb_write(connection, "+", 1);
+	if (retval != ERROR_OK) {
+		LOG_ERROR("Could not send GDB Ack packet. gdb_write() error: %d", retval);
+		return retval;
+	}
 
 	/* output goes through gdb connection */
 	command_set_output_handler(connection->cmd_ctx, gdb_output, connection);
@@ -1056,8 +1060,10 @@ static int gdb_new_connection(struct connection *connection)
 	 * Remove the initial ACK from the incoming buffer.
 	 */
 	retval = gdb_get_char(connection, &initial_ack);
-	if (retval != ERROR_OK)
+	if (retval != ERROR_OK) {
+		LOG_ERROR("Could not recieve GDB Ack packet. gdb_get_char() error: %d", retval);
 		return retval;
+	}
 
 	if (initial_ack != '+')
 		gdb_putback_char(connection, initial_ack);
