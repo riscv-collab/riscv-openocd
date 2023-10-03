@@ -135,9 +135,6 @@ int riscv_command_timeout_sec = DEFAULT_COMMAND_TIMEOUT_SEC;
 int riscv_reset_timeout_sec = DEFAULT_RESET_TIMEOUT_SEC;
 
 static bool riscv_enable_virt2phys = true;
-bool riscv_ebreakm = true;
-bool riscv_ebreaks = true;
-bool riscv_ebreaku = true;
 
 bool riscv_enable_virtual;
 
@@ -1198,15 +1195,17 @@ static int riscv_add_breakpoint(struct target *target, struct breakpoint *breakp
 	LOG_TARGET_DEBUG(target, "@0x%" TARGET_PRIxADDR, breakpoint->address);
 	assert(breakpoint);
 	if (breakpoint->type == BKPT_SOFT) {
-		/** @todo check RVC for size/alignment */
-		if (!(breakpoint->length == 4 || breakpoint->length == 2)) {
-			LOG_TARGET_ERROR(target, "Invalid breakpoint length %d", breakpoint->length);
+		const bool c_extension_supported = riscv_supports_extension(target, 'C');
+		if (!(breakpoint->length == 4 || (breakpoint->length == 2 && c_extension_supported))) {
+			LOG_TARGET_ERROR(target, "Invalid breakpoint length %d, supported lengths: %s", breakpoint->length,
+				c_extension_supported ? "2, 4" : "4");
 			return ERROR_FAIL;
 		}
 
-		if (0 != (breakpoint->address % 2)) {
-			LOG_TARGET_ERROR(target, "Invalid breakpoint alignment for address 0x%" TARGET_PRIxADDR,
-				breakpoint->address);
+		const unsigned int required_align = c_extension_supported ? 2 : 4;
+		if ((breakpoint->address % required_align) != 0) {
+			LOG_TARGET_ERROR(target, "Invalid breakpoint alignment for address 0x%" TARGET_PRIxADDR
+				", required alignment: %u", breakpoint->address, required_align);
 			return ERROR_FAIL;
 		}
 
@@ -1391,7 +1390,7 @@ static int riscv_hit_trigger_hit_bit(struct target *target, uint32_t *unique_id)
 				hit_mask = CSR_MCONTROL_HIT;
 				break;
 			case CSR_TDATA1_TYPE_MCONTROL6:
-				hit_mask = CSR_MCONTROL6_HIT;
+				hit_mask = CSR_MCONTROL6_HIT0 | CSR_MCONTROL6_HIT1;
 				break;
 			case CSR_TDATA1_TYPE_ICOUNT:
 				hit_mask = CSR_ICOUNT_HIT;
@@ -3746,32 +3745,53 @@ COMMAND_HANDLER(riscv_set_enable_virt2phys)
 
 COMMAND_HANDLER(riscv_set_ebreakm)
 {
-	if (CMD_ARGC != 1) {
-		LOG_ERROR("Command takes exactly 1 parameter");
-		return ERROR_COMMAND_SYNTAX_ERROR;
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (CMD_ARGC == 0) {
+		command_print(CMD, "riscv_ebreakm enabled: %s", r->riscv_ebreakm ? "on" : "off");
+		return ERROR_OK;
+	} else if (CMD_ARGC == 1) {
+		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->riscv_ebreakm);
+		return ERROR_OK;
 	}
-	COMMAND_PARSE_ON_OFF(CMD_ARGV[0], riscv_ebreakm);
-	return ERROR_OK;
+
+	LOG_ERROR("Command takes 0 or 1 parameters");
+	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
 COMMAND_HANDLER(riscv_set_ebreaks)
 {
-	if (CMD_ARGC != 1) {
-		LOG_ERROR("Command takes exactly 1 parameter");
-		return ERROR_COMMAND_SYNTAX_ERROR;
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (CMD_ARGC == 0) {
+		command_print(CMD, "riscv_ebreaks enabled: %s", r->riscv_ebreaks ? "on" : "off");
+		return ERROR_OK;
+	} else if (CMD_ARGC == 1) {
+		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->riscv_ebreaks);
+		return ERROR_OK;
 	}
-	COMMAND_PARSE_ON_OFF(CMD_ARGV[0], riscv_ebreaks);
-	return ERROR_OK;
+
+	LOG_ERROR("Command takes 0 or 1 parameters");
+	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
 COMMAND_HANDLER(riscv_set_ebreaku)
 {
-	if (CMD_ARGC != 1) {
-		LOG_ERROR("Command takes exactly 1 parameter");
-		return ERROR_COMMAND_SYNTAX_ERROR;
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (CMD_ARGC == 0) {
+		command_print(CMD, "riscv_ebreaku enabled: %s", r->riscv_ebreaku ? "on" : "off");
+		return ERROR_OK;
+	} else if (CMD_ARGC == 1) {
+		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->riscv_ebreaku);
+		return ERROR_OK;
 	}
-	COMMAND_PARSE_ON_OFF(CMD_ARGV[0], riscv_ebreaku);
-	return ERROR_OK;
+
+	LOG_ERROR("Command takes 0 or 1 parameters");
+	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
 COMMAND_HELPER(riscv_clear_trigger, int trigger_id, const char *name)
@@ -4162,13 +4182,23 @@ error:
 	return result;
 }
 
-COMMAND_HELPER(riscv_print_info_line, const char *section, const char *key,
-			   unsigned int value)
+static COMMAND_HELPER(riscv_print_info_line_if_available, const char *section,
+		const char *key, unsigned int value, bool is_available)
 {
 	char full_key[80];
 	snprintf(full_key, sizeof(full_key), "%s.%s", section, key);
-	command_print(CMD, "%-21s %3d", full_key, value);
+	if (is_available)
+		command_print(CMD, "%-21s %3d", full_key, value);
+	else
+		command_print(CMD, "%-21s unavailable", full_key);
 	return 0;
+}
+
+COMMAND_HELPER(riscv_print_info_line, const char *section, const char *key,
+			   unsigned int value)
+{
+	return CALL_COMMAND_HANDLER(riscv_print_info_line_if_available, section,
+			key, value, /*is_available*/ true);
 }
 
 COMMAND_HANDLER(handle_info)
@@ -4179,10 +4209,11 @@ COMMAND_HANDLER(handle_info)
 	/* This output format can be fed directly into TCL's "array set". */
 
 	riscv_print_info_line(CMD, "hart", "xlen", riscv_xlen(target));
-	riscv_enumerate_triggers(target);
-	riscv_print_info_line(CMD, "hart", "trigger_count",
-						  r->trigger_count);
 
+	const bool trigger_count_available =
+		riscv_enumerate_triggers(target) == ERROR_OK;
+	riscv_print_info_line_if_available(CMD, "hart", "trigger_count",
+				r->trigger_count, trigger_count_available);
 	if (r->print_info)
 		return CALL_COMMAND_HANDLER(r->print_info, target);
 
@@ -4439,7 +4470,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "set_ebreakm",
 		.handler = riscv_set_ebreakm,
 		.mode = COMMAND_ANY,
-		.usage = "on|off",
+		.usage = "[on|off]",
 		.help = "Control dcsr.ebreakm. When off, M-mode ebreak instructions "
 			"don't trap to OpenOCD. Defaults to on."
 	},
@@ -4447,7 +4478,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "set_ebreaks",
 		.handler = riscv_set_ebreaks,
 		.mode = COMMAND_ANY,
-		.usage = "on|off",
+		.usage = "[on|off]",
 		.help = "Control dcsr.ebreaks. When off, S-mode ebreak instructions "
 			"don't trap to OpenOCD. Defaults to on."
 	},
@@ -4455,7 +4486,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "set_ebreaku",
 		.handler = riscv_set_ebreaku,
 		.mode = COMMAND_ANY,
-		.usage = "on|off",
+		.usage = "[on|off]",
 		.help = "Control dcsr.ebreaku. When off, U-mode ebreak instructions "
 			"don't trap to OpenOCD. Defaults to on."
 	},
@@ -4619,6 +4650,10 @@ static void riscv_info_init(struct target *target, struct riscv_info *r)
 	INIT_LIST_HEAD(&r->hide_csr);
 
 	r->vsew64_supported = YNM_MAYBE;
+
+	r->riscv_ebreakm = true;
+	r->riscv_ebreaks = true;
+	r->riscv_ebreaku = true;
 }
 
 static int riscv_resume_go_all_harts(struct target *target)
@@ -4753,6 +4788,9 @@ unsigned int riscv_count_harts(struct target *target)
  */
 static bool gdb_regno_cacheable(enum gdb_regno regno, bool is_write)
 {
+	if (regno == GDB_REGNO_ZERO)
+		return !is_write;
+
 	/* GPRs, FPRs, vector registers are just normal data stores. */
 	if (regno <= GDB_REGNO_XPR31 ||
 			(regno >= GDB_REGNO_FPR0 && regno <= GDB_REGNO_FPR31) ||
@@ -4929,8 +4967,11 @@ int riscv_get_register(struct target *target, riscv_reg_t *value,
  */
 int riscv_save_register(struct target *target, enum gdb_regno regid)
 {
-	assert(target->state == TARGET_HALTED &&
-			"Doesn't make sense to populate register cache on non-halted targets.");
+	if (target->state != TARGET_HALTED) {
+		LOG_TARGET_ERROR(target, "Can't save register %s on a hart that is not halted.",
+				 gdb_regno_name(regid));
+		return ERROR_FAIL;
+	}
 	assert(gdb_regno_cacheable(regid, /* is write? */ false) &&
 			"Only cacheable registers can be saved.");
 
@@ -5029,6 +5070,78 @@ int riscv_dmi_write_u64_bits(struct target *target)
 	return r->dmi_write_u64_bits(target);
 }
 
+static int check_if_trigger_exists(struct target *target, unsigned int index)
+{
+	/* If we can't write tselect, then this hart does not support triggers. */
+	if (riscv_set_register(target, GDB_REGNO_TSELECT, index) != ERROR_OK)
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	riscv_reg_t tselect_rb;
+	if (riscv_get_register(target, &tselect_rb, GDB_REGNO_TSELECT) != ERROR_OK)
+		return ERROR_FAIL;
+	/* Mask off the top bit, which is used as tdrmode in legacy RISC-V Debug Spec
+	 * (old revisions of v0.11 spec). */
+	tselect_rb &= ~(1ULL << (riscv_xlen(target) - 1));
+	if (tselect_rb != index)
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	return ERROR_OK;
+}
+
+/**
+ * This function reads `tinfo` or `tdata1`, when reading `tinfo` fails,
+ * to determine trigger types supported by a trigger.
+ * It is assumed that the trigger is already selected via writing `tselect`.
+ */
+static int get_trigger_types(struct target *target, unsigned int *trigger_tinfo,
+		riscv_reg_t tdata1)
+{
+	assert(trigger_tinfo);
+	riscv_reg_t tinfo;
+	if (riscv_get_register(target, &tinfo, GDB_REGNO_TINFO) == ERROR_OK) {
+		/* tinfo.INFO == 1: trigger doesn’t exist
+		 * tinfo == 0 or tinfo.INFO != 1 and tinfo LSB is set: invalid tinfo */
+		if (tinfo == 0 || tinfo & 0x1)
+			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+		*trigger_tinfo = tinfo;
+		return ERROR_OK;
+	}
+	const unsigned int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
+	if (type == 0)
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	*trigger_tinfo = 1 << type;
+	return ERROR_OK;
+}
+
+static int disable_trigger_if_dmode(struct target *target, riscv_reg_t tdata1)
+{
+	bool dmode_is_set = false;
+	switch (get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)))) {
+		case CSR_TDATA1_TYPE_LEGACY:
+			/* On these older cores we don't support software using
+			 * triggers. */
+			dmode_is_set = true;
+			break;
+		case CSR_TDATA1_TYPE_MCONTROL:
+			dmode_is_set = tdata1 & CSR_MCONTROL_DMODE(riscv_xlen(target));
+			break;
+		case CSR_TDATA1_TYPE_MCONTROL6:
+			dmode_is_set = tdata1 & CSR_MCONTROL6_DMODE(riscv_xlen(target));
+			break;
+		case CSR_TDATA1_TYPE_ICOUNT:
+			dmode_is_set = tdata1 & CSR_ICOUNT_DMODE(riscv_xlen(target));
+			break;
+		case CSR_TDATA1_TYPE_ITRIGGER:
+			dmode_is_set = tdata1 & CSR_ITRIGGER_DMODE(riscv_xlen(target));
+			break;
+		case CSR_TDATA1_TYPE_ETRIGGER:
+			dmode_is_set = tdata1 & CSR_ETRIGGER_DMODE(riscv_xlen(target));
+			break;
+	}
+	if (!dmode_is_set)
+		/* Nothing to do */
+		return ERROR_OK;
+	return riscv_set_register(target, GDB_REGNO_TDATA1, 0);
+}
+
 /**
  * Count triggers, and initialize trigger_count for each hart.
  * trigger_count is initialized even if this function fails to discover
@@ -5043,89 +5156,54 @@ int riscv_enumerate_triggers(struct target *target)
 	if (r->triggers_enumerated)
 		return ERROR_OK;
 
-	r->triggers_enumerated = true;	/* At the very least we tried. */
+	if (target->state != TARGET_HALTED) {
+		LOG_TARGET_ERROR(target, "Unable to enumerate triggers: target not halted.");
+		return ERROR_FAIL;
+	}
 
-	riscv_reg_t tselect;
-	int result = riscv_get_register(target, &tselect, GDB_REGNO_TSELECT);
+	riscv_reg_t orig_tselect;
+	int result = riscv_get_register(target, &orig_tselect, GDB_REGNO_TSELECT);
 	/* If tselect is not readable, the trigger module is likely not
-		* implemented. There are no triggers to enumerate then and no error
-		* should be thrown. */
+	 * implemented. */
 	if (result != ERROR_OK) {
-		LOG_TARGET_DEBUG(target, "Cannot access tselect register. "
+		LOG_TARGET_INFO(target, "Cannot access tselect register. "
 				"Assuming that triggers are not implemented.");
+		r->triggers_enumerated = true;
 		r->trigger_count = 0;
 		return ERROR_OK;
 	}
 
-	for (unsigned int t = 0; t < RISCV_MAX_TRIGGERS; ++t) {
-		r->trigger_count = t;
-
-		/* If we can't write tselect, then this hart does not support triggers. */
-		if (riscv_set_register(target, GDB_REGNO_TSELECT, t) != ERROR_OK)
-			break;
-		uint64_t tselect_rb;
-		result = riscv_get_register(target, &tselect_rb, GDB_REGNO_TSELECT);
-		if (result != ERROR_OK)
-			return result;
-		/* Mask off the top bit, which is used as tdrmode in old
-			* implementations. */
-		tselect_rb &= ~(1ULL << (riscv_xlen(target) - 1));
-		if (tselect_rb != t)
+	unsigned int t = 0;
+	for (; t < ARRAY_SIZE(r->trigger_tinfo); ++t) {
+		result = check_if_trigger_exists(target, t);
+		if (result == ERROR_FAIL)
+			return ERROR_FAIL;
+		if (result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
 			break;
 
-		uint64_t tinfo;
-		result = riscv_get_register(target, &tinfo, GDB_REGNO_TINFO);
-		if (result == ERROR_OK) {
-			/* tinfo == 0 invalid tinfo
-			 * tinfo == 1 trigger doesn’t exist */
-			if (tinfo == 0 || tinfo == 1)
-				break;
-			r->trigger_tinfo[t] = tinfo;
-		} else {
-			uint64_t tdata1;
-			result = riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1);
-			if (result != ERROR_OK)
-				return result;
+		riscv_reg_t tdata1;
+		if (riscv_get_register(target, &tdata1, GDB_REGNO_TDATA1) != ERROR_OK)
+			return ERROR_FAIL;
 
-			int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
-			if (type == 0)
-				break;
-			switch (type) {
-				case CSR_TDATA1_TYPE_LEGACY:
-					/* On these older cores we don't support software using
-						* triggers. */
-					riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-					break;
-				case CSR_TDATA1_TYPE_MCONTROL:
-					if (tdata1 & CSR_MCONTROL_DMODE(riscv_xlen(target)))
-						riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-					break;
-				case CSR_TDATA1_TYPE_MCONTROL6:
-					if (tdata1 & CSR_MCONTROL6_DMODE(riscv_xlen(target)))
-						riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-					break;
-				case CSR_TDATA1_TYPE_ICOUNT:
-					if (tdata1 & CSR_ICOUNT_DMODE(riscv_xlen(target)))
-						riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-					break;
-				case CSR_TDATA1_TYPE_ITRIGGER:
-					if (tdata1 & CSR_ITRIGGER_DMODE(riscv_xlen(target)))
-						riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-					break;
-				case CSR_TDATA1_TYPE_ETRIGGER:
-					if (tdata1 & CSR_ETRIGGER_DMODE(riscv_xlen(target)))
-						riscv_set_register(target, GDB_REGNO_TDATA1, 0);
-					break;
-			}
-			r->trigger_tinfo[t] = 1 << type;
-		}
-		LOG_TARGET_DEBUG(target, "Trigger %u: supported types (mask) = 0x%08x", t, r->trigger_tinfo[t]);
+		result = get_trigger_types(target, &r->trigger_tinfo[t], tdata1);
+		if (result == ERROR_FAIL)
+			return ERROR_FAIL;
+		if (result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			break;
+
+		LOG_TARGET_DEBUG(target, "Trigger %u: supported types (mask) = 0x%08x",
+				t, r->trigger_tinfo[t]);
+
+		if (disable_trigger_if_dmode(target, tdata1) != ERROR_OK)
+			return ERROR_FAIL;
 	}
 
-	riscv_set_register(target, GDB_REGNO_TSELECT, tselect);
+	if (riscv_set_register(target, GDB_REGNO_TSELECT, orig_tselect) != ERROR_OK)
+		return ERROR_FAIL;
 
-	LOG_TARGET_INFO(target, "Found %d triggers.", r->trigger_count);
-
+	r->triggers_enumerated = true;
+	r->trigger_count = t;
+	LOG_TARGET_INFO(target, "Found %d triggers", r->trigger_count);
 	return ERROR_OK;
 }
 
