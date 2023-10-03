@@ -34,7 +34,6 @@ proc expectTelnetTargetListing { spawn_id } {
   for { set CoreIndex 0 } { $CoreIndex < $NUM_CORES } { incr CoreIndex } {
     expectExpr $spawn_id "halted\r\n" "target state"
   }
-  expectExpr $spawn_id "\r\n" "target newlines"
   send "help\n"
   expectExpr $spawn_id "\r\n\r>" "prompt after help"
   send "shutdown\n"

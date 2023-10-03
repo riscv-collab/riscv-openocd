@@ -9,7 +9,7 @@ set __JTAG_TAPS_INFO [dict create]
 namespace eval __SC_JTAGLIB_INTERNAL {
     proc sc_jtaglib_verbose { message { level 2 } } {
         set debug_level_str [debug_level]
-        if {[regexp {debug_level: ([0-9]+)\s} $debug_level_str m debug_level]} {
+        if {[regexp {debug_level: ([0-9]+)} $debug_level_str m debug_level]} {
             if {$debug_level >= $level } {
                 echo $message
             }
