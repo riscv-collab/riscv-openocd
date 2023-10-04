@@ -100,7 +100,7 @@ deploy:
   parallel:
     matrix:
       - PROFILE: [default]
-        IMAGE: [cpp_ubuntu_18, cpp_centos_7]
+        IMAGE: [cpp_ubuntu_18, cpp_centos_7, cpp_ubuntu_22]
       - PROFILE: [makepy_sc_mingw]
         IMAGE: [cpp_ubuntu_18]
   script:
