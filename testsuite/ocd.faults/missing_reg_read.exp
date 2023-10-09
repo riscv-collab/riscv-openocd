@@ -22,6 +22,8 @@ proc run_test {} {
 
   set expect_op_failure 1
   ocdtlb_run_expect "reg wobble" $expect_op_failure
+  # cause I'm feeling lucky
+  ocdtlb_run_expect "reg 777777" $expect_op_failure
 
   # now check that the target is still responsive
 

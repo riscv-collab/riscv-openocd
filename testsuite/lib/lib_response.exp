@@ -160,9 +160,6 @@ proc parse_reg_set { report } {
 # { name , size, value }
 proc parse_reg_fetch { report } {
   set TYPE "reg"
-  if {[regexp "not found in current target" $report]} {
-    return [internal_parse_op_failure $TYPE $report {}]
-  }
   set line [split [string trim $report "\n\r\t\x1a"] "\n"]
   if { [llength $line] != 1 } {
     return [internal_parse_error $TYPE $report {}]
