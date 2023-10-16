@@ -1,16 +1,16 @@
 {
     "version": "0.5",
     "requires": [
-        "zlib/1.2.13#13c96f538b52e1600c40b88994de240f%1682597484.674",
-        "sail-riscv/0.1.0-rc.0.10+sc.main@sc/main#ed8dc767669e76a33cd76ff857ec4e0607e9b192%1692194824.79",
-        "riscv-isa-sim/0.1.0-rc.0.123+sc.main@sc/main#cacd7049822718e59ea46e012996854abcfdc719%1692897450.01",
-        "riscv-gcc/13.1.0-rc.0.12@sc/main#5efd7e29b180ec2992d852a06719c8390605f038%1688129725.919",
-        "gmp/6.2.1#9cd6e4a851f6ffd6ea5b5d563f23abcc%1678897585.752"
+        "zlib/1.2.13#13c96f538b52e1600c40b88994de240f%1667396813.733",
+        "sail-riscv/0.1.0-rc.0.14+sc.main@sc/main#728628456b0b3ab7450cec566b72345c76437ac9%1697185571.784",
+        "riscv-isa-sim/0.1.0-rc.0.127+sc.main@sc/main#868ef2851747e84781adb0a343f8c889772f3de3%1697210082.751",
+        "riscv-gcc/12.2.0-rc.0.48+sc.sc-dt.2023.09@sc/main#8284dc17cd2f0eaefbd922abded903ffbb5556dc%1695222427.158",
+        "gmp/6.2.1#9cd6e4a851f6ffd6ea5b5d563f23abcc%1674272182.27"
     ],
     "build_requires": [
-        "sail/0.1.0-rc.0.12@sc/main#9db10f2a2d1b987111e34bf78ab53ec4b7046b34%1687831642.025",
+        "sail/0.1.0-rc.0.14+sc.main@sc/main#8a8ba7c7444f81f72836b7a33f592b467d1d8fd6%1697126972.348",
         "m4/1.4.19#c1c4b1ee919e34630bb9b50046253d3c%1676610086.39",
-        "gmp/6.2.1#9cd6e4a851f6ffd6ea5b5d563f23abcc%1678897585.752"
+        "gmp/6.2.1#9cd6e4a851f6ffd6ea5b5d563f23abcc%1674272182.27"
     ],
     "python_requires": []
 }

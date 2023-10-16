@@ -1,17 +1,17 @@
 [
   {
     "display_name": "cpp_ubuntu_18",
-    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:18.1.12",
+    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:18.1.21",
     "os": "posix"
   },
   {
     "display_name": "cpp_ubuntu_22",
-    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:22.1.11",
+    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:22.1.12",
     "os": "posix"
   },
   {
     "display_name": "cpp_centos_7",
-    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_centos:7.0.18",
+    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_centos:7.0.21",
     "os": "posix"
   }
 ]
