@@ -90,14 +90,15 @@ pipeline {
         echo "Generating credential file"
         dir ("$WD") {
           script {
-            withCredentials([file(credentialsId: 'makepy_creds', variable: 'MAKEPY_CREDS')]) {
+            withCredentials([file(credentialsId: 'makepy_creds_pro', variable: 'MAKEPY_CREDS')]) {
             withCredentials([sshUserPrivateKey(credentialsId: 'cicd-sc_gitlab_ssh_key', keyFileVariable: 'MAKEPY_SSH')]) {
               sh """
               #!/bin/bash
               set +x
               wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 -O jq && chmod +x jq
               cp "$MAKEPY_SSH" the_key
-              cat "$MAKEPY_CREDS"  | ./jq ".gitlab.ssh_path = \\\"$WD/the_key\\\"" | tee credentials.json
+              cat "$MAKEPY_CREDS"  | ./jq ".gitlab.ssh_path = \\\"$WD/the_key\\\"" | tee credentials.json.tmp
+              cat credentials.json.tmp  | ./jq ".stands.ssh_path = \\\"$WD/the_key\\\"" | tee credentials.json
               export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -i '$MAKEPY_SSH'"
               ${MAKE_PY} pass
               """
