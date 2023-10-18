@@ -281,7 +281,7 @@ void select_dmi_via_bscan(struct target *target)
 										bscan_tunnel_nested_tap_select_dmi, TAP_IDLE);
 }
 
-uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
+int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_ptr)
 {
 	/* On BSCAN TAP: Select IR=USER4, issue tunneled IR scan via BSCAN TAP's DR */
 	uint8_t tunneled_ir_width[4] = {bscan_tunnel_ir_width};
@@ -362,18 +362,19 @@ uint32_t dtmcontrol_scan_via_bscan(struct target *target, uint32_t out)
 	uint32_t in = buf_get_u32(in_value, 1, 32);
 	LOG_DEBUG("DTMCS: 0x%x -> 0x%x", out, in);
 
-	return in;
+	if (in_ptr)
+		*in_ptr = in;
+	return ERROR_OK;
 }
 
-static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
+static int dtmcontrol_scan(struct target *target, uint32_t out, uint32_t *in_ptr)
 {
 	struct scan_field field;
 	uint8_t in_value[4];
 	uint8_t out_value[4] = { 0 };
 
 	if (bscan_tunnel_ir_width != 0)
-		return dtmcontrol_scan_via_bscan(target, out);
-
+		return dtmcontrol_scan_via_bscan(target, out, in_ptr);
 
 	buf_set_u32(out_value, 0, 32, out);
 
@@ -389,14 +390,16 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 
 	int retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
-		LOG_ERROR("failed jtag scan: %d", retval);
+		LOG_TARGET_ERROR(target, "dtmcontrol scan failed, error code = %d", retval);
 		return retval;
 	}
 
 	uint32_t in = buf_get_u32(field.in_value, 0, 32);
 	LOG_DEBUG("DTMCONTROL: 0x%x -> 0x%x", out, in);
 
-	return in;
+	if (in_ptr)
+		*in_ptr = in;
+	return ERROR_OK;
 }
 
 static struct target_type *get_target_type(struct target *target)
@@ -408,11 +411,13 @@ static struct target_type *get_target_type(struct target *target)
 
 	RISCV_INFO(info);
 	switch (info->dtm_version) {
-		case 0:
+		case DTM_DTMCS_VERSION_0_11:
 			return &riscv011_target;
-		case 1:
+		case DTM_DTMCS_VERSION_1_0:
 			return &riscv013_target;
 		default:
+			/* TODO: once we have proper support for non-examined targets
+			 * we should have an assert here */
 			LOG_TARGET_ERROR(target, "Unsupported DTM version: %d",
 					info->dtm_version);
 			return NULL;
@@ -479,6 +484,7 @@ static void riscv_free_registers(struct target *target)
 			free(target->reg_cache->reg_list);
 		}
 		free(target->reg_cache);
+		target->reg_cache = NULL;
 	}
 }
 
@@ -488,6 +494,8 @@ static void riscv_deinit_target(struct target *target)
 
 	struct riscv_info *info = target->arch_info;
 	struct target_type *tt = get_target_type(target);
+	if (!tt)
+		LOG_TARGET_ERROR(target, "Could not identify target type.");
 
 	if (riscv_flush_registers(target) != ERROR_OK)
 		LOG_TARGET_ERROR(target, "Failed to flush registers. Ignoring this error.");
@@ -857,15 +865,16 @@ static struct match_triggers_tdata1_fields fill_match_triggers_tdata1_fields_t6(
 	return result;
 }
 
-static int maybe_add_trigger_t2_t6(struct target *target,
+static int maybe_add_trigger_t2_t6_for_wp(struct target *target,
 		struct trigger *trigger, struct match_triggers_tdata1_fields fields)
 {
-	int ret = ERROR_OK;
+	RISCV_INFO(r);
+	int ret = ERROR_FAIL;
 
-	if (!trigger->is_execute && trigger->length > 1) {
+	if (trigger->length > 0) {
 		/* Setting a load/store trigger ("watchpoint") on a range of addresses */
 
-		if (can_use_napot_match(trigger)) {
+		if (r->enable_napot_trigger && can_use_napot_match(trigger)) {
 			LOG_TARGET_DEBUG(target, "trying to setup NAPOT match trigger");
 			struct trigger_request_info napot = {
 				.tdata1 = fields.common | fields.size.any |
@@ -877,52 +886,58 @@ static int maybe_add_trigger_t2_t6(struct target *target,
 			if (ret != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
 				return ret;
 		}
-		LOG_TARGET_DEBUG(target, "trying to setup GE+LT chained match trigger pair");
-		struct trigger_request_info ge_1 = {
-			.tdata1 = fields.common | fields.size.any | fields.chain.enable |
-				fields.match.ge,
-			.tdata2 = trigger->address,
-			.tdata1_ignore_mask = fields.tdata1_ignore_mask
-		};
-		struct trigger_request_info lt_2 = {
-			.tdata1 = fields.common | fields.size.any | fields.chain.disable |
-				fields.match.lt,
-			.tdata2 = trigger->address + trigger->length,
-			.tdata1_ignore_mask = fields.tdata1_ignore_mask
-		};
-		ret = try_setup_chained_match_triggers(target, trigger, ge_1, lt_2);
-		if (ret != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
-			return ret;
 
-		LOG_TARGET_DEBUG(target, "trying to setup LT+GE chained match trigger pair");
-		struct trigger_request_info lt_1 = {
-			.tdata1 = fields.common | fields.size.any | fields.chain.enable |
-				fields.match.lt,
-			.tdata2 = trigger->address + trigger->length,
-			.tdata1_ignore_mask = fields.tdata1_ignore_mask
-		};
-		struct trigger_request_info ge_2 = {
-			.tdata1 = fields.common | fields.size.any | fields.chain.disable |
-				fields.match.ge,
-			.tdata2 = trigger->address,
-			.tdata1_ignore_mask = fields.tdata1_ignore_mask
-		};
-		ret = try_setup_chained_match_triggers(target, trigger, lt_1, ge_2);
-		if (ret != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
-			return ret;
+		if (r->enable_ge_lt_trigger) {
+			LOG_TARGET_DEBUG(target, "trying to setup GE+LT chained match trigger pair");
+			struct trigger_request_info ge_1 = {
+				.tdata1 = fields.common | fields.size.any | fields.chain.enable |
+					fields.match.ge,
+				.tdata2 = trigger->address,
+				.tdata1_ignore_mask = fields.tdata1_ignore_mask
+			};
+			struct trigger_request_info lt_2 = {
+				.tdata1 = fields.common | fields.size.any | fields.chain.disable |
+					fields.match.lt,
+				.tdata2 = trigger->address + trigger->length,
+				.tdata1_ignore_mask = fields.tdata1_ignore_mask
+			};
+			ret = try_setup_chained_match_triggers(target, trigger, ge_1, lt_2);
+			if (ret != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+				return ret;
+
+			LOG_TARGET_DEBUG(target, "trying to setup LT+GE chained match trigger pair");
+			struct trigger_request_info lt_1 = {
+				.tdata1 = fields.common | fields.size.any | fields.chain.enable |
+					fields.match.lt,
+				.tdata2 = trigger->address + trigger->length,
+				.tdata1_ignore_mask = fields.tdata1_ignore_mask
+			};
+			struct trigger_request_info ge_2 = {
+				.tdata1 = fields.common | fields.size.any | fields.chain.disable |
+					fields.match.ge,
+				.tdata2 = trigger->address,
+				.tdata1_ignore_mask = fields.tdata1_ignore_mask
+			};
+			ret = try_setup_chained_match_triggers(target, trigger, lt_1, ge_2);
+			if (ret != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+				return ret;
+		}
 	}
-	LOG_TARGET_DEBUG(target, "trying to setup equality match trigger");
-	struct trigger_request_info eq = {
-		.tdata1 = fields.common | fields.size.any | fields.chain.disable |
-			fields.match.eq,
-		.tdata2 = trigger->address,
-		.tdata1_ignore_mask = fields.tdata1_ignore_mask
-	};
-	ret = try_setup_single_match_trigger(target, trigger, eq);
-	if (ret != ERROR_OK)
-		return ret;
 
-	if (trigger->length > 1) {
+	if (r->enable_equality_match_trigger) {
+		LOG_TARGET_DEBUG(target, "trying to setup equality match trigger");
+		struct trigger_request_info eq = {
+			.tdata1 = fields.common | fields.size.any | fields.chain.disable |
+				fields.match.eq,
+			.tdata2 = trigger->address,
+			.tdata1_ignore_mask = fields.tdata1_ignore_mask
+		};
+		ret = try_setup_single_match_trigger(target, trigger, eq);
+		if (ret != ERROR_OK)
+			return ERROR_FAIL;
+	}
+
+	if (ret == ERROR_OK && trigger->length > 1) {
 		LOG_TARGET_DEBUG(target, "Trigger will match accesses at address 0x%" TARGET_PRIxADDR
 				", but may not match accesses at addresses in the inclusive range from 0x%"
 				TARGET_PRIxADDR " to 0x%" TARGET_PRIxADDR ".", trigger->address,
@@ -938,7 +953,34 @@ static int maybe_add_trigger_t2_t6(struct target *target,
 					"against the first address of the range.");
 		info->range_trigger_fallback_encountered = true;
 	}
-	return ERROR_OK;
+
+	return ret;
+}
+
+static int maybe_add_trigger_t2_t6_for_bp(struct target *target,
+		struct trigger *trigger, struct match_triggers_tdata1_fields fields)
+{
+	LOG_TARGET_DEBUG(target, "trying to setup equality match trigger");
+	struct trigger_request_info eq = {
+		.tdata1 = fields.common | fields.size.any | fields.chain.disable |
+			fields.match.eq,
+		.tdata2 = trigger->address,
+		.tdata1_ignore_mask = fields.tdata1_ignore_mask
+	};
+
+	return try_setup_single_match_trigger(target, trigger, eq);
+}
+
+static int maybe_add_trigger_t2_t6(struct target *target,
+		struct trigger *trigger, struct match_triggers_tdata1_fields fields)
+{
+	if (trigger->is_execute) {
+		assert(!trigger->is_read && !trigger->is_write);
+		return maybe_add_trigger_t2_t6_for_bp(target, trigger, fields);
+	}
+
+	assert(trigger->is_read || trigger->is_write);
+	return maybe_add_trigger_t2_t6_for_wp(target, trigger, fields);
 }
 
 static int maybe_add_trigger_t3(struct target *target, bool vs, bool vu,
@@ -1517,6 +1559,8 @@ static int oldriscv_step(struct target *target, int current, uint32_t address,
 		int handle_breakpoints)
 {
 	struct target_type *tt = get_target_type(target);
+	if (!tt)
+		return ERROR_FAIL;
 	return tt->step(target, current, address, handle_breakpoints);
 }
 
@@ -1542,25 +1586,40 @@ static int riscv_examine(struct target *target)
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 
 	RISCV_INFO(info);
-	uint32_t dtmcontrol = dtmcontrol_scan(target, 0);
+	uint32_t dtmcontrol;
+	if (dtmcontrol_scan(target, 0, &dtmcontrol) != ERROR_OK || dtmcontrol == 0) {
+		LOG_TARGET_ERROR(target, "Could not read dtmcontrol. Check JTAG connectivity/board power.");
+		return ERROR_FAIL;
+	}
 	LOG_TARGET_DEBUG(target, "dtmcontrol=0x%x", dtmcontrol);
 	info->dtm_version = get_field(dtmcontrol, DTMCONTROL_VERSION);
 	LOG_TARGET_DEBUG(target, "version=0x%x", info->dtm_version);
 
+	int examine_status = ERROR_FAIL;
 	struct target_type *tt = get_target_type(target);
 	if (!tt)
-		return ERROR_FAIL;
+		goto examine_fail;
 
-	int result = tt->init_target(info->cmd_ctx, target);
-	if (result != ERROR_OK)
-		return result;
+	examine_status = tt->init_target(info->cmd_ctx, target);
+	if (examine_status != ERROR_OK)
+		goto examine_fail;
 
-	return tt->examine(target);
+	examine_status = tt->examine(target);
+	if (examine_status != ERROR_OK)
+		goto examine_fail;
+
+	return ERROR_OK;
+
+examine_fail:
+	info->dtm_version = DTM_DTMCS_VERSION_UNKNOWN;
+	return examine_status;
 }
 
 static int oldriscv_poll(struct target *target)
 {
 	struct target_type *tt = get_target_type(target);
+	if (!tt)
+		return ERROR_FAIL;
 	return tt->poll(target);
 }
 
@@ -1694,6 +1753,8 @@ static int halt_go(struct target *target)
 	int result;
 	if (!r->get_hart_state) {
 		struct target_type *tt = get_target_type(target);
+		if (!tt)
+			return ERROR_FAIL;
 		result = tt->halt(target);
 	} else {
 		result = riscv_halt_go_all_harts(target);
@@ -1715,6 +1776,8 @@ int riscv_halt(struct target *target)
 
 	if (!r->get_hart_state) {
 		struct target_type *tt = get_target_type(target);
+		if (!tt)
+			return ERROR_FAIL;
 		return tt->halt(target);
 	}
 
@@ -1760,6 +1823,8 @@ static int riscv_assert_reset(struct target *target)
 {
 	LOG_TARGET_DEBUG(target, "coreid: [%d]", target->coreid);
 	struct target_type *tt = get_target_type(target);
+	if (!tt)
+		return ERROR_FAIL;
 	riscv_invalidate_register_cache(target);
 	return tt->assert_reset(target);
 }
@@ -1768,6 +1833,8 @@ static int riscv_deassert_reset(struct target *target)
 {
 	LOG_TARGET_DEBUG(target, "coreid: [%d]", target->coreid);
 	struct target_type *tt = get_target_type(target);
+	if (!tt)
+		return ERROR_FAIL;
 	return tt->deassert_reset(target);
 }
 
@@ -1900,6 +1967,8 @@ static int resume_go(struct target *target, int current,
 	int result;
 	if (!r->get_hart_state) {
 		struct target_type *tt = get_target_type(target);
+		if (!tt)
+			return ERROR_FAIL;
 		result = tt->resume(target, current, address, handle_breakpoints,
 				debug_execution);
 	} else {
@@ -2400,6 +2469,8 @@ static int riscv_write_phys_memory(struct target *target, target_addr_t phys_add
 			uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	struct target_type *tt = get_target_type(target);
+	if (!tt)
+		return ERROR_FAIL;
 	return tt->write_memory(target, phys_address, size, count, buffer);
 }
 
@@ -2416,6 +2487,8 @@ static int riscv_write_memory(struct target *target, target_addr_t address,
 		address = physical_addr;
 
 	struct target_type *tt = get_target_type(target);
+	if (!tt)
+		return ERROR_FAIL;
 	return tt->write_memory(target, address, size, count, buffer);
 }
 
@@ -2493,6 +2566,8 @@ static int riscv_get_gdb_reg_list(struct target *target,
 static int riscv_arch_state(struct target *target)
 {
 	struct target_type *tt = get_target_type(target);
+	if (!tt)
+		return ERROR_FAIL;
 	return tt->arch_state(target);
 }
 
@@ -4230,7 +4305,7 @@ COMMAND_HANDLER(riscv_exec_progbuf)
 	struct target *target = get_current_target(CMD_CTX);
 
 	RISCV_INFO(r);
-	if (r->dtm_version != 1) {
+	if (r->dtm_version != DTM_DTMCS_VERSION_1_0) {
 		LOG_TARGET_ERROR(target, "exec_progbuf: Program buffer is "
 				"only supported on v0.13 or v1.0 targets.");
 		return ERROR_FAIL;
@@ -4271,6 +4346,57 @@ COMMAND_HANDLER(riscv_exec_progbuf)
 	LOG_TARGET_DEBUG(target, "exec_progbuf: Program buffer execution successful.");
 
 	return ERROR_OK;
+}
+
+COMMAND_HANDLER(riscv_set_enable_eq_match_trigger)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (CMD_ARGC == 0) {
+		command_print(CMD, "equality match trigger enabled: %s", r->enable_equality_match_trigger ? "on" : "off");
+		return ERROR_OK;
+	} else if (CMD_ARGC == 1) {
+		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->enable_equality_match_trigger);
+		return ERROR_OK;
+	}
+
+	LOG_ERROR("Command takes 0 or 1 parameters");
+	return ERROR_COMMAND_SYNTAX_ERROR;
+}
+
+COMMAND_HANDLER(riscv_set_enable_napot_trigger)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (CMD_ARGC == 0) {
+		command_print(CMD, "NAPOT trigger enabled: %s", r->enable_napot_trigger ? "on" : "off");
+		return ERROR_OK;
+	} else if (CMD_ARGC == 1) {
+		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->enable_napot_trigger);
+		return ERROR_OK;
+	}
+
+	LOG_ERROR("Command takes 0 or 1 parameters");
+	return ERROR_COMMAND_SYNTAX_ERROR;
+}
+
+COMMAND_HANDLER(riscv_set_enable_ge_lt_trigger)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (CMD_ARGC == 0) {
+		command_print(CMD, "ge-lt triggers enabled: %s", r->enable_ge_lt_trigger ? "on" : "off");
+		return ERROR_OK;
+	} else if (CMD_ARGC == 1) {
+		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->enable_ge_lt_trigger);
+		return ERROR_OK;
+	}
+
+	LOG_ERROR("Command takes 0 or 1 parameters");
+	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
 static const struct command_registration riscv_exec_command_handlers[] = {
@@ -4519,6 +4645,27 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.help = "Execute a sequence of 32-bit instructions using the program buffer. "
 			"The final ebreak instruction is added automatically, if needed."
 	},
+	{
+		.name = "set_enable_eq_match_trigger",
+		.handler = riscv_set_enable_eq_match_trigger,
+		.mode = COMMAND_CONFIG,
+		.usage = "[on|off]",
+		.help = "When on, allow OpenOCD to use equality match trigger in wp."
+	},
+	{
+		.name = "set_enable_napot_trigger",
+		.handler = riscv_set_enable_napot_trigger,
+		.mode = COMMAND_CONFIG,
+		.usage = "[on|off]",
+		.help = "When on, allow OpenOCD to use NAPOT trigger in wp."
+	},
+	{
+		.name = "set_enable_ge_lt_trigger",
+		.handler = riscv_set_enable_ge_lt_trigger,
+		.mode = COMMAND_CONFIG,
+		.usage = "[on|off]",
+		.help = "When on, allow OpenOCD to use GE/LT triggers in wp."
+	},
 	COMMAND_REGISTRATION_DONE
 };
 
@@ -4628,7 +4775,7 @@ static void riscv_info_init(struct target *target, struct riscv_info *r)
 
 	r->common_magic = RISCV_COMMON_MAGIC;
 
-	r->dtm_version = 1;
+	r->dtm_version = DTM_DTMCS_VERSION_UNKNOWN;
 	r->version_specific = NULL;
 
 	memset(r->trigger_unique_id, 0xff, sizeof(r->trigger_unique_id));
@@ -4654,6 +4801,10 @@ static void riscv_info_init(struct target *target, struct riscv_info *r)
 	r->riscv_ebreakm = true;
 	r->riscv_ebreaks = true;
 	r->riscv_ebreaku = true;
+
+	r->enable_equality_match_trigger = true;
+	r->enable_ge_lt_trigger = true;
+	r->enable_napot_trigger = true;
 }
 
 static int riscv_resume_go_all_harts(struct target *target)
@@ -4844,6 +4995,18 @@ static int riscv_set_or_write_register(struct target *target,
 
 	keep_alive();
 
+	if (regid == GDB_REGNO_PC) {
+		return riscv_set_or_write_register(target, GDB_REGNO_DPC, value, write_through);
+	} else if (regid == GDB_REGNO_PRIV) {
+		riscv_reg_t dcsr;
+
+		if (riscv_get_register(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+			return ERROR_FAIL;
+		dcsr = set_field(dcsr, CSR_DCSR_PRV, get_field(value, VIRT_PRIV_PRV));
+		dcsr = set_field(dcsr, CSR_DCSR_V, get_field(value, VIRT_PRIV_V));
+		return riscv_set_or_write_register(target, GDB_REGNO_DCSR, dcsr, write_through);
+	}
+
 	if (!target->reg_cache) {
 		assert(!target_was_examined(target));
 		LOG_TARGET_DEBUG(target,
@@ -4928,6 +5091,17 @@ int riscv_get_register(struct target *target, riscv_reg_t *value,
 	assert(r->get_register);
 
 	keep_alive();
+
+	if (regid == GDB_REGNO_PC) {
+		return riscv_get_register(target, value, GDB_REGNO_DPC);
+	} else if (regid == GDB_REGNO_PRIV) {
+		uint64_t dcsr;
+		if (riscv_get_register(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+			return ERROR_FAIL;
+		*value = set_field(0, VIRT_PRIV_V, get_field(dcsr, CSR_DCSR_V));
+		*value = set_field(*value, VIRT_PRIV_PRV, get_field(dcsr, CSR_DCSR_PRV));
+		return ERROR_OK;
+	}
 
 	if (!target->reg_cache) {
 		assert(!target_was_examined(target));

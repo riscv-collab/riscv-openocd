@@ -411,14 +411,14 @@ static void select_dmi(struct target *target)
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 }
 
-static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
+static int dtmcontrol_scan(struct target *target, uint32_t out, uint32_t *in_ptr)
 {
 	struct scan_field field;
 	uint8_t in_value[4];
 	uint8_t out_value[4] = { 0 };
 
 	if (bscan_tunnel_ir_width != 0)
-		return dtmcontrol_scan_via_bscan(target, out);
+		return dtmcontrol_scan_via_bscan(target, out, in_ptr);
 
 	buf_set_u32(out_value, 0, 32, out);
 
@@ -441,7 +441,9 @@ static uint32_t dtmcontrol_scan(struct target *target, uint32_t out)
 	uint32_t in = buf_get_u32(field.in_value, 0, 32);
 	LOG_DEBUG("DTMCS: 0x%x -> 0x%x", out, in);
 
-	return in;
+	if (in_ptr)
+		*in_ptr = in;
+	return ERROR_OK;
 }
 
 static void increase_dmi_busy_delay(struct target *target)
@@ -452,7 +454,7 @@ static void increase_dmi_busy_delay(struct target *target)
 			info->dtmcs_idle, info->dmi_busy_delay,
 			info->ac_busy_delay);
 
-	dtmcontrol_scan(target, DTM_DTMCS_DMIRESET);
+	dtmcontrol_scan(target, DTM_DTMCS_DMIRESET, NULL /* discard result */);
 }
 
 /**
@@ -597,7 +599,7 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in,
 		} else if (status == DMI_STATUS_SUCCESS) {
 			break;
 		} else {
-			dtmcontrol_scan(target, DTM_DTMCS_DMIRESET);
+			dtmcontrol_scan(target, DTM_DTMCS_DMIRESET, NULL /* discard result */);
 			break;
 		}
 		if (time(NULL) - start > timeout_sec)
@@ -632,7 +634,7 @@ static int dmi_op_timeout(struct target *target, uint32_t *data_in,
 							"Failed DMI %s (NOP) at 0x%x; status=%d", op_name, address,
 							status);
 				}
-				dtmcontrol_scan(target, DTM_DTMCS_DMIRESET);
+				dtmcontrol_scan(target, DTM_DTMCS_DMIRESET, NULL /* discard result */);
 				return ERROR_FAIL;
 			}
 			if (time(NULL) - start > timeout_sec)
@@ -1845,17 +1847,19 @@ static int examine(struct target *target)
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 	LOG_TARGET_DEBUG(target, "dbgbase=0x%x", target->dbgbase);
 
-	uint32_t dtmcontrol = dtmcontrol_scan(target, 0);
+	uint32_t dtmcontrol;
+	if (dtmcontrol_scan(target, 0, &dtmcontrol) != ERROR_OK || dtmcontrol == 0) {
+		LOG_TARGET_ERROR(target, "Could not scan dtmcontrol. Check JTAG connectivity/board power.");
+		return ERROR_FAIL;
+	}
+
 	LOG_TARGET_DEBUG(target, "dtmcontrol=0x%x", dtmcontrol);
 	LOG_TARGET_DEBUG(target, "  dmireset=%d", get_field(dtmcontrol, DTM_DTMCS_DMIRESET));
 	LOG_TARGET_DEBUG(target, "  idle=%d", get_field(dtmcontrol, DTM_DTMCS_IDLE));
 	LOG_TARGET_DEBUG(target, "  dmistat=%d", get_field(dtmcontrol, DTM_DTMCS_DMISTAT));
 	LOG_TARGET_DEBUG(target, "  abits=%d", get_field(dtmcontrol, DTM_DTMCS_ABITS));
 	LOG_TARGET_DEBUG(target, "  version=%d", get_field(dtmcontrol, DTM_DTMCS_VERSION));
-	if (dtmcontrol == 0) {
-		LOG_TARGET_ERROR(target, "dtmcontrol is 0. Check JTAG connectivity/board power.");
-		return ERROR_FAIL;
-	}
+
 	if (get_field(dtmcontrol, DTM_DTMCS_VERSION) != 1) {
 		LOG_TARGET_ERROR(target, "Unsupported DTM version %d. (dtmcontrol=0x%x)",
 				get_field(dtmcontrol, DTM_DTMCS_VERSION), dtmcontrol);
@@ -4667,25 +4671,12 @@ static int riscv013_get_register(struct target *target,
 	if (dm013_select_target(target) != ERROR_OK)
 		return ERROR_FAIL;
 
-	int result = ERROR_OK;
-	if (rid == GDB_REGNO_PC) {
-		/* TODO: move this into riscv.c. */
-		result = register_read_direct(target, value, GDB_REGNO_DPC);
-		LOG_TARGET_DEBUG(target, "read PC from DPC: 0x%" PRIx64, *value);
-	} else if (rid == GDB_REGNO_PRIV) {
-		uint64_t dcsr;
-		/* TODO: move this into riscv.c. */
-		if (register_read_direct(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-			return ERROR_FAIL;
-		*value = set_field(0, VIRT_PRIV_V, get_field(dcsr, CSR_DCSR_V));
-		*value = set_field(*value, VIRT_PRIV_PRV, get_field(dcsr, CSR_DCSR_PRV));
-	} else {
-		result = register_read_direct(target, value, rid);
-		if (result != ERROR_OK)
-			*value = -1;
+	if (register_read_direct(target, value, rid) != ERROR_OK) {
+		*value = -1;
+		return ERROR_FAIL;
 	}
 
-	return result;
+	return ERROR_OK;
 }
 
 static int riscv013_set_register(struct target *target, enum gdb_regno rid,
@@ -4697,24 +4688,7 @@ static int riscv013_set_register(struct target *target, enum gdb_regno rid,
 	if (dm013_select_target(target) != ERROR_OK)
 		return ERROR_FAIL;
 
-	if (rid <= GDB_REGNO_XPR31) {
-		return register_write_direct(target, rid, value);
-	} else if (rid == GDB_REGNO_PC) {
-		LOG_TARGET_DEBUG(target, "writing PC to DPC: 0x%" PRIx64, value);
-		return register_write_direct(target, GDB_REGNO_DPC, value);
-	} else if (rid == GDB_REGNO_PRIV) {
-		riscv_reg_t dcsr;
-
-		if (register_read_direct(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-			return ERROR_FAIL;
-		dcsr = set_field(dcsr, CSR_DCSR_PRV, get_field(value, VIRT_PRIV_PRV));
-		dcsr = set_field(dcsr, CSR_DCSR_V, get_field(value, VIRT_PRIV_V));
-		return register_write_direct(target, GDB_REGNO_DCSR, dcsr);
-	} else {
-		return register_write_direct(target, rid, value);
-	}
-
-	return ERROR_OK;
+	return register_write_direct(target, rid, value);
 }
 
 static int dm013_select_hart(struct target *target, int hart_index)

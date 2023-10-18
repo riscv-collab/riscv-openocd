@@ -166,6 +166,24 @@ struct target *get_available_target_from_connection(struct connection *connectio
 	return target;
 }
 
+/** Return true iff the given connection includes the given target. */
+static bool gdb_connection_includes_target(struct connection *connection, struct target *target)
+{
+	struct gdb_service *gdb_service = connection->service->priv;
+	struct target *service_target = gdb_service->target;
+	if (service_target->smp) {
+		struct target_list *tlist;
+		foreach_smp_target(tlist, service_target->smp_targets) {
+			struct target *t = tlist->target;
+			if (t == target)
+				return true;
+		}
+		return false;
+	}
+	/* Non-SMP target. */
+	return service_target == target;
+}
+
 static int gdb_last_signal(struct target *target)
 {
 	switch (target->debug_reason) {
@@ -988,9 +1006,9 @@ static int gdb_target_callback_event_handler(struct target *target,
 		enum target_event event, void *priv)
 {
 	struct connection *connection = priv;
-	struct target *gdb_target = get_available_target_from_connection(connection);
 
-	if (gdb_target != target)
+	/* Propagate this event if it's for any of the targets on this gdb connection. */
+	if (!gdb_connection_includes_target(connection, target))
 		return ERROR_OK;
 
 	switch (event) {
@@ -1419,8 +1437,13 @@ static int gdb_get_register_packet(struct connection *connection,
 	LOG_DEBUG("-");
 #endif
 
-	if ((target->rtos) && (rtos_get_gdb_reg(connection, reg_num) == ERROR_OK))
-		return ERROR_OK;
+	if (target->rtos) {
+		retval = rtos_get_gdb_reg(connection, reg_num);
+		if (retval == ERROR_OK)
+			return ERROR_OK;
+		if (retval != ERROR_NOT_IMPLEMENTED)
+			return gdb_error(connection, retval);
+	}
 
 	retval = target_get_gdb_reg_list_noread(target, &reg_list, &reg_list_size,
 			REG_CLASS_ALL);
@@ -3033,7 +3056,7 @@ static bool gdb_handle_vcont_packet(struct connection *connection, const char *p
 	__attribute__((unused)) int packet_size)
 {
 	struct gdb_connection *gdb_connection = connection->priv;
-	struct target *target = get_available_target_from_connection(connection);
+	struct target *target = get_target_from_connection(connection);
 	const char *parse = packet;
 	int retval;
 
@@ -3054,6 +3077,24 @@ static bool gdb_handle_vcont_packet(struct connection *connection, const char *p
 	/* simple case, a continue packet */
 	if (parse[0] == 'c') {
 		gdb_running_type = 'c';
+
+		if (target->state == TARGET_UNAVAILABLE) {
+			struct target *available_target = get_available_target_from_connection(connection);
+			if (target == available_target) {
+				LOG_DEBUG("All targets for this gdb connection "
+						"are unavailable.  Fake to gdb that the resume "
+						"succeeded and the target is now running.");
+				gdb_connection->frontend_state = TARGET_RUNNING;
+				gdb_connection->output_flag = GDB_OUTPUT_ALL;
+				target_call_event_callbacks(target, TARGET_EVENT_GDB_START);
+				return true;
+			}
+			LOG_TARGET_DEBUG(target, "Target is unavailable. Resume %s instead.",
+					target_name(available_target));
+			/* Resume an available target. */
+			target = available_target;
+		}
+
 		LOG_DEBUG("target %s continue", target_name(target));
 		gdb_connection->output_flag = GDB_OUTPUT_ALL;
 		retval = target_resume(target, 1, 0, 0, 0);
@@ -3193,9 +3234,15 @@ static bool gdb_handle_vcont_packet(struct connection *connection, const char *p
 			return true;
 		}
 
-		retval = target_step(ct, current_pc, 0, 0);
-		if (retval == ERROR_TARGET_NOT_HALTED)
-			LOG_INFO("target %s was not halted when step was requested", target_name(ct));
+		if (ct->state == TARGET_UNAVAILABLE) {
+			LOG_TARGET_ERROR(ct, "Target is unavailable, so cannot be stepped. "
+					     "Pretending to gdb that it is running until it's available again.");
+			retval = ERROR_FAIL;
+		} else {
+			retval = target_step(ct, current_pc, 0, 0);
+			if (retval == ERROR_TARGET_NOT_HALTED)
+				LOG_INFO("target %s was not halted when step was requested", target_name(ct));
+		}
 
 		/* if step was successful send a reply back to gdb */
 		if (retval == ERROR_OK) {
