@@ -37,17 +37,10 @@ proc is_wp_expected_to_match_on_crossing { HAS_INTERSECTION ADDRESS WP_SIZE } {
     error "test does not support this configuration and needs to be fixed"
   }
   # FIXME: we should check this only for non-NAPOT requests
-  # TODO: looks like the current implementation does not use GE/LE for
-  # 1-byte watchpoints
-  if { $WP_SIZE > 1 && [target_info cpu,wp_gelt_matches_on_crossing] } {
+  if { $WP_SIZE >= 1 && [target_info cpu,wp_gelt_matches_on_crossing] } {
     return 1
   }
-  if { $WP_SIZE == 1 } {
-    # TODO: probably, we should implement some special handling for WP_SIZE = 1
-    if {[target_info cpu,wp_eq_matches_on_crossing]} {
-      return 1
-    }
-  }
+
   if { $WP_SIZE == 0 && [target_info cpu,wp_eq_matches_on_crossing] } {
     return 1
   }
