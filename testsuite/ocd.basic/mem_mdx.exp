@@ -32,14 +32,6 @@ proc run_test {} {
     ocdtlb_expect_equal $bytes [list 0xdeadbabe00baddad]
   }
 
-  set expect_failure [expr ![target_info cpu,misaligned_access_support]]
-  ocdtlb_run_expect "mdh [expr $MEM_ADDR + 1]" $expect_failure
-  ocdtlb_run_expect "mdw [expr $MEM_ADDR + 1]" $expect_failure
-  ocdtlb_run_expect "mdd [expr $MEM_ADDR + 1]" $expect_failure
-  ocdtlb_run_expect "mdh [expr $MEM_ADDR + 1] 2" $expect_failure
-  ocdtlb_run_expect "mdw [expr $MEM_ADDR + 1] 2" $expect_failure
-  ocdtlb_run_expect "mdd [expr $MEM_ADDR + 1] 2" $expect_failure
-
   return [ocd_test_pass]
 }
 

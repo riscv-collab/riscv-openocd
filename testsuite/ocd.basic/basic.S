@@ -59,3 +59,5 @@ work_area_start:
 work_area_end:
 mdd_test_data:
   .8byte 0xdeadbabe00baddad
+  .8byte 0x1020304050607080
+  .8byte 0x90a0b0c0d0e0f010

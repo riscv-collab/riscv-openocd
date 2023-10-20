@@ -1,0 +1,43 @@
+proc mem_mdx_unaligned_test { command expect_failure expected_values } {
+  set response [ocdtlb_run_expect "$command" $expect_failure]
+  if { $expect_failure } {
+    return
+  }
+  set bytes [dict get $response data]
+  ocdtlb_expect_equal $bytes $expected_values
+}
+
+proc run_test {} {
+  set xlen64 [expr [target_info cpu,xlen] == 64]
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set MEM_ADDR [tool_state_get_program_symbol mdd_test_data]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+
+  set expect_failure [expr ![target_info cpu,misaligned_access_support]]
+  set MEM_ADDR_UNALIGNED [expr {$MEM_ADDR + 1}]
+
+  mem_mdx_unaligned_test "mdh $MEM_ADDR_UNALIGNED" $expect_failure [list 0xbadd]
+  mem_mdx_unaligned_test "mdw $MEM_ADDR_UNALIGNED" $expect_failure [list 0xbe00badd]
+
+  mem_mdx_unaligned_test "mdh $MEM_ADDR_UNALIGNED 2" $expect_failure [list 0xbadd 0xbe00]
+  mem_mdx_unaligned_test "mdw $MEM_ADDR_UNALIGNED 2" $expect_failure [list 0xbe00badd 0x80deadba]
+
+  if {$xlen64} {
+    mem_mdx_unaligned_test "mdd $MEM_ADDR_UNALIGNED" $expect_failure [list 0x80deadbabe00badd]
+    mem_mdx_unaligned_test "mdd $MEM_ADDR_UNALIGNED 2" $expect_failure [list 0x80deadbabe00badd 0x1010203040506070]
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
