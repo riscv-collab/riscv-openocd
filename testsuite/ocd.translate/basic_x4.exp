@@ -58,20 +58,22 @@ proc run_test {} {
 
     ocd_connect
 
-    foreach mode $modes mode_x4 $modes_x4 {
-        ocdtlb_run_expect "reset halt"
+    foreach mode $modes {
+        foreach mode_x4 $modes_x4 {
+            ocdtlb_run_expect "reset halt"
 
-        init_with_config $mode $table_addr $va_list $ga_list
-        init_with_config $mode_x4 $table_addr_x4 $extended_ga_list $pa_list
+            init_with_config $mode $table_addr $va_list $ga_list
+            init_with_config $mode_x4 $table_addr_x4 $extended_ga_list $pa_list
 
-        turn_on_translation $mode $table_addr 1
-        turn_on_translation $mode_x4 $table_addr_x4
+            turn_on_translation $mode $table_addr 1
+            turn_on_translation $mode_x4 $table_addr_x4
 
-        ocdtlb_run_expect "mdw $virtual_address"
-        ocdtlb_run_expect "mww phys $physical_address $true_data"
-        set data [dict get [ocdtlb_run_expect "mdw $virtual_address"] data ]
+            ocdtlb_run_expect "mdw $virtual_address"
+            ocdtlb_run_expect "mww phys $physical_address $true_data"
+            set data [dict get [ocdtlb_run_expect "mdw $virtual_address"] data ]
 
-        ocdtlb_expect_equal $data $true_data
+            ocdtlb_expect_equal $data $true_data
+        }
     }
 
     return [ocd_test_pass]
