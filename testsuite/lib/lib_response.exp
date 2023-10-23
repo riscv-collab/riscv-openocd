@@ -547,3 +547,9 @@ proc parse_show_ebreak { report } {
 
   return [internal_parse_error $TYPE $report {info "set_ebreak* dont passed"}]
 }
+
+proc parse_set_enable_virt2phys { report } {
+  set TYPE "set_enable_virt2phys"
+
+  return [internal_parse_success $TYPE $report {info "set_enable_virt2phys passed"}]
+}

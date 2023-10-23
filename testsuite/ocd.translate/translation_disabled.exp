@@ -1,0 +1,18 @@
+proc run_test {} {
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe"
+
+    set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+    ocd_connect
+    ocdtlb_run_expect "reset halt"
+
+    ocdtlb_run_expect "riscv set_enable_virt2phys off"
+
+    set received_address [dict get [ocdtlb_run_expect "virt2phys $ENTRY_ADDR"] value]
+    ocdtlb_expect_equal $received_address $ENTRY_ADDR
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

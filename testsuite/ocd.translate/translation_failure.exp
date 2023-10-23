@@ -1,0 +1,36 @@
+proc run_test {} {
+    set SATP_MODE ""
+    set available_modes [list sv39 sv48 sv57]
+    foreach mode $available_modes {
+        if {[target_info "cpu,$mode"]} {
+            set SATP_MODE $mode
+            break
+        }
+    }
+
+    if {$SATP_MODE eq ""} {
+        return [ocd_test_unsupported]
+    }
+
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe"
+
+    set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+    ocd_connect
+    ocdtlb_run_expect "reset halt"
+
+    ocdtlb_run_expect "mwd $ENTRY_ADDR 0x0"
+
+    set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
+    source $lib_translate_support
+
+    turn_on_translation $SATP_MODE $ENTRY_ADDR
+
+    set expect_failure 1
+    ocdtlb_run_expect "virt2phys $ENTRY_ADDR" $expect_failure
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

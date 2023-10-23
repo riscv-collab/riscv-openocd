@@ -69,9 +69,13 @@ proc run_test {} {
             turn_on_translation $mode_x4 $table_addr_x4
 
             ocdtlb_run_expect "mdw $virtual_address"
-            ocdtlb_run_expect "mww phys $physical_address $true_data"
-            set data [dict get [ocdtlb_run_expect "mdw $virtual_address"] data ]
 
+            ocdtlb_run_expect "mww phys $physical_address $true_data"
+            set data [dict get [ocdtlb_run_expect "mdw $virtual_address"] data]
+            ocdtlb_expect_equal $data $true_data
+
+            ocdtlb_run_expect "mww $virtual_address $true_data"
+            set data [dict get [ocdtlb_run_expect "mdw phys $physical_address"] data]
             ocdtlb_expect_equal $data $true_data
         }
     }
