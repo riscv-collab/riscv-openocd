@@ -18,14 +18,14 @@ proc run_test {} {
     ]
 
     set test_script_flags [list \
-     -f $srcdir/$subdir/$tcl_script \
+     -f $srcdir/$subdir/universal_config_tests/$tcl_script \
     ]
 
     set cmd [concat \
       [list $OPENOCD] \
       $openocd_adapter_flags \
       $target_cfg_flags \
-      [list -f $srcdir/$subdir/common_test_init.tcl] \
+      [list -f $srcdir/$subdir/universal_config_tests/common_test_init.tcl] \
       $test_script_flags \
     ]
     # [list -d2]
