@@ -1,0 +1,37 @@
+proc mem_mwx_unaligned_test { operation address values expect_failure expected_values } {
+  ocdtlb_run_expect "$operation $address $values" $expect_failure
+  if { $expect_failure } {
+    return
+  }
+  ocdtlb_do_byte_read_compare $address $expected_values
+}
+
+proc run_test {} {
+  set xlen64 [expr [target_info cpu,xlen] == 64]
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  set MEM_ADDR [tool_state_get_program_symbol work_area_start]
+  set MEM_ADDR_UNALIGNED [expr {$MEM_ADDR + 1}]
+  set expect_failure [expr ![target_info cpu,misaligned_access_support]]
+
+  mem_mwx_unaligned_test mwh $MEM_ADDR_UNALIGNED 0xbad0 $expect_failure \
+    [list 0xd0 0xba]
+  mem_mwx_unaligned_test mww $MEM_ADDR_UNALIGNED 0xfffafbfc $expect_failure \
+    [list 0xfc 0xfb 0xfa 0xff]
+  if {$xlen64} {
+    mem_mwx_unaligned_test mwd $MEM_ADDR_UNALIGNED 0xC00010FFB0BAB0BA $expect_failure \
+      [list 0xba 0xb0 0xba 0xb0 0xff 0x10 0x00 0xc0]
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
+
