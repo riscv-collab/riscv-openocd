@@ -58,6 +58,7 @@ default:
     - PACKAGE_NAME=$(./make.py --no-history-dump --image $IMAGE --logging-level error
         conan-info package $ASSUME_RELEASE_ARG)
     - RELEASE_STRING=$(echo -e "$CI_COMMIT_MESSAGE" | sed -rn 's/^SYNTACORE_RELSTR'":"' (.*)/\1/p' | xargs)
+    - git fetch
     - ./make.py --image $IMAGE distr-prep -r "$RELEASE_STRING"
   after_script:
     - echo "You can reproduce this pipeline with the following commands:"

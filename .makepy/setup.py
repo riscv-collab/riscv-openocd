@@ -266,13 +266,16 @@ class _PrepareDistribution(_Command):
         if release_string == "":
             release_string = "development_build"
         release_string = f"{release_string}-g{commit_hash}"
-        git_describe = _run_shell(
-            ["git", "describe"], capture_output=True, cwd=_repo_path
-        ).stdout
+        riscv_merge_base = _run_shell(
+            ["git", "merge-base", "origin/riscv", "HEAD"],
+            capture_output=True,
+            cwd=_repo_path,
+        ).stdout[0:7]
+        version_info = f"riscv-upstream-{riscv_merge_base}-cs-{commit_hash}"
         with open(
             _repo_path / "__sc_version.txt", "w", encoding="utf-8"
         ) as version_file:
-            version_file.write(f"{release_string}\n{git_describe}")
+            version_file.write(f"{release_string}\n{version_info}")
 
 
 def _build_formatter_and_linter() -> tuple[_FormatCommand, _LintCommand]:
