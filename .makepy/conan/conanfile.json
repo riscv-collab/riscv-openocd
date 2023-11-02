@@ -1,4 +1,0 @@
-{
-  "riscv-gcc": "riscv-gcc/[*, include_prerelease=True]@sc/main",
-  "riscv-isa-sim": "riscv-isa-sim/[*, include_prerelease=True]@sc/main"
-}

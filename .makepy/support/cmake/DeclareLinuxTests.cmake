@@ -1,6 +1,17 @@
 if(NOT DEFINED RISCVGCC_DIR)
   message(FATAL_ERROR "RISCVGCC_DIR is not defined")
 endif()
+set(RISCV_GCC_BINARY ${RISCVGCC_DIR}/bin/riscv64-unknown-elf-gcc)
+
+if(NOT DEFINED RISCVGDB_DIR)
+  message(FATAL_ERROR "RISCVGDB_DIR is not defined")
+endif()
+set(RISCV_GDB_BINARY ${RISCVGDB_DIR}/rv64elf/bin/riscv64-unknown-elf-gdb)
+
+if(NOT DEFINED RISCVSpike_DIR)
+  message(FATAL_ERROR "RISCVSpike_DIR is not defined")
+endif()
+set(RISCV_SPIKE_SIM_BINARY ${RISCVSpike_DIR}/bin/spike)
 
 set(DEJAGNU_SRC_CODE dejagnu)
 # cmake-format: off
@@ -194,12 +205,12 @@ function(add_riscv_test_debug_run_for_target target)
     WORKING_DIRECTORY ${wd_relative_path}
     COMMAND
       env
+        GCC=${RISCV_GCC_BINARY}
+        GDB=${RISCV_GDB_BINARY}
         LOGS=${RISCV_TESTS_LOGS_DIRNAME}
-        GCC=${RISCVGCC_DIR}/bin/riscv64-unknown-elf-gcc
-        GDB=${RISCVGDB_DIR}/bin/riscv64-unknown-elf-gdb
-        SIM=${RISCVSpike_DIR}/bin/spike
         OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
         ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
+        SIM=${RISCV_SPIKE_SIM_BINARY}
         TGT=${target}
       ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/run-riscv-debug-tests.sh
     DEPENDS openocd ${wd_target_name})

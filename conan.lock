@@ -1,16 +1,14 @@
 {
     "version": "0.5",
-    "requires": [
-        "zlib/1.2.13#13c96f538b52e1600c40b88994de240f%1667396813.733",
-        "sail-riscv/0.1.0-rc.0.14+sc.main@sc/main#728628456b0b3ab7450cec566b72345c76437ac9%1697185571.784",
-        "riscv-isa-sim/0.1.0-rc.0.127+sc.main@sc/main#868ef2851747e84781adb0a343f8c889772f3de3%1697210082.751",
-        "riscv-gcc/12.2.0-rc.0.48+sc.sc-dt.2023.09@sc/main#8284dc17cd2f0eaefbd922abded903ffbb5556dc%1695222427.158",
-        "gmp/6.2.1#9cd6e4a851f6ffd6ea5b5d563f23abcc%1674272182.27"
-    ],
+    "requires": [],
     "build_requires": [
-        "sail/0.1.0-rc.0.14+sc.main@sc/main#8a8ba7c7444f81f72836b7a33f592b467d1d8fd6%1697126972.348",
-        "m4/1.4.19#c1c4b1ee919e34630bb9b50046253d3c%1676610086.39",
-        "gmp/6.2.1#9cd6e4a851f6ffd6ea5b5d563f23abcc%1674272182.27"
+        "testgen-model-interface/0.1.0-rc.0.2+sc.main@sc/main#3b39bdf71d578cba9b284aa39dd1fe16b1235563%1698053605.646",
+        "riscv-isa-sim/0.1.0-rc.0.130+sc.main@sc/main#689bad1e0e9dcca6e3b244412a604559c9b93c36%1698238055.129",
+        "riscv-gdb/13.2.0-rc.0.60+sc.main@sc/main#44d1f59548c4138aaf5e784c12d8613f240d6f8a%1697555672.28",
+        "riscv-gcc/12.2.1-rc.0.57+sc.main@sc/main#2655a73daad32c6a26e93ecab89722a7aac3152c%1697791422.95",
+        "python/3.10.0-rc.0.67+sc.main@sc/main#ce12b6a95963e9d901a1bcf5d9def9a10f3a68b6%1696946400.048"
     ],
-    "python_requires": []
+    "python_requires": [
+        "conan-manifest/1.0.0-rc.0.74+sc.main@sc/main#93e3fbfb122d1e733539582a47a3aca51bc00c83%1697722269.708"
+    ]
 }

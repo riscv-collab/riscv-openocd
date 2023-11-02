@@ -31,7 +31,7 @@ class Package(_conan.ConanFile):
     package_type = "application"
 
     exports = [
-        ".makepy/conan/conanfile.json",
+        "conandeps.json",
         ".makepy/support/manifest.json",
         ".makepy/support/manifest.py",
     ]
@@ -46,19 +46,18 @@ class Package(_conan.ConanFile):
         "!external_sources/*",
     ]
 
+    # pylint: disable=not-callable
     def requirements(self) -> None:
-        conanfile_json = (
-            _Path(__file__).parent / ".makepy" / "conan" / "conanfile.json"
-        )
+        conanfile_json = _Path(__file__).parent / "conandeps.json"
         with open(conanfile_json, "r", encoding="UTF-8") as file:
             deps = _json.loads(file.read())
         if self.settings.os != "Linux":
             return
         if self.options.test != "True":
             return
-        # pylint: disable-next=not-callable
-        self.requires(deps["riscv-gcc"])
-        self.requires(deps["riscv-isa-sim"])
+        self.tool_requires(deps["riscv-gcc"])
+        self.tool_requires(deps["riscv-gdb"])
+        self.tool_requires(deps["riscv-isa-sim"])
 
     def set_version(self) -> None:
         source_folder = _Path(__file__).parent
@@ -163,19 +162,9 @@ class Package(_conan.ConanFile):
         self._download_source_deps(external_deps_folder / "sources")
 
         if self.settings.os == "Linux" and self.options.test:
-            riscv_binutils_gdb_url = (
-                "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts/"
-                "riscv-binutils-gdb/sc/main/230727-180158_6babcbd5/x86_Lin-x86_Lin-RISCV64_Elf_g6babcbd5_d230727-150158.tar.gz"
-            )
-            _conan.tools.files.get(
-                self, riscv_binutils_gdb_url, destination=external_deps_folder
-            )
-            # FIXME: can we enforce **normalized** absolute paths here?
             toolchain.variables["RISCVSpike_DIR"] = self._var("SC_SPIKE_PATH")
             toolchain.variables["RISCVGCC_DIR"] = self._var("SC_GCC_PATH")
-            toolchain.variables[
-                "RISCVGDB_DIR"
-            ] = f"{external_deps_folder}/x86_Lin-x86_Lin-RISCV64_Elf/binutils-gdb"
+            toolchain.variables["RISCVGDB_DIR"] = self._var("SC_RISCV_GDB_PATH")
             toolchain.variables["CMAKE_BUILD_TYPE"] = self.options.build_type
             toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
 

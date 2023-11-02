@@ -25,6 +25,7 @@ from makepy.generic import ParallelHook as _ParallelHook
 from makepy.generic import PrivilegedContainerHook as _PrivilegedContainerHook
 from makepy.lint import FormatCommand as _FormatCommand
 from makepy.lint import LintCommand as _LintCommand
+from makepy.syntacore import ConanConfigs as _ConanConfigs
 from makepy.syntacore import ConanSuite as _ConanSuite
 from makepy.syntacore import SyntacoreSuite as _SyntacoreSuite
 from makepy.utils import main as _main_decorator
@@ -305,11 +306,15 @@ def _main() -> None:
 
     conductor.add(_GenericSuite())
     conductor.add(_SyntacoreSuite())
+    configs = _ConanConfigs()
+    configs.add_x86()
+    configs.add_x86(options={"test": "True"})
     conductor.add(
         _ConanSuite(
             name="openocd",
             start_version="cd481a97e9ae604880b8239679bf83534e83b381",
             start_semver="0.11.0",
+            configs=configs,
         )
     )
 
