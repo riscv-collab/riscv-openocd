@@ -59,6 +59,7 @@ class Package(_conan.ConanFile):
         self.tool_requires(deps["riscv-gcc"])
         self.tool_requires(deps["riscv-gdb"])
         self.tool_requires(deps["riscv-isa-sim"])
+        self.tool_requires(deps["dejagnu"])
 
     def set_version(self) -> None:
         source_folder = _Path(__file__).parent
@@ -166,6 +167,7 @@ class Package(_conan.ConanFile):
             toolchain.variables["RISCVSpike_DIR"] = self._var("SC_SPIKE_PATH")
             toolchain.variables["RISCVGCC_DIR"] = self._var("SC_GCC_PATH")
             toolchain.variables["RISCVGDB_DIR"] = self._var("SC_RISCV_GDB_PATH")
+            toolchain.variables["DEJAGNU_DIR"] = self._var("SC_DEJAGNU_PATH")
             toolchain.variables["RISCVTESTS_DIR"] = self._var(
                 "SC_EXTERNAL_OPENOCD_TESTS_PATH"
             )
@@ -197,7 +199,9 @@ class Package(_conan.ConanFile):
         # introduce an unnecessary confusion in client codebase.
         self.buildenv_info.define("RISCV_OPENOCD_DIR", self.package_folder)
         self.runenv_info.define("RISCV_OPENOCD_DIR", self.package_folder)
+
         self.buildenv_info.define("SC_RISCV_OPENOCD_PATH", self.package_folder)
         self.runenv_info.define("SC_RISCV_OPENOCD_PATH", self.package_folder)
+
         self.cpp_info.includedirs = []  # no includes
         self.cpp_info.libdirs = []  # no libraries to link against

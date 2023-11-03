@@ -17,18 +17,9 @@ if(NOT DEFINED RISCVTESTS_DIR)
   message(FATAL_ERROR "RISCVTESTS_DIR is not defined")
 endif()
 
-set(DEJAGNU_SRC_CODE dejagnu)
-# cmake-format: off
-ExternalProject_Add(
-  dejagnu
-  PREFIX DejaGnuBuild
-  SOURCE_DIR DejaGNUSources
-  URL file://${DEPENDENCIES_LOCATION}/${DEJAGNU_SRC_CODE}
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-  CONFIGURE_COMMAND
-    ${CMAKE_BINARY_DIR}/DejaGNUSources/configure
-      --prefix=${CMAKE_BINARY_DIR}/install_dejagnu)
-# cmake-format: on
+if (NOT DEFINED DEJAGNU_DIR)
+  message(FATAL_ERROR "DEJAGNU_DIR is not defined")
+endif()
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/local_init.exp.in
@@ -108,13 +99,13 @@ function(addNextToolToTestForBoard tool_name board_config_name)
     WORKING_DIRECTORY ${tool_run_dir}
     COMMAND
       env DEJAGNU=${OPENOCD_TESTSUITE_DIRECTORY}/site.exp
-      ${CMAKE_BINARY_DIR}/install_dejagnu/bin/runtest
+      ${DEJAGNU_DIR}/bin/runtest
         --src_dir=${OPENOCD_TESTSUITE_DIRECTORY}
         ${target_board_cmdline}
         --tool=${tool_name}
         --outdir=${tool_summary_dir}
         --local_init ${CMAKE_BINARY_DIR}/local_init.exp
-    DEPENDS openocd dejagnu)
+    DEPENDS openocd)
   # cmake-format: on
 
   if(NOT TARGET ${board_tests_target})
