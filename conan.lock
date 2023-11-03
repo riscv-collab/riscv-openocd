@@ -3,7 +3,7 @@
     "requires": [],
     "build_requires": [
         "testgen-model-interface/0.1.0-rc.0.2+sc.main@sc/main#3b39bdf71d578cba9b284aa39dd1fe16b1235563%1698053605.646",
-        "riscv-isa-sim/0.1.0-rc.0.130+sc.main@sc/main#689bad1e0e9dcca6e3b244412a604559c9b93c36%1698238055.129",
+        "riscv-isa-sim/0.1.0-rc.0.131+sc.main@sc/main#4b496cd011220001b63b4e9fe1ca42f2933b9923%1699042083.024",
         "riscv-gdb/13.2.0-rc.0.60+sc.main@sc/main#44d1f59548c4138aaf5e784c12d8613f240d6f8a%1697555672.28",
         "riscv-gcc/12.2.1-rc.0.57+sc.main@sc/main#2655a73daad32c6a26e93ecab89722a7aac3152c%1697791422.95",
         "python/3.10.0-rc.0.67+sc.main@sc/main#ce12b6a95963e9d901a1bcf5d9def9a10f3a68b6%1696946400.048",
