@@ -2,5 +2,6 @@
   "locks": [],
   "riscv-gcc": "riscv-gcc/[<13.0.0, include_prerelease=True]@sc/main",
   "riscv-gdb": "riscv-gdb/[*, include_prerelease=True]@sc/main",
-  "riscv-isa-sim": "riscv-isa-sim/[*, include_prerelease=True]@sc/main"
+  "riscv-isa-sim": "riscv-isa-sim/[*, include_prerelease=True]@sc/main",
+  "external_openocd_tests": "external_openocd_tests/[*, include_prerelease=True]@sc/main"
 }

@@ -28,12 +28,5 @@
     "kind": "archive",
     "url": "https://gitlab.zapb.de/libjaylink/libjaylink/-/archive/0.3.1/libjaylink-0.3.1.tar.bz2",
     "strip_root": true
-  },
-  {
-    "name": "riscv_tests",
-    "kind": "git",
-    "url": "https://github.com/riscv-software-src/riscv-tests.git",
-    "version": "ed0a63ea4ffea691e753ba1410d78961b80dc739",
-    "patch": "dependencies_support/memory_sample_thresholds.patch"
   }
 ]

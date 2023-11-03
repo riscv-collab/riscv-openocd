@@ -55,6 +55,7 @@ class Package(_conan.ConanFile):
             return
         if self.options.test != "True":
             return
+        self.tool_requires(deps["external_openocd_tests"])
         self.tool_requires(deps["riscv-gcc"])
         self.tool_requires(deps["riscv-gdb"])
         self.tool_requires(deps["riscv-isa-sim"])
@@ -165,6 +166,9 @@ class Package(_conan.ConanFile):
             toolchain.variables["RISCVSpike_DIR"] = self._var("SC_SPIKE_PATH")
             toolchain.variables["RISCVGCC_DIR"] = self._var("SC_GCC_PATH")
             toolchain.variables["RISCVGDB_DIR"] = self._var("SC_RISCV_GDB_PATH")
+            toolchain.variables["RISCVTESTS_DIR"] = self._var(
+                "SC_EXTERNAL_OPENOCD_TESTS_PATH"
+            )
             toolchain.variables["CMAKE_BUILD_TYPE"] = self.options.build_type
             toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
 

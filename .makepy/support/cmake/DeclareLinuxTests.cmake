@@ -13,6 +13,10 @@ if(NOT DEFINED RISCVSpike_DIR)
 endif()
 set(RISCV_SPIKE_SIM_BINARY ${RISCVSpike_DIR}/bin/spike)
 
+if(NOT DEFINED RISCVTESTS_DIR)
+  message(FATAL_ERROR "RISCVTESTS_DIR is not defined")
+endif()
+
 set(DEJAGNU_SRC_CODE dejagnu)
 # cmake-format: off
 ExternalProject_Add(
@@ -159,7 +163,7 @@ set(RISCV_TESTS_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTests)
 ExternalProject_Add(
   riscv_tests
   SOURCE_DIR ${RISCV_TESTS_SOURCE_DIR}
-  URL file://${DEPENDENCIES_LOCATION}/riscv_tests
+  URL file://${RISCVTESTS_DIR}/riscv-tests
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ""
   INSTALL_COMMAND "")
