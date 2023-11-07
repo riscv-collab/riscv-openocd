@@ -5574,6 +5574,7 @@ const char *gdb_regno_name(struct target *target, enum gdb_regno regno)
 	return NULL;
 }
 
+
 /**
  * This function is the handler of user's request to read a register.
  */
