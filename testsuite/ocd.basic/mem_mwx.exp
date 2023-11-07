@@ -1,33 +1,47 @@
-proc run_test {} {
-  set xlen64 [expr [target_info cpu,xlen] == 64]
+proc write_and_check {name address count size byte_strs} {
+  set value 0x[join $byte_strs ""]
+  ocdtlb_run_expect "mw$name $address $value $count"
+  if {$count eq ""} {
+    set count 1
+  }
+  set value_list [list]
+  foreach byte [lreverse $byte_strs] {
+    lappend value_list 0x$byte
+  }
+  set word [list {*}$value_list {*}[lrepeat [expr {$size - [llength $value_list]}] 0]]
+  set bytes [lrepeat $count {*}$word]
+  ocdtlb_do_byte_read_compare $address $bytes
+}
 
+proc test_one_case {name size count} {
+  # created by compile executable
+  set MEM_ADDR [tool_state_get_program_symbol work_area_start]
+  write_and_check $name $MEM_ADDR $count $size [list 0]
+  set byte_strs {88 77 66 55 44 33 22 11}
+  for {set i 0} {$i < $size} {incr i} {
+    write_and_check $name $MEM_ADDR $count $size [lrange $byte_strs 0 $i]
+  }
+}
+
+proc run_test {} {
   set default_bin_prefix [tool_state_get default_bin_prefix]
   ocd_compile_executable "basic.S" "$default_bin_prefix.exe"
 
-  # created by compile executable
-  set MEM_ADDR [tool_state_get_program_symbol work_area_start]
-
   ocd_connect
 
-  ocdtlb_run_expect "targets 0"
   ocdtlb_run_expect "reset halt"
 
-  ocdtlb_run_expect "mwb $MEM_ADDR 42"
-  ocdtlb_do_byte_read_compare $MEM_ADDR [list 42]
-
-  ocdtlb_run_expect "mwh $MEM_ADDR 0xbad0"
-  ocdtlb_do_byte_read_compare $MEM_ADDR [list 0xd0 0xba]
-
-  ocdtlb_run_expect "mww $MEM_ADDR 0xfffafbfc"
-  ocdtlb_do_byte_read_compare $MEM_ADDR [list 0xfc 0xfb 0xfa 0xff]
-
-  if {$xlen64} {
-    ocdtlb_run_expect "mwd $MEM_ADDR 0xC00010FFB0BAB0BA"
-    ocdtlb_do_byte_read_compare $MEM_ADDR [list 0xba 0xb0 0xba 0xb0 0xff 0x10 0x00 0xc0]
+  if {[expr [target_info cpu,xlen] != 64]} {
+    set name_size_map [dict create "b" 1 "h" 2 "w" 4]
+  } else {
+    set name_size_map [dict create "b" 1 "h" 2 "w" 4 "d" 8]
   }
-
+  foreach count {"" 1 2 3} {
+    dict for {name size} $name_size_map {
+      test_one_case $name $size $count
+    }
+  }
   return [ocd_test_pass]
 }
 
 return [run_test]
-
