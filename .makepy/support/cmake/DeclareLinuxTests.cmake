@@ -150,6 +150,14 @@ find_package(
   Python
   COMPONENTS Interpreter
   REQUIRED)
+set(RISCV_TESTS_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/RISCVTests)
+ExternalProject_Add(
+  riscv_tests
+  SOURCE_DIR ${RISCV_TESTS_SOURCE_DIR}
+  URL file://${RISCVTESTS_DIR}/riscv-tests
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ""
+  INSTALL_COMMAND "")
 
 set(RISCV_TESTS_RUN_DIR ${TESTING_ROOT}/riscv_tests)
 set(RISCV_TESTS_LOGS_DIRNAME "${RISCV_TESTS_RUN_DIR}/logs")
@@ -157,7 +165,7 @@ add_custom_target(
   riscv_tests_run_dir ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${RISCV_TESTS_RUN_DIR}
   COMMAND ${CMAKE_COMMAND} -E make_directory ${RISCV_TESTS_LOGS_DIRNAME}
-)
+  DEPENDS riscv_tests)
 
 list(
   APPEND
@@ -183,7 +191,7 @@ function(add_riscv_test_debug_run_for_target target)
     ${wd_target_name} ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory ${wd_relative_path}
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${RISCVTESTS_DIR}/riscv-tests/debug/bin ${wd_relative_path}/bin
+            ${RISCV_TESTS_SOURCE_DIR}/debug/bin ${wd_relative_path}/bin
     DEPENDS riscv_tests_run_dir)
 
   # cmake-format: off
@@ -196,7 +204,7 @@ function(add_riscv_test_debug_run_for_target target)
         GDB=${RISCV_GDB_BINARY}
         LOGS=${RISCV_TESTS_LOGS_DIRNAME}
         OCD=${OPENOCD_INSTALL_PATH}/bin/openocd
-        ROOT=${RISCVTESTS_DIR}/riscv-tests/debug
+        ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
         SIM=${RISCV_SPIKE_SIM_BINARY}
         TGT=${target}
       ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/run-riscv-debug-tests.sh
