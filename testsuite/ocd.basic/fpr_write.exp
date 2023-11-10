@@ -42,6 +42,21 @@ proc run_test {} {
     ocdtlb_expect_equal $values($i) $value
   }
 
+  ocdtlb_run_expect "reg fcsr 0xff"
+  set fcsr [ocdtlb_rsp_get [ocdtlb_run_expect "reg fcsr"]]
+  set fflags [ocdtlb_rsp_get [ocdtlb_run_expect "reg fflags"]]
+  ocdtlb_expect_equal $fflags 0x1f
+  set frm [ocdtlb_rsp_get [ocdtlb_run_expect "reg frm"]]
+  ocdtlb_expect_equal $frm 0x7
+
+  ocdtlb_run_expect "reg fflags 0x0"
+  set fcsr [ocdtlb_rsp_get [ocdtlb_run_expect "reg fcsr"]]
+  ocdtlb_expect_equal $fcsr 0xe0
+
+  ocdtlb_run_expect "reg frm 0x0"
+  set fcsr [ocdtlb_rsp_get [ocdtlb_run_expect "reg fcsr"]]
+  ocdtlb_expect_equal $fcsr 0x0
+
   return [ocd_test_pass]
 }
 

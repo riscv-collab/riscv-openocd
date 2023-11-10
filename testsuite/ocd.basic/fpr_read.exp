@@ -36,6 +36,12 @@ proc run_test {} {
     }
   }
 
+  set fcsr [ocdtlb_rsp_get [ocdtlb_run_expect "reg fcsr"]]
+  set fflags [ocdtlb_rsp_get [ocdtlb_run_expect "reg fflags"]]
+  ocdtlb_expect_equal [expr {$fcsr & 0x1f}] $fflags
+  set frm [ocdtlb_rsp_get [ocdtlb_run_expect "reg frm"]]
+  ocdtlb_expect_equal [expr {$fcsr & 0xe0}] $frm
+
   return [ocd_test_pass]
 }
 
