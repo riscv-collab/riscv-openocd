@@ -16,9 +16,6 @@ from conan.tools.scm import Git as _Git
 # pylint: disable=wrong-import-position
 # pylint: disable=no-member
 _sys.path.append(str(_Path(__file__).parent / ".makepy"))
-from support.manifest import ArchiveDependency as _ArchiveDependency
-from support.manifest import GitDependency as _GitDependency
-from support.manifest import Manifest as _Manifest
 
 
 class Package(_conan.ConanFile):
@@ -32,8 +29,6 @@ class Package(_conan.ConanFile):
 
     exports = [
         "conandeps.json",
-        ".makepy/support/manifest.json",
-        ".makepy/support/manifest.py",
     ]
 
     exports_sources = [
@@ -81,66 +76,6 @@ class Package(_conan.ConanFile):
         self.folders.generators = build_folder
         self.folders.build = build_folder
 
-    def _manifest_path(self) -> _Path:
-        return (
-            _Path(self.source_folder) / ".makepy" / "support" / "manifest.json"
-        )
-
-    def _download_source_deps(self, destination: _Path) -> None:
-        jobs = max(_multiprocessing.cpu_count(), 8)
-        manifest = _Manifest(self._manifest_path())
-
-        for dep in manifest:
-            dep_dst = destination / dep.name
-            if isinstance(dep, _GitDependency):
-                shallow = not dep.full_clone
-                shallow_args = None
-                shallow_args_str = ""
-                if shallow:
-                    shallow_args = ["--depth", "1000"]
-                    shallow_args_str = " ".join(shallow_args)
-                _Git(self).clone(url=dep.url, target=dep_dst, args=shallow_args)
-                if shallow:
-                    _Git(self, folder=dep_dst).run(
-                        f"fetch origin {dep.version}"
-                    )
-                _Git(self, folder=dep_dst).checkout(dep.version)
-                _Git(self, folder=dep_dst).run(
-                    f"submodule update --init --checkout --jobs {jobs} {shallow_args_str}"
-                )
-
-            elif isinstance(dep, _ArchiveDependency) and dep.url.startswith(
-                "ftp://"
-            ):
-                parsed_url = _urlparse(dep.url)
-                archive = _Path(parsed_url.path).name
-                _conan.tools.files.ftp_download(
-                    self, parsed_url.netloc, parsed_url.path
-                )
-                _conan.tools.files.unzip(
-                    self,
-                    archive,
-                    destination=dep_dst,
-                    strip_root=dep.strip_root,
-                )
-                _Path(archive).unlink()
-
-            elif isinstance(dep, _ArchiveDependency):
-                _conan.tools.files.get(
-                    self,
-                    dep.url,
-                    destination=dep_dst,
-                    strip_root=dep.strip_root,
-                )
-
-            else:
-                assert False
-
-            if dep.patch is not None:
-                self.run(
-                    f"patch --directory {dep_dst} --input {dep.patch} --strip 1"
-                )
-
     def source(self) -> None:
         # NOTE: OpenOCD requires a dedicated "bootstrap" process. Usually this
         # involves calling of ./bootstrap script which is part of OpenOCD
@@ -162,14 +97,10 @@ class Package(_conan.ConanFile):
     def generate(self) -> None:
         toolchain = _CMakeToolchain(self)
 
-        external_deps_folder = (
-            _Path(self.generators_folder) / "external_dependencies"
-        )
-        self._download_source_deps(external_deps_folder / "sources")
-
         toolchain.variables["OPENOCD_SOURCE_DEPS_DIR"] = self._var(
             "SC_OPENOCD_SOURCE_DEPS_PATH"
         )
+
         if self.settings.os == "Linux" and self.options.test:
             toolchain.variables["RISCVSpike_DIR"] = self._var("SC_SPIKE_PATH")
             toolchain.variables["RISCVGCC_DIR"] = self._var("SC_GCC_PATH")
