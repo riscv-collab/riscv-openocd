@@ -1,5 +1,10 @@
 pipeline {
-  agent { label 'msk_automation_linux_01' }
+  // Note: we don't really need this specific runner. This is a workaround for
+  // non-existent IT/Automation support. Existing Jenkins runners do not have
+  // uniform access to components and IT infrasrtructure.  For example we can
+  // easily end up on the machine without access to artifactory.  Since IT
+  // support is abysmall/non existed I just switched to a runner that **works**
+  agent { label 'zalman' }
   options {
     skipDefaultCheckout(true)
   }
