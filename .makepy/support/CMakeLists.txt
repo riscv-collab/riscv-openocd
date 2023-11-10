@@ -14,7 +14,11 @@ execute_process(
   OUTPUT_VARIABLE CONFIGURE_HOST
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-set(DEPENDENCIES_LOCATION ${CMAKE_BINARY_DIR}/external_dependencies/sources)
+if (NOT DEFINED OPENOCD_SOURCE_DEPS_DIR)
+  message(FATAL_ERROR "OPENOCD_SOURCE_DEPS_DIR is not defined")
+endif()
+
+set(DEPENDENCIES_LOCATION ${OPENOCD_SOURCE_DEPS_DIR})
 set(DEPENDENCIES_INSTALL_PATH ${CMAKE_BINARY_DIR}/dependencies_install)
 include(cmake/DeclareDepsBuild.cmake)
 declare_build_dependencies(openocd_deps)

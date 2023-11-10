@@ -4,5 +4,6 @@
   "riscv-gdb": "riscv-gdb/[*, include_prerelease=True]@sc/main",
   "riscv-isa-sim": "riscv-isa-sim/[*, include_prerelease=True]@sc/main",
   "external_openocd_tests": "external_openocd_tests/[*, include_prerelease=True]@sc/main",
-  "dejagnu": "dejagnu/[*, include_prerelease=True]@sc/main"
+  "dejagnu": "dejagnu/[*, include_prerelease=True]@sc/main",
+  "openocd_source_deps": "openocd_source_deps/[*, include_prerelease=True]@sc/main"
 }

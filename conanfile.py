@@ -51,10 +51,14 @@ class Package(_conan.ConanFile):
         conanfile_json = _Path(__file__).parent / "conandeps.json"
         with open(conanfile_json, "r", encoding="UTF-8") as file:
             deps = _json.loads(file.read())
+
+        self.requires(deps["openocd_source_deps"])
+
         if self.settings.os != "Linux":
             return
         if self.options.test != "True":
             return
+
         self.tool_requires(deps["external_openocd_tests"])
         self.tool_requires(deps["riscv-gcc"])
         self.tool_requires(deps["riscv-gdb"])
@@ -163,6 +167,9 @@ class Package(_conan.ConanFile):
         )
         self._download_source_deps(external_deps_folder / "sources")
 
+        toolchain.variables["OPENOCD_SOURCE_DEPS_DIR"] = self._var(
+            "SC_OPENOCD_SOURCE_DEPS_PATH"
+        )
         if self.settings.os == "Linux" and self.options.test:
             toolchain.variables["RISCVSpike_DIR"] = self._var("SC_SPIKE_PATH")
             toolchain.variables["RISCVGCC_DIR"] = self._var("SC_GCC_PATH")

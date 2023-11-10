@@ -1,13 +1,15 @@
 {
     "version": "0.5",
-    "requires": [],
+    "requires": [
+        "openocd_source_deps/0.0.1-rc.0.92+sc.main@sc/main#5e31f60f28ee2436a5e1ebc1a2acb393899480c9%1699649526.969"
+    ],
     "build_requires": [
-        "testgen-model-interface/0.1.0-rc.0.2+sc.main@sc/main#3b39bdf71d578cba9b284aa39dd1fe16b1235563%1698053605.646",
-        "riscv-isa-sim/0.1.0-rc.0.131+sc.main@sc/main#4b496cd011220001b63b4e9fe1ca42f2933b9923%1699042083.024",
+        "testgen-model-interface/0.1.0-rc.0.4+sc.main@sc/main#a736f64480341f13364a0e06418cb15bbd71c1d7%1699531424.654",
+        "riscv-isa-sim/0.1.0-rc.0.133+sc.main@sc/main#adef9ac73d975ec7b254b7c38df57b8505e59230%1699536843.933",
         "riscv-gdb/13.2.0-rc.0.60+sc.main@sc/main#44d1f59548c4138aaf5e784c12d8613f240d6f8a%1697555672.28",
         "riscv-gcc/12.2.1-rc.0.57+sc.main@sc/main#2655a73daad32c6a26e93ecab89722a7aac3152c%1697791422.95",
         "python/3.10.0-rc.0.67+sc.main@sc/main#ce12b6a95963e9d901a1bcf5d9def9a10f3a68b6%1696946400.048",
-        "external_openocd_tests/0.0.1-rc.0.86+sc.main@sc/main#9080c09a8eb5af5dca0269829144e193b2c146be%1699030512.933",
+        "external_openocd_tests/0.0.2-rc.0.91+sc.main@sc/main#7be3423e85401d6f9e684761aaa6aa8c337af511%1699645153.097",
         "dejagnu/1.6.3-rc.0.84+sc.main@sc/main#b3dfd133e64a2278be1be13c56f661b1%1698903057.145"
     ],
     "python_requires": [
