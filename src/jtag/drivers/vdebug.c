@@ -1125,7 +1125,10 @@ static int vdebug_dap_queue_ap_abort(struct adiv5_dap *dap, uint8_t *ack)
 
 static int vdebug_dap_run(struct adiv5_dap *dap)
 {
-	return vdebug_run_reg_queue(vdc.hsocket, pbuf, le_to_h_u16(pbuf->waddr));
+	if (le_to_h_u16(pbuf->waddr))
+		return vdebug_run_reg_queue(vdc.hsocket, pbuf, le_to_h_u16(pbuf->waddr));
+
+	return ERROR_OK;
 }
 
 COMMAND_HANDLER(vdebug_set_server)
