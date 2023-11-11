@@ -1,7 +1,7 @@
 {
     "version": "0.5",
     "requires": [
-        "openocd_source_deps/0.0.1-rc.0.92+sc.main@sc/main#5e31f60f28ee2436a5e1ebc1a2acb393899480c9%1699649526.969"
+        "openocd_source_deps/0.0.1-rc.0.94+sc.main@sc/main#7b805fa3f3feb76d38e79e8edaa5f7bdf64cc362%1699723901.709"
     ],
     "build_requires": [
         "testgen-model-interface/0.1.0-rc.0.4+sc.main@sc/main#a736f64480341f13364a0e06418cb15bbd71c1d7%1699531424.654",
