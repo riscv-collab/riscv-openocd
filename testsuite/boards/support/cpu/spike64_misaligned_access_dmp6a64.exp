@@ -36,6 +36,7 @@ set_board_info cpu,misaligned_access_support 1
 
 set_board_info cpu,dm_abstract_csr 1
 set_board_info cpu,dm_abstract_fpr 1
+set_board_info cpu,dm_is_slow 0
 
 add_board_info cflags   -march=$TGT_ARCH
 add_board_info cflags   -mabi=lp64d
@@ -45,4 +46,5 @@ add_board_info sim,options --dm-progsize=6
 add_board_info sim,options --dm-sba=64
 add_board_info sim,options --dm-abstract-rti=0
 add_board_info sim,options --dm-abstract-rti=0
+
 add_board_info sim,options --misaligned

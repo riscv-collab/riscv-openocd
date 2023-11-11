@@ -368,11 +368,15 @@ proc tsuplib_internal_tclrpc_send_command {msg {mode "catch"} } {
 
 proc tsuplib_tclrpc_run_command {msg {extra_timeout ""}} {
   tsuplib_internal_tclrpc_send_command $msg
+  set effective_timeout [target_info env,preferred_timeout]
   if {$extra_timeout ne ""} {
-    set timeout $extra_timeout
-  } else {
-    set timeout [target_info env,preferred_timeout]
+    set effective_timeout [expr { $extra_timeout + $effective_timeout }]
   }
+  if {[target_info cpu,dm_is_slow] == 1} {
+    set effective_timeout [expr { $effective_timeout * 10 }]
+  }
+  verbose "effective timeout for the command: $effective_timeout" 3
+  set timeout $effective_timeout
   expect {
     \x1a {
       return $expect_out(buffer)

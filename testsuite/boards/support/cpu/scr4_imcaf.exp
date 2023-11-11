@@ -36,6 +36,7 @@ set_board_info cpu,misaligned_access_support 0
 
 set_board_info cpu,dm_abstract_csr 1
 set_board_info cpu,dm_abstract_fpr 1
+set_board_info cpu,dm_is_slow 0
 
 add_board_info cflags   -march=$TGT_ARCH
 add_board_info cflags   -mabi=ilp32d
