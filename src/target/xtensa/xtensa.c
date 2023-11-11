@@ -410,7 +410,7 @@ static int xtensa_core_reg_get(struct reg *reg)
 		return ERROR_TARGET_NOT_HALTED;
 	if (!reg->exist) {
 		if (strncmp(reg->name, "?0x", 3) == 0) {
-			unsigned int regnum = strtoul(reg->name + 1, 0, 0);
+			unsigned int regnum = strtoul(reg->name + 1, NULL, 0);
 			LOG_WARNING("Read unknown register 0x%04x ignored", regnum);
 			return ERROR_OK;
 		}
@@ -430,7 +430,7 @@ static int xtensa_core_reg_set(struct reg *reg, uint8_t *buf)
 
 	if (!reg->exist) {
 		if (strncmp(reg->name, "?0x", 3) == 0) {
-			unsigned int regnum = strtoul(reg->name + 1, 0, 0);
+			unsigned int regnum = strtoul(reg->name + 1, NULL, 0);
 			LOG_WARNING("Write unknown register 0x%04x ignored", regnum);
 			return ERROR_OK;
 		}
@@ -1541,9 +1541,10 @@ int xtensa_prepare_resume(struct target *target,
 		debug_execution);
 
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_WARNING(target, "target not halted");
+		LOG_TARGET_ERROR(target, "not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
+	xtensa->halt_request = false;
 
 	if (address && !current) {
 		xtensa_reg_set(target, XT_REG_IDX_PC, address);
@@ -1666,7 +1667,7 @@ int xtensa_do_step(struct target *target, int current, target_addr_t address, in
 		current, address, handle_breakpoints);
 
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_WARNING(target, "target not halted");
+		LOG_TARGET_ERROR(target, "not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
@@ -1940,7 +1941,7 @@ int xtensa_read_memory(struct target *target, target_addr_t address, uint32_t si
 	bool bswap = xtensa->target->endianness == TARGET_BIG_ENDIAN;
 
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_WARNING(target, "target not halted");
+		LOG_TARGET_ERROR(target, "not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
@@ -2036,7 +2037,7 @@ int xtensa_write_memory(struct target *target,
 	bool fill_head_tail = false;
 
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_WARNING(target, "target not halted");
+		LOG_TARGET_ERROR(target, "not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
@@ -2565,7 +2566,7 @@ int xtensa_watchpoint_add(struct target *target, struct watchpoint *watchpoint)
 	xtensa_reg_val_t dbreakcval;
 
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_WARNING(target, "target not halted");
+		LOG_TARGET_ERROR(target, "not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 

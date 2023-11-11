@@ -230,11 +230,11 @@ static int stm32x_otp_enable(struct flash_bank *bank)
 	struct stm32x_flash_bank *stm32x_info = bank->driver_priv;
 
 	if (!stm32x_info->otp_unlocked) {
-		LOG_INFO("OTP memory bank #%u is is enabled for write commands.",
+		LOG_INFO("OTP memory bank #%u is enabled for write commands.",
 			 bank->bank_number);
 		stm32x_info->otp_unlocked = true;
 	} else {
-		LOG_WARNING("OTP memory bank #%u is is already enabled for write commands.",
+		LOG_WARNING("OTP memory bank #%u is already enabled for write commands.",
 			    bank->bank_number);
 	}
 	return ERROR_OK;
@@ -659,8 +659,10 @@ static int stm32x_protect(struct flash_bank *bank, int set, unsigned int first,
 	}
 
 	if (stm32x_is_otp(bank)) {
-		if (!set)
+		if (!set) {
+			LOG_ERROR("OTP protection can only be enabled");
 			return ERROR_COMMAND_ARGUMENT_INVALID;
+		}
 
 		return stm32x_otp_protect(bank, first, last);
 	}
@@ -959,7 +961,7 @@ static int stm32x_get_device_id(struct flash_bank *bank, uint32_t *device_id)
 		return retval;
 
 	if ((*device_id & 0xfff) == 0x411
-			&& cortex_m_get_partno_safe(target) == CORTEX_M4_PARTNO) {
+			&& cortex_m_get_impl_part(target) == CORTEX_M4_PARTNO) {
 		*device_id &= ~((0xFFFF << 16) | 0xfff);
 		*device_id |= (0x1000 << 16) | 0x413;
 		LOG_INFO("stm32f4x errata detected - fixing incorrect MCU_IDCODE");

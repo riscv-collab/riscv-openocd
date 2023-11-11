@@ -37,6 +37,7 @@ struct breakpoint {
 };
 
 #define WATCHPOINT_IGNORE_DATA_VALUE_MASK (~(uint64_t)0)
+
 struct watchpoint {
 	target_addr_t address;
 	uint32_t length;

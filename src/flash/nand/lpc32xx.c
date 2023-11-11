@@ -24,8 +24,6 @@
 static int lpc32xx_reset(struct nand_device *nand);
 static int lpc32xx_controller_ready(struct nand_device *nand, int timeout);
 static int lpc32xx_tc_ready(struct nand_device *nand, int timeout);
-extern int nand_correct_data(struct nand_device *nand, u_char *dat,
-		u_char *read_ecc, u_char *calc_ecc);
 
 /* These are offset with the working area in IRAM when using DMA to
  * read/write data to the SLC controller.
@@ -1029,7 +1027,7 @@ static int lpc32xx_write_page_slc(struct nand_device *nand,
 
 	LOG_DEBUG("SLC write page %" PRIx32 " data=%d, oob=%d, "
 		"data_size=%" PRIu32 ", oob_size=%" PRIu32,
-		page, data != 0, oob != 0, data_size, oob_size);
+		page, !!data, !!oob, data_size, oob_size);
 
 	target_mem_base = pworking_area->address;
 	/*

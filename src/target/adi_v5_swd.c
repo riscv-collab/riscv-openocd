@@ -13,7 +13,7 @@
  * is a transport level interface, with "target/arm_adi_v5.[hc]" code
  * understanding operation semantics, shared with the JTAG transport.
  *
- * Single-DAP support only.
+ * Single DAP and multidrop-SWD support.
  *
  * for details, see "ARM IHI 0031A"
  * ARM Debug Interface v5 Architecture Specification
@@ -657,9 +657,16 @@ static const struct command_registration swd_commands[] = {
 		 * REVISIT can we verify "just one SWD DAP" here/early?
 		 */
 		.name = "newdap",
-		.jim_handler = jim_jtag_newtap,
+		.handler = handle_jtag_newtap,
 		.mode = COMMAND_CONFIG,
-		.help = "declare a new SWD DAP"
+		.help = "declare a new SWD DAP",
+		.usage = "basename dap_type ['-irlen' count] "
+			"['-enable'|'-disable'] "
+			"['-expected_id' number] "
+			"['-ignore-version'] "
+			"['-ignore-bypass'] "
+			"['-ircapture' number] "
+			"['-mask' number]",
 	},
 	COMMAND_REGISTRATION_DONE
 };

@@ -1296,7 +1296,7 @@ static int dsp563xx_step(struct target *target,
 	struct dsp563xx_common *dsp563xx = target_to_dsp563xx(target);
 
 	if (target->state != TARGET_HALTED) {
-		LOG_WARNING("target not halted");
+		LOG_TARGET_ERROR(target, "not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
@@ -1374,14 +1374,14 @@ static int dsp563xx_run_algorithm(struct target *target,
 	int num_mem_params, struct mem_param *mem_params,
 	int num_reg_params, struct reg_param *reg_params,
 	target_addr_t entry_point, target_addr_t exit_point,
-	int timeout_ms, void *arch_info)
+	unsigned int timeout_ms, void *arch_info)
 {
 	int i;
 	int retval = ERROR_OK;
 	struct dsp563xx_common *dsp563xx = target_to_dsp563xx(target);
 
 	if (target->state != TARGET_HALTED) {
-		LOG_WARNING("target not halted");
+		LOG_TARGET_ERROR(target, "not halted (run target algo)");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
@@ -1705,7 +1705,7 @@ static int dsp563xx_write_memory_core(struct target *target,
 		count);
 
 	if (target->state != TARGET_HALTED) {
-		LOG_WARNING("target not halted");
+		LOG_TARGET_ERROR(target, "not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 

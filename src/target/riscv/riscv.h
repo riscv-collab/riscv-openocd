@@ -113,6 +113,11 @@ typedef struct {
 
 #define DTM_DTMCS_VERSION_UNKNOWN ((unsigned int)-1)
 
+struct reg_name_table {
+	unsigned int num_entries;
+	char **reg_names;
+};
+
 struct riscv_info {
 	unsigned int common_magic;
 
@@ -121,9 +126,8 @@ struct riscv_info {
 	struct command_context *cmd_ctx;
 	void *version_specific;
 
-	/* Single buffer that contains all register names, instead of calling
-	 * malloc for each register. Needs to be freed when reg_list is freed. */
-	char *reg_names;
+	struct reg_name_table custom_register_names;
+	char **reg_names;
 
 	/* It's possible that each core has a different supported ISA set. */
 	int xlen;
@@ -138,6 +142,12 @@ struct riscv_info {
 
 	/* The number of triggers per hart. */
 	unsigned int trigger_count;
+
+	/* Data structure to record known unsupported tdata1+tdata2 trigger CSR values.
+	 * This is to avoid repetitive attempts to set trigger configurations that are already
+	 * known to be unsupported in the HW.
+	 * A separate data structure is created for each trigger. */
+	struct list_head *wp_triggers_negative_cache;
 
 	/* record the tinfo of each trigger */
 	unsigned int trigger_tinfo[RISCV_MAX_TRIGGERS];
