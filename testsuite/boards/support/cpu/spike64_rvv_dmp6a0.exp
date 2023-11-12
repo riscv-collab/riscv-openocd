@@ -10,6 +10,7 @@ set_board_info cpu,has_h_ext 1
 set_board_info cpu,has_v_ext 1
 set_board_info cpu,v_ext_vlen 128
 set_board_info cpu,v_ext_elen 64
+set_board_info cpu,v_ext_misa_writable 0
 
 set_board_info cpu,trigger_count 4
 

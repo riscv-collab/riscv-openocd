@@ -119,20 +119,32 @@ function(addSCR7L2Config RELEASE_NAME BITSTREAM)
 endfunction()
 
 function(addSCR9L2Config RELEASE_NAME BITSTREAM)
+
+  set(options TWIN_NIGHTLY)
+  cmake_parse_arguments(PARSE_ARGV 1 SCR9BOARD_ARG
+    "${options}" "" ""
+  )
+
+  if (SCR9BOARD_ARG_TWIN_NIGHTLY)
+    set(TESTING_CYCLE TWIN_NIGHTLY)
+  else()
+    set(TESTING_CYCLE TWIN_UNSTABLE)
+  endif()
+
   registerFPGAConfiguration("twin_norvv_${RELEASE_NAME}_score_nortos"
     BITSTREAM ${BITSTREAM}
     OPENOCD_BOARD twin_scr9norvv_x_1core_nortos
-    TWIN_SCR9
+    ${TESTING_CYCLE}
   )
   registerFPGAConfiguration("twin_norvv_${RELEASE_NAME}_score_rtoshw"
     BITSTREAM ${BITSTREAM}
     OPENOCD_BOARD twin_scr9norvv_x_1core_rtoshw
-    TWIN_SCR9
+    ${TESTING_CYCLE}
   )
   registerFPGAConfiguration("twin_rvv_${RELEASE_NAME}_score_nortos"
     BITSTREAM ${BITSTREAM}
     OPENOCD_BOARD twin_scr9_x_1core_nortos
-    TWIN_SCR9
+    ${TESTING_CYCLE}
   )
 endfunction()
 
@@ -215,38 +227,22 @@ registerFPGAConfiguration(twin_scr6
 )
 
 # SCR7 testing
-
-addSCR7L2Config(scr7_l2_23ww28.6.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww28.6.0/SCR7WR_23WW28.6.0_Dual_65MHz.bit
+# TODO: scr7_l2_23ww46.4.0 is the last SCR7 bitstream that has 2 harts
+# subsequent versions have only 1 hart, we need an additional work to handle
+# 1-hart bitstreams
+addSCR7L2Config(scr7_l2_23ww46.4.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww46.4.0/scr7_l2_23ww46.4.0.bit
   TWIN_NIGHTLY
 )
-
-addSCR7L2Config(scr7_l2_23ww29.4.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww29.4.0/SCR7WR_23WW29.4.0_Dual_65MHz.bit
-  TWIN_NIGHTLY
-)
-
-addSCR7L2Config(scr7_l2_23ww29.5.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww29.5.0/SCR7WR_23WW29.5.0_Dual_65MHz.bit
-  TWIN_NIGHTLY
-)
-
 addSCR7L2Config(scr7_dev
-  scr7_dev
+  scr7_l2
 )
 
 # SCR9 testing
-
-addSCR9L2Config(scr9_l2_23ww27.6.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww27.6.0/scr9_l2_23ww27.6.0.bit
+addSCR9L2Config(scr9_l2_23ww45.4.0.bit
+  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww45.4.0/scr9_l2_23ww45.4.0.bit
+  TWIN_NIGHTLY
 )
-
-# bitstreams between 27.6 and 30.5 have broken watchpoints
-
-addSCR9L2Config(scr9_l2_23ww30.5.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww30.5.0/scr9_l2_23ww30.5.0.bit
-)
-
 addSCR9L2Config(scr9_dev
-  scr9_dev
+  scr9_l2
 )

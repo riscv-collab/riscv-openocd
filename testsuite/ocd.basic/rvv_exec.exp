@@ -24,6 +24,12 @@ proc run_test {} {
   ocdtlb_run_expect "targets 0"
   ocdtlb_run_expect "reset halt"
 
+  if {[target_info cpu,v_ext_misa_writable] == 1} {
+    set reset_misa [ocdtlb_rsp_get [ocdtlb_run_expect "reg misa"]]
+    set misa_with_v [expr { $reset_misa | ( 1 << 21 ) }]
+    ocdtlb_run_expect "reg misa $misa_with_v"
+  }
+
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
   ocdtlb_run_expect "bp $WRITE_DONE_ADDR 4"
@@ -32,6 +38,12 @@ proc run_test {} {
   ocdtlb_wait_resume wait_halt
 
   ocdtlb_do_expect_halted
+
+  if {[target_info cpu,v_ext_misa_writable] == 1} {
+    set current_misa [ocdtlb_rsp_get [ocdtlb_run_expect "reg misa"]]
+    ocdtlb_expect_equal $current_misa $misa_with_v
+    ocdtlb_run_expect "reg misa $reset_misa"
+  }
 
   set current_pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
   if {![expr { $current_pc == $WRITE_DONE_ADDR}]} {

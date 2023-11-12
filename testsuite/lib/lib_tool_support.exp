@@ -47,6 +47,7 @@ proc tsuplib_target_info_check {} {
     cpu,has_v_ext \
     cpu,v_ext_vlen \
     cpu,v_ext_elen \
+    cpu,v_ext_misa_writable \
     cpu,trigger_count \
     cpu,has_watchpoints \
     cpu,has_watchpoints_equal \
