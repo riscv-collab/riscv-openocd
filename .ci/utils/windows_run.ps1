@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $ID = "$env:DISTRIBUTION_ID"
-$URL = "http://artifactory.dev.syntacore.com:8082/artifactory/tools-gitlab-artifacts/openocd/${ID}/windows_openocd.zip"
+$URL = "http://artifactory.dev.syntacore.com/artifactory/tools-gitlab-artifacts/openocd/${ID}/windows_openocd.zip"
 
 echo "Downloading from: ${URL}"
 

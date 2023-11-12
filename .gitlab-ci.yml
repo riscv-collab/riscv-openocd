@@ -66,10 +66,25 @@ default:
     - ./make.py container clean
     - |
       if [ $CI_JOB_STATUS != 'success' ]; then
-        echo "Testing directory size:"
-        du -hs build/Release/testing
-        time XZ_OPT="-T0 -9" tar -cJf testing_logs.tar.xz build/Release/testing
-        du -hs testing_logs.tar.xz
+        # WTF you ask? Good question, bro!
+        # Well, let me tell you a story...
+        # **after_script** action has a non-configurable timeout of 5 minutes.
+        #   Our server is not capable to archive log files and upload them
+        #   to artifactory given the time constraint.
+        # Now you know the reason. Happy?
+        # So, instead of uploading to artifactory I just copy these archives
+        # on some storage device.
+        # This needs to be replaced once we transition to Jenkins
+        # NOTE: logs are huge, so we need some retention policy
+        RUN_DATE=$(date "+%s")
+        BUILD_ID="$CI_COMMIT_REF_SLUG-$RUN_DATE"
+        ARCHIVE="$BUILD_ID.tar.xz"
+        STORAGE="/tmp_files_for_ci/openocd_logs"
+        time XZ_OPT="-T0 -9" tar -cJf "$ARCHIVE" build/Release/testing
+        echo "coping $ARCHIVE to $STORAGE"
+        cp "$ARCHIVE" "$STORAGE"
+        # remove files older than one week
+        find "$STORAGE" -maxdepth 1 -mtime +7 -type f -delete
       fi
 
 main:

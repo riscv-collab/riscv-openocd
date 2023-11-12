@@ -17,7 +17,7 @@ fi
 
 REPO_PATH=$(realpath "$(dirname "$0")/../..")
 COMMIT=$(git --git-dir="$REPO_PATH/.git" --work-tree "$REPO_PATH" rev-parse --short=8 HEAD)
-ARTIFACTORY_URL="http://artifactory.dev.syntacore.com:8082/artifactory"
+ARTIFACTORY_URL="http://artifactory.dev.syntacore.com/artifactory"
 ARTIFACTORY_DIR=${ARTIFACTORY_DIR:-openocd_test_reports}
 ARTIFACTORY_BASEPATH="$ARTIFACTORY_URL/$ARTIFACTORY_DIR"
 
