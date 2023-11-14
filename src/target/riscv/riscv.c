@@ -5360,10 +5360,11 @@ riscv_insn_t riscv_read_debug_buffer(struct target *target, int index)
 	return r->read_debug_buffer(target, index);
 }
 
-int riscv_execute_debug_buffer(struct target *target)
+int riscv_execute_debug_buffer(struct target *target,
+	unsigned int *abstractcs_err)
 {
 	RISCV_INFO(r);
-	return r->execute_debug_buffer(target);
+	return r->execute_debug_buffer(target, abstractcs_err);
 }
 
 void riscv_fill_dm_write_u64(struct target *target, char *buf, int a, uint64_t d)
