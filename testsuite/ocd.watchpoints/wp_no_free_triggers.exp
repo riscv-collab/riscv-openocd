@@ -1,0 +1,29 @@
+proc run_test {} {
+    if {![target_info cpu,has_watchpoints]} {
+        return [ocd_test_unsupported]
+    }
+
+    set max_trigger_count [target_info cpu,trigger_count]
+    set wp_address 0x0
+    set error_message "resource not available"
+
+    ocd_connect
+
+    ocdtlb_run_expect "targets 0"
+    ocdtlb_run_expect "reset halt"
+
+    for {set n 0} {$n < $max_trigger_count} {incr n} {
+        ocdtlb_run_expect "wp $wp_address 4"
+        set wp_address 0x[format %x [expr {$wp_address + 4}]]
+    }
+
+    set response [tsuplib_tclrpc_run_command "capture { catch { wp $wp_address 4 } err }"]
+
+    if {[string first $error_message $response] == -1} {
+        return [ocdt_test_failure]
+    }
+
+    return [ocd_test_pass]
+}
+
+return [run_test]
