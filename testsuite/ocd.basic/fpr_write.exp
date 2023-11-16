@@ -16,6 +16,8 @@ proc run_test {} {
 
   ocdtlb_run_expect "targets 0"
   ocdtlb_run_expect "reset halt"
+  set STEP_LIMIT 100
+  ocdtlb_do_expect_step_until $END_ADDR $STEP_LIMIT
 
   set prev 1
   set values(0) 0
@@ -33,8 +35,6 @@ proc run_test {} {
     ocdtlb_run_expect "reg $FPR($i) $values($i)"
   }
 
-  # NOTE: END_ADDR has an unconditional branch
-  ocdtlb_run_expect "reg pc $END_ADDR"
   ocdtlb_run_expect "step"
 
   for {set i 0} {$i < 32} {incr i} {

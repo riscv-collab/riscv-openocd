@@ -64,6 +64,11 @@ proc run_test {} {
     return [ocd_test_pass]
   }
 
+  #Enable FPU
+  set mstatus [ocdtlb_rsp_get [ocdtlb_run_expect "reg mstatus"]]
+  set new_mstatus [expr $mstatus | 1 << 13]
+  ocdtlb_run_expect "reg mstatus $new_mstatus"
+
   set fpr_idx 0
   foreach name $FPR_NAMES {
     if {![string match $name $FPR($fpr_idx)]} {
