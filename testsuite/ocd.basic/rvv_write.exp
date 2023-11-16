@@ -89,6 +89,14 @@ proc run_test {} {
     return [ocd_test_fail]
   }
 
+  ocdtlb_run_expect "reg vl 0x0"
+  set vl [ocdtlb_rsp_get [ocdtlb_run_expect "reg vl"]]
+  ocdtlb_expect_equal $vl 0x0
+
+  ocdtlb_run_expect "reg vtype 0x0"
+  set vtype [ocdtlb_rsp_get [ocdtlb_run_expect "reg vtype"]]
+  ocdtlb_expect_equal $vtype 0x0
+
   return [ocd_test_pass]
 }
 

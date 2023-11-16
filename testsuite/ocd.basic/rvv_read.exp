@@ -49,6 +49,12 @@ proc run_test {} {
     ocdtlb_expect_equal_hex [list $expected_low64 $expected_high64] [list $low64 $high64]
   }
 
+  set vtype [ocdtlb_rsp_get [ocdtlb_run_expect "reg vtype"]]
+  ocdtlb_expect_equal $vtype 0x18
+
+  set vl [ocdtlb_rsp_get [ocdtlb_run_expect "reg vl"]]
+  ocdtlb_expect_equal $vl 0x2
+
   return [ocd_test_pass]
 }
 
