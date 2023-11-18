@@ -25,10 +25,7 @@
 #include "rtos/rtos.h"
 #include "debug_defines.h"
 #include <helper/bits.h>
-
-#define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
-#define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
-#define field_value(mask, val) set_field((riscv_reg_t)0, mask, val)
+#include "field_helpers.h"
 
 /*** JTAG registers. ***/
 
@@ -1079,7 +1076,7 @@ static int maybe_add_trigger_t2_t6_for_wp(struct target *target,
 		};
 		ret = try_setup_single_match_trigger(target, trigger, eq);
 		if (ret != ERROR_OK)
-			return ERROR_FAIL;
+			return ret;
 	}
 
 	if (ret == ERROR_OK && trigger->length > 1) {
@@ -1961,7 +1958,7 @@ int riscv_halt(struct target *target)
 
 static int riscv_assert_reset(struct target *target)
 {
-	LOG_TARGET_DEBUG(target, "coreid: [%d]", target->coreid);
+	LOG_TARGET_DEBUG(target, "");
 	struct target_type *tt = get_target_type(target);
 	if (!tt)
 		return ERROR_FAIL;
@@ -1971,7 +1968,7 @@ static int riscv_assert_reset(struct target *target)
 
 static int riscv_deassert_reset(struct target *target)
 {
-	LOG_TARGET_DEBUG(target, "coreid: [%d]", target->coreid);
+	LOG_TARGET_DEBUG(target, "");
 	struct target_type *tt = get_target_type(target);
 	if (!tt)
 		return ERROR_FAIL;

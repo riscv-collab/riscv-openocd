@@ -29,6 +29,7 @@
 #include "asm.h"
 #include "batch.h"
 #include "debug_reg_printer.h"
+#include "field_helpers.h"
 
 static int riscv013_on_step_or_resume(struct target *target, bool step);
 static int riscv013_step_or_resume_current_hart(struct target *target,
@@ -84,9 +85,6 @@ static int set_group(struct target *target, bool *supported, unsigned int group,
  * called directly by OpenOCD, which can't assume anything about what's
  * currently in IR. They should set IR to dbus explicitly.
  */
-
-#define get_field(reg, mask) (((reg) & (mask)) / ((mask) & ~((mask) << 1)))
-#define set_field(reg, mask, val) (((reg) & ~(mask)) | (((val) * ((mask) & ~((mask) << 1))) & (mask)))
 
 #define RISCV013_INFO(r) riscv013_info_t *r = get_info(target)
 
@@ -371,7 +369,7 @@ static unsigned int decode_dmi(struct target *target, char *text, unsigned int a
 	return decode_dm(text, address - dm->base, data);
 }
 
-static void dump_field(struct target *target, int idle, const struct scan_field *field)
+static void dump_field(struct target *target, int idle, const struct scan_field *field, bool discard_in)
 {
 	static const char * const op_string[] = {"-", "r", "w", "?"};
 	static const char * const status_string[] = {"+", "?", "F", "b"};
@@ -389,19 +387,22 @@ static void dump_field(struct target *target, int idle, const struct scan_field 
 	unsigned int in_data = get_field(in, DTM_DMI_DATA);
 	unsigned int in_address = in >> DTM_DMI_ADDRESS_OFFSET;
 
-	log_printf_lf(LOG_LVL_DEBUG,
-			__FILE__, __LINE__, "scan",
+	log_printf_lf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__,
 			"%db %s %08x @%02x -> %s %08x @%02x; %di",
 			field->num_bits, op_string[out_op], out_data, out_address,
 			status_string[in_op], in_data, in_address, idle);
 
-	char out_text[decode_dmi(target, NULL, out_address, out_data) + 1];
-	unsigned int out_len = decode_dmi(target, out_text, out_address, out_data);
-	char in_text[decode_dmi(target, NULL, in_address, in_data) + 1];
-	unsigned int in_len = decode_dmi(target, in_text, in_address, in_data);
-	if (in_text[0] || out_text[0]) {
-		log_printf_lf(LOG_LVL_DEBUG, __FILE__, __LINE__, "scan", "%.*s -> %.*s",
-				out_len, out_text, in_len, in_text);
+	if (out_op == DTM_DMI_OP_WRITE) {
+		char out_decoded[decode_dmi(target, NULL, out_address, out_data) + 1];
+		decode_dmi(target, out_decoded, out_address, out_data);
+		log_printf_lf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__,
+				"write: %s", out_decoded);
+	}
+	if (!discard_in && in_op == DTM_DMI_OP_SUCCESS) {
+		char in_decoded[decode_dmi(target, NULL, in_address, in_data) + 1];
+		decode_dmi(target, in_decoded, in_address, in_data);
+		log_printf_lf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__,
+				"read: %s", in_decoded);
 	}
 }
 
@@ -542,7 +543,7 @@ static dmi_status_t dmi_scan(struct target *target, uint32_t *address_in,
 
 	if (address_in)
 		*address_in = buf_get_u32(in, DTM_DMI_ADDRESS_OFFSET, info->abits);
-	dump_field(target, idle_count, &field);
+	dump_field(target, idle_count, &field, /*discard_in*/ !data_in);
 	return buf_get_u32(in, DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
 }
 
@@ -779,9 +780,9 @@ static int dmstatus_read_timeout(struct target *target, uint32_t *dmstatus,
 	int dmstatus_version = get_field(*dmstatus, DM_DMSTATUS_VERSION);
 	if (dmstatus_version != 2 && dmstatus_version != 3) {
 		LOG_ERROR("OpenOCD only supports Debug Module version 2 (0.13) and 3 (1.0), not "
-				"%d (dmstatus=0x%x). This error might be caused by a JTAG "
+				"%" PRId32 " (dmstatus=0x%" PRIx32 "). This error might be caused by a JTAG "
 				"signal issue. Try reducing the JTAG clock speed.",
-				get_field(*dmstatus, DM_DMSTATUS_VERSION), *dmstatus);
+				get_field32(*dmstatus, DM_DMSTATUS_VERSION), *dmstatus);
 	} else if (authenticated && !get_field(*dmstatus, DM_DMSTATUS_AUTHENTICATED)) {
 		LOG_ERROR("Debugger is not authenticated to target Debug Module. "
 				"(dmstatus=0x%x). Use `riscv authdata_read` and "
@@ -1859,15 +1860,11 @@ static int examine(struct target *target)
 	}
 
 	LOG_TARGET_DEBUG(target, "dtmcontrol=0x%x", dtmcontrol);
-	LOG_TARGET_DEBUG(target, "  dmireset=%d", get_field(dtmcontrol, DTM_DTMCS_DMIRESET));
-	LOG_TARGET_DEBUG(target, "  idle=%d", get_field(dtmcontrol, DTM_DTMCS_IDLE));
-	LOG_TARGET_DEBUG(target, "  dmistat=%d", get_field(dtmcontrol, DTM_DTMCS_DMISTAT));
-	LOG_TARGET_DEBUG(target, "  abits=%d", get_field(dtmcontrol, DTM_DTMCS_ABITS));
-	LOG_TARGET_DEBUG(target, "  version=%d", get_field(dtmcontrol, DTM_DTMCS_VERSION));
+	log_debug_reg(target, DTM_DTMCS_ORDINAL, dtmcontrol);
 
 	if (get_field(dtmcontrol, DTM_DTMCS_VERSION) != 1) {
-		LOG_TARGET_ERROR(target, "Unsupported DTM version %d. (dtmcontrol=0x%x)",
-				get_field(dtmcontrol, DTM_DTMCS_VERSION), dtmcontrol);
+		LOG_TARGET_ERROR(target, "Unsupported DTM version %" PRIu32 ". (dtmcontrol=0x%" PRIx32 ")",
+				get_field32(dtmcontrol, DTM_DTMCS_VERSION), dtmcontrol);
 		return ERROR_FAIL;
 	}
 
@@ -2114,11 +2111,11 @@ static int examine(struct target *target)
 		if (set_group(target, &info->haltgroup_supported, target->smp, HALT_GROUP) != ERROR_OK)
 			return ERROR_FAIL;
 		if (info->haltgroup_supported)
-			LOG_TARGET_INFO(target, "Core %d made part of halt group %d.", target->coreid,
+			LOG_TARGET_INFO(target, "Core %d made part of halt group %d.", info->index,
 					target->smp);
 		else
 			LOG_TARGET_INFO(target, "Core %d could not be made part of halt group %d.",
-					target->coreid, target->smp);
+					info->index, target->smp);
 	}
 
 	/* Some regression suites rely on seeing 'Examined RISC-V core' to know
@@ -3168,6 +3165,8 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 			return ERROR_FAIL;
 
 		if (info->bus_master_read_delay) {
+			LOG_TARGET_DEBUG(target, "Waiting %d cycles for bus master read delay",
+					info->bus_master_read_delay);
 			jtag_add_runtest(info->bus_master_read_delay, TAP_IDLE);
 			if (jtag_execute_queue() != ERROR_OK) {
 				LOG_TARGET_ERROR(target, "Failed to scan idle sequence");
@@ -3175,8 +3174,8 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 			}
 		}
 
-		/* First value has been read, and is waiting for us to issue a DMI read
-		 * to get it. */
+		/* First read has been started. Optimistically assume that it has
+		 * completed. */
 
 		static int sbdata[4] = {DM_SBDATA0, DM_SBDATA1, DM_SBDATA2, DM_SBDATA3};
 		uint32_t sbvalue[4] = {0};
@@ -3195,7 +3194,19 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 					}
 					keep_alive();
 					dmi_status_t status = dmi_scan(target, NULL, &sbvalue[next_read_j],
-												   DMI_OP_READ, sbdata[j], 0, false);
+								       DMI_OP_READ, sbdata[j], 0, false);
+					/* By reading from sbdata0, we have just initiated another system bus read.
+					 * If necessary add a delay so the read can finish. */
+					if (j == 0 && info->bus_master_read_delay) {
+						LOG_TARGET_DEBUG(target, "Waiting %d cycles for bus master read delay",
+								info->bus_master_read_delay);
+						jtag_add_runtest(info->bus_master_read_delay, TAP_IDLE);
+						if (jtag_execute_queue() != ERROR_OK) {
+							LOG_TARGET_ERROR(target, "Failed to scan idle sequence");
+							return ERROR_FAIL;
+						}
+					}
+
 					if (status == DMI_STATUS_BUSY)
 						increase_dmi_busy_delay(target);
 					else if (status == DMI_STATUS_SUCCESS)
@@ -3258,16 +3269,32 @@ static int read_memory_bus_v1(struct target *target, target_addr_t address,
 		}
 
 		if (get_field(sbcs_read, DM_SBCS_SBBUSYERROR)) {
-			/* We read while the target was busy. Slow down and try again. */
-			if (dm_write(target, DM_SBCS, sbcs_read | DM_SBCS_SBBUSYERROR) != ERROR_OK)
+			/* We read while the target was busy. Slow down and try again.
+			 * Clear sbbusyerror, as well as readondata or readonaddr. */
+			if (dm_write(target, DM_SBCS, DM_SBCS_SBBUSYERROR) != ERROR_OK)
 				return ERROR_FAIL;
-			next_address = sb_read_address(target);
+
+			if (get_field(sbcs_read, DM_SBCS_SBERROR) == DM_SBCS_SBERROR_NONE) {
+				/* Read the address whose read was last completed. */
+				next_address = sb_read_address(target);
+
+				/* Read the value for the last address. It's
+				 * sitting in the register for us, but we read it
+				 * too early (sbbusyerror became set). */
+				target_addr_t current_address = next_address - (increment ? size : 0);
+				if (read_memory_bus_word(target, current_address, size,
+							buffer + current_address - address) != ERROR_OK)
+					return ERROR_FAIL;
+			}
+
 			info->bus_master_read_delay += info->bus_master_read_delay / 10 + 1;
+			LOG_TARGET_DEBUG(target, "Increasing bus_master_read_delay to %d.",
+					info->bus_master_read_delay);
 			continue;
 		}
 
 		unsigned error = get_field(sbcs_read, DM_SBCS_SBERROR);
-		if (error == 0) {
+		if (error == DM_SBCS_SBERROR_NONE) {
 			next_address = end_address;
 		} else {
 			/* Some error indicating the bus access failed, but not because of
@@ -4742,7 +4769,7 @@ static int select_prepped_harts(struct target *target)
 		struct riscv_info *info = riscv_info(t);
 		riscv013_info_t *info_013 = get_info(t);
 		unsigned int index = info_013->index;
-		LOG_TARGET_DEBUG(target, "index=%d, coreid=%d, prepped=%d", index, t->coreid, info->prepped);
+		LOG_TARGET_DEBUG(target, "index=%d, prepped=%d", index, info->prepped);
 		if (info->prepped) {
 			info_013->selected = true;
 			hawindow[index / 32] |= 1 << (index % 32);
@@ -4913,7 +4940,7 @@ static enum riscv_halt_reason riscv013_halt_reason(struct target *target)
 		 * already set when we connected. Force enumeration now, which has the
 		 * side effect of clearing any triggers we did not set. */
 		riscv_enumerate_triggers(target);
-		LOG_TARGET_DEBUG(target, "Coreid: [%d] halted because of trigger", target->coreid);
+		LOG_TARGET_DEBUG(target, "halted because of trigger");
 		return RISCV_HALT_TRIGGER;
 	case CSR_DCSR_CAUSE_STEP:
 		return RISCV_HALT_SINGLESTEP;
