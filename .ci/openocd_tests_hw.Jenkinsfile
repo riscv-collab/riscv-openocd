@@ -10,6 +10,10 @@ def runTests(boards){
       stage("${board}") {
          lock (resource: "${fpga_lock}") {
             dir ("$WD") {
+              if (params.containsKey('nightly_run')) {
+                def ENSURE_RUN_BEFORE = params.nightly_run
+                sh "${SOURCE_DIR}/.ci/utils/ensure_nigthly_timeframe.sh ${ENSURE_RUN_BEFORE}"
+              }
               sh """
               #!/bin/bash
               set +x
