@@ -16,6 +16,7 @@ proc run_test {} {
 
   ocdtlb_run_expect "targets 0"
   ocdtlb_run_expect "reset halt"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
   set STEP_LIMIT 100
   ocdtlb_do_expect_step_until $END_ADDR $STEP_LIMIT
 
