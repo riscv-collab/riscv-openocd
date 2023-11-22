@@ -1,0 +1,24 @@
+proc run_test {} {
+  global OPENOCD_ROOT
+
+  set ElfFile "[tool_state_get default_bin_prefix]_spike_run.elf"
+  ocd_compile_executable "lib/simple.S" "$ElfFile"
+
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+  set script_to_run [ocdtlb_test_resource_path wp_workarounds_test.tcl]
+  set script_timeout_multiplier 10
+  set LogFile [utils_spawn_universal_launcher \
+    [list \
+      --run-script ${OPENOCD_ROOT}/share/openocd/scripts/syntacore/wp_utils.tcl \
+      --run-script $script_to_run \
+      --run-command "wp_workaround_test $ElfFile $ENTRY_ADDR"] \
+    wa_lib_testing \
+    expect_success \
+    $script_timeout_multiplier]
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
+
