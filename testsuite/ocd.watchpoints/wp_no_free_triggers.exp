@@ -13,7 +13,10 @@ proc run_test {} {
     ocdtlb_run_expect "reset halt"
 
     for {set n 0} {$n < $max_trigger_count} {incr n} {
-        ocdtlb_run_expect "wp $wp_address 4"
+        if {[catch {ocdtlb_run_expect "wp $wp_address 4"} var]} {
+            break
+        }
+
         set wp_address 0x[format %x [expr {$wp_address + 4}]]
     }
 
