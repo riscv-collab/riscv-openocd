@@ -23,12 +23,12 @@ proc run_test {} {
 
   source [ocdtlb_test_resource_path wp_tests_lib.tcl]
 
-  # created by compile executable
   ocd_connect
 
   ocdtlb_run_expect "targets 0"
   ocdtlb_run_expect "reset halt"
 
+  # created by ocd_compile executable
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 
   set WpLengths [list \

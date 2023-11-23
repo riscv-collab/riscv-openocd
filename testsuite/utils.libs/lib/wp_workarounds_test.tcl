@@ -69,9 +69,14 @@ proc wp_workaround_test_running_target { Elf Entry } {
 }
 
 proc wp_workaround_test {ElfFile EntryPoint} {
-  wp_workaround_test_basic 2
-  wp_workaround_test_basic 1
-  wp_workaround_test_running_target $ElfFile $EntryPoint
+  if {[catch {
+    wp_workaround_test_basic 2
+    wp_workaround_test_basic 1
+    wp_workaround_test_running_target $ElfFile $EntryPoint
+  } err]} {
+    echo "fatal error: $err"
+    shutdown error
+  }
   shutdown
 }
 
