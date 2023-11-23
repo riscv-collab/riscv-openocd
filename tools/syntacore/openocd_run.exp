@@ -19,7 +19,7 @@ set COMMAND_LINE_OPTIONS [dict create \
   --auto-config "flag. try to guess which configuration file should be used for debug adapter" \
   --bindto "value:value. issue bindto configuration command. Typically this is something like 0.0.0.0" \
   --bitbang-port "devel:value:port. rbb port (for connection to spike simulator)" \
-  --configure-hook "value:script_file. script to execute during configuration phase. The file is loaded right before init" \
+  --configure-hook "value:file. TCL script to execute during configuration phase. The file is loaded right before init" \
   --debug-adapter-index "value:index. specify selected adapter" \
   --debug-adapter-serial "value:serial. specify serial number of debug adapter" \
   --disable-interactive-mode "flag. disables interactive selection of debug adapter" \
@@ -31,8 +31,8 @@ set COMMAND_LINE_OPTIONS [dict create \
   --no-extra-scripts "flag. avoid loading of extra scripts (common routines to help with debugging)" \
   --no-targets "devel:flag. create only TAP, do not create OpenOCD targets" \
   --reset-adapter "flag. enforce reset of debug adapter before use" \
-  --run-command "value:openocd_command. extra command to run (can be specified multiple times)" \
-  --run-script "value:script_file. additional script(s) to run (can be specified multiple times)" \
+  --run-command "value:command. extra TCL command to run. Can be specified multiple times. The command is run after init phase" \
+  --run-script "value:file. additional TCL script to run. Can be specified multiple times. The script is run after init phase" \
   --save "value:config_path. save selected configuration to the file (see --load)" \
   --scan-only "flag. do not launch OpenOCD server, only show the resulting command" \
   --single-core "flag. enforce single-hart configuration even if we know that other harts are available" \
