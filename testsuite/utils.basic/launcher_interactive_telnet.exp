@@ -78,7 +78,7 @@ proc run_test {} {
   }
 
   set TelnetLog [utils_spawn_universal_launcher \
-    [list --verbose --telnet --log-session ""] \
+    [list --telnet --log-session ""] \
     telnet_no_session_log  \
     interactive]
   expectTelnetStartup $spawn_id
