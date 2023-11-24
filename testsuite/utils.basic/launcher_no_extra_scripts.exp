@@ -1,0 +1,16 @@
+proc run_test {} {
+  set script_to_run "[ocdtlb_test_resource_path check_fpga_lib_availability.tcl]"
+  set LogFile [utils_spawn_universal_launcher \
+    [list \
+      --no-extra-scripts \
+      --run-script $script_to_run \
+      --run-command "check_fpga_lib_availability 0" \
+      --run-command shutdown \
+    ] \
+    no_extra_scripts  \
+    expect_success]
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

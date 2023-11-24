@@ -3,29 +3,33 @@ proc run_test {} {
     [list --help]  help  expect_success]
 
   set options [list \
-    help \
-    disable-interactive-mode \
-    speed \
-    smp \
-    save \
-    load \
+    auto-config \
+    bindto \
     bitbang-port \
+    configure-hook \
     debug-adapter-index \
     debug-adapter-serial \
+    disable-interactive-mode \
+    help \
+    ide-mode \
+    i-know-what-im-doing \
+    load \
+    log-session \
     no-extra-scripts \
-    run-script \
+    no-targets \
+    reset-adapter \
     run-command \
+    run-script \
+    save \
     scan-only \
+    single-core \
+    smp \
+    speed \
     spike-arg \
     spike-bin \
     spike-harts \
-    single-core \
-    ide-mode \
-    bindto \
-    configure-hook \
-    log-session \
+    stand-db \
     telnet \
-    i-know-what-im-doing \
     verbose \
   ]
   foreach option $options {
