@@ -293,7 +293,7 @@ static int breakpoint_free(struct target *data_target, struct target *breakpoint
 	}
 
 	if (!breakpoint)
-		return ERROR_OK;
+		return ERROR_BREAKPOINT_NOT_FOUND;
 
 	retval = target_remove_breakpoint(breakpoint_target, breakpoint);
 	if (retval != ERROR_OK) {
@@ -330,7 +330,6 @@ static int breakpoint_remove_all_internal(struct target *target)
 
 int breakpoint_remove(struct target *target, target_addr_t address)
 {
-	int retval = ERROR_OK;
 	if (!target->smp) {
 		struct breakpoint *breakpoint = breakpoint_find(target, address);
 		if (breakpoint)
@@ -338,6 +337,7 @@ int breakpoint_remove(struct target *target, target_addr_t address)
 		return ERROR_BREAKPOINT_NOT_FOUND;
 	}
 
+	int retval = ERROR_OK;
 	unsigned int found = 0;
 	struct target_list *head;
 	/* Target where we found a software breakpoint. */
@@ -404,9 +404,11 @@ int breakpoint_remove(struct target *target, target_addr_t address)
 			/* Remove the software breakpoint through
 			* remove_target, but update the breakpoints structure
 			* of software_breakpoint_target. */
-			/* TODO: If there is an error, can we try to remove the
-			 * same breakpoint from a different target? */
-			return breakpoint_free(software_breakpoint_target, remove_target, software_breakpoint);
+			int status = breakpoint_free(software_breakpoint_target, remove_target, software_breakpoint);
+			if (status != ERROR_OK)
+				/* TODO: If there is an error, can we try to remove the
+				* same breakpoint from a different target? */
+				retval = status;
 		} else {
 			LOG_WARNING("No halted target found to remove software breakpoint at "
 					TARGET_ADDR_FMT ".", address);
@@ -575,7 +577,7 @@ static int watchpoint_free(struct target *target, struct watchpoint *watchpoint_
 	}
 
 	if (!watchpoint)
-		return ERROR_OK;
+		return ERROR_WATCHPOINT_NOT_FOUND;
 	retval = target_remove_watchpoint(target, watchpoint);
 	if (retval != ERROR_OK) {
 		LOG_TARGET_ERROR(target, "could not remove watchpoint #%d on this target",
