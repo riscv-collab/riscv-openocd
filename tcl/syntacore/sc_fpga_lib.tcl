@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 # A collection of reference scripts that are useful for basic fpga tasks
 #
 # If you experience difficulties with these scripts or would like to introduce
@@ -12,7 +14,7 @@
 #   target that does not belong to any. Currently, OpenOCD does not expose
 #   functionality to identify which target belongs to which group. It only
 #   allows us to query if a target belongs to some group. So these functions
-#   are not safe to use in such contexts. That beeing said, we do hope that
+#   are not safe to use in such contexts. That being said, we do hope that
 #   such contexts are seldom (well, never :), to be more precise) used and most
 #   users don't need to worry about that.
 
@@ -246,7 +248,7 @@ proc sc_fpga_find_target_by_hartid { hartid } {
         targets $t
         if {[catch { _SC_INTERNALS::sc_lib_read_reg_hex mhartid } mhartid]} {
             targets $current_target
-            return -code error "could not not read mhartid from $t ($mhartid)"
+            return -code error "could not read mhartid from $t ($mhartid)"
         }
         set decimal_val [expr $mhartid]
         if { $decimal_val == $hartid } {

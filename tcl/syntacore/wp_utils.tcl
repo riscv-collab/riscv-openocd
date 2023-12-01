@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 proc sc_lib_watchpoints_stash {} {
   if {[[target current] curstate] ne "halted"} {
     error "could not stash watchpoints, since [target current] is not halted"

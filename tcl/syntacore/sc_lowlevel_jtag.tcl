@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 # Expect lib for OpenOCD with commands to manipulate RISCV cores using low-level JTAG commands;
 # All commands start with "ocdjtag_riscv" (like, "ocdjtag_riscv_update_taps_info")
 #
@@ -507,7 +509,7 @@ proc ocdjtag_riscv_halt_hart { tap_num } {
     }
 
     if {![dict get $dmstatus anyhalted]} {
-        error "halt_hart->Halt isn't successfull"
+        error "halt_hart->Halt isn't successful"
     }
 }
 
@@ -549,11 +551,11 @@ proc ocdjtag_riscv_resume_hart { tap_num {for_step 0} } {
     set dmstatus [ocdjtag_riscv_get_dmstatus $tap_num]
 
     if {![dict get $dmstatus anyrunning] && $for_step == 0} {
-        error "resume_hart->Resume isn't successfull"
+        error "resume_hart->Resume isn't successful"
     }
 
     if {![dict get $dmstatus anyresumeack]} {
-        error "resume_hart->Resume acknowledgement isn't successfull"
+        error "resume_hart->Resume acknowledgment isn't successful"
     }
 }
 
@@ -695,7 +697,7 @@ proc ocdjtag_riscv_examine_hart { tap_num } {
         ocdjtag_riscv_clear_cmderr $tap_num
     }
 
-    #if result of execution register_read_abstract isn't successfull (returned 0),
+    #if result of execution register_read_abstract isn't successful (returned 0),
     #xlen remains 32, in other case (returned 1), xlen become 64
 
     __SC_JTAGLIB_INTERNAL::sc_jtaglib_verbose "xlen: $xlen"
