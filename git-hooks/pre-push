@@ -5,5 +5,28 @@ git diff $(git merge-base sc/main HEAD) HEAD \
     -x "a/src/jtag/drivers/libjaylink/*" \
     -x "a/tools/git2cl/*" \
     -x "a/.github/*" \
+    -x "a/testsuite/*" \
+    -x "a/tools/syntacore/*" \
+    -x "a/.ci/*" \
+    -x "a/.makepy/*" \
+    -x "a/.mypy_cache/*" \
+    -x "a/testing/syntacore/*" \
+    -x "a/.cmake-format.py" \
+    -x "a/.yamllint.yaml" \
+    -x "a/conanfile.py" \
+    -x "a/make.py" \
+    -x "a/test_package/*" \
+    -x "b/.github/*" \
+    -x "b/testsuite/*" \
+    -x "b/tools/syntacore/*" \
+    -x "b/.ci/*" \
+    -x "b/.makepy/*" \
+    -x "b/.mypy_cache/*" \
+    -x "b/testing/syntacore/*" \
+    -x "b/.cmake-format.py" \
+    -x "b/.yamllint.yaml" \
+    -x "b/conanfile.py" \
+    -x "b/make.py" \
+    -x "b/test_package/*" \
     -x "a/HACKING" \
   | ./tools/scripts/checkpatch.pl --no-signoff -
