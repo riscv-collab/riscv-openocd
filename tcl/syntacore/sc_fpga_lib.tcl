@@ -179,7 +179,7 @@ proc sc_fpga_read_reg {reg_name} {
 }
 
 proc sc_fpga_write_reg { reg_name value } {
-    set result [__SC_INTERNALS::sc_lib_write_reg $reg_name $value]
+    set result [_SC_INTERNALS::sc_lib_write_reg $reg_name $value]
     _SC_INTERNALS::sc_lib_print "$result"
     return $result
 }
