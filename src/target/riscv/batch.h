@@ -58,6 +58,10 @@ bool riscv_batch_full(struct riscv_batch *batch);
 /* Executes this scan batch. */
 int riscv_batch_run(struct riscv_batch *batch);
 
+int riscv_batch_continue(struct riscv_batch *batch, size_t start_i);
+
+size_t riscv_batch_first_busy(const struct riscv_batch *batch);
+
 /* Adds a DM register write to this batch. */
 void riscv_batch_add_dm_write(struct riscv_batch *batch, uint64_t address, uint32_t data,
 	bool read_back);
@@ -75,11 +79,14 @@ void riscv_batch_add_nop(struct riscv_batch *batch);
 /* Returns the number of available scans. */
 size_t riscv_batch_available_scans(struct riscv_batch *batch);
 
+/* Return true iff the scan in the batch returned DMI_OP_BUSY. */
+bool riscv_batch_was_busy(const struct riscv_batch *batch, size_t scan_i);
+
 /* Return true iff the last scan in the batch returned DMI_OP_BUSY. */
 bool riscv_batch_dmi_busy_encountered(const struct riscv_batch *batch);
 
 /* Change the number of idle cycles used starting from the given scan. */
 int riscv_batch_change_idle_used_from_scan(struct riscv_batch *batch,
-		size_t new_idle, size_t scan_idx);
+		size_t new_idle, size_t *old_idle, size_t scan_idx);
 
 #endif
