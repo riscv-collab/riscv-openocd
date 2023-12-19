@@ -235,7 +235,7 @@ static inline const char *target_endianness(struct target *target)
 }
 
 /** Returns the instance-specific name of the specified target. */
-static inline const char *target_name(struct target *target)
+static inline const char *target_name(const struct target *target)
 {
 	return target->cmd_name;
 }
