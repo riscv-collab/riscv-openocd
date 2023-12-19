@@ -1502,9 +1502,6 @@ static int csr_read_progbuf(struct target *target, uint64_t *value,
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095);
 
-	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
-		return ERROR_FAIL;
-
 	struct riscv_program program;
 	riscv_program_init(&program, target);
 	if (riscv_program_csrr(&program, S0, number) != ERROR_OK)
@@ -4040,14 +4037,6 @@ static int read_memory_progbuf_inner_fill_progbuf(struct target *target,
 		uint32_t increment, uint32_t size, bool mprven)
 {
 	const bool is_repeated_read = increment == 0;
-
-	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
-		return ERROR_FAIL;
-	if (riscv_save_register(target, GDB_REGNO_S1) != ERROR_OK)
-		return ERROR_FAIL;
-	if (is_repeated_read &&	riscv_save_register(target, GDB_REGNO_A0) != ERROR_OK)
-		return ERROR_FAIL;
-
 	struct riscv_program program;
 
 	riscv_program_init(&program, target);
@@ -4066,7 +4055,9 @@ static int read_memory_progbuf_inner_fill_progbuf(struct target *target,
 	}
 	if (riscv_program_ebreak(&program) != ERROR_OK)
 		return ERROR_FAIL;
-	if (riscv_program_write(&program) != ERROR_OK)
+	if (riscv_program_save_regs(&program, target) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_program_write(&program, target) != ERROR_OK)
 		return ERROR_FAIL;
 
 	return ERROR_OK;
@@ -4138,9 +4129,6 @@ static int read_memory_progbuf_inner(struct target *target,
 static int read_memory_progbuf_inner_one(struct target *target,
 		struct memory_access_info access, bool mprven)
 {
-	if (riscv_save_register(target, GDB_REGNO_S1) != ERROR_OK)
-		return ERROR_FAIL;
-
 	struct riscv_program program;
 
 	riscv_program_init(&program, target);
@@ -4149,7 +4137,9 @@ static int read_memory_progbuf_inner_one(struct target *target,
 		return ERROR_FAIL;
 	if (riscv_program_ebreak(&program) != ERROR_OK)
 		return ERROR_FAIL;
-	if (riscv_program_write(&program) != ERROR_OK)
+	if (riscv_program_save_regs(&program, target) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_program_write(&program, target) != ERROR_OK)
 		return ERROR_FAIL;
 
 	/* Write address to S1, and execute buffer. */
@@ -4675,11 +4665,6 @@ static int riscv_program_store_mprv(struct riscv_program *p, enum gdb_regno d,
 static int write_memory_progbuf_fill_progbuf(struct target *target,
 		uint32_t size, bool mprven)
 {
-	if (riscv_save_register(target, GDB_REGNO_S0) != ERROR_OK)
-		return ERROR_FAIL;
-	if (riscv_save_register(target, GDB_REGNO_S1) != ERROR_OK)
-		return ERROR_FAIL;
-
 	struct riscv_program program;
 
 	riscv_program_init(&program, target);
@@ -4693,7 +4678,9 @@ static int write_memory_progbuf_fill_progbuf(struct target *target,
 	if (riscv_program_ebreak(&program) != ERROR_OK)
 		return ERROR_FAIL;
 
-	return riscv_program_write(&program);
+	if (riscv_program_save_regs(&program, target) != ERROR_OK)
+		return ERROR_FAIL;
+	return riscv_program_write(&program, target);
 }
 
 static int write_memory_progbuf_inner(struct target *target, target_addr_t start_addr,
