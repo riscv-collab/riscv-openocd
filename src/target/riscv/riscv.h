@@ -423,7 +423,7 @@ int riscv_get_hart_state(struct target *target, enum riscv_hart_state *state);
 
 /* These helper functions let the generic program interface get target-specific
  * information. */
-size_t riscv_progbuf_size(struct target *target);
+size_t riscv_progbuf_size(const struct target *target);
 
 riscv_insn_t riscv_read_progbuf(struct target *target, int index);
 int riscv_write_progbuf(struct target *target, int index, riscv_insn_t insn);

@@ -15,7 +15,7 @@
 #include "encoding.h"
 
 /* Program interface. */
-int riscv_program_init(struct riscv_program *p, struct target *target)
+int riscv_program_init(struct riscv_program *p, const struct target *target)
 {
 	memset(p, 0, sizeof(*p));
 	p->target = target;
@@ -31,12 +31,13 @@ int riscv_program_init(struct riscv_program *p, struct target *target)
 	return ERROR_OK;
 }
 
-int riscv_program_write(struct riscv_program *program)
+int riscv_program_write(struct riscv_program *program, struct target *target)
 {
 	for (unsigned i = 0; i < program->instruction_count; ++i) {
 		LOG_TARGET_DEBUG(program->target, "progbuf[%02x] = DASM(0x%08x)",
 				i, program->progbuf[i]);
-		if (riscv_write_progbuf(program->target, i, program->progbuf[i]) != ERROR_OK)
+		if (riscv_write_progbuf(target, i, program->progbuf[i])
+				!= ERROR_OK)
 			return ERROR_FAIL;
 	}
 	return ERROR_OK;
@@ -85,7 +86,7 @@ int riscv_program_exec(struct riscv_program *p, struct target *t)
 	if (result != ERROR_OK)
 		return result;
 
-	if (riscv_program_write(p) != ERROR_OK)
+	if (riscv_program_write(p, t) != ERROR_OK)
 		return ERROR_FAIL;
 
 	uint32_t cmderr;
@@ -223,7 +224,7 @@ int riscv_program_fence_rw_rw(struct riscv_program *p)
 
 int riscv_program_ebreak(struct riscv_program *p)
 {
-	struct target *target = p->target;
+	const struct target *target = p->target;
 	RISCV_INFO(r);
 	if (p->instruction_count == riscv_progbuf_size(p->target) &&
 			r->impebreak) {

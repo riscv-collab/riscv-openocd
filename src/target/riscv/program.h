@@ -21,7 +21,7 @@ typedef enum {
  * program buffers and executing them on the target.  This structure contains a
  * single program, which can then be executed on targets.  */
 struct riscv_program {
-	struct target *target;
+	const struct target *target;
 
 	uint32_t progbuf[RISCV_MAX_PROGBUF_SIZE];
 
@@ -41,10 +41,10 @@ struct riscv_program {
 };
 
 /* Initializes a program with the header. */
-int riscv_program_init(struct riscv_program *p, struct target *t);
+int riscv_program_init(struct riscv_program *p, const struct target *t);
 
 /* Write the program to the program buffer. */
-int riscv_program_write(struct riscv_program *program);
+int riscv_program_write(struct riscv_program *program, struct target *t);
 
 int riscv_program_save_regs(struct riscv_program *p, struct target *t);
 
