@@ -146,9 +146,12 @@ proc test_execution_log { log status_code expected_result expected_line } {
     }
   }
 
-  set LastLine [lindex [split [string trim $log] "\n"] end]
+  set LogLines [split [string trim $log] "\n"]
+  # The log is expected to contain return code of the command. Drop it and
+  # extract the last line
+  set LastLine [lindex [lreplace $LogLines end end] end]
   if {[string first $expected_line $LastLine] == -1} {
-    error "\n--$expected_line\nis not found in\n--$LastLine"
+    error "\n--$expected_line\nis not found in last line\n--$LastLine\n--log:\n$log\n--"
   }
 }
 
