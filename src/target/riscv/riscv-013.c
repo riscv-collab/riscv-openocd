@@ -34,7 +34,7 @@
 static int riscv013_on_step_or_resume(struct target *target, bool step);
 static int riscv013_step_or_resume_current_hart(struct target *target,
 		bool step);
-static void riscv013_clear_abstract_error(struct target *target);
+static int riscv013_clear_abstract_error(struct target *target);
 
 /* Implementations of the functions in struct riscv_info. */
 static int riscv013_get_register(struct target *target,
@@ -49,13 +49,12 @@ static int riscv013_step_current_hart(struct target *target);
 static int riscv013_on_step(struct target *target);
 static int riscv013_resume_prep(struct target *target);
 static enum riscv_halt_reason riscv013_halt_reason(struct target *target);
-static int riscv013_write_debug_buffer(struct target *target, unsigned int index,
+static int riscv013_write_progbuf(struct target *target, unsigned int index,
 		riscv_insn_t d);
-static riscv_insn_t riscv013_read_debug_buffer(struct target *target, unsigned int
+static riscv_insn_t riscv013_read_progbuf(struct target *target, unsigned int
 		index);
-static int riscv013_invalidate_cached_debug_buffer(struct target *target);
-static int riscv013_execute_debug_buffer(struct target *target,
-		unsigned int *abstractcs_err);
+static int riscv013_invalidate_cached_progbuf(struct target *target);
+static int riscv013_execute_progbuf(struct target *target, uint32_t *cmderr);
 static void riscv013_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d);
 static void riscv013_fill_dmi_read_u64(struct target *target, char *buf, int a);
 static int riscv013_dmi_write_u64_bits(struct target *target);
@@ -841,7 +840,8 @@ static int wait_for_idle(struct target *target, uint32_t *abstractcs)
 	time_t start = time(NULL);
 	do {
 		if (dm_read(target, abstractcs, DM_ABSTRACTCS) != ERROR_OK) {
-			/* NOTE: this value is meaninless, overwrite to avoid stale value */
+			/* We couldn't read abstractcs. For safety, overwrite the output value to
+			 * prevent the caller working with a stale value of abstractcs. */
 			*abstractcs = 0;
 			LOG_TARGET_ERROR(target,
 				"potentially unrecoverable error detected - could not read abstractcs");
@@ -851,7 +851,7 @@ static int wait_for_idle(struct target *target, uint32_t *abstractcs)
 		if (get_field(*abstractcs, DM_ABSTRACTCS_BUSY) == 0)
 			return ERROR_OK;
 
-	} while (time(NULL) - start < riscv_command_timeout_sec);
+	} while ((time(NULL) - start) < riscv_command_timeout_sec);
 
 	LOG_TARGET_ERROR(target,
 		"Timed out after %ds waiting for busy to go low (abstractcs=0x%" PRIx32 "). "
@@ -869,7 +869,7 @@ static int dm013_select_target(struct target *target)
 }
 
 static int execute_abstract_command(struct target *target, uint32_t command,
-		unsigned int *cmderr)
+		uint32_t *cmderr)
 {
 	assert(cmderr);
 	*cmderr = CMDERR_NONE;
@@ -894,12 +894,12 @@ static int execute_abstract_command(struct target *target, uint32_t command,
 		if (wait_result == ERROR_TIMEOUT_REACHED)
 			LOG_TARGET_DEBUG(target, "command 0x%" PRIx32 " failed (timeout)", command);
 		else
-			LOG_TARGET_DEBUG(target, "command 0x%" PRIx32 " failed (unknown fatal error)", command);
+			LOG_TARGET_DEBUG(target, "command 0x%" PRIx32 " failed (unknown fatal error %d)", command, wait_result);
 		return wait_result;
 	}
-	*cmderr = get_field(abstractcs, DM_ABSTRACTCS_CMDERR);
+	*cmderr = get_field32(abstractcs, DM_ABSTRACTCS_CMDERR);
 	if (*cmderr != CMDERR_NONE) {
-		LOG_TARGET_DEBUG(target, "command 0x%" PRIx32 " failed; abstractcs=0x%" PRIx32 "",
+		LOG_TARGET_DEBUG(target, "command 0x%" PRIx32 " failed; abstractcs=0x%" PRIx32,
 			command, abstractcs);
 		/* Attempt to clear the error. */
 		/* TODO: can we add a more substantial recovery if the clear operation fails ? */
@@ -922,12 +922,12 @@ static riscv_reg_t read_abstract_arg(struct target *target, unsigned index,
 			LOG_TARGET_ERROR(target, "Unsupported size: %d bits", size_bits);
 			return ~0;
 		case 64:
-			dm_read(target, &v, DM_DATA0 + offset + 1);
-			value |= ((uint64_t) v) << 32;
+			if (dm_read(target, &v, DM_DATA0 + offset + 1) == ERROR_OK)
+				value |= ((uint64_t)v) << 32;
 			/* falls through */
 		case 32:
-			dm_read(target, &v, DM_DATA0 + offset);
-			value |= v;
+			if (dm_read(target, &v, DM_DATA0 + offset) == ERROR_OK)
+				value |= v;
 	}
 	return value;
 }
@@ -1012,10 +1012,10 @@ static int register_read_abstract_with_size(struct target *target,
 	uint32_t command = access_register_command(target, number, size,
 			AC_ACCESS_REGISTER_TRANSFER);
 
-	unsigned int abstractcs_err;
-	int result = execute_abstract_command(target, command, &abstractcs_err);
+	uint32_t cmderr;
+	int result = execute_abstract_command(target, command, &cmderr);
 	if (result != ERROR_OK) {
-		if (abstractcs_err == CMDERR_NOT_SUPPORTED) {
+		if (cmderr == CMDERR_NOT_SUPPORTED) {
 			if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
 				info->abstract_read_fpr_supported = false;
 				LOG_TARGET_INFO(target, "Disabling abstract command reads from FPRs.");
@@ -1061,10 +1061,10 @@ static int register_write_abstract(struct target *target, enum gdb_regno number,
 	if (write_abstract_arg(target, 0, value, size) != ERROR_OK)
 		return ERROR_FAIL;
 
-	unsigned int abstractcs_err;
-	int result = execute_abstract_command(target, command, &abstractcs_err);
+	uint32_t cmderr;
+	int result = execute_abstract_command(target, command, &cmderr);
 	if (result != ERROR_OK) {
-		if (abstractcs_err == CMDERR_NOT_SUPPORTED) {
+		if (cmderr == CMDERR_NOT_SUPPORTED) {
 			if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
 				info->abstract_write_fpr_supported = false;
 				LOG_TARGET_INFO(target, "Disabling abstract command writes to FPRs.");
@@ -1198,9 +1198,14 @@ static int prep_for_register_access(struct target *target,
 {
 	assert(orig_mstatus);
 
-	if (!is_fpu_reg(regno) && !is_vector_reg(regno))
+	if (!is_fpu_reg(regno) && !is_vector_reg(regno)) {
+		/* If we don't assign orig_mstatus, clang static analysis
+		 * complains when this value is passed to
+		 * cleanup_after_register_access(). */
+		*orig_mstatus = 0;
 		/* No special preparation needed */
 		return ERROR_OK;
+	}
 
 	LOG_TARGET_DEBUG(target, "Preparing mstatus to access %s",
 			gdb_regno_name(target, regno));
@@ -1375,7 +1380,7 @@ static int scratch_write64(struct target *target, scratch_mem_t *scratch,
 		case SPACE_DMI_PROGBUF:
 			dm_write(target, DM_PROGBUF0 + scratch->debug_address, value);
 			dm_write(target, DM_PROGBUF1 + scratch->debug_address, value >> 32);
-			riscv013_invalidate_cached_debug_buffer(target);
+			riscv013_invalidate_cached_progbuf(target);
 			break;
 		case SPACE_DMI_RAM:
 			{
@@ -1914,7 +1919,7 @@ static int examine(struct target *target)
 	}
 	/* We're here because we're uncertain about the state of the target. That
 	 * includes our progbuf cache. */
-	riscv013_invalidate_cached_debug_buffer(target);
+	riscv013_invalidate_cached_progbuf(target);
 
 	dm_write(target, DM_DMCONTROL, DM_DMCONTROL_HARTSELLO |
 			DM_DMCONTROL_HARTSELHI | DM_DMCONTROL_DMACTIVE |
@@ -2052,7 +2057,7 @@ static int examine(struct target *target)
 
 	/* Without knowing anything else we can at least mess with the
 	 * program buffer. */
-	r->debug_buffer_size = info->progbufsize;
+	r->progbuf_size = info->progbufsize;
 
 	int result = register_read_abstract_with_size(target, NULL, GDB_REGNO_S0, 64);
 	if (result == ERROR_OK)
@@ -2752,10 +2757,10 @@ static int init_target(struct command_context *cmd_ctx,
 	generic_info->halt_go = &riscv013_halt_go;
 	generic_info->on_step = &riscv013_on_step;
 	generic_info->halt_reason = &riscv013_halt_reason;
-	generic_info->read_debug_buffer = &riscv013_read_debug_buffer;
-	generic_info->write_debug_buffer = &riscv013_write_debug_buffer;
-	generic_info->execute_debug_buffer = &riscv013_execute_debug_buffer;
-	generic_info->invalidate_cached_debug_buffer = &riscv013_invalidate_cached_debug_buffer;
+	generic_info->read_progbuf = &riscv013_read_progbuf;
+	generic_info->write_progbuf = &riscv013_write_progbuf;
+	generic_info->execute_progbuf = &riscv013_execute_progbuf;
+	generic_info->invalidate_cached_progbuf = &riscv013_invalidate_cached_progbuf;
 	generic_info->fill_dm_write_u64 = &riscv013_fill_dm_write_u64;
 	generic_info->fill_dm_read_u64 = &riscv013_fill_dm_read_u64;
 	generic_info->fill_dm_nop_u64 = &riscv013_fill_dm_nop_u64;
@@ -2830,7 +2835,7 @@ static int assert_reset(struct target *target)
 	/* The DM might have gotten reset if OpenOCD called us in some reset that
 	 * involves SRST being toggled. So clear our cache which may be out of
 	 * date. */
-	return riscv013_invalidate_cached_debug_buffer(target);
+	return riscv013_invalidate_cached_progbuf(target);
 }
 
 static int deassert_reset(struct target *target)
@@ -2910,12 +2915,20 @@ static int execute_fence(struct target *target)
 	 * here, but there's no ISA-defined way of doing that. */
 	struct riscv_program program;
 
+	/* program.execution_result may indicate RISCV_PROGBUF_EXEC_RESULT_EXCEPTION -
+	 * currently, we ignore this error since most likely this is an indication
+	 * that target does not support a fence instruction (execution of an
+	 * unsupported instruction results in "Illegal instruction" exception on
+	 * targets that comply with riscv-privilege spec).
+	 * Currently, RISC-V specification does not provide us with a portable and
+	 * less invasive way to detect if a fence is supported by the target. We may
+	 * revise this code once the spec allows us to do this */
 	if (has_sufficient_progbuf(target, 3)) {
 		riscv_program_init(&program, target);
 		riscv_program_fence_i(&program);
 		riscv_program_fence_rw_rw(&program);
 		if (riscv_program_exec(&program, target) != ERROR_OK) {
-			if (program.execution_result != RISCV_DBGBUF_EXEC_RESULT_EXCEPTION) {
+			if (program.execution_result != RISCV_PROGBUF_EXEC_RESULT_EXCEPTION) {
 				LOG_TARGET_ERROR(target, "Unexpected error during fence execution");
 				return ERROR_FAIL;
 			}
@@ -2928,7 +2941,7 @@ static int execute_fence(struct target *target)
 		riscv_program_init(&program, target);
 		riscv_program_fence_i(&program);
 		if (riscv_program_exec(&program, target) != ERROR_OK) {
-			if (program.execution_result != RISCV_DBGBUF_EXEC_RESULT_EXCEPTION) {
+			if (program.execution_result != RISCV_PROGBUF_EXEC_RESULT_EXCEPTION) {
 				LOG_TARGET_ERROR(target, "Unexpected error during fence.i execution");
 				return ERROR_FAIL;
 			}
@@ -2938,7 +2951,7 @@ static int execute_fence(struct target *target)
 		riscv_program_init(&program, target);
 		riscv_program_fence_rw_rw(&program);
 		if (riscv_program_exec(&program, target) != ERROR_OK) {
-			if (program.execution_result != RISCV_DBGBUF_EXEC_RESULT_EXCEPTION) {
+			if (program.execution_result != RISCV_PROGBUF_EXEC_RESULT_EXCEPTION) {
 				LOG_TARGET_ERROR(target, "Unexpected error during fence rw, rw execution");
 				return ERROR_FAIL;
 			}
@@ -3027,12 +3040,12 @@ static target_addr_t sb_read_address(struct target *target)
 	target_addr_t address = 0;
 	uint32_t v;
 	if (sbasize > 32) {
-		dm_read(target, &v, DM_SBADDRESS1);
-		address |= v;
+		if (dm_read(target, &v, DM_SBADDRESS1) == ERROR_OK)
+			address |= v;
 		address <<= 32;
 	}
-	dm_read(target, &v, DM_SBADDRESS0);
-	address |= v;
+	if (dm_read(target, &v, DM_SBADDRESS0) == ERROR_OK)
+		address |= v;
 	return address;
 }
 
@@ -3515,11 +3528,11 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 		}
 
 		/* Execute the command */
-		unsigned int abstractcs_err;
-		result = execute_abstract_command(target, command, &abstractcs_err);
+		uint32_t cmderr;
+		result = execute_abstract_command(target, command, &cmderr);
 
-		/* TODO: we need to modify error handling here. We can make decisions only
-		 * if abstractcs_err indicates an exception */
+		/* TODO: we need to modify error handling here. */
+		/* NOTE: in case of timeout cmderr is set to CMDERR_NONE */
 		if (info->has_aampostincrement == YNM_MAYBE) {
 			if (result == ERROR_OK) {
 				/* Safety: double-check that the address was really auto-incremented */
@@ -3534,7 +3547,7 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 			} else {
 				/* Try the same access but with postincrement disabled. */
 				command = access_memory_command(target, false, width, false, false);
-				result = execute_abstract_command(target, command, &abstractcs_err);
+				result = execute_abstract_command(target, command, &cmderr);
 				if (result == ERROR_OK) {
 					LOG_TARGET_DEBUG(target, "aampostincrement is not supported on this target.");
 					info->has_aampostincrement = YNM_NO;
@@ -3601,11 +3614,11 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 		}
 
 		/* Execute the command */
-		unsigned int abstractcs_err;
-		result = execute_abstract_command(target, command, &abstractcs_err);
+		uint32_t cmderr;
+		result = execute_abstract_command(target, command, &cmderr);
 
-		/* TODO: we need to modify error handling here. We can make decisions only
-		 * if abstractcs_err indicates an exception */
+		/* TODO: we need to modify error handling here. */
+		/* NOTE: in case of timeout cmderr is set to CMDERR_NONE */
 		if (info->has_aampostincrement == YNM_MAYBE) {
 			if (result == ERROR_OK) {
 				/* Safety: double-check that the address was really auto-incremented */
@@ -3620,7 +3633,7 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 			} else {
 				/* Try the same access but with postincrement disabled. */
 				command = access_memory_command(target, false, width, false, true);
-				result = execute_abstract_command(target, command, &abstractcs_err);
+				result = execute_abstract_command(target, command, &cmderr);
 				if (result == ERROR_OK) {
 					LOG_TARGET_DEBUG(target, "aampostincrement is not supported on this target.");
 					info->has_aampostincrement = YNM_NO;
@@ -3669,11 +3682,11 @@ static int read_memory_progbuf_inner_startup(struct target *target,
 	const uint32_t startup_command = access_register_command(target,
 			GDB_REGNO_S1, riscv_xlen(target),
 			AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
-	unsigned int abstractcs_err;
-	if (execute_abstract_command(target, startup_command, &abstractcs_err) != ERROR_OK)
+	uint32_t cmderr;
+	if (execute_abstract_command(target, startup_command, &cmderr) != ERROR_OK)
 		return ERROR_FAIL;
-	/* TODO: we need to modify error handling here. We can make decisions only
-	 * if abstractcs_err indicates an exception */
+	/* TODO: we need to modify error handling here. */
+	/* NOTE: in case of timeout cmderr is set to CMDERR_NONE */
 
 	/* First read has just triggered. Result is in s1.
 	 * dm_data registers contain the previous value of s1 (garbage).
@@ -3693,7 +3706,7 @@ static int read_memory_progbuf_inner_startup(struct target *target,
 	if (wait_for_idle(target, &abstractcs) != ERROR_OK)
 		goto clear_abstractauto_and_fail;
 
-	uint32_t cmderr = get_field(abstractcs, DM_ABSTRACTCS_CMDERR);
+	cmderr = get_field32(abstractcs, DM_ABSTRACTCS_CMDERR);
 	switch (cmderr) {
 	case CMDERR_NONE:
 		return ERROR_OK;
@@ -3866,7 +3879,7 @@ static int read_memory_progbuf_inner_run_and_process_batch(struct target *target
 
 	uint32_t elements_to_extract_from_batch;
 
-	unsigned int cmderr = get_field(abstractcs, DM_ABSTRACTCS_CMDERR);
+	uint32_t cmderr = get_field32(abstractcs, DM_ABSTRACTCS_CMDERR);
 	switch (cmderr) {
 	case CMDERR_NONE:
 		LOG_TARGET_DEBUG(target, "successful (partial?) memory read [%"
@@ -4140,8 +4153,8 @@ static int read_memory_progbuf_inner_one(struct target *target,
 	uint32_t command = access_register_command(target, GDB_REGNO_S1,
 			riscv_xlen(target), AC_ACCESS_REGISTER_WRITE |
 			AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
-	unsigned int abstractcs_err;
-	if (execute_abstract_command(target, command, &abstractcs_err) != ERROR_OK)
+	uint32_t cmderr;
+	if (execute_abstract_command(target, command, &cmderr) != ERROR_OK)
 		return ERROR_FAIL;
 
 	return read_word_from_s1(target, access, 0);
@@ -4493,8 +4506,8 @@ static int write_memory_progbuf_startup(struct target *target, target_addr_t *ad
 			AC_ACCESS_REGISTER_TRANSFER |
 			AC_ACCESS_REGISTER_WRITE);
 
-	unsigned int abstractcs_err;
-	if (execute_abstract_command(target, command, &abstractcs_err) != ERROR_OK)
+	uint32_t cmderr;
+	if (execute_abstract_command(target, command, &cmderr) != ERROR_OK)
 		return ERROR_FAIL;
 
 	log_memory_access64(*address_p, value, size, /*is_read*/ false);
@@ -4592,7 +4605,7 @@ static int write_memory_progbuf_run_batch(struct target *target, struct riscv_ba
 	if (wait_for_idle(target, &abstractcs) != ERROR_OK)
 		return ERROR_FAIL;
 
-	unsigned int cmderr = get_field(abstractcs, DM_ABSTRACTCS_CMDERR);
+	uint32_t cmderr = get_field32(abstractcs, DM_ABSTRACTCS_CMDERR);
 	const bool dmi_busy_encountered = riscv_batch_dmi_busy_encountered(batch);
 	if (cmderr == CMDERR_NONE && !dmi_busy_encountered) {
 		LOG_TARGET_DEBUG(target, "Successfully written memory block M[0x%" TARGET_PRIxADDR
@@ -5090,7 +5103,7 @@ static enum riscv_halt_reason riscv013_halt_reason(struct target *target)
 	return RISCV_HALT_UNKNOWN;
 }
 
-static int riscv013_write_debug_buffer(struct target *target, unsigned int index, riscv_insn_t data)
+static int riscv013_write_progbuf(struct target *target, unsigned int index, riscv_insn_t data)
 {
 	dm013_info_t *dm = get_dm(target);
 	if (!dm)
@@ -5105,14 +5118,16 @@ static int riscv013_write_debug_buffer(struct target *target, unsigned int index
 	return ERROR_OK;
 }
 
-static riscv_insn_t riscv013_read_debug_buffer(struct target *target, unsigned int index)
+static riscv_insn_t riscv013_read_progbuf(struct target *target, unsigned int index)
 {
 	uint32_t value;
-	dm_read(target, &value, DM_PROGBUF0 + index);
-	return value;
+	if (dm_read(target, &value, DM_PROGBUF0 + index) == ERROR_OK)
+		return value;
+	else
+		return 0;
 }
 
-static int riscv013_invalidate_cached_debug_buffer(struct target *target)
+static int riscv013_invalidate_cached_progbuf(struct target *target)
 {
 	dm013_info_t *dm = get_dm(target);
 	if (!dm) {
@@ -5126,17 +5141,15 @@ static int riscv013_invalidate_cached_debug_buffer(struct target *target)
 	return ERROR_OK;
 }
 
-static int riscv013_execute_debug_buffer(struct target *target,
-		unsigned int *abstractcs_err)
+static int riscv013_execute_progbuf(struct target *target, uint32_t *cmderr)
 {
-	assert(abstractcs_err);
 	uint32_t run_program = 0;
 	run_program = set_field(run_program, AC_ACCESS_REGISTER_AARSIZE, 2);
 	run_program = set_field(run_program, AC_ACCESS_REGISTER_POSTEXEC, 1);
 	run_program = set_field(run_program, AC_ACCESS_REGISTER_TRANSFER, 0);
 	run_program = set_field(run_program, AC_ACCESS_REGISTER_REGNO, 0x1000);
 
-	return execute_abstract_command(target, run_program, abstractcs_err);
+	return execute_abstract_command(target, run_program, cmderr);
 }
 
 static void riscv013_fill_dmi_write_u64(struct target *target, char *buf, int a, uint64_t d)
@@ -5263,25 +5276,12 @@ static int riscv013_step_or_resume_current_hart(struct target *target,
 	return ERROR_FAIL;
 }
 
-static void riscv013_clear_abstract_error(struct target *target)
+static int riscv013_clear_abstract_error(struct target *target)
 {
-	/* Wait for busy to go away. */
-	time_t start = time(NULL);
 	uint32_t abstractcs;
-	/* TODO: replace with wait_for_idle call ? */
-	dm_read(target, &abstractcs, DM_ABSTRACTCS);
-	while (get_field(abstractcs, DM_ABSTRACTCS_BUSY)) {
-		dm_read(target, &abstractcs, DM_ABSTRACTCS);
-
-		if (time(NULL) - start > riscv_command_timeout_sec) {
-			LOG_TARGET_ERROR(target, "abstractcs.busy is not going low after %d seconds "
-					"(abstractcs=0x%x). The target is either really slow or "
-					"broken. You could increase the timeout with riscv "
-					"set_command_timeout_sec.",
-					riscv_command_timeout_sec, abstractcs);
-			break;
-		}
-	}
-	/* Clear the error status. */
-	dm_write(target, DM_ABSTRACTCS, DM_ABSTRACTCS_CMDERR);
+	int result = wait_for_idle(target, &abstractcs);
+	/* Clear the error status, even if busy is still set. */
+	if (dm_write(target, DM_ABSTRACTCS, DM_ABSTRACTCS_CMDERR) != ERROR_OK)
+		result = ERROR_FAIL;
+	return result;
 }
