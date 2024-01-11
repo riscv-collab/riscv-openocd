@@ -5,6 +5,11 @@
     "os": "posix"
   },
   {
+    "display_name": "cpp_ubuntu_20",
+    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:20.1.4",
+    "os": "posix"
+  },
+  {
     "display_name": "cpp_ubuntu_22",
     "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:22.1.12",
     "os": "posix"
