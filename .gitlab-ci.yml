@@ -95,7 +95,7 @@ main:
       - PROFILE: [default]
         IMAGE: [cpp_ubuntu_18, cpp_centos_7]
       - PROFILE: [makepy_sc_mingw]
-        IMAGE: [cpp_ubuntu_18]
+        IMAGE: [cpp_ubuntu_22]
   artifacts:
     paths:
       - testing_logs.tar.xz
@@ -118,7 +118,7 @@ deploy:
       - PROFILE: [default]
         IMAGE: [cpp_ubuntu_18, cpp_centos_7, cpp_ubuntu_20, cpp_ubuntu_22]
       - PROFILE: [makepy_sc_mingw]
-        IMAGE: [cpp_ubuntu_18]
+        IMAGE: [cpp_ubuntu_22]
   script:
     - if git fetch origin "$PACKAGE_NAME" &> /dev/null; then
         if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
