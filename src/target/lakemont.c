@@ -357,6 +357,7 @@ static const struct reg_arch_type lakemont_reg_type = {
 	 */
 	.get = lakemont_get_core_reg,
 	.set = lakemont_set_core_reg,
+	.flush = NULL,
 };
 
 struct reg_cache *lakemont_build_reg_cache(struct target *t)

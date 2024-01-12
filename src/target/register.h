@@ -151,6 +151,7 @@ struct reg_cache {
 struct reg_arch_type {
 	int (*get)(struct reg *reg);
 	int (*set)(struct reg *reg, uint8_t *buf);
+	int (*flush)(struct reg *reg);
 };
 
 struct reg *register_get_by_number(struct reg_cache *first,
@@ -162,5 +163,8 @@ void register_unlink_cache(struct reg_cache **cache_p, const struct reg_cache *c
 void register_cache_invalidate(struct reg_cache *cache);
 
 void register_init_dummy(struct reg *reg);
+
+/* Flushes the register. Also invalidates the cached register value if invalidate == true */
+int register_flush(const struct target *target, struct reg *reg, bool invalidate);
 
 #endif /* OPENOCD_TARGET_REGISTER_H */

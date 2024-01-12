@@ -1180,6 +1180,7 @@ static int stm8_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
 static const struct reg_arch_type stm8_reg_type = {
 	.get = stm8_get_core_reg,
 	.set = stm8_set_core_reg,
+	.flush = NULL,
 };
 
 static struct reg_cache *stm8_build_reg_cache(struct target *target)

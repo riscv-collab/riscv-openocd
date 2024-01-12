@@ -1714,6 +1714,7 @@ static int armv8_set_core_reg(struct reg *reg, uint8_t *buf)
 static const struct reg_arch_type armv8_reg_type = {
 	.get = armv8_get_core_reg,
 	.set = armv8_set_core_reg,
+	.flush = NULL,
 };
 
 static int armv8_get_core_reg32(struct reg *reg)
@@ -1775,6 +1776,7 @@ static int armv8_set_core_reg32(struct reg *reg, uint8_t *buf)
 static const struct reg_arch_type armv8_reg32_type = {
 	.get = armv8_get_core_reg32,
 	.set = armv8_set_core_reg32,
+	.flush = NULL,
 };
 
 /** Builds cache of architecturally defined registers.  */

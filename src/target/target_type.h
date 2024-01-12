@@ -309,6 +309,10 @@ struct target_type {
 	 * will typically be 32 for 32-bit targets, and 64 for 64-bit targets. If
 	 * not implemented, it's assumed to be 32. */
 	unsigned int (*data_bits)(struct target *target);
+
+	/* Flush the whole register cache.
+	 * Also invalidate flushed register values if invalidate == true */
+	int (*flush_all_regs)(struct target *target, bool invalidate);
 };
 
 extern struct target_type aarch64_target;

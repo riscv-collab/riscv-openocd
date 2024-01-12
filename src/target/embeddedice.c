@@ -152,6 +152,7 @@ static int embeddedice_get_reg(struct reg *reg)
 static const struct reg_arch_type eice_reg_type = {
 	.get = embeddedice_get_reg,
 	.set = embeddedice_set_reg_w_exec,
+	.flush = NULL,
 };
 
 /**

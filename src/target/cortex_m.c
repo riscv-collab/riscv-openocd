@@ -2431,6 +2431,7 @@ static const struct dwt_reg dwt_comp[] = {
 static const struct reg_arch_type dwt_reg_type = {
 	.get = cortex_m_dwt_get_reg,
 	.set = cortex_m_dwt_set_reg,
+	.flush = NULL,
 };
 
 static void cortex_m_dwt_addreg(struct target *t, struct reg *r, const struct dwt_reg *d)

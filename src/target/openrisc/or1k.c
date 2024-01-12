@@ -494,6 +494,7 @@ static int or1k_set_core_reg(struct reg *reg, uint8_t *buf)
 static const struct reg_arch_type or1k_reg_type = {
 	.get = or1k_get_core_reg,
 	.set = or1k_set_core_reg,
+	.flush = NULL,
 };
 
 static struct reg_cache *or1k_build_reg_cache(struct target *target)

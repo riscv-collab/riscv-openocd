@@ -430,6 +430,7 @@ static int dsp563xx_set_core_reg(struct reg *reg, uint8_t *buf)
 static const struct reg_arch_type dsp563xx_reg_type = {
 	.get = dsp563xx_get_core_reg,
 	.set = dsp563xx_set_core_reg,
+	.flush = NULL,
 };
 
 static void dsp563xx_build_reg_cache(struct target *target)

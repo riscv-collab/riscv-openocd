@@ -179,6 +179,7 @@ static int mem_ap_reg_set(struct reg *reg, uint8_t *buf)
 static struct reg_arch_type mem_ap_reg_arch_type = {
 	.get = mem_ap_reg_get,
 	.set = mem_ap_reg_set,
+	.flush = NULL,
 };
 
 static const char *mem_ap_get_gdb_arch(const struct target *target)

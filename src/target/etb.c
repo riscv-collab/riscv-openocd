@@ -108,6 +108,7 @@ static int etb_get_reg(struct reg *reg)
 static const struct reg_arch_type etb_reg_type = {
 	.get = etb_get_reg,
 	.set = etb_set_reg_w_exec,
+	.flush = NULL,
 };
 
 struct reg_cache *etb_build_reg_cache(struct etb *etb)
