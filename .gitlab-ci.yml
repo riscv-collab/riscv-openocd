@@ -93,9 +93,14 @@ main:
   parallel:
     matrix:
       - PROFILE: [default]
-        IMAGE: [cpp_ubuntu_18, cpp_centos_7]
+        IMAGE: [cpp_ubuntu_18]
+        TEST_OPT: ['--options:host test=True']
+      - PROFILE: [default]
+        IMAGE: [cpp_ubuntu_20, cpp_ubuntu_22, cpp_centos_7]
+        TEST_OPT: ['']
       - PROFILE: [makepy_sc_mingw]
         IMAGE: [cpp_ubuntu_22]
+        TEST_OPT: ['']
   artifacts:
     paths:
       - testing_logs.tar.xz
@@ -103,10 +108,12 @@ main:
 
   script:
     - ./make.py --image $IMAGE just-config
-      --profile:host $PROFILE --build-path $BUILD_PATH --options:host test=True
+      --profile:host $PROFILE --build-path $BUILD_PATH $TEST_OPT
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target openocd
     - if [[ "$PROFILE" == "makepy_sc_mingw" ]]; then exit; fi
     - if [[ "$IMAGE" == "cpp_centos_7" ]]; then exit; fi # TODO: fix tests on CentOS
+    - if [[ "$IMAGE" == "cpp_ubuntu_20" ]]; then exit; fi # TODO: fix tests on ubuntu_20
+    - if [[ "$IMAGE" == "cpp_ubuntu_22" ]]; then exit; fi # TODO: fix tests on ubuntu_22
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target OpenOCDTestsOn_spike
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target RISCVTestsDebug
 

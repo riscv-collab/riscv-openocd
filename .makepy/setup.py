@@ -309,6 +309,11 @@ def _main() -> None:
     configs = _ConanConfigs()
     configs.add_x86()
     configs.add_x86(options={"test": "True"})
+    configs.add_ubuntu20()
+    configs.add_ubuntu20(options={"test": "True"})
+    configs.add_ubuntu22()
+    # NOTE: currently, we don't run tests on ubuntu_22
+    # configs.add_ubuntu22(options={"test": "True"})
     conductor.add(
         _ConanSuite(
             name="openocd",
