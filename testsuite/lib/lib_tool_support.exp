@@ -261,22 +261,30 @@ proc tsuplib_shutdown_openocd { cleanup_type } {
     verbose "\\\\\\ ocd_finish (ignored) ///\n   _______" 1
     return
   }
-  # TODO: implement proper shutdown
-  # TODO2: in theory we could just call `close`, the spawned process is
-  # expected (?) to get SIGHUP, however there is no guarantee that OpenOCD
-  # server won't hang. This needs to be tested.
+
   verbose "about to kill openocd instance" 2
   exec kill -s SIGINT [exp_pid -i $openocd_instance_spawn_id ]
-  # wait a little bit to allow for a clean termination
-  sleep [ocd_exec_delay]
-  exec kill -s SIGKILL [exp_pid -i $openocd_instance_spawn_id ]
-
-  verbose "kill sent. closing connection to OpenOCD instance" 2
-  close -i $openocd_instance_spawn_id
-  verbose "kill sent. reaping (wait) the process..." 2
-
-  # TODO: this nowait looks like a bug
-  wait -nowait -i $openocd_instance_spawn_id
+  # we expect SIGINT to eventually initiate shutdown-like procedure, so
+  # we are waiting for eof
+  set shutdown_timeout [target_info env,long_op_timeout]
+  set timeout $shutdown_timeout
+  expect {
+    -i $openocd_instance_spawn_id
+    eof {
+      verbose "OpenOCD managed to successfully shutdown" 1
+      # TODO: double check that we don't have anything abnormal here like SIGABORT
+      wait -i $openocd_instance_spawn_id
+    }
+    timeout  {
+      perror "OpenOCD could not perform shutdown in $shutdown_timeout seconds"
+      exec kill -s SIGKILL [exp_pid -i $openocd_instance_spawn_id ]
+      verbose "kill sent. closing connection to OpenOCD instance" 2
+      close -i $openocd_instance_spawn_id
+      puts "kill sent. reaping (waiting) the OpenOCD process..."
+      wait -i $openocd_instance_spawn_id
+      puts "OpenOCD terminated via SIGKILL"
+    }
+  }
 
   verbose "wait done. openocd process is reaped" 2
 
