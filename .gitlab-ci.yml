@@ -93,10 +93,10 @@ main:
   parallel:
     matrix:
       - PROFILE: [default]
-        IMAGE: [cpp_ubuntu_18]
+        IMAGE: [cpp_ubuntu_18, cpp_ubuntu_20]
         TEST_OPT: ['--options:host test=True']
       - PROFILE: [default]
-        IMAGE: [cpp_ubuntu_20, cpp_ubuntu_22, cpp_centos_7]
+        IMAGE: [cpp_ubuntu_22, cpp_centos_7]
         TEST_OPT: ['']
       - PROFILE: [makepy_sc_mingw]
         IMAGE: [cpp_ubuntu_22]
@@ -112,10 +112,11 @@ main:
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target openocd
     - if [[ "$PROFILE" == "makepy_sc_mingw" ]]; then exit; fi
     - if [[ "$IMAGE" == "cpp_centos_7" ]]; then exit; fi # TODO: fix tests on CentOS
-    - if [[ "$IMAGE" == "cpp_ubuntu_20" ]]; then exit; fi # TODO: fix tests on ubuntu_20
     - if [[ "$IMAGE" == "cpp_ubuntu_22" ]]; then exit; fi # TODO: fix tests on ubuntu_22
-    - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target OpenOCDTestsOn_spike
-    - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target RISCVTestsDebug
+    # NOTE: spike requires way too much resources. Till this is fixed we'd better
+    # to have parallelization of CPU_COUNT/2
+    - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target OpenOCDTestsOn_spike --parallel 8
+    - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target RISCVTestsDebug --parallel 8
 
 deploy:
   stage: deploy
