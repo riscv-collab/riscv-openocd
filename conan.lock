@@ -4,13 +4,23 @@
         "openocd_source_deps/0.0.1-rc.0.94+sc.main@sc/main#7b805fa3f3feb76d38e79e8edaa5f7bdf64cc362%1699723901.709"
     ],
     "build_requires": [
-        "testgen-model-interface/0.1.0-rc.0.4+sc.main@sc/main#a736f64480341f13364a0e06418cb15bbd71c1d7%1699531424.654",
-        "riscv-isa-sim/0.1.0-rc.0.133+sc.main@sc/main#adef9ac73d975ec7b254b7c38df57b8505e59230%1699536843.933",
-        "riscv-gdb/13.2.0-rc.0.60+sc.main@sc/main#44d1f59548c4138aaf5e784c12d8613f240d6f8a%1697555672.28",
-        "riscv-gcc/12.2.1-rc.0.57+sc.main@sc/main#2655a73daad32c6a26e93ecab89722a7aac3152c%1697791422.95",
-        "python/3.10.0-rc.0.67+sc.main@sc/main#ce12b6a95963e9d901a1bcf5d9def9a10f3a68b6%1696946400.048",
-        "external_openocd_tests/0.0.2-rc.0.91+sc.main@sc/main#7be3423e85401d6f9e684761aaa6aa8c337af511%1699645153.097",
-        "dejagnu/1.6.3-rc.0.84+sc.main@sc/main#b3dfd133e64a2278be1be13c56f661b1%1698903057.145"
+        "testgen-model-interface/0.1.0-rc.0.7+sc.main@sc/main#32c0d67ac579d49d181db9904e8047357ceaebc5%1702127758.214",
+        "riscv-newlib/4.3.0-rc.0.21+sc.main@sc/main#3e213df8ade41ef8ddab239f1dce0bc4e28b3233%1705325059.084",
+        "riscv-isa-sim/0.1.0-rc.0.152+sc.main@sc/main#63873e0bbcd37d5e8eef4452b2f8eb5b83a708fb%1705426500.68",
+        "riscv-glibc/2.33.0-rc.0.23+sc.main@sc/main#ffb4d610c32520274a6c7e81d56e8e21c99d4581%1705330019.508",
+        "riscv-gdb/13.2.0-rc.0.76+sc.main@sc/main#d7867af973ecd382e4d74f084694952b33bb8d1f%1705458750.074",
+        "riscv-gcc-raw/12.2.1-rc.0.81+sc.main@sc/main#5a295ad74365d0e2a0d256c7f62420d9d1021492%1705314020.927",
+        "riscv-gcc/12.2.1-rc.0.83+sc.main@sc/main#284258911b4ff2dae599fbd62aa67d6f9497c5a4%1705415170.342",
+        "riscv-binutils-raw/2.38.0-rc.0.21+sc.main@sc/main#bd384c7ea92c61e59f00af995e92a9c444482427%1705069894.11",
+        "riscv-binutils/2.38.0-rc.0.22+sc.main@sc/main#b0dca665751167ecd41fa9a132b935c77f95dcbb%1705394216.942",
+        "rapidyaml/0.5.0#c6f48c5eb99c1d0bad5c4ac8e6960375%1699016203.526",
+        "python/3.10.0-rc.0.129+sc.main@sc/main#492ed8a5880f4d3e0dbb91dd1949361757f5df24%1704992214.94",
+        "multilib-desc/1.0.0-rc.0.124+sc.main@sc/main#aa13e016b4109df8609b0d9d2de9ea103390da82%1703067233.37",
+        "glibc-linux-headers/5.10.5-rc.0.88+sc.main@sc/main#cded0422f0b06fc8a462d722139e790ee2b4286b%1699523647.321",
+        "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
+        "external_openocd_tests/0.0.2-rc.0.104+sc.main@sc/main#07f9b38dbeeb612ab542009c00bd5089d98ff10b%1701341181.074",
+        "dejagnu/1.6.3-rc.0.129+sc.main@sc/main#ca7dc45201246f5818767a0fb1ca15e8%1704992082.969",
+        "c4core/0.1.11#5c6caad554b14584140f7e66c47eefb5%1699016213.432"
     ],
     "python_requires": [
         "conan-manifest/1.0.0-rc.0.74+sc.main@sc/main#93e3fbfb122d1e733539582a47a3aca51bc00c83%1697722269.708"
