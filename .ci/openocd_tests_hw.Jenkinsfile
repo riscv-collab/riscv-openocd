@@ -119,6 +119,7 @@ pipeline {
           sh '${MAKE_PY} --image $DOCKER_IMAGE container run -p -m . --credentials ${WD}/credentials.json'
           sh '${MAKE_PY} --image $DOCKER_IMAGE pass'
           sh '${MAKE_PY} --image $DOCKER_IMAGE sh --container-user root usermod -g plugdev $(whoami)'
+          sh '${MAKE_PY} --image $DOCKER_IMAGE sh --container-user root apt-get install udev'
           sh '${MAKE_PY} --image $DOCKER_IMAGE conan-config --credentials ${WD}/credentials.json'
           sh '${MAKE_PY} --image $DOCKER_IMAGE just-config -b ${BUILD_DIR} --profile:host default --options:host test=True'
           sh '${MAKE_PY} --image $DOCKER_IMAGE build -b ${BUILD_DIR} --target openocd'
