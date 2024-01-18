@@ -59,7 +59,7 @@ pipeline {
     // in addition NAS_PSW and NAS_USR variables are defined
     NAS = credentials('GitlabJenkins')
     DOCKER = credentials('docker-images-nexus')
-    DOCKER_IMAGE = "cpp_ubuntu_18"
+    DOCKER_IMAGE = "cpp_ubuntu_20"
 
     SUDO_PSW = "${NAS_PSW}"
     ARTIFACTORY_API_KEY = credentials('OpenOCDTestReportKey')
