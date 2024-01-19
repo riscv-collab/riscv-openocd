@@ -78,4 +78,9 @@ size_t riscv_batch_available_scans(struct riscv_batch *batch);
 /* Return true iff the last scan in the batch returned DMI_OP_BUSY. */
 bool riscv_batch_dmi_busy_encountered(const struct riscv_batch *batch);
 
+/* TODO: The function is defined in `riscv-013.c`. This is done to reduce the
+ * diff of the commit. The intention is to move the function defenition to
+ * `batch.c` in a separate commit. */
+void riscv_dump_field(const struct target *target, int idle, const struct scan_field *field, bool discard_in);
+
 #endif
