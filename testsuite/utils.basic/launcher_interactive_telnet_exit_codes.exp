@@ -50,7 +50,7 @@ proc run_test {} {
 
   set TelnetLog [utils_spawn_universal_launcher \
     [list --telnet] \
-    telnet  \
+    telnet_shutdown_error  \
     interactive]
   expectTelnetStartup $spawn_id
   send "shutdown error\n"
@@ -59,7 +59,7 @@ proc run_test {} {
 
   set KilledBySIGTERMLog [utils_spawn_universal_launcher \
     [list --telnet] \
-    telnet  \
+    telnet_sigterm_end  \
     interactive]
   expectTelnetStartup $spawn_id
   send "echo \"--- OPENOCD PID=\[pid\] ---\"\n"
@@ -70,7 +70,7 @@ proc run_test {} {
 
   set KilledBySIGKILLLog [utils_spawn_universal_launcher \
     [list --telnet] \
-    telnet  \
+    telnet_sigkill_end  \
     interactive]
   expectTelnetStartup $spawn_id
   send "echo \"--- OPENOCD PID=\[pid\] ---\"\n"

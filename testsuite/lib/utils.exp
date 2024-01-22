@@ -62,6 +62,7 @@ proc utils_spawn_universal_launcher { args \
                                       log \
                                       {termination_policy expect_timeout} \
                                       {script_timeout_multiplier 1} } {
+  # TODO: we should guarantee that the resulting log file is unique per platform
   set args [utils_build_ul_args {*}$args]
   set openocd_launcher [utils_get_universal_launcher]
   set log_name [utils_get_log_name $log]
