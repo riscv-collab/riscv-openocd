@@ -24,7 +24,7 @@ struct riscv_batch {
 	size_t allocated_scans;
 	size_t used_scans;
 
-	size_t idle_count;
+	struct list_head idle_counts;
 
 	uint8_t *data_out;
 	uint8_t *data_in;
@@ -49,7 +49,7 @@ struct riscv_batch {
 /* Allocates (or frees) a new scan set.  "scans" is the maximum number of JTAG
  * scans that can be issued to this object, and idle is the number of JTAG idle
  * cycles between every real scan. */
-struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_t idle);
+struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_t idle_count);
 void riscv_batch_free(struct riscv_batch *batch);
 
 /* Checks to see if this batch is full. */
@@ -77,5 +77,9 @@ size_t riscv_batch_available_scans(struct riscv_batch *batch);
 
 /* Return true iff the last scan in the batch returned DMI_OP_BUSY. */
 bool riscv_batch_dmi_busy_encountered(const struct riscv_batch *batch);
+
+/* Change the number of idle cycles used starting from the given scan. */
+int riscv_batch_change_idle_used_from_scan(struct riscv_batch *batch,
+		size_t new_idle, size_t scan_idx);
 
 #endif
