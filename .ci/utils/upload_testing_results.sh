@@ -11,7 +11,7 @@ API_KEY=$3
 
 REPO_PATH=$(realpath "$(dirname "$0")/../..")
 COMMIT=$(git --git-dir="$REPO_PATH/.git" --work-tree "$REPO_PATH" rev-parse --short HEAD)
-ARTIFACTORY_URL="http://artifactory.dev.syntacore.com/artifactory"
+ARTIFACTORY_URL="https://artifactory.dev.syntacore.com/artifactory"
 ARTIFACTORY_DIR=${ARTIFACTORY_DIR:-openocd_build_dependencies/test_logs}
 ARTIFACTORY_BASEPATH="$ARTIFACTORY_URL/$ARTIFACTORY_DIR"
 
