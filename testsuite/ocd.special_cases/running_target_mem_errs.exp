@@ -1,0 +1,61 @@
+proc run_test {} {
+
+  if {[target_info cpu,dm_sba_access_enable] == 1} {
+    # NOTE: spike allows system bus access on a runnnig target
+    return [ocd_test_unsupported]
+  }
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "special.S" "$default_bin_prefix.exe"
+  # created by compile executable
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset"
+
+  set VirtMemReadWarn "failed to read_memory while target is not halted"
+  set PhysMemReadWarn "failed to read_phys_memory while target is not halted"
+
+  set VirtMemWriteWarn "failed to write_memory while target is not halted"
+  set PhysMemWriteWarn "failed to write_phys_memory while target is not halted"
+
+  # NOTE: we may need to restrict mdd/mwd to 64-bit targets in future
+  set MemoryDisplay { mdb mdh mdw mdd}
+  set MemoryWrite { mwb mwh mww mwd}
+  foreach operation $MemoryDisplay {
+    set response [ocdtlb_run_catch_and_capture "$operation $ENTRY_ADDR"]
+    ocdtlb_expect_substring $VirtMemReadWarn $response
+
+    set response [ocdtlb_run_catch_and_capture "$operation phys $ENTRY_ADDR"]
+    ocdtlb_expect_substring $PhysMemReadWarn $response
+  }
+
+  foreach operation $MemoryWrite {
+    set response [ocdtlb_run_catch_and_capture "$operation $ENTRY_ADDR 0"]
+    ocdtlb_expect_substring $VirtMemWriteWarn $response
+
+    set response [ocdtlb_run_catch_and_capture "$operation phys $ENTRY_ADDR 0"]
+    ocdtlb_expect_substring $PhysMemWriteWarn $response
+  }
+
+  set response [ocdtlb_run_catch_and_capture "read_memory $ENTRY_ADDR 8 1"]
+  ocdtlb_expect_substring $VirtMemReadWarn $response
+
+  set response [ocdtlb_run_catch_and_capture "read_memory $ENTRY_ADDR 8 1 phys"]
+  ocdtlb_expect_substring $PhysMemReadWarn $response
+
+  set response [ocdtlb_run_catch_and_capture "write_memory $ENTRY_ADDR 8 0"]
+  ocdtlb_expect_substring $VirtMemWriteWarn $response
+
+  set response [ocdtlb_run_catch_and_capture "write_memory $ENTRY_ADDR 8 0 phys"]
+  ocdtlb_expect_substring $PhysMemWriteWarn $response
+
+  set response [ocdtlb_run_catch_and_capture "load_image $default_bin_prefix.exe"]
+  ocdtlb_expect_substring $VirtMemWriteWarn $response
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
