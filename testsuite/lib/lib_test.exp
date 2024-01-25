@@ -78,6 +78,11 @@ proc ocdtlb_unique_list {list} {
   dict keys $dict
 }
 
+proc ocdtlb_expect_substring { needle hay } {
+  if {[string first $needle $hay] != -1} { return }
+  error "*${needle}* is not found in *${hay}*"
+}
+
 proc ocdtlb_rsp_get { response {what value} } {
   if {![response_is_success $response]} {
     error "can not get value from failed response: $response"
@@ -165,6 +170,29 @@ proc ocdtlb_expectation_arg_is_success { arg } {
     return 0
   }
   error "unknown expectation value: $arg"
+}
+
+proc ocdtlb_fetch_variable_from_tcl { variable } {
+  verbose "fetching variable *${variable}*" 1
+  set raw_response [ocdtlb_run_catch_and_capture "echo \[set $variable\]"]
+  if {[string first "0:" $raw_response] != 0} {
+    error "unexpected response format (retunrn code is not zero) $raw_response"
+  }
+  set rsp_lines [split $raw_response "\n"]
+  if {[lindex $rsp_lines end] ne "0\x1a"} {
+    error "unexpected respose format (does not end with zero+^Z) $raw_response"
+  }
+  # drop last "0^Z" that represents return code of "catch {capture { ... } }" call
+  set purged_lines [lreplace $rsp_lines end end]
+  # re-join lines and drop initial return code "0:..."
+  return [string range [join $purged_lines "\n"] 2 end]
+}
+
+proc ocdtlb_run_catch_and_capture { command } {
+  verbose "cmd(catch_and_capture): ${command}" 1
+  set response [tsuplib_tclrpc_run_command "capture { catch { $command } err }"]
+  verbose "<<<<" 3
+  return $response
 }
 
 proc ocdtlb_run_expect_raw {command parser_name {expect_op_fail 0} {extra_timeout ""} } {

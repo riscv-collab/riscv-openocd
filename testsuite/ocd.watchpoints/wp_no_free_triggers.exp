@@ -5,7 +5,6 @@ proc run_test {} {
 
     set max_trigger_count [target_info cpu,trigger_count]
     set wp_address 0x0
-    set error_message "resource not available"
 
     ocd_connect
 
@@ -20,11 +19,8 @@ proc run_test {} {
         set wp_address 0x[format %x [expr {$wp_address + 4}]]
     }
 
-    set response [tsuplib_tclrpc_run_command "capture { catch { wp $wp_address 4 } err }"]
-
-    if {[string first $error_message $response] == -1} {
-        return [ocdt_test_failure]
-    }
+    set response [ocdtlb_run_catch_and_capture "wp $wp_address 4"]
+    ocdtlb_expect_substring "resource not available" $response
 
     return [ocd_test_pass]
 }

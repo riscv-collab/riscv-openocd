@@ -406,7 +406,7 @@ proc tsuplib_disconnect_client { } {
   }
   set ocd_client_spawn_id [tool_state_steal client_spawn_id]
 
-  verbose "Closing connection to OpenOCD client" 1
+  verbose "closing connection to OpenOCD client" 1
   close -i $ocd_client_spawn_id
   verbose "client connection closed, reaping the process" 1
 
