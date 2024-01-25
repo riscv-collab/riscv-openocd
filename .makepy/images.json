@@ -1,12 +1,12 @@
 [
   {
-    "display_name": "cpp_ubuntu_18",
-    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:18.1.30",
+    "display_name": "cpp_ubuntu_20",
+    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:20.1.6",
     "os": "posix"
   },
   {
-    "display_name": "cpp_ubuntu_20",
-    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:20.1.6",
+    "display_name": "cpp_ubuntu_18",
+    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_ubuntu:18.1.30",
     "os": "posix"
   },
   {
