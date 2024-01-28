@@ -80,7 +80,7 @@ default:
         BUILD_ID="$CI_COMMIT_REF_SLUG-$RUN_DATE"
         ARCHIVE="$BUILD_ID.tar.xz"
         STORAGE="/tmp_files_for_ci/openocd_logs"
-        time XZ_OPT="-T0 -9" tar -cJf "$ARCHIVE" build/Release/testing
+        time XZ_OPT="-T0" tar -cJf "$ARCHIVE" build/Release/testing
         echo "coping $ARCHIVE to $STORAGE"
         cp "$ARCHIVE" "$STORAGE"
         # remove files older than one week
@@ -116,7 +116,7 @@ main:
     # NOTE: spike requires way too much resources. Till this is fixed we'd better
     # to have parallelization of CPU_COUNT/2
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target OpenOCDTestsOn_spike --parallel 8
-    # - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target RISCVTestsDebug --parallel 8
+    - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target RISCVTestsDebug --parallel 8
 
 deploy:
   stage: deploy

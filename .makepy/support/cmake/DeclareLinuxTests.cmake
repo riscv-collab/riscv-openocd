@@ -155,6 +155,8 @@ ExternalProject_Add(
   riscv_tests
   SOURCE_DIR ${RISCV_TESTS_SOURCE_DIR}
   URL file://${RISCVTESTS_DIR}/riscv-tests
+  PATCH_COMMAND
+    patch -p1 < ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/the_patch.patch
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ""
   INSTALL_COMMAND "")

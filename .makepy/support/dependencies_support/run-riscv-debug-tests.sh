@@ -14,6 +14,7 @@ ${ROOT}/gdbserver.py ${ROOT}/targets/RISC-V/${TGT}.py  \
   --gcc "${GCC}"          \
   --gdb "${GDB}"          \
   --sim_cmd "${SIM}"      \
+  --target-timeout 180    \
   --server_cmd "${OCD} -d3" 2>&1 | tee "${LOGS}/${TGT}.log"
 
 TEST_STATUS=${PIPESTATUS[0]}
