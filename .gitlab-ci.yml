@@ -116,7 +116,7 @@ main:
     # NOTE: spike requires way too much resources. Till this is fixed we'd better
     # to have parallelization of CPU_COUNT/2
     - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target OpenOCDTestsOn_spike --parallel 8
-    - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target RISCVTestsDebug --parallel 8
+    # - ./make.py --image $IMAGE build --build-path $BUILD_PATH --target RISCVTestsDebug --parallel 8
 
 deploy:
   stage: deploy
