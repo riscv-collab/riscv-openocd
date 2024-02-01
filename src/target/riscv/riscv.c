@@ -515,6 +515,9 @@ static void free_wp_triggers_cache(struct target *target)
 {
 	RISCV_INFO(r);
 
+	if (!r->wp_triggers_negative_cache)
+		return;
+
 	for (unsigned int i = 0; i < r->trigger_count; ++i) {
 		struct tdata1_cache *elem_1, *tmp_1;
 		list_for_each_entry_safe(elem_1, tmp_1, &r->wp_triggers_negative_cache[i], elem_tdata1) {
@@ -528,6 +531,7 @@ static void free_wp_triggers_cache(struct target *target)
 		}
 	}
 	free(r->wp_triggers_negative_cache);
+	r->wp_triggers_negative_cache = NULL;
 }
 
 static void riscv_deinit_target(struct target *target)
