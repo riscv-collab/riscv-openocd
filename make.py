@@ -30,9 +30,9 @@ def run_in_venv(
     env["PATH"] = f"{venv_path}/bin:" + env["PATH"]
     env["VIRTUAL_ENV"] = str(venv_path)
     if ssh_path:
-        env[
-            "GIT_SSH_COMMAND"
-        ] = f"ssh -o StrictHostKeyChecking=no -i {ssh_path}"
+        env["GIT_SSH_COMMAND"] = (
+            f"ssh -o StrictHostKeyChecking=no -i {ssh_path}"
+        )
 
     if not activate_path.exists():
         _logger.info("Creating virtual environment...")
