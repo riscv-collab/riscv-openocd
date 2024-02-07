@@ -1,5 +1,3 @@
-set TGT_ARCH "rv64gc"
-
 set_board_info cpu,xlen 64
 set_board_info cpu,has_floats 1
 set_board_info cpu,has_doubles 1
@@ -41,5 +39,5 @@ set_board_info cpu,dm_is_slow 0
 
 set_board_info cpu,dm_sba_access_enable 0
 
-add_board_info cflags   -march=$TGT_ARCH
+add_board_info cflags   -march=rv64gc
 add_board_info cflags   -mabi=lp64d
