@@ -19,37 +19,61 @@ proc spike_get_target_memory_map {} {
   return "-m$primary_region"
 }
 
-proc init_sim_args { boot_binary } {
-  set sim_options [target_info sim,options]
+proc isa_string_for_current_target {} {
+  # the isa string is derived from:
+  #   - target_info cpu,* : basic properties that can be used to form an isa string
+  #   - `sim,ext_isa_info` : extensions that we want to enable
+  # In general, the intention to construct isa string as --isa=<base_isa>_<ext>
+  # <base_isa> should be formed from `cpu,*` properties and extentions are
+  # just appended as is.
+  # if the first element of `sim,ext_isa_info` starts from rv*, we use it as a
+  # <base_isa> as is ignoring all `cpu,*` properties our target has
 
-  if {[target_info cpu,xlen] == 64} {
-    set isa_substring "rv64gc"
-    set replacement_substring "rv64gch"
+  # construct <base_isa> part of the isa string
+  set base_isa "rv"
+  set xlen [target_info cpu,xlen]
+  if {$xlen == 64} {
+    set base_isa "${base_isa}64"
+  } elseif {$xlen == 32} {
+    set base_isa "${base_isa}32"
   } else {
-    set isa_substring "rv32gc"
-    set replacement_substring "rv32gch"
+    error "unsupported XLEN=$xlen specified for the board"
+  }
+  # TODO: for now we always assume that we have "gc" target, needs to be fixed
+  set base_isa "${base_isa}gc"
+  if {[target_info cpu,has_h_ext]} {
+    set base_isa "${base_isa}h"
+  }
+  if {[target_info cpu,has_v_ext]} {
+    set base_isa "${base_isa}v"
   }
 
-  set list_index [lsearch -regexp $sim_options $isa_substring]
-
-  if {[target_info cpu,has_h_ext]} {
-    if {$list_index != -1} {
-      set isa [lindex $sim_options $list_index]
-
-      set substring_for_replace_start [string first $isa_substring $isa]
-      set substring_for_replace_end [expr {$substring_for_replace_start + [string length $isa_substring] - 1}]
-
-      set changed_isa [string replace $isa $substring_for_replace_start $substring_for_replace_end $replacement_substring]
-
-      set sim_options [lreplace $sim_options $list_index $list_index $changed_isa]
-    } else {
-      error "Can't find position to insert \"h\" (hypervisor extension) to $isa"
+  # now construct <ext> part, optionally overriding <base_isa>
+  set ext_isa_info [target_info sim,ext_isa_info]
+  if {[llength $ext_isa_info] > 0} {
+    if {[string first "rv" [lindex $ext_isa_info 0]] == 0} {
+      set base_isa [lindex $ext_isa_info 0]
+      set ext_isa_info [lreplace $ext_isa_info 0 0]
     }
   }
+  # NOTE: currently all our spike platforms are assumed to support zicntr
+  lappend ext_isa_info zicntr
+  set ext_isa [join $ext_isa_info "_"]
 
-  return [list {*}$sim_options \
-                     [spike_get_target_memory_map] \
-                     $boot_binary]
+  set final_isa_string $base_isa
+  if {[string length $ext_isa] > 0} {
+    set final_isa_string "${final_isa_string}_${ext_isa}"
+  }
+
+  return $final_isa_string
+}
+
+proc init_sim_args { boot_binary } {
+  set isa_string [isa_string_for_current_target]
+
+  verbose "Final ISA string for simulator target: $isa_string" 1
+  set sim_options [list --isa=$isa_string {*}[target_info sim,options]]
+  return [list {*}$sim_options [spike_get_target_memory_map] $boot_binary]
 }
 
 proc ${board}_init { name } {
