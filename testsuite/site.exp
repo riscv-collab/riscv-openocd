@@ -69,6 +69,7 @@ proc getScriptDirectory {} {
   return $scriptFolder
 }
 
+# TODO: where to put this?
 set STAND_DB_PATH [getScriptDirectory]/boards/support/stand_db/stand_db.tcl
-puts "Loading stand_db from: $STAND_DB_PATH"
+verbose "Loading stand_db API from: $STAND_DB_PATH" 1
 source "$STAND_DB_PATH"

@@ -17,27 +17,10 @@ set_board_info memory,reset_vector 0x1000
 set_board_info sim $SPIKE_SIM
 add_board_info sim,options --rbb-port=0
 
-proc spike_update_active_rbb_port { value } {
-  global RBB_PORT
-  set RBB_PORT $value
-  verbose "rbb_port: $value" 1
-}
-
-proc spike_get_active_rbb_port {} {
-  global RBB_PORT
-  return $RBB_PORT
-}
-
-set_board_info ldscript "-T$testsuitedir/boards/support/ldscripts/spike.ld"
+set_board_info ldscript "-T[get_support_file ldscripts/spike.ld]"
 
 # NOTE: for now every spike configuration we use has only one TAP
 # in general case this is not the case, so the code needs to be revised
 set_board_info openocd,jtag_tool_tap_definition_flags \
-  [list -f $testsuitedir/boards/support/ocd/jtag_1tap_irlen5.cfg]
+  [list -f [get_support_file ocd/jtag_1tap_irlen5.cfg]]
 
-proc ocd_tool_target_definition_flags { cfg_name } {
-  global testsuitedir
-  return [list \
-    -f $testsuitedir/boards/support/ocd/$cfg_name \
-  ]
-}

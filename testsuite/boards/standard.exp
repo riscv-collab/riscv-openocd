@@ -1,6 +1,25 @@
+# NOTE: we use standard.exp for two purposes:
+# 1. set some common values for all boards (like ldflags)
+# 2. provide some basic functionality to find support files and set board_cpu
+# I'm not sure if the latter is the right way to do. Probably, this belongs
+# to some other place.
+proc get_support_file { filename } {
+  global boards_dir
+  # TODO: we should make sure that the requiested file is unique across
+  # the whole chain.
+  foreach bd [lreverse $boards_dir] {
+    verbose "searching $filename in $bd" 2
+    set path_to_try [file join $bd support $filename]
+    if {[file exists "$path_to_try"]} {
+      verbose "requested support file $filename found at $bd" 1
+      return "$path_to_try"
+    }
+  }
+  error "could not find support file $filename"
+}
+
 proc set_board_cpu { cpu_name { harts_num 1} } {
-  set dirname [file dirname [info script]]
-  set cpu_def [file join $dirname support cpu ${cpu_name}.exp]
+  set cpu_def [get_support_file [file join cpu ${cpu_name}.exp]]
   verbose "loading cpu: $cpu_name from $cpu_def" 1
   source $cpu_def
 

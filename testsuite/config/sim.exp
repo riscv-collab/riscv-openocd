@@ -1,6 +1,5 @@
 proc compile_boot_code { output_name } {
-  global testsuitedir
-  set boot_source "$testsuitedir/boards/support/sim/spike_boot.S"
+  set boot_source "[get_support_file sim/spike_boot.S]"
   return [target_compile $boot_source "$output_name" "executable" {}]
 }
 
@@ -112,5 +111,16 @@ proc ${board}_close { name } {
   unset spike_board_spawn_id
 
   verbose "spike board $name is closed, bye!" 1
+}
+
+proc spike_update_active_rbb_port { value } {
+  global RBB_PORT
+  set RBB_PORT $value
+  verbose "rbb_port: $value" 1
+}
+
+proc spike_get_active_rbb_port {} {
+  global RBB_PORT
+  return $RBB_PORT
 }
 

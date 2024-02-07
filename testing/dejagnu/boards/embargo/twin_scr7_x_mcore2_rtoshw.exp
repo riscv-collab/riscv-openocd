@@ -1,15 +1,15 @@
 load_board_description "baremetal-fpga-common"
 
-set_board_cpu scr5_32
+set_board_cpu scr7_norvv 2
 
 set_board_info memory,has_high_pa 0
 set_board_info memory,ocd_work_area 0
-set_board_info memory,reset_vector 0xffffff00
+set_board_info memory,reset_vector 0xffffffffffffff00
 
-set_board_info ldscript "-T${testsuitedir}/boards/support/ldscripts/scr5.ld"
+set_board_info ldscript "-T[get_support_file ldscripts/scr7.ld]"
 
 set_board_info openocd,extra_csr 0
-set_board_info openocd,hwthreads 0
+set_board_info openocd,hwthreads 1
 set_board_info openocd,smp_target 0
 set_board_info openocd,abi_regnames 0
 set_board_info openocd,hidden_triggers 0
@@ -18,8 +18,8 @@ set_board_info openocd,ide_cloak 0
 set_board_info env,stand twin
 
 set_board_info openocd,ocd_tool_target_flags [list \
- -f ${testsuitedir}/boards/support/ocd/syntacore_score_nortos.cfg \
+ -f [get_support_file ocd/syntacore_mcore2_rtoshw.cfg] \
 ]
 
 set_board_info openocd,jtag_tool_tap_definition_flags \
-  [jtag_tool_tap_definition_flags jtag_1tap_irlen5.cfg]
+  [jtag_tool_tap_definition_flags jtag_2tap_irlen5.cfg]

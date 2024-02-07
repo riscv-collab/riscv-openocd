@@ -15,6 +15,6 @@ set_board_info openocd,ide_cloak 1
 set target_flags [list \
  -f "${OPENOCD_ROOT}/share/openocd/scripts/syntacore/syntacore_ide_csr_cloak.cfg" \
 ]
-lappend target_flags {*}[ocd_tool_target_definition_flags spike_default.cfg]
+lappend target_flags {*}[list -f [get_support_file ocd/spike_default.cfg]]
 
 set_board_info openocd,ocd_tool_target_flags $target_flags

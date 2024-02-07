@@ -1,22 +1,9 @@
-
 proc registerStandInfo { stand_name adapter_config adapter_id default_speed } {
   global STANDS_INFO
   set STANDS_INFO($stand_name,adapter_config) $adapter_config
   set STANDS_INFO($stand_name,adapter_id) $adapter_id
   set STANDS_INFO($stand_name,default_speed) $default_speed
 }
-
-registerStandInfo \
-  twin \
-  share/openocd/scripts/interface/ftdi/digilent-hs2a.cfg \
-  210249B070B3 \
-  2000
-
-registerStandInfo \
-  zalman \
-  share/openocd/scripts/interface/ftdi/digilent-hs2a.cfg \
-  210249B06EB3 \
-  500
 
 proc standInfoGet { parameter } {
   global STANDS_INFO

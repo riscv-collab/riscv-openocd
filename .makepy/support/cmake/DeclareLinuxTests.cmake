@@ -25,10 +25,10 @@ configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/local_init.exp.in
   local_init.exp @ONLY)
 
-# this variable is used by BoardDefinitions.cmake
-set(OPENOCD_TESTSUITE_DIRECTORY "${OPENOCD_SOURCES}/testsuite")
 # we expect that FpgaBoardInfo interface target is defined after this include
 set(FPGA_SUPPORT_PROJECT_PATH ${OPENOCD_SOURCES}/testing/syntacore/fpga_support)
+# this variable is used by BoardDefinitions.cmake
+set(DEJAGNU_FPGA_BOARDS_DIRECTORY ${OPENOCD_SOURCES}/testing/dejagnu/boards)
 include("${FPGA_SUPPORT_PROJECT_PATH}/cmake/BoardDefinitions.cmake")
 
 add_custom_target("OpenOCDTestsOn_spike")
@@ -46,6 +46,7 @@ function(registerSpikeConfiguration SPIKE_CONFIGURATION_NAME)
   )
 endfunction()
 
+set(OPENOCD_TESTSUITE_DIRECTORY "${OPENOCD_SOURCES}/testsuite")
 file(GLOB PATH_FOR_SPIKE_PLATFORMS
   ${OPENOCD_TESTSUITE_DIRECTORY}/boards/spike32*.exp
   ${OPENOCD_TESTSUITE_DIRECTORY}/boards/spike64*.exp
@@ -93,12 +94,22 @@ function(addNextToolToTestForBoard tool_name board_config_name)
   set(board_tests_target "OpenOCDTestsOn_${board_config}")
   set(board_tool_target "Tool_${tool_name}_For_${board_tests_target}")
 
+  # somewhat dirty hack to identify if we should use default site.exp suitable
+  # for spike runs, or an extended one suitable for fpga platforms
+  # NOTE: techinically we can just use only the latter, but I want both
+  # paths to be tested
+  if (openocd_board MATCHES "^spike")
+    set(GLOBAL_SITE_EXP ${OPENOCD_TESTSUITE_DIRECTORY}/site.exp)
+  else()
+    set(GLOBAL_SITE_EXP ${OPENOCD_SOURCES}/testing/dejagnu/site.exp)
+  endif()
+
   # cmake-format: off
   add_custom_target(
     ${board_tool_target}
     WORKING_DIRECTORY ${tool_run_dir}
     COMMAND
-      env DEJAGNU=${OPENOCD_TESTSUITE_DIRECTORY}/site.exp
+      env DEJAGNU=${GLOBAL_SITE_EXP}
       ${DEJAGNU_DIR}/bin/runtest
         --src_dir=${OPENOCD_TESTSUITE_DIRECTORY}
         ${target_board_cmdline}

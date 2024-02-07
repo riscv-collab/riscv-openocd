@@ -13,4 +13,4 @@ set_board_info openocd,hidden_triggers 0
 set_board_info openocd,ide_cloak 0
 
 set_board_info openocd,ocd_tool_target_flags \
-    [ocd_tool_target_definition_flags spike_mcore4_rtoshw0.cfg]
+    [list -f [get_support_file ocd/spike_mcore4_rtoshw0.cfg]]

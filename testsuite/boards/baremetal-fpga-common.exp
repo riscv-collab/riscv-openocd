@@ -8,9 +8,8 @@ set_board_info env,ocdjtag_riscv_timeout 1
 set_board_info env,ocdjtag_riscv_dmi_delay 0
 
 proc jtag_tool_tap_definition_flags { tap_config { speed 500 } } {
-  global testsuitedir
   return [list \
-    -f "$testsuitedir/boards/support/ocd/$tap_config" \
+    -f [get_support_file ocd/$tap_config] \
     -c "transport select jtag" \
     -c "adapter speed $speed"
   ]

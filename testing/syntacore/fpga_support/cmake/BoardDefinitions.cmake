@@ -3,13 +3,23 @@ set(ARTY_BITSTREAM_FTP_STORAGE ${SYNTACORE_NAS_SERVER}/pub/exchange/ot-sc/arty-a
 
 message(STATUS "Syntacore NAS server: ${SYNTACORE_NAS_SERVER}")
 
-if (NOT OPENOCD_TESTSUITE_DIRECTORY)
-  message(FATAL_ERROR "OPENOCD_TESTSUITE_DIRECTORY is not specified")
+if (NOT DEJAGNU_FPGA_BOARDS_DIRECTORY)
+  message(FATAL_ERROR "DEJAGNU_FPGA_BOARDS_DIRECTORY is not specified")
 endif()
 
-message(STATUS "OPENOCD_TESTSUITE_DIRECTORY: ${OPENOCD_TESTSUITE_DIRECTORY}")
+message(STATUS "DEJAGNU_FPGA_BOARDS_DIRECTORY: ${DEJAGNU_FPGA_BOARDS_DIRECTORY}")
 
 add_library(FpgaBoardInfo INTERFACE)
+
+function(ensureFileExists NAME)
+  foreach(dir ${ARGN})
+    cmake_path(APPEND dir ${NAME} OUTPUT_VARIABLE TEST_PATH)
+    if (EXISTS ${TEST_PATH})
+      return()
+    endif()
+  endforeach()
+  message(FATAL_ERROR "could not find file ${NAME} at ${ARGN}")
+endfunction()
 
 function(registerFPGAConfiguration CONFIGURATION_NAME)
   set(options
@@ -28,11 +38,9 @@ function(registerFPGAConfiguration CONFIGURATION_NAME)
     "${options}" "${oneValueArgs}" ""
   )
 
-  cmake_path(APPEND OPENOCD_TESTSUITE_DIRECTORY boards OUTPUT_VARIABLE BOARDS_DIR)
-  cmake_path(APPEND BOARDS_DIR ${BOARD_ARG_OPENOCD_BOARD}.exp OUTPUT_VARIABLE BOARD_FILE)
-  if (NOT EXISTS ${BOARD_FILE})
-    message(FATAL_ERROR "could not find ${BOARD_FILE} board definition file")
-  endif()
+  cmake_path(APPEND DEJAGNU_FPGA_BOARDS_DIRECTORY embargo OUTPUT_VARIABLE EMBARGO_BOARDS)
+  cmake_path(APPEND DEJAGNU_FPGA_BOARDS_DIRECTORY syntacore OUTPUT_VARIABLE EXAMPLE_BOARDS)
+  ensureFileExists("${BOARD_ARG_OPENOCD_BOARD}.exp" ${EMBARGO_BOARDS} ${EXAMPLE_BOARDS})
 
   set(INTERFACE_LIB_NAME fpga-${CONFIGURATION_NAME})
 

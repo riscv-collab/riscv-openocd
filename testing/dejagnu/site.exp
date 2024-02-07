@@ -1,0 +1,18 @@
+# load the default site.exp distributed with the basic testsuite
+source [file join $testsuitedir site.exp]
+# make sure that we add path to boards from the original testsuite
+# this will ensure that common library functions are available
+lappend boards_dir [file join $testsuitedir boards]
+set auxiliary_boards [file join [file dirname [file normalize [info script]]] boards]
+verbose "Extra boards directory $auxiliary_boards" 1
+# load auxiliary boards which should be in the same directory as this site.exp
+lappend boards_dir [file join $auxiliary_boards syntacore]
+lappend boards_dir [file join $auxiliary_boards embargo]
+
+# NOTE: this file does not exists by default. Your are expected to create one
+# in your fork of the project
+set private_stand_database [file join $auxiliary_boards embargo stand_db db.cfg]
+if {[file exists $private_stand_database]} {
+  puts "Loading private stand database from $private_stand_database"
+  source $private_stand_database
+}

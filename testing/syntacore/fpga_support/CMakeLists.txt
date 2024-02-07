@@ -5,8 +5,8 @@ project(FpgaSupport)
 # NOTE: well... it's better to specify this externally, but at the momement
 # I'm too lazy for that
 get_filename_component(OPENOCD_SRC_DIRECTORY ../../../ ABSOLUTE)
-cmake_path(APPEND OPENOCD_SRC_DIRECTORY testsuite
-  OUTPUT_VARIABLE OPENOCD_TESTSUITE_DIRECTORY)
+cmake_path(APPEND OPENOCD_SRC_DIRECTORY testing dejagnu boards
+  OUTPUT_VARIABLE DEJAGNU_FPGA_BOARDS_DIRECTORY)
 include(cmake/BoardDefinitions.cmake)
 printAvailableFPGAConfigurations()
 
