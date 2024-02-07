@@ -8,19 +8,19 @@ proc get_support_file { filename } {
   # TODO: we should make sure that the requiested file is unique across
   # the whole chain.
   foreach bd [lreverse $boards_dir] {
-    verbose "searching $filename in $bd" 2
+    verbose "Searching $filename in $bd" 2
     set path_to_try [file join $bd support $filename]
     if {[file exists "$path_to_try"]} {
-      verbose "requested support file $filename found at $bd" 1
+      verbose "Requested support file $filename found at $bd" 1
       return "$path_to_try"
     }
   }
-  error "could not find support file $filename"
+  error "Could not find support file $filename"
 }
 
 proc set_board_cpu { cpu_name { harts_num 1} } {
   set cpu_def [get_support_file [file join cpu ${cpu_name}.exp]]
-  verbose "loading cpu: $cpu_name from $cpu_def" 1
+  verbose "Loading cpu: $cpu_name from $cpu_def" 1
   source $cpu_def
 
   set_board_info cpu,name $cpu_name
