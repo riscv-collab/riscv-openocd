@@ -41,11 +41,11 @@ proc isa_string_for_current_target {} {
   }
   # TODO: for now we always assume that we have "gc" target, needs to be fixed
   set base_isa "${base_isa}gc"
-  if {[target_info cpu,has_h_ext]} {
-    set base_isa "${base_isa}h"
-  }
   if {[target_info cpu,has_v_ext]} {
     set base_isa "${base_isa}v"
+  }
+  if {[target_info cpu,has_h_ext]} {
+    set base_isa "${base_isa}h"
   }
 
   # now construct <ext> part, optionally overriding <base_isa>

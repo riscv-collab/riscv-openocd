@@ -4,9 +4,9 @@
         "openocd_source_deps/0.0.1-rc.0.94+sc.main@sc/main#7b805fa3f3feb76d38e79e8edaa5f7bdf64cc362%1699723901.709"
     ],
     "build_requires": [
-        "testgen-model-interface/0.1.0-rc.0.7+sc.main@sc/main#32c0d67ac579d49d181db9904e8047357ceaebc5%1702127758.214",
+        "testgen-model-interface/0.1.0-rc.0.9+sc.main@sc/main#357a3af4d02197878e794c3b1368484117e0ac27%1705419875.083",
         "riscv-newlib/4.3.0-rc.0.21+sc.main@sc/main#3e213df8ade41ef8ddab239f1dce0bc4e28b3233%1705325059.084",
-        "riscv-isa-sim/0.1.0-rc.0.152+sc.main@sc/main#63873e0bbcd37d5e8eef4452b2f8eb5b83a708fb%1705426500.68",
+        "riscv-isa-sim/0.1.0-rc.0.157+sc.main@sc/main#88d82361bd9bbf394bde3a976a402ca81d13d001%1707388885.23",
         "riscv-glibc/2.33.0-rc.0.23+sc.main@sc/main#ffb4d610c32520274a6c7e81d56e8e21c99d4581%1705330019.508",
         "riscv-gdb/13.2.0-rc.0.76+sc.main@sc/main#d7867af973ecd382e4d74f084694952b33bb8d1f%1705458750.074",
         "riscv-gcc-raw/12.2.1-rc.0.81+sc.main@sc/main#5a295ad74365d0e2a0d256c7f62420d9d1021492%1705314020.927",
