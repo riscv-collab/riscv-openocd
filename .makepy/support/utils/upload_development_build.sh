@@ -8,7 +8,7 @@ set -o nounset
 REPO_PATH=$(realpath "$(dirname "$0")/../../..")
 
 COMMIT=$(git --git-dir="$REPO_PATH/.git" --work-tree "$REPO_PATH" rev-parse --short=8 HEAD)
-ARTIFACTORY_URL="http://artifactory.dev.syntacore.com:8082/artifactory"
+ARTIFACTORY_URL="https://artifactory.dev.syntacore.com/artifactory"
 ARTIFACTORY_DIR="tools-gitlab-artifacts/openocd/development_builds/$COMMIT"
 ARTIFACTORY_BASEPATH="$ARTIFACTORY_URL/$ARTIFACTORY_DIR"
 ARTIFACT_NAME=$(basename "$1")
