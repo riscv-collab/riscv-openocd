@@ -91,14 +91,14 @@ static int set_group(struct target *target, bool *supported, unsigned int group,
 /*** JTAG registers. ***/
 
 typedef enum {
-	DMI_OP_NOP = 0,
-	DMI_OP_READ = 1,
-	DMI_OP_WRITE = 2
+	DMI_OP_NOP = DTM_DMI_OP_NOP,
+	DMI_OP_READ = DTM_DMI_OP_READ,
+	DMI_OP_WRITE = DTM_DMI_OP_WRITE
 } dmi_op_t;
 typedef enum {
-	DMI_STATUS_SUCCESS = 0,
-	DMI_STATUS_FAILED = 2,
-	DMI_STATUS_BUSY = 3
+	DMI_STATUS_SUCCESS = DTM_DMI_OP_SUCCESS,
+	DMI_STATUS_FAILED = DTM_DMI_OP_FAILED,
+	DMI_STATUS_BUSY = DTM_DMI_OP_BUSY
 } dmi_status_t;
 
 typedef enum slot {
@@ -280,13 +280,17 @@ static dm013_info_t *get_dm(struct target *target)
 	return dm;
 }
 
-static riscv_debug_reg_ctx_t get_riscv_debug_reg_ctx(struct target *target)
+static riscv_debug_reg_ctx_t get_riscv_debug_reg_ctx(const struct target *target)
 {
-	RISCV_INFO(r);
+	if (!target_was_examined(target)) {
+		const riscv_debug_reg_ctx_t default_context = {0};
+		return default_context;
+	}
+
 	RISCV013_INFO(info);
 	const riscv_debug_reg_ctx_t context = {
-		.XLEN = { .value = r->xlen, .is_set = true },
-		.DXLEN = { .value = r->xlen, .is_set = true },
+		.XLEN = { .value = riscv_xlen(target), .is_set = true },
+		.DXLEN = { .value = riscv_xlen(target), .is_set = true },
 		.abits = { .value = info->abits, .is_set = true },
 	};
 	return context;
@@ -691,6 +695,16 @@ static int dmi_write_exec(struct target *target, uint32_t address,
 	return dmi_op(target, NULL, NULL, DMI_OP_WRITE, address, value, true, ensure_success);
 }
 
+static uint32_t riscv013_get_dmi_address(const struct target *target, uint32_t address)
+{
+	assert(target);
+	uint32_t base = 0;
+	RISCV013_INFO(info);
+	if (info && info->dm)
+		base = info->dm->base;
+	return address + base;
+}
+
 static int dm_op_timeout(struct target *target, uint32_t *data_in,
 		bool *dmi_busy_encountered, int op, uint32_t address,
 		uint32_t data_out, int timeout_sec, bool exec, bool ensure_success)
@@ -941,10 +955,10 @@ static int write_abstract_arg(struct target *target, unsigned index,
 			LOG_TARGET_ERROR(target, "Unsupported size: %d bits", size_bits);
 			return ERROR_FAIL;
 		case 64:
-			dm_write(target, DM_DATA0 + offset + 1, value >> 32);
+			dm_write(target, DM_DATA0 + offset + 1, (uint32_t)(value >> 32));
 			/* falls through */
 		case 32:
-			dm_write(target, DM_DATA0 + offset, value);
+			dm_write(target, DM_DATA0 + offset, (uint32_t)value);
 	}
 	return ERROR_OK;
 }
@@ -1374,12 +1388,12 @@ static int scratch_write64(struct target *target, scratch_mem_t *scratch,
 {
 	switch (scratch->memory_space) {
 		case SPACE_DM_DATA:
-			dm_write(target, DM_DATA0 + scratch->debug_address, value);
-			dm_write(target, DM_DATA1 + scratch->debug_address, value >> 32);
+			dm_write(target, DM_DATA0 + scratch->debug_address, (uint32_t)value);
+			dm_write(target, DM_DATA1 + scratch->debug_address, (uint32_t)(value >> 32));
 			break;
 		case SPACE_DMI_PROGBUF:
-			dm_write(target, DM_PROGBUF0 + scratch->debug_address, value);
-			dm_write(target, DM_PROGBUF1 + scratch->debug_address, value >> 32);
+			dm_write(target, DM_PROGBUF0 + scratch->debug_address, (uint32_t)value);
+			dm_write(target, DM_PROGBUF1 + scratch->debug_address, (uint32_t)(value >> 32));
 			riscv013_invalidate_cached_progbuf(target);
 			break;
 		case SPACE_DMI_RAM:
@@ -2150,8 +2164,7 @@ static int examine(struct target *target)
 	/* Some regression suites rely on seeing 'Examined RISC-V core' to know
 	 * when they can connect with gdb/telnet.
 	 * We will need to update those suites if we want to change that text. */
-	LOG_TARGET_INFO(target, "Examined RISC-V core; found %d harts",
-			riscv_count_harts(target));
+	LOG_TARGET_INFO(target, "Examined RISC-V core");
 	LOG_TARGET_INFO(target, " XLEN=%d, misa=0x%" PRIx64, r->xlen, r->misa);
 	return ERROR_OK;
 }
@@ -2201,13 +2214,6 @@ static int riscv013_authdata_write(struct target *target, uint32_t value, unsign
 	}
 
 	return ERROR_OK;
-}
-
-static int riscv013_hart_count(struct target *target)
-{
-	dm013_info_t *dm = get_dm(target);
-	assert(dm);
-	return dm->hart_count;
 }
 
 /* Try to find out the widest memory access size depending on the selected memory access methods. */
@@ -2477,9 +2483,10 @@ static int sb_write_address(struct target *target, target_addr_t address,
 	if (sbasize > 64)
 		dm_op(target, NULL, NULL, DMI_OP_WRITE, DM_SBADDRESS2, 0, false, false);
 	if (sbasize > 32)
-		dm_op(target, NULL, NULL, DMI_OP_WRITE, DM_SBADDRESS1, address >> 32, false, false);
-	return dm_op(target, NULL, NULL, DMI_OP_WRITE, DM_SBADDRESS0, address,
-				  false, ensure_success);
+		dm_op(target, NULL, NULL, DMI_OP_WRITE, DM_SBADDRESS1,
+			(uint32_t)(address >> 32), false, false);
+	return dm_op(target, NULL, NULL, DMI_OP_WRITE, DM_SBADDRESS0,
+		(uint32_t)address, false, ensure_success);
 }
 
 static int batch_run(const struct target *target, struct riscv_batch *batch)
@@ -2769,10 +2776,8 @@ static int init_target(struct command_context *cmd_ctx,
 	generic_info->authdata_write = &riscv013_authdata_write;
 	generic_info->dmi_read = &dmi_read;
 	generic_info->dmi_write = &dmi_write;
-	generic_info->dm_read = &dm_read;
-	generic_info->dm_write = &dm_write;
+	generic_info->get_dmi_address = &riscv013_get_dmi_address;
 	generic_info->read_memory = read_memory;
-	generic_info->hart_count = &riscv013_hart_count;
 	generic_info->data_bits = &riscv013_data_bits;
 	generic_info->print_info = &riscv013_print_info;
 
@@ -3024,7 +3029,7 @@ static int read_memory_bus_word(struct target *target, target_addr_t address,
 	static int sbdata[4] = { DM_SBDATA0, DM_SBDATA1, DM_SBDATA2, DM_SBDATA3 };
 	assert(size <= 16);
 	for (int i = (size - 1) / 4; i >= 0; i--) {
-		result = dm_op(target, &sbvalue[i], NULL, DMI_OP_READ, sbdata[i], 0, false, true);
+		result = dm_read(target, &sbvalue[i], sbdata[i]);
 		if (result != ERROR_OK)
 			return result;
 		buf_set_u32(buffer + i * 4, 0, 8 * MIN(size, 4), sbvalue[i]);
@@ -4845,6 +4850,19 @@ struct target_type riscv013_target = {
 static int riscv013_get_register(struct target *target,
 		riscv_reg_t *value, enum gdb_regno rid)
 {
+	/* It would be beneficial to move this redirection to the
+	 * version-independent section, but there is a conflict:
+	 * `dcsr[5]` is `dcsr.v` in current spec, but it is `dcsr.debugint` in 0.11.
+	 */
+	if (rid == GDB_REGNO_PRIV) {
+		uint64_t dcsr;
+		if (riscv_get_register(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+			return ERROR_FAIL;
+		*value = set_field(0, VIRT_PRIV_V, get_field(dcsr, CSR_DCSR_V));
+		*value = set_field(*value, VIRT_PRIV_PRV, get_field(dcsr, CSR_DCSR_PRV));
+		return ERROR_OK;
+	}
+
 	LOG_TARGET_DEBUG(target, "reading register %s",	gdb_regno_name(target, rid));
 
 	if (dm013_select_target(target) != ERROR_OK)

@@ -228,8 +228,9 @@ struct xtensa_sw_breakpoint {
 struct xtensa_algorithm {
 	/** User can set this to specify which core mode algorithm should be run in. */
 	enum xtensa_mode core_mode;
-	/** Used internally to backup and restore debug_reason. */
+	/** Used internally to backup and restore core state. */
 	enum target_debug_reason ctx_debug_reason;
+	xtensa_reg_val_t ctx_ps;
 };
 
 #define XTENSA_COMMON_MAGIC 0x54E4E555U
@@ -421,7 +422,7 @@ int xtensa_run_algorithm(struct target *target,
 	target_addr_t entry_point, target_addr_t exit_point,
 	unsigned int timeout_ms, void *arch_info);
 void xtensa_set_permissive_mode(struct target *target, bool state);
-const char *xtensa_get_gdb_arch(struct target *target);
+const char *xtensa_get_gdb_arch(const struct target *target);
 int xtensa_gdb_query_custom(struct target *target, const char *packet, char **response_p);
 
 COMMAND_HELPER(xtensa_cmd_xtdef_do, struct xtensa *xtensa);

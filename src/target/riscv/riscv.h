@@ -242,8 +242,11 @@ struct riscv_info {
 	int (*dmi_read)(struct target *target, uint32_t *value, uint32_t address);
 	int (*dmi_write)(struct target *target, uint32_t address, uint32_t value);
 
-	int (*dm_read)(struct target *target, uint32_t *value, uint32_t address);
-	int (*dm_write)(struct target *target, uint32_t address, uint32_t value);
+	/* Get the DMI address of target's DM's register.
+	 * The function should return the passed address
+	 * if the target is not assigned a DM yet.
+	 */
+	uint32_t (*get_dmi_address)(const struct target *target, uint32_t dm_address);
 
 	int (*sample_memory)(struct target *target,
 						 struct riscv_sample_buf *buf,
@@ -253,8 +256,6 @@ struct riscv_info {
 	int (*read_memory)(struct target *target, target_addr_t address,
 			uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment);
 
-	/* How many harts are attached to the DM that this target is attached to? */
-	int (*hart_count)(struct target *target);
 	unsigned (*data_bits)(struct target *target);
 
 	COMMAND_HELPER((*print_info), struct target *target);
@@ -396,10 +397,6 @@ unsigned riscv_xlen(const struct target *target);
 
 /*** Support functions for the RISC-V 'RTOS', which provides multihart support
  * without requiring multiple targets.  */
-
-/* Lists the number of harts in the system, which are assumed to be
- * consecutive and start with mhartid=0. */
-unsigned int riscv_count_harts(struct target *target);
 
 /**
  * Set the register value. For cacheable registers, only the cache is updated
