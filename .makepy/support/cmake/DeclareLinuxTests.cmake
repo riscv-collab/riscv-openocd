@@ -46,7 +46,11 @@ set(FPGA_SUPPORT_PROJECT_PATH ${OPENOCD_SOURCES}/testing/syntacore/fpga_support)
 set(DEJAGNU_FPGA_BOARDS_DIRECTORY ${OPENOCD_SOURCES}/testing/dejagnu/boards)
 include("${FPGA_SUPPORT_PROJECT_PATH}/cmake/BoardDefinitions.cmake")
 
-add_custom_target("OpenOCDTestsOn_spike")
+set(SpikeTestsTarget "OpenOCDTestsOn_spike")
+set(TransferableSpikeTestsTarget "Transferable_OpenOCDTestsOn_spike")
+add_custom_target(${SpikeTestsTarget})
+add_custom_target(${TransferableSpikeTestsTarget})
+
 add_library(SpikeBoardInfo INTERFACE)
 
 function(registerSpikeConfiguration SPIKE_CONFIGURATION_NAME)
@@ -92,6 +96,7 @@ list(APPEND TEST_BOARDS ${SPIKE_TEST_BOARDS})
 
 set(TESTING_ROOT "${CMAKE_BINARY_DIR}/testing")
 
+set(TRANSFERABLE_TESTING_ROOT "${TESTING_ROOT}/dejagnu_transferable")
 set(DEJAGNU_TESTING_ROOT "${TESTING_ROOT}/dejagnu")
 
 function(addBoardTestsDependency
@@ -99,22 +104,34 @@ function(addBoardTestsDependency
          tool_tests_target_name
          spike_tests_parking_slot)
 
+  if(${board_tests_target_name} MATCHES "OpenOCDTestsOn_spike")
+    set(SPIKE_TARGETS YES)
+  endif()
+
   if(NOT TARGET ${board_tests_target_name})
     add_custom_target(${board_tests_target_name} DEPENDS ${tool_tests_target_name})
     message(STATUS "Primary ${board_tests_target_name} defined")
-    message(STATUS "    ${board_tests_target_name} depends on ${tool_tests_target_name}")
-
-    if(board_tests_target MATCHES "^OpenOCDTestsOn_spike")
-      add_dependencies("${spike_tests_parking_slot}" ${board_tests_target_name})
+    if(SPIKE_TARGETS)
+      add_dependencies(${spike_tests_parking_slot} ${board_tests_target_name})
+      message(STATUS "  ${board_tests_target_name} parked to ${spike_tests_parking_slot}")
     endif()
+    message(STATUS "     ${board_tests_target_name} depends on ${tool_tests_target_name}")
   else()
     get_property(
       board_test_deps
       TARGET ${board_tests_target_name}
       PROPERTY TOOL_DEPENDENCIES)
     list(GET board_test_deps -1 last_added_tool)
-    add_dependencies(${last_added_tool} ${tool_tests_target_name})
-    message(STATUS "    ${last_added_tool} depends on ${tool_tests_target_name}")
+
+    if (SPIKE_TARGETS)
+      add_dependencies(${board_tests_target_name} ${tool_tests_target_name})
+      message(STATUS "     ${board_tests_target_name} depends on ${tool_tests_target_name}")
+    else()
+      # for non-spike targets we build a chain of tool dependencies for each
+      # ${board_tests_target_name}. This is to avoid paralllel runs of tool tests.
+      add_dependencies(${last_added_tool} ${tool_tests_target_name})
+      message(STATUS "    ${last_added_tool} depends on ${tool_tests_target_name}")
+    endif()
   endif()
 
   set_property(
@@ -128,7 +145,12 @@ function(addNextToolToTestForBoard tool_name board_config_name)
   set(tool_run_dir "${tool_dir}/runs")
   set(tool_summary_dir "${tool_dir}/SUMMARY")
 
+  set(transferable_tool_dir "${TRANSFERABLE_TESTING_ROOT}/${board_config_name}/${tool_name}")
+  set(transferable_tool_run_dir "${transferable_tool_dir}/runs")
+  set(transferable_tool_summary_dir "${transferable_tool_dir}/SUMMARY")
+
   file(MAKE_DIRECTORY ${tool_run_dir} ${tool_summary_dir})
+  file(MAKE_DIRECTORY ${transferable_tool_run_dir} ${transferable_tool_summary_dir})
 
   get_property(
     openocd_board
@@ -138,6 +160,9 @@ function(addNextToolToTestForBoard tool_name board_config_name)
   set(target_board_cmdline "--target_board=${openocd_board}")
   set(board_tests_target "OpenOCDTestsOn_${board_config}")
   set(board_tool_target "Tool_${tool_name}_For_${board_tests_target}")
+
+  set(transferable_board_tests_target "Transferable_${board_tests_target}")
+  set(transferable_board_tool_target  "Transferable_${board_tool_target}")
 
   # somewhat dirty hack to identify if we should use default site.exp suitable
   # for spike runs, or an extended one suitable for fpga platforms
@@ -163,7 +188,23 @@ function(addNextToolToTestForBoard tool_name board_config_name)
         --local_init ${CMAKE_BINARY_DIR}/local_init.exp
     DEPENDS openocd)
   addBoardTestsDependency(
-    ${board_tests_target} ${board_tool_target} "OpenOCDTestsOn_spike")
+    ${board_tests_target} ${board_tool_target} ${SpikeTestsTarget})
+
+  set(TRANSFERABLE_TESTSUITE_ROOT ${OPENOCD_TESTSUITE_INSTALL_PATH}/ocd_transferable_testsuite)
+  add_custom_target(
+    ${transferable_board_tool_target}
+    WORKING_DIRECTORY ${transferable_tool_run_dir}
+    COMMAND
+      env DEJAGNU=${TRANSFERABLE_TESTSUITE_ROOT}/site.exp
+      ${DEJAGNU_DIR}/bin/runtest
+        --src_dir=${TRANSFERABLE_TESTSUITE_ROOT}/acceptance_tests/testsuite
+        ${target_board_cmdline}
+        --tool=${tool_name}
+        --outdir=${transferable_tool_summary_dir}
+    DEPENDS openocd)
+  addBoardTestsDependency(
+    ${transferable_board_tests_target} ${transferable_board_tool_target}
+    ${TransferableSpikeTestsTarget})
   # cmake-format: on
 endfunction()
 

@@ -116,6 +116,31 @@ workflow('openocd') {
         }
     }
 
+    job('tests-transferable') {
+        resources {
+            cpu('10', '10')
+            memory('16Gi')
+        }
+        matrix {
+            [[image          : ['cpp_ubuntu_20'],
+              profile        : ['default'],
+              testOpt        : ['--options:host test=True'],
+              buildType      : ['Release']]]
+        }
+        script { vars ->
+          buildProject(vars)
+          try {
+            sh("./make.py build --build-path build/${vars.buildType} --target transferable_testsuite")
+            sh("./make.py build --build-path build/${vars.buildType} --target Transferable_OpenOCDTestsOn_spike --parallel 8")
+          } catch (Exception ex) {
+            artifacts.push("build/${vars.buildType}/testing",
+                           "artifacts-transferable--${vars.image}-${vars.profile}-${vars.buildType}",
+                           retention: '1w')
+            error "wasted!"
+          }
+        }
+    }
+
     deploy {
         resources {
             cpu('4', '4')

@@ -23,6 +23,7 @@ set(DEPENDENCIES_INSTALL_PATH ${CMAKE_BINARY_DIR}/dependencies_install)
 include(cmake/DeclareDepsBuild.cmake)
 declare_build_dependencies(openocd_deps)
 
+set(OPENOCD_TESTSUITE_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_testsuite)
 set(OPENOCD_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_openocd/openocd)
 
 # windows and linux have different set of features
@@ -92,6 +93,20 @@ ExternalProject_Add(
       ${OPENOCD_SCRIPTS_INSTALL_DIR}/syntacore_ide_csr_cloak.cfg
   DEPENDS openocd_deps)
 # cmake-format: on
+
+set(TESTSUITE_NAME ocd_transferable_testsuite)
+add_custom_command(
+  OUTPUT ${OPENOCD_TESTSUITE_INSTALL_PATH}/${TESTSUITE_NAME}.tar.gz
+  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/utils/make_distr.sh
+          ${CMAKE_BINARY_DIR}
+          ${OPENOCD_TESTSUITE_INSTALL_PATH}
+          ${TESTSUITE_NAME}
+  DEPENDS openocd
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+add_custom_target(transferable_testsuite
+                  DEPENDS ${OPENOCD_TESTSUITE_INSTALL_PATH}/${TESTSUITE_NAME}.tar.gz)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND SC_OPENOCD_ENABLE_TESTS)
   include(cmake/DeclareLinuxTests.cmake)
