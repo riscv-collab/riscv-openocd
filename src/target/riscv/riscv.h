@@ -213,6 +213,8 @@ struct riscv_info {
 		enum riscv_hart_state previous_riscv_state);
 	int (*handle_became_running)(struct target *target,
 		enum riscv_hart_state previous_riscv_state);
+	int (*handle_became_available)(struct target *target,
+		enum riscv_hart_state previous_riscv_state);
 	int (*handle_became_unavailable)(struct target *target,
 		enum riscv_hart_state previous_riscv_state);
 
