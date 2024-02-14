@@ -3214,6 +3214,11 @@ int riscv_openocd_poll(struct target *target)
 		if (!target_was_examined(t))
 			continue;
 
+		if (target->defer_examine) {
+			target->examined = false;
+			continue;
+		}
+
 		enum riscv_next_action next_action;
 		if (riscv_poll_hart(t, &next_action) != ERROR_OK)
 			return ERROR_FAIL;

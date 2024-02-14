@@ -2056,6 +2056,14 @@ static int examine(struct target *target)
 	enum riscv_hart_state state_at_examine_start;
 	if (riscv_get_hart_state(target, &state_at_examine_start) != ERROR_OK)
 		return ERROR_FAIL;
+
+	/* Skip full examination of hart if it is unavailable */
+	const bool hart_unavailable_at_examine_start = state_at_examine_start == RISCV_STATE_UNAVAILABLE;
+	if (hart_unavailable_at_examine_start) {
+		LOG_TARGET_INFO(target, "Did not fully examine hart %d as it was unavailable, deferring examine.", info->index);
+		target->defer_examine = true;
+		return ERROR_OK;
+	}
 	const bool hart_halted_at_examine_start = state_at_examine_start == RISCV_STATE_HALTED;
 	if (!hart_halted_at_examine_start) {
 		r->prepped = true;

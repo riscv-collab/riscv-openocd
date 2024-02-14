@@ -686,7 +686,8 @@ int target_examine_one(struct target *target)
 	}
 
 	LOG_USER("[%s] Target successfully examined.", target_name(target));
-	target_set_examined(target);
+	if (!target->defer_examine)
+		target_set_examined(target);
 	target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_END);
 
 	LOG_TARGET_INFO(target, "Examination succeed");
@@ -5267,7 +5268,8 @@ COMMAND_HANDLER(handle_target_examine)
 		return retval;
 	}
 
-	target_set_examined(target);
+	if (!target->defer_examine)
+		target_set_examined(target);
 
 	return ERROR_OK;
 }
