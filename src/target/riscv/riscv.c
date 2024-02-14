@@ -534,6 +534,10 @@ static void riscv_deinit_target(struct target *target)
 {
 	LOG_TARGET_DEBUG(target, "riscv_deinit_target()");
 
+	/* No need to deinit a target that has not been examined */
+	if (!target->examined)
+		return;
+
 	struct riscv_info *info = target->arch_info;
 	struct target_type *tt = get_target_type(target);
 	if (!tt)
@@ -1920,19 +1924,22 @@ int riscv_halt(struct target *target)
 
 	LOG_TARGET_DEBUG(target, "halting all harts");
 
+	/* Only halt a hart if it has been examined (was available) */
 	int result = ERROR_OK;
 	if (target->smp) {
 		struct target_list *tlist;
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
-			if (halt_prep(t) != ERROR_OK)
-				result = ERROR_FAIL;
+			if (t->examined) {
+				if (halt_prep(t) != ERROR_OK)
+					result = ERROR_FAIL;
+			}
 		}
 
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
 			struct riscv_info *i = riscv_info(t);
-			if (i->prepped) {
+			if (t->examined && i->prepped) {
 				if (halt_go(t) != ERROR_OK)
 					result = ERROR_FAIL;
 			}
@@ -1940,8 +1947,10 @@ int riscv_halt(struct target *target)
 
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
-			if (halt_finish(t) != ERROR_OK)
-				return ERROR_FAIL;
+			if (t->examined) {
+				if (halt_finish(t) != ERROR_OK)
+					return ERROR_FAIL;
+			}
 		}
 
 	} else {

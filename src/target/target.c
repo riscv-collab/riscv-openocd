@@ -2978,7 +2978,7 @@ static int handle_target(void *priv)
 		 * schedule for now+polling_interval, the next poll won't
 		 * actually happen until a polling_interval later. */
 		bool poll_needed = timeval_ms() + polling_interval / 2 >= target->backoff.next_attempt;
-		if (!target->tap->enabled || power_dropout || srst_asserted || !poll_needed)
+		if (!target->examined || !target->tap->enabled || power_dropout || srst_asserted || !poll_needed)
 			continue;
 
 		/* polling may fail silently until the target has been examined */
