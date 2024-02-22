@@ -295,7 +295,6 @@ def _build_formatter_and_linter() -> tuple[_FormatCommand, _LintCommand]:
     lint_cmd = _LintCommand(default_revision="origin/sc/main")
     lint_cmd.add_pylint([*python_files])
     lint_cmd.add_mypy([*python_files])
-    lint_cmd.add_yamllint([_repo_path / ".gitlab-ci.yml"])
 
     return format_cmd, lint_cmd
 

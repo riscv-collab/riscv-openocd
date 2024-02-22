@@ -16,7 +16,7 @@
   },
   {
     "display_name": "cpp_centos_7",
-    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_centos:7.0.18",
+    "nametag": "nexus.dev.syntacore.com:8091/sc/cpp_centos:7.0.21",
     "os": "posix"
   }
 ]

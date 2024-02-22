@@ -26,6 +26,7 @@ class Package(_conan.ConanFile):
     revision_mode = "scm"
     cmake_find_mode = "both"
     package_type = "application"
+    url = "https://gitlab.dev.syntacore.com/tools/toolchain/openocd"
 
     exports = [
         "conandeps.json",
@@ -59,17 +60,6 @@ class Package(_conan.ConanFile):
         self.tool_requires(deps["riscv-gdb"])
         self.tool_requires(deps["riscv-isa-sim"])
         self.tool_requires(deps["dejagnu"])
-
-    def set_version(self) -> None:
-        source_folder = _Path(__file__).parent
-        with _io.StringIO() as result:
-            self.run(
-                f"{source_folder}/make.py --no-history-dump --logging-level error conan-info version",
-                stdout=result,
-            )
-            version = result.getvalue().splitlines()[-1].strip()
-
-        self.version = version
 
     def layout(self) -> None:
         build_folder = _Path("build") / str(self.options.build_type)
