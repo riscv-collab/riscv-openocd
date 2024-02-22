@@ -51,6 +51,7 @@ workflow('openocd') {
                 }
             } catch (Exception ex) {
                 artifacts.push("build/Release/testing", "artifacts-${vars.profile}-${vars.image}", retention: 'ignore')
+                error "wasted!"
             }
         }
     }
