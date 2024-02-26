@@ -82,7 +82,7 @@ workflow('openocd') {
             cpu('8', '8')
             memory('16Gi')
         }
-        dependsOn 'main'
+        dependsOn 'deploy'
         matrix {
             [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default']],
