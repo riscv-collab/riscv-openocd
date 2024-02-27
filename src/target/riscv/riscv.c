@@ -535,7 +535,7 @@ static void riscv_deinit_target(struct target *target)
 	LOG_TARGET_DEBUG(target, "riscv_deinit_target()");
 
 	/* No need to deinit a target that has not been examined */
-	if (!target->examined)
+	if (!target_was_examined(target))
 		return;
 
 	struct riscv_info *info = target->arch_info;
@@ -1930,27 +1930,25 @@ int riscv_halt(struct target *target)
 		struct target_list *tlist;
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
-			if (t->examined) {
+			if (target_was_examined(t))
 				if (halt_prep(t) != ERROR_OK)
 					result = ERROR_FAIL;
-			}
 		}
 
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
 			struct riscv_info *i = riscv_info(t);
-			if (t->examined && i->prepped) {
-				if (halt_go(t) != ERROR_OK)
-					result = ERROR_FAIL;
-			}
+			if (target_was_examined(t))
+				if (i->prepped)
+					if (halt_go(t) != ERROR_OK)
+						result = ERROR_FAIL;
 		}
 
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
-			if (t->examined) {
+			if (target_was_examined(t))
 				if (halt_finish(t) != ERROR_OK)
 					return ERROR_FAIL;
-			}
 		}
 
 	} else {
@@ -3213,11 +3211,6 @@ int riscv_openocd_poll(struct target *target)
 
 		if (!target_was_examined(t))
 			continue;
-
-		if (target->defer_examine) {
-			target->examined = false;
-			continue;
-		}
 
 		enum riscv_next_action next_action;
 		if (riscv_poll_hart(t, &next_action) != ERROR_OK)

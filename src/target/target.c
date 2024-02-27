@@ -676,6 +676,7 @@ int target_examine_one(struct target *target)
 
 	target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_START);
 
+	bool defer_state = target->defer_examine;
 	int retval = target->type->examine(target);
 	if (retval != ERROR_OK) {
 		LOG_TARGET_ERROR(target, "Examination failed");
@@ -685,9 +686,14 @@ int target_examine_one(struct target *target)
 		return retval;
 	}
 
-	LOG_USER("[%s] Target successfully examined.", target_name(target));
-	if (!target->defer_examine)
+	if (target->defer_examine) {
+		LOG_USER("[%s] Target unavailable for full examination.", target_name(target));
+		target->defer_examine = defer_state;
+		target_reset_examined(target);
+	} else {
+		LOG_USER("[%s] Target successfully examined.", target_name(target));
 		target_set_examined(target);
+	}
 	target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_END);
 
 	LOG_TARGET_INFO(target, "Examination succeed");
@@ -2979,7 +2985,7 @@ static int handle_target(void *priv)
 		 * schedule for now+polling_interval, the next poll won't
 		 * actually happen until a polling_interval later. */
 		bool poll_needed = timeval_ms() + polling_interval / 2 >= target->backoff.next_attempt;
-		if (!target->examined || !target->tap->enabled || power_dropout || srst_asserted || !poll_needed)
+		if (!target->tap->enabled || power_dropout || srst_asserted || !poll_needed)
 			continue;
 
 		/* polling may fail silently until the target has been examined */
@@ -5262,13 +5268,18 @@ COMMAND_HANDLER(handle_target_examine)
 		return ERROR_OK;
 	}
 
+	bool defer_state = target->defer_examine;
 	int retval = target->type->examine(target);
 	if (retval != ERROR_OK) {
 		target_reset_examined(target);
 		return retval;
 	}
 
-	if (!target->defer_examine)
+	if (target->defer_examine) {
+		LOG_INFO("Unable to do full examination of %s", target_name(target));
+		target->defer_examine = defer_state;
+		target_reset_examined(target);
+	} else
 		target_set_examined(target);
 
 	return ERROR_OK;
