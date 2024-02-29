@@ -3474,6 +3474,15 @@ Currently valid @var{variant} values include:
 The USB device description string of the adapter.
 This value is only used with the standard variant.
 @end deffn
+
+@deffn {Config Command} {openjtag vid_pid} vid pid
+The USB vendor ID and product ID of the adapter. If not specified, default
+0x0403:0x6001 is used.
+This value is only used with the standard variant.
+@example
+openjtag vid_pid 0x403 0x6014
+@end example
+@end deffn
 @end deffn
 
 
@@ -9055,9 +9064,10 @@ echo "Downloading kernel -- please wait"
 @end example
 @end deffn
 
-@deffn {Command} {log_output} [filename | "default"]
-Redirect logging to @var{filename} or set it back to default output;
-the default log output channel is stderr.
+@deffn {Command} {log_output} [filename | 'default']
+Redirect logging to @var{filename}. If used without an argument or
+@var{filename} is set to 'default' log output channel is set to
+stderr.
 @end deffn
 
 @deffn {Command} {add_script_search_dir} [directory]
@@ -11369,16 +11379,28 @@ OpenOCD. When off, they generate a breakpoint exception handled internally.
 The commands below can be used to prevent OpenOCD from using certain RISC-V trigger features.
 For example in cases when there are known issues in the target hardware.
 
-@deffn {Command} {riscv set_enable_eq_match_trigger} [on|off]
-When on (default), allow OpenOCD to use exact-match triggers in watchpoints.
-@end deffn
+@deffn {Command} {riscv set_enable_trigger_feature} [(@option{eq}|@option{napot}|@option{ge_lt}|@option{all}) (@option{wp}|@option{none})]
+Control which RISC-V trigger features can be used by OpenOCD placing watchpoints.
+All trigger features are allowed by default. Only new watchpoints, inserted after this command,
+are affected (watchpoints that were already placed before are not changed).
 
-@deffn {Command} {riscv set_enable_napot_trigger} [on|off]
-When on (default), allow OpenOCD to use NAPOT trigger in watchpoints.
-@end deffn
+The first argument selects one of the configurable RISC-V trigger features:
 
-@deffn {Command} {riscv set_enable_ge_lt_trigger} [on|off]
-When on (default), allow OpenOCD to use a pair of chained less-than & greater-than triggers in watchpoints.
+@itemize @minus
+@item @option{eq}: Equality match trigger
+@item @option{napot}: NAPOT trigger
+@item @option{ge_lt}: Chained pair of `greater-equal` and `less-than` triggers
+@item @option{all}: All trigger features which were described above
+@end itemize
+
+The second argument configures how OpenOCD should use the selected trigger feature:
+
+@itemize @minus
+@item @option{wp}: Enable this trigger feature for watchpoints - allow OpenOCD to use it. (Default.)
+@item @option{none}: Disable the use of this trigger feature. OpenOCD will not attempt to use it.
+@end itemize
+
+With no parameters, prints current trigger features configuration.
 @end deffn
 
 @subsection RISC-V Authentication Commands
