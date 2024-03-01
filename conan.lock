@@ -18,7 +18,7 @@
         "multilib-desc/1.0.0-rc.0.124+sc.main@sc/main#aa13e016b4109df8609b0d9d2de9ea103390da82%1703067233.37",
         "glibc-linux-headers/5.10.5-rc.0.88+sc.main@sc/main#cded0422f0b06fc8a462d722139e790ee2b4286b%1699523647.321",
         "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
-        "external_openocd_tests/0.0.2-rc.0.104+sc.main@sc/main#07f9b38dbeeb612ab542009c00bd5089d98ff10b%1701341181.074",
+        "external_openocd_tests/0.0.3-rc.0.147+sc.main@sc/main#2f8f4c2462174567bab43c6535207e38ead45d4f%1709370544.467",
         "dejagnu/1.6.3-rc.0.129+sc.main@sc/main#ca7dc45201246f5818767a0fb1ca15e8%1704992082.969",
         "c4core/0.1.11#5c6caad554b14584140f7e66c47eefb5%1699016213.432"
     ],

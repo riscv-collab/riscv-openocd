@@ -15,6 +15,7 @@ ${ROOT}/gdbserver.py ${ROOT}/targets/RISC-V/${TGT}.py  \
   --gdb "${GDB}"          \
   --sim_cmd "${SIM}"      \
   --target-timeout 180    \
+  --remotelogfile-enable  \
   --server_cmd "${OCD} -d3" 2>&1 | tee "${LOGS}/${TGT}.log"
 
 TEST_STATUS=${PIPESTATUS[0]}
