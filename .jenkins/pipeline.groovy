@@ -73,6 +73,9 @@ workflow('openocd') {
             include(vars.branch == vars.defaultBranch)
         }
         script { vars ->
+            withCredentials([string(credentialsId: 'artifactory_cicdsc_api_key', variable: 'ART_API_KEY')]) {
+              sh("./.ci/utils/check_nightly_status.sh $ART_API_KEY")
+            }
             makepy.deployPackage(vars.name, assumeRelease: vars.assumeRelease, profile: vars.profile)
         }
     }
