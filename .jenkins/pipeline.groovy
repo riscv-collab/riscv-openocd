@@ -1,4 +1,4 @@
-@Library("jenkins-lib@v2-volatile") _
+@Library("jenkins-lib@v3-volatile") _
 
 workflow('openocd') {
     parameters {
