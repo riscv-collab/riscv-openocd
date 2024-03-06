@@ -46,7 +46,7 @@ workflow('openocd') {
 
     job('tests') {
         resources {
-            cpu('16', '16')
+            cpu('10', '10')
             memory('16Gi')
         }
         matrix {
