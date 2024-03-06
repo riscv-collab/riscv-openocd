@@ -114,7 +114,7 @@ workflow('openocd') {
             include(vars.branch == vars.defaultBranch)
         }
         script { vars ->
-            packageRef = makepy.getConanVars(vars.name, false).packageRef
+            String packageRef = makepy.getConanVars(vars.name, false).packageRef
             sh(""" ./make.py conan install \
                     --profile:host ${vars.profile} --remote syntacore --requires "${packageRef}" --lockfile-partial \
                     --output-folder build/deploy --deployer .makepy/support/utils/conan_the_deployer.py """)
