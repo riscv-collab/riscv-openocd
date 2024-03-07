@@ -1,13 +1,11 @@
 @Library("jenkins-lib@v3-volatile") _
 
 def distPrepair(vars) {
-  if (vars.releaseString != '') {
-     sh(""" ./make.py distr-prep -r "${vars.releaseString}" """)
-  }
+  sh(""" ./make.py distr-prep -r "${vars.releaseString}" """)
 }
 
 def buildProject(vars) {
-  // distPrepair(vars)
+  distPrepair(vars)
   sh("./make.py just-config --profile:host ${vars.profile} --build-path ${vars.buildPath} ${vars.testOpt}")
   sh("./make.py build --build-path ${vars.buildPath} --target openocd")
 }
@@ -92,7 +90,7 @@ workflow('openocd') {
               sh("./.ci/utils/check_nightly_status.sh $ART_API_KEY")
             }
             // TODO: use conan mechanism to set version string
-            // distPrepair(vars)
+            distPrepair(vars)
             makepy.deployPackage(vars.name, assumeRelease: vars.assumeRelease, profile: vars.profile)
         }
     }
