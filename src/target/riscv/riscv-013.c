@@ -16,6 +16,7 @@
 #include "target/target.h"
 #include "target/algorithm.h"
 #include "target/target_type.h"
+#include <target/smp.h>
 #include <helper/log.h>
 #include "jtag/jtag.h"
 #include "target/register.h"
@@ -1789,6 +1790,7 @@ static int set_dcsr_ebreak(struct target *target, bool step)
 			riscv_set_register(target, GDB_REGNO_DCSR, dcsr) != ERROR_OK)
 		return ERROR_FAIL;
 	info->dcsr_ebreak_is_set = true;
+
 	return ERROR_OK;
 }
 
@@ -1821,7 +1823,29 @@ static int halt_set_dcsr_ebreak(struct target *target)
 	 */
 
 
+	struct target_list *entry;
+	struct list_head *targets;
+
+	if (target->smp) {
+		targets = target->smp_targets;
+		foreach_smp_target(entry, targets) {
+			struct target *t = entry->target;
+			if (info->haltgroup_supported) {
+				if (dm013_select_target(t) != ERROR_OK)
+					return ERROR_FAIL;
+				bool supported;
+				if (set_group(t, &supported, t->smp, HALT_GROUP) != ERROR_OK)
+					return ERROR_FAIL;
+				if (!supported)
+					LOG_TARGET_ERROR(target, "Couldn't place hart %d in halt group %d. "
+								 "Some harts may be unexpectedly halted.", t->coreid, t->smp);
+			}
+		}
+	}
+
 	if (info->haltgroup_supported) {
+		if (dm013_select_target(target) != ERROR_OK)
+			return ERROR_FAIL;
 		bool supported;
 		if (set_group(target, &supported, 0, HALT_GROUP) != ERROR_OK)
 			return ERROR_FAIL;
@@ -1831,19 +1855,77 @@ static int halt_set_dcsr_ebreak(struct target *target)
 	}
 
 	int result = ERROR_OK;
-
 	r->prepped = true;
-	if (riscv013_halt_go(target) != ERROR_OK ||
-			set_dcsr_ebreak(target, false) != ERROR_OK ||
-			riscv013_step_or_resume_current_hart(target, false) != ERROR_OK) {
-		result = ERROR_FAIL;
+
+	if (target->smp) {
+		targets = target->smp_targets;
+		foreach_smp_target(entry, targets) {
+			struct target *t = entry->target;
+			enum riscv_hart_state state;
+			if (riscv_get_hart_state(t, &state) == ERROR_OK) {
+				LOG_TARGET_DEBUG(t, "target state in halt_set_dcsr_ebreak before riscv013_halt_go: %d", state);
+			}
+		}
+	}
+
+	if (dm013_select_target(target) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv013_halt_go(target) == ERROR_OK) {
+		if (target->smp) {
+			targets = target->smp_targets;
+			foreach_smp_target(entry, targets) {
+				struct target *t = entry->target;
+				enum riscv_hart_state state;
+				if (riscv_get_hart_state(t, &state) == ERROR_OK) {
+					LOG_TARGET_DEBUG(t, "target state in halt_set_dcsr_ebreak before set_dcsr_ebreak: %d", state);
+				}
+			}
+		}
+
+		if (dm013_select_target(target) != ERROR_OK)
+			return ERROR_FAIL;
+		if (set_dcsr_ebreak(target, false) == ERROR_OK) {
+			if (target->smp) {
+				targets = target->smp_targets;
+				foreach_smp_target(entry, targets) {
+					struct target *t = entry->target;
+					enum riscv_hart_state state;
+					if (riscv_get_hart_state(t, &state) == ERROR_OK) {
+						LOG_TARGET_DEBUG(t, "target state in halt_set_dcsr_ebreak before riscv013_step_or_resume_current_hart: %d", state);
+					}
+				}
+			}
+
+			if (dm013_select_target(target) != ERROR_OK)
+				return ERROR_FAIL;
+			if (riscv013_step_or_resume_current_hart(target, false) == ERROR_OK) {
+				target->state = TARGET_RUNNING;
+				target->debug_reason = DBG_REASON_NOTHALTED;
+			} else {
+				result = ERROR_FAIL;
+			}
+		} else {
+			result = ERROR_FAIL;
+		}
 	} else {
-		target->state = TARGET_RUNNING;
-		target->debug_reason = DBG_REASON_NOTHALTED;
+		result = ERROR_FAIL;
+	}
+
+	if (target->smp) {
+		targets = target->smp_targets;
+		foreach_smp_target(entry, targets) {
+			struct target *t = entry->target;
+			enum riscv_hart_state state;
+			if (riscv_get_hart_state(t, &state) == ERROR_OK) {
+				LOG_TARGET_DEBUG(t, "target state in halt_set_dcsr_ebreak before set_group: %d", state);
+			}
+		}
 	}
 
 	/* Add it back to the halt group. */
 	if (info->haltgroup_supported) {
+		if (dm013_select_target(target) != ERROR_OK)
+			return ERROR_FAIL;
 		bool supported;
 		if (set_group(target, &supported, target->smp, HALT_GROUP) != ERROR_OK)
 			return ERROR_FAIL;
@@ -1876,13 +1958,18 @@ static int set_group(struct target *target, bool *supported, unsigned int group,
 	assert(group <= 31);
 	write_val = set_field(write_val, DM_DMCS2_GROUP, group);
 	write_val = set_field(write_val, DM_DMCS2_GROUPTYPE, (grouptype == HALT_GROUP) ? 0 : 1);
-	if (dm_write(target, DM_DMCS2, write_val) != ERROR_OK)
+	if (dm_write(target, DM_DMCS2, write_val) != ERROR_OK) {
+		LOG_TARGET_DEBUG(target, "dm_write in set_group failed");
 		return ERROR_FAIL;
+	}
 	uint32_t read_val;
-	if (dm_read(target, &read_val, DM_DMCS2) != ERROR_OK)
+	if (dm_read(target, &read_val, DM_DMCS2) != ERROR_OK) {
+		LOG_TARGET_DEBUG(target, "dm_read in set_group failed");
 		return ERROR_FAIL;
+	}
 	if (supported)
 		*supported = (get_field(read_val, DM_DMCS2_GROUP) == group);
+	LOG_TARGET_DEBUG(target, "set_group succeeded");
 	return ERROR_OK;
 }
 
@@ -2037,6 +2124,9 @@ static int examine(struct target *target)
 			if (get_field(s, DM_DMSTATUS_ANYHAVERESET))
 				dm_write(target, DM_DMCONTROL,
 						set_dmcontrol_hartsel(DM_DMCONTROL_DMACTIVE | DM_DMCONTROL_ACKHAVERESET, i));
+			if (get_field(s, DM_DMSTATUS_HASRESETHALTREQ))
+				dm_write(target, DM_DMCONTROL,
+						set_dmcontrol_hartsel(DM_DMCONTROL_DMACTIVE | DM_DMCONTROL_CLRRESETHALTREQ, i));
 		}
 
 		LOG_TARGET_DEBUG(target, "Detected %d harts.", dm->hart_count);
@@ -2060,7 +2150,7 @@ static int examine(struct target *target)
 	/* Skip full examination of hart if it is unavailable */
 	const bool hart_unavailable_at_examine_start = state_at_examine_start == RISCV_STATE_UNAVAILABLE;
 	if (hart_unavailable_at_examine_start) {
-		LOG_TARGET_INFO(target, "Did not fully examine hart %d as it was unavailable, deferring examine.", info->index);
+		LOG_TARGET_DEBUG(target, "Did not fully examine hart %d as it was unavailable, deferring examine.", info->index);
 		target->defer_examine = true;
 		return ERROR_OK;
 	}
