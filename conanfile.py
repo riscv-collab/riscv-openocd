@@ -55,11 +55,11 @@ class Package(_conan.ConanFile):
         if self.options.test != "True":
             return
 
-        self.tool_requires(deps["external_openocd_tests"])
-        self.tool_requires(deps["riscv-gcc"])
-        self.tool_requires(deps["riscv-gdb"])
-        self.tool_requires(deps["riscv-isa-sim"])
-        self.tool_requires(deps["dejagnu"])
+        self.test_requires(deps["external_openocd_tests"])
+        self.test_requires(deps["riscv-gcc"])
+        self.test_requires(deps["riscv-gdb"])
+        self.test_requires(deps["riscv-isa-sim"])
+        self.test_requires(deps["dejagnu"])
 
     def layout(self) -> None:
         build_folder = _Path("build") / str(self.options.build_type)
