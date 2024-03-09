@@ -6,7 +6,7 @@
     "build_requires": [
         "testgen-model-interface/0.1.0-rc.0.16+sc.main@sc/main#69902fa354622b2920ade4aeb06e7b67f62dc664%1709719011.731",
         "riscv-newlib/4.3.0-rc.0.25+sc.main@sc/main#9b9a2746bed89c6129bfc56050b654a5b0ce196d%1709273805.642",
-        "riscv-isa-sim/0.1.0-rc.0.164+sc.main@sc/main#5b4b950b1d1d52b832c86d8f57aefde6293e5215%1709724288.366",
+        "riscv-isa-sim/0.1.0-rc.0.172+sc.main@sc/main#a89c8746495adb6d8cc901323fe3fd1a726781a3%1710059426.728",
         "riscv-glibc/2.33.0-rc.0.31+sc.main@sc/main#8fccb010141a5fc5dddfdae26204c0ec76fa741a%1709271241.665",
         "riscv-gdb/13.2.0-rc.0.92+sc.main@sc/main#8031da7f41787ac1fd39f606960ef14b86f69571%1709751445.29",
         "riscv-gcc-raw/12.2.1-rc.0.94+sc.main@sc/main#febd87496d56d74df3ded45d70b600c3c88495e6%1709113957.305",
