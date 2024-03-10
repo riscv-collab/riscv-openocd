@@ -1614,6 +1614,282 @@ static int riscv_hit_trigger_hit_bit(struct target *target, uint32_t *unique_id)
 	return ERROR_OK;
 }
 
+static inline uint32_t get_bits_field(riscv_insn_t b, uint32_t lo, uint32_t len) {
+	return (b >> lo) & (((uint32_t)1 << len) - 1);
+}
+
+static inline int16_t get_imm_clwsp(riscv_insn_t instruction) {
+	return (get_bits_field(instruction, 4, 3) << 2)
+		   + (get_bits_field(instruction, 12, 1) << 5)
+		   + (get_bits_field(instruction, 2, 2) << 6);
+}
+
+static inline int16_t get_imm_cldsp(riscv_insn_t instruction) {
+	return (get_bits_field(instruction, 5, 2) << 3)
+		   + (get_bits_field(instruction, 12, 1) << 5)
+		   + (get_bits_field(instruction, 2, 3) << 6);
+}
+
+static inline int16_t get_imm_cswsp(riscv_insn_t instruction) {
+	return (get_bits_field(instruction, 9, 4) << 2)
+		   + (get_bits_field(instruction, 7, 2) << 6);
+}
+
+static inline int16_t get_imm_csdsp(riscv_insn_t instruction) {
+	return (get_bits_field(instruction, 10, 3) << 3)
+		   + (get_bits_field(instruction, 7, 3) << 6);
+}
+
+static inline int16_t get_imm_clw(riscv_insn_t instruction) {
+	return (get_bits_field(instruction, 6, 1) << 2)
+	       + (get_bits_field(instruction, 10, 3) << 3)
+		   + (get_bits_field(instruction, 5, 1) << 6);
+}
+
+static inline int16_t get_imm_cld(riscv_insn_t instruction) {
+	return (get_bits_field(instruction, 10, 3) << 3)
+		   + (get_bits_field(instruction, 5, 2) << 6);
+}
+
+static inline int16_t get_imm_clq(riscv_insn_t instruction) {
+	return (get_bits_field(instruction, 11, 1) << 4)
+		   + (get_bits_field(instruction, 12, 1) << 5)
+		   + (get_bits_field(instruction, 5, 2) << 6)
+		   + (get_bits_field(instruction, 10, 1) << 8);
+}
+
+static inline int16_t get_imm_csw(riscv_insn_t instruction) {
+	return (get_bits_field(instruction, 6, 1) << 2)
+		   + (get_bits_field(instruction, 10, 3) << 3)
+		   + (get_bits_field(instruction, 5, 1) << 6);
+}
+
+static inline uint32_t get_rs1_c(riscv_insn_t instruction) {
+	return 8 + get_bits_field(instruction, 7, 3);
+}
+
+static inline int get_memaddr_storeload(struct target *target,
+		const riscv_insn_t instruction, target_addr_t *mem_addr_wp) {
+	/* find out which memory address is accessed by the instruction at dpc */
+	/* opcode is first 7 bits of the instruction */
+	uint32_t opcode = instruction & 0x7F;
+	/* RVxxC MASK_C = 0xe003 for load/store instructions */
+	if ((instruction & 0x03) < 0x03) {
+		opcode = instruction & 0xe003;
+	}
+	uint32_t rs1;
+	int16_t imm;
+	target_addr_t mem_addr = 0;
+	bool misa_f = riscv_supports_extension(target, 'F');
+	bool misa_d = riscv_supports_extension(target, 'D');
+
+	switch (opcode) {
+	case MATCH_LB: // and MATCH_SB:
+		rs1 = (instruction & 0xf8000) >> 15;
+		riscv_get_register(target, &mem_addr, rs1);
+		if (opcode == MATCH_SB) {
+			LOG_TARGET_DEBUG(target, "%x is store instruction", instruction);
+			imm = ((instruction & 0xf80) >> 7) |
+				  ((instruction & 0xfe000000) >> 20);
+		} else {
+			LOG_TARGET_DEBUG(target, "%x is load instruction", instruction);
+			imm = (instruction & 0xfff00000) >> 20;
+		}
+		/* sign extend 12-bit imm to 16-bits */
+		if (imm & (1 << 11))
+			imm |= 0xf000;
+		mem_addr += imm;
+		LOG_TARGET_DEBUG(target, "Memory address=0x%" PRIx64, mem_addr);
+		break;
+	case MATCH_C_LWSP:
+		if (get_bits_field(instruction, 7, 5) == 0) // the code points with rd=x0 are reserved
+			return ERROR_FAIL;
+		riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+		imm = get_imm_clwsp(instruction);
+		mem_addr += imm;
+		LOG_TARGET_DEBUG(target, "C.LWSP Memory address=0x%" PRIx64, mem_addr);
+		break;
+	case MATCH_C_LDSP: // if xlen >= 64 or MATCH_C_FLWSP:
+		if (riscv_xlen(target) > 32) { // MATCH_C_LDSP
+			if (get_bits_field(instruction, 7, 5) == 0) // the code points with rd=x0 are reserved
+				return ERROR_FAIL;
+			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			imm = get_imm_cldsp(instruction);
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.LDSP memory address=0x%" PRIx64,
+							 mem_addr);
+		} else { // MATCH_C_FLWSP
+			if (!misa_f)
+				return ERROR_FAIL;
+			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			imm = get_imm_clwsp(instruction);
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.FLWSP memory address=0x%" PRIx64,
+							 mem_addr);
+		}
+		break;
+	case MATCH_C_FLDSP: // or MATCH_C_LQSP if RV128C
+		if (riscv_xlen(target) == 128) { // MATCH_C_LQSP
+			if (get_bits_field(instruction, 7, 5) == 0) // the code points with rd=x0 are reserved
+				return ERROR_FAIL;
+			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			imm = (get_bits_field(instruction, 6, 1) << 4)
+				  + (get_bits_field(instruction, 12, 1) << 5)
+				  + (get_bits_field(instruction, 2, 4) << 6);
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.LQSP memory address=0x%" PRIx64,
+							 mem_addr);
+		} else { // MATCH_C_FLDSP
+			if (!misa_d)
+				return ERROR_FAIL;
+			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			imm = get_imm_cldsp(instruction);
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.FLDSP memory address=0x%" PRIx64,
+							 mem_addr);
+		}
+		break;
+	case MATCH_C_SWSP:
+		riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+		imm = get_imm_cswsp(instruction);
+		mem_addr += imm;
+		LOG_TARGET_DEBUG(target, "C.SWSP memory address=0x%" PRIx64, mem_addr);
+		break;
+	case MATCH_C_SDSP: // if xlen >= 64 or MATCH_C_FSWSP:
+		if (riscv_xlen(target) > 32) { // MATCH_C_SDSP
+			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			imm = get_imm_csdsp(instruction);
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.SDSP memory address=0x%" PRIx64,
+							 mem_addr);
+		} else { // MATCH_C_FSWSP
+			if (!misa_f)
+				return ERROR_FAIL;
+			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			imm = get_imm_cswsp(instruction);
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.FSWSP memory address=0x%" PRIx64,
+							 mem_addr);
+		}
+		break;
+	case MATCH_C_FSDSP: // or MATCH_C_SQSP if xlen == 128
+		if (riscv_xlen(target) == 128) { // MATCH_C_SQSP
+			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			imm = (get_bits_field(instruction, 11, 2) << 4)
+				  + (get_bits_field(instruction, 7, 4) << 6);
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.SQSP memory address=0x%" PRIx64,
+							 mem_addr);
+		} else { // MATCH_C_FSDSP
+			if (!misa_d)
+				return ERROR_FAIL;
+			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			imm = get_imm_csdsp(instruction); // as C.FSDSP
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.FSDSP memory address=0x%" PRIx64,
+							 mem_addr);
+		}
+		break;
+	case MATCH_C_LW:
+		rs1 = get_rs1_c(instruction);
+		riscv_get_register(target, &mem_addr, rs1);
+		imm = get_imm_clw(instruction);
+		mem_addr += imm;
+		LOG_TARGET_DEBUG(target, "C.LW memory address=0x%" PRIx64, mem_addr);
+		break;
+	case MATCH_C_FLW: // or MATCH_C_LD if xlen >= 64
+		if (riscv_xlen(target) > 32) { // MATCH_C_LD
+			rs1 = get_rs1_c(instruction);
+			riscv_get_register(target, &mem_addr, rs1);
+			imm = get_imm_cld(instruction);
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.LD Memory address=0x%" PRIx64,
+							 mem_addr);
+		} else { // MATCH_C_FLW
+			if (!misa_f)
+				return ERROR_FAIL;
+			rs1 = get_rs1_c(instruction);
+			riscv_get_register(target, &mem_addr, rs1);
+			imm = get_imm_clw(instruction); // same as C.FLW
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.FLW memory address=0x%" PRIx64,
+							 mem_addr);
+		}
+		break;
+	case MATCH_C_FLD: // or MATCH_C_LQ if xlen == 128
+		if (riscv_xlen(target) == 128) { // MATCH_C_LQ
+			rs1 = get_rs1_c(instruction);
+			riscv_get_register(target, &mem_addr, rs1);
+			imm = get_imm_clq(instruction);
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.LQ memory address=0x%" PRIx64,
+							 mem_addr);
+			break;
+		} else { // MATCH_C_FLD
+			if (!misa_d)
+				return ERROR_FAIL;
+			rs1 = get_rs1_c(instruction);
+			riscv_get_register(target, &mem_addr, rs1);
+			imm = get_imm_cld(instruction); // same as C.LD
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.FLD Memory address=0x%" PRIx64,
+							 mem_addr);
+		}
+		break;
+	case MATCH_C_SW:
+		rs1 = get_rs1_c(instruction);
+		riscv_get_register(target, &mem_addr, rs1);
+		imm = get_imm_csw(instruction);
+		mem_addr += imm;
+		LOG_TARGET_DEBUG(target, "C.SW memory address=0x%" PRIx64, mem_addr);
+		break;
+	case MATCH_C_FSW: // or MATCH_C_SD if xlen >= 64
+		if (riscv_xlen(target) > 32) { // MATCH_C_SD
+			rs1 = get_rs1_c(instruction);
+			riscv_get_register(target, &mem_addr, rs1);
+			imm = get_imm_cld(instruction); // same as c.ld
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.SD memory address=0x%" PRIx64,
+							 mem_addr);
+		} else { // MATCH_C_FSW
+			if (!misa_f)
+				break;
+			rs1 = get_rs1_c(instruction);
+			riscv_get_register(target, &mem_addr, rs1);
+			imm = get_imm_csw(instruction); // same as c.sw
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.FSW memory address=0x%" PRIx64,
+							 mem_addr);
+		}
+		break;
+	case MATCH_C_FSD: // or MATCH_C_SQ if xlen == 128
+		if (riscv_xlen(target) == 128) { // MATCH_C_SQ
+			rs1 = get_rs1_c(instruction);
+			riscv_get_register(target, &mem_addr, rs1);
+			imm = get_imm_clq(instruction); // same as c.lq
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.SQ memory address=0x%" PRIx64,
+							 mem_addr); // PRIx128
+		} else { // MATCH_C_FSD
+			if (!misa_d)
+				return ERROR_FAIL;
+			rs1 = get_rs1_c(instruction);
+			riscv_get_register(target, &mem_addr, rs1);
+			imm = get_imm_cld(instruction); // same as c.ld
+			mem_addr += imm;
+			LOG_TARGET_DEBUG(target, "C.SQ memory address=0x%" PRIx64,
+							 mem_addr);
+		}
+		break;
+	default:
+		LOG_TARGET_DEBUG(target, "%x is not a RV32I or \"C\" load or store",
+						 instruction);
+		return ERROR_FAIL;
+	}
+	*mem_addr_wp = mem_addr;
+	return ERROR_OK;
+}
+
 /* Sets *hit_watchpoint to the first watchpoint identified as causing the
  * current halt.
  *
@@ -1643,11 +1919,12 @@ static int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_w
 	/* fetch the instruction at dpc */
 	uint8_t buffer[length];
 	if (target_read_buffer(target, dpc, length, buffer) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read instruction at dpc 0x%" PRIx64, dpc);
+		LOG_TARGET_ERROR(target, "Failed to read instruction at dpc 0x%" PRIx64,
+						 dpc);
 		return ERROR_FAIL;
 	}
 
-	uint32_t instruction = 0;
+	riscv_insn_t instruction = 0;
 
 	for (int i = 0; i < length; i++) {
 		LOG_TARGET_DEBUG(target, "Next byte is %x", buffer[i]);
@@ -1655,40 +1932,20 @@ static int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_w
 	}
 	LOG_TARGET_DEBUG(target, "Full instruction is %x", instruction);
 
-	/* find out which memory address is accessed by the instruction at dpc */
-	/* opcode is first 7 bits of the instruction */
-	uint8_t opcode = instruction & 0x7F;
-	uint32_t rs1;
-	int16_t imm;
-	riscv_reg_t mem_addr;
-
-	if (opcode == MATCH_LB || opcode == MATCH_SB) {
-		rs1 = (instruction & 0xf8000) >> 15;
-		riscv_get_register(target, &mem_addr, rs1);
-
-		if (opcode == MATCH_SB) {
-			LOG_TARGET_DEBUG(target, "%x is store instruction", instruction);
-			imm = ((instruction & 0xf80) >> 7) | ((instruction & 0xfe000000) >> 20);
-		} else {
-			LOG_TARGET_DEBUG(target, "%x is load instruction", instruction);
-			imm = (instruction & 0xfff00000) >> 20;
-		}
-		/* sign extend 12-bit imm to 16-bits */
-		if (imm & (1 << 11))
-			imm |= 0xf000;
-		mem_addr += imm;
-		LOG_TARGET_DEBUG(target, "Memory address=0x%" PRIx64, mem_addr);
-	} else {
-		LOG_TARGET_DEBUG(target, "%x is not a RV32I load or store", instruction);
+	int retval;
+	target_addr_t mem_addr_wp;
+	retval = get_memaddr_storeload(target, instruction, &mem_addr_wp);
+	if (retval != ERROR_OK)
 		return ERROR_FAIL;
-	}
 
 	struct watchpoint *wp = target->watchpoints;
 	while (wp) {
-		/*TODO support length/mask */
-		if (wp->address == mem_addr) {
+		/*TODO support mask */
+		if (mem_addr_wp >= wp->address &&
+			mem_addr_wp <= (wp->address + wp->length)) {
 			*hit_watchpoint = wp;
-			LOG_TARGET_DEBUG(target, "Hit address=%" TARGET_PRIxADDR, wp->address);
+			LOG_TARGET_DEBUG(target, "Hit address=%" TARGET_PRIxADDR,
+							 wp->address);
 			return ERROR_OK;
 		}
 		wp = wp->next;
@@ -1699,6 +1956,7 @@ static int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_w
 	 *
 	 * OpenOCD will behave as if this function had never been implemented i.e.
 	 * report the halt to GDB with no address information. */
+	LOG_TARGET_DEBUG(target, "Not hit address=%" TARGET_PRIxADDR, mem_addr_wp);
 	return ERROR_FAIL;
 }
 
