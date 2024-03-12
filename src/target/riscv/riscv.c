@@ -1944,7 +1944,7 @@ static int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_w
 	while (wp) {
 		/*TODO support mask */
 		if (mem_addr_wp >= wp->address &&
-			mem_addr_wp <= (wp->address + wp->length)) {
+			mem_addr_wp < (wp->address + wp->length)) {
 			*hit_watchpoint = wp;
 			LOG_TARGET_DEBUG(target, "Hit address=%" TARGET_PRIxADDR,
 							 wp->address);
