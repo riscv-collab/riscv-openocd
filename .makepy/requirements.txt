@@ -1,4 +1,4 @@
-makepy==1.56.2
+makepy==1.61.1
 black==24.1.1
 cmakelang==0.6.13
 isort==5.13.2
@@ -49,3 +49,4 @@ typing_extensions==4.9.0
 tzlocal==5.2
 urllib3==1.26.18
 websocket-client==1.7.0
+tomli==2.0.1
