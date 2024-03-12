@@ -38,7 +38,7 @@ set COMMAND_LINE_OPTIONS [dict create \
   --single-core "flag. enforce single-hart configuration even if we know that other harts are available" \
   --smp "flag. if several harts are detected, combine them to an smp target" \
   --speed "value:kHz. adapter speed" \
-  --spike-arg "devel:value:arg. command line element to append to spike options list" \
+  --spike-arg "devel:value:arg. command line element to use as spike command line. Disables defaults" \
   --spike-bin "devel:value:spike_bin_and_executable. spike_binary:executable to run" \
   --spike-harts "devel:value:harts_num. number of harts spike should create" \
   --stand-db "value:path. path to stand database file. Defaults to `$STAND_DB_DEFAULT_PATH`. Use /dev/null to disable" \
