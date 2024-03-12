@@ -1688,7 +1688,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		/* fallthrough */
 	case MATCH_SB:
 		rs1 = (instruction & 0xf8000) >> 15;
-		riscv_get_register(target, &mem_addr, rs1);
+		if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+			return ERROR_FAIL;
 		if (opcode == MATCH_SB) {
 			LOG_TARGET_DEBUG(target, "%x is store instruction", instruction);
 			imm = ((instruction & 0xf80) >> 7) |
@@ -1706,7 +1707,8 @@ static inline int get_memaddr_storeload(struct target *target,
 	case MATCH_C_LWSP:
 		if (get_bits_field(instruction, 7, 5) == 0) // the code points with rd=x0 are reserved
 			return ERROR_FAIL;
-		riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+		if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+			return ERROR_FAIL;
 		imm = get_imm_clwsp(instruction);
 		mem_addr += imm;
 		LOG_TARGET_DEBUG(target, "C.LWSP Memory address=0x%" PRIx64, mem_addr);
@@ -1715,7 +1717,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		if (riscv_xlen(target) > 32) { // MATCH_C_LDSP
 			if (get_bits_field(instruction, 7, 5) == 0) // the code points with rd=x0 are reserved
 				return ERROR_FAIL;
-			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_cldsp(instruction);
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.LDSP memory address=0x%" PRIx64,
@@ -1723,7 +1726,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		} else { // MATCH_C_FLWSP
 			if (!misa_f)
 				return ERROR_FAIL;
-			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_clwsp(instruction);
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.FLWSP memory address=0x%" PRIx64,
@@ -1734,7 +1738,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		if (riscv_xlen(target) == 128) { // MATCH_C_LQSP
 			if (get_bits_field(instruction, 7, 5) == 0) // the code points with rd=x0 are reserved
 				return ERROR_FAIL;
-			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = (get_bits_field(instruction, 6, 1) << 4)
 				  + (get_bits_field(instruction, 12, 1) << 5)
 				  + (get_bits_field(instruction, 2, 4) << 6);
@@ -1744,7 +1749,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		} else { // MATCH_C_FLDSP
 			if (!misa_d)
 				return ERROR_FAIL;
-			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_cldsp(instruction);
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.FLDSP memory address=0x%" PRIx64,
@@ -1752,14 +1758,16 @@ static inline int get_memaddr_storeload(struct target *target,
 		}
 		break;
 	case MATCH_C_SWSP:
-		riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+		if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+			return ERROR_FAIL;
 		imm = get_imm_cswsp(instruction);
 		mem_addr += imm;
 		LOG_TARGET_DEBUG(target, "C.SWSP memory address=0x%" PRIx64, mem_addr);
 		break;
 	case MATCH_C_SDSP: // if xlen >= 64 or MATCH_C_FSWSP:
 		if (riscv_xlen(target) > 32) { // MATCH_C_SDSP
-			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_csdsp(instruction);
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.SDSP memory address=0x%" PRIx64,
@@ -1767,7 +1775,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		} else { // MATCH_C_FSWSP
 			if (!misa_f)
 				return ERROR_FAIL;
-			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_cswsp(instruction);
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.FSWSP memory address=0x%" PRIx64,
@@ -1776,7 +1785,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		break;
 	case MATCH_C_FSDSP: // or MATCH_C_SQSP if xlen == 128
 		if (riscv_xlen(target) == 128) { // MATCH_C_SQSP
-			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = (get_bits_field(instruction, 11, 2) << 4)
 				  + (get_bits_field(instruction, 7, 4) << 6);
 			mem_addr += imm;
@@ -1785,7 +1795,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		} else { // MATCH_C_FSDSP
 			if (!misa_d)
 				return ERROR_FAIL;
-			riscv_get_register(target, &mem_addr, GDB_REGNO_SP);
+			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_csdsp(instruction); // as C.FSDSP
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.FSDSP memory address=0x%" PRIx64,
@@ -1794,7 +1805,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		break;
 	case MATCH_C_LW:
 		rs1 = get_rs1_c(instruction);
-		riscv_get_register(target, &mem_addr, rs1);
+		if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+			return ERROR_FAIL;
 		imm = get_imm_clw(instruction);
 		mem_addr += imm;
 		LOG_TARGET_DEBUG(target, "C.LW memory address=0x%" PRIx64, mem_addr);
@@ -1802,7 +1814,8 @@ static inline int get_memaddr_storeload(struct target *target,
 	case MATCH_C_FLW: // or MATCH_C_LD if xlen >= 64
 		if (riscv_xlen(target) > 32) { // MATCH_C_LD
 			rs1 = get_rs1_c(instruction);
-			riscv_get_register(target, &mem_addr, rs1);
+			if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_cld(instruction);
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.LD Memory address=0x%" PRIx64,
@@ -1811,7 +1824,8 @@ static inline int get_memaddr_storeload(struct target *target,
 			if (!misa_f)
 				return ERROR_FAIL;
 			rs1 = get_rs1_c(instruction);
-			riscv_get_register(target, &mem_addr, rs1);
+			if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_clw(instruction); // same as C.FLW
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.FLW memory address=0x%" PRIx64,
@@ -1821,7 +1835,8 @@ static inline int get_memaddr_storeload(struct target *target,
 	case MATCH_C_FLD: // or MATCH_C_LQ if xlen == 128
 		if (riscv_xlen(target) == 128) { // MATCH_C_LQ
 			rs1 = get_rs1_c(instruction);
-			riscv_get_register(target, &mem_addr, rs1);
+			if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_clq(instruction);
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.LQ memory address=0x%" PRIx64,
@@ -1831,7 +1846,8 @@ static inline int get_memaddr_storeload(struct target *target,
 			if (!misa_d)
 				return ERROR_FAIL;
 			rs1 = get_rs1_c(instruction);
-			riscv_get_register(target, &mem_addr, rs1);
+			if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_cld(instruction); // same as C.LD
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.FLD Memory address=0x%" PRIx64,
@@ -1840,7 +1856,8 @@ static inline int get_memaddr_storeload(struct target *target,
 		break;
 	case MATCH_C_SW:
 		rs1 = get_rs1_c(instruction);
-		riscv_get_register(target, &mem_addr, rs1);
+		if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+			return ERROR_FAIL;
 		imm = get_imm_csw(instruction);
 		mem_addr += imm;
 		LOG_TARGET_DEBUG(target, "C.SW memory address=0x%" PRIx64, mem_addr);
@@ -1848,7 +1865,8 @@ static inline int get_memaddr_storeload(struct target *target,
 	case MATCH_C_FSW: // or MATCH_C_SD if xlen >= 64
 		if (riscv_xlen(target) > 32) { // MATCH_C_SD
 			rs1 = get_rs1_c(instruction);
-			riscv_get_register(target, &mem_addr, rs1);
+			if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_cld(instruction); // same as c.ld
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.SD memory address=0x%" PRIx64,
@@ -1857,7 +1875,8 @@ static inline int get_memaddr_storeload(struct target *target,
 			if (!misa_f)
 				break;
 			rs1 = get_rs1_c(instruction);
-			riscv_get_register(target, &mem_addr, rs1);
+			if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_csw(instruction); // same as c.sw
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.FSW memory address=0x%" PRIx64,
@@ -1867,7 +1886,8 @@ static inline int get_memaddr_storeload(struct target *target,
 	case MATCH_C_FSD: // or MATCH_C_SQ if xlen == 128
 		if (riscv_xlen(target) == 128) { // MATCH_C_SQ
 			rs1 = get_rs1_c(instruction);
-			riscv_get_register(target, &mem_addr, rs1);
+			if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_clq(instruction); // same as c.lq
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.SQ memory address=0x%" PRIx64,
@@ -1876,7 +1896,8 @@ static inline int get_memaddr_storeload(struct target *target,
 			if (!misa_d)
 				return ERROR_FAIL;
 			rs1 = get_rs1_c(instruction);
-			riscv_get_register(target, &mem_addr, rs1);
+			if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
+				return ERROR_FAIL;
 			imm = get_imm_cld(instruction); // same as c.ld
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.SQ memory address=0x%" PRIx64,
@@ -1914,7 +1935,8 @@ static int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_w
 	}
 
 	riscv_reg_t dpc;
-	riscv_get_register(target, &dpc, GDB_REGNO_DPC);
+	if (riscv_get_register(target, &dpc, GDB_REGNO_DPC) != ERROR_OK)
+		return ERROR_FAIL;
 	const uint8_t length = 4;
 	LOG_TARGET_DEBUG(target, "dpc is 0x%" PRIx64, dpc);
 
