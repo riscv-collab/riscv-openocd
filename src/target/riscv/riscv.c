@@ -1684,7 +1684,9 @@ static inline int get_memaddr_storeload(struct target *target,
 	bool misa_d = riscv_supports_extension(target, 'D');
 
 	switch (opcode) {
-	case MATCH_LB: // and MATCH_SB:
+	case MATCH_LB:
+		/* fallthrough */
+	case MATCH_SB:
 		rs1 = (instruction & 0xf8000) >> 15;
 		riscv_get_register(target, &mem_addr, rs1);
 		if (opcode == MATCH_SB) {
