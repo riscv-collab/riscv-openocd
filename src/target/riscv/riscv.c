@@ -1615,52 +1615,89 @@ static int riscv_hit_trigger_hit_bit(struct target *target, uint32_t *unique_id)
 }
 
 /**
- * This function is needed to extract individual bits (for imm) that do not
- * have the mask in the file encoding.h from the instruction
+ * These functions are needed to extract individual bits (for imm)
+ * from the instruction
  */
-static inline uint32_t get_bits_field(riscv_insn_t instruction, uint32_t lo,
-		uint32_t len) {
-	return (instruction >> lo) & (((uint32_t)1 << len) - 1);
+// c.lwsp rd_n0 c_uimm8sphi c_uimm8splo - offset[5] offset[4:2|7:6]
+static inline uint16_t get_imm_clwsp(riscv_insn_t instruction) {
+	uint16_t imm_4to2and7to6_bits =
+		get_field32(instruction, INSN_FIELD_C_UIMM8SPLO);
+	uint16_t imm_4to2_bits = imm_4to2and7to6_bits >> 2;
+	uint16_t imm_7to6_bits = imm_4to2and7to6_bits & 0x3;
+	uint16_t imm_b5_bit = get_field32(instruction, INSN_FIELD_C_UIMM8SPHI);
+	return (imm_4to2_bits << 2) + (imm_b5_bit << 5) + (imm_7to6_bits << 6);
 }
 
-static inline int16_t get_imm_clwsp(riscv_insn_t instruction) {
-	return (get_bits_field(instruction, 4, 3) << 2)
-		   + (get_bits_field(instruction, 12, 1) << 5)
-		   + (get_bits_field(instruction, 2, 2) << 6);
+//c.ldsp rd_n0 c_uimm9sphi c_uimm9splo - offset[5] offset[4:3|8:6]
+static inline uint16_t get_imm_cldsp(riscv_insn_t instruction) {
+	uint16_t imm_4to3and8to6_bits =
+		get_field32(instruction, INSN_FIELD_C_UIMM9SPLO);
+	uint16_t imm_4to3_bits = imm_4to3and8to6_bits >> 3;
+	uint16_t imm_8to6_bits = imm_4to3and8to6_bits & 0x7;
+	uint16_t imm_b5_bit = get_field32(instruction, INSN_FIELD_C_UIMM9SPHI);
+	return (imm_4to3_bits << 3) + (imm_b5_bit << 5) + (imm_8to6_bits << 6);
 }
 
-static inline int16_t get_imm_cldsp(riscv_insn_t instruction) {
-	return (get_bits_field(instruction, 5, 2) << 3)
-		   + (get_bits_field(instruction, 12, 1) << 5)
-		   + (get_bits_field(instruction, 2, 3) << 6);
+//c.swsp c_rs2 c_uimm8sp_s - offset[5:2|7:6]
+static inline uint16_t get_imm_cswsp(riscv_insn_t instruction) {
+	uint16_t imm_5to2and7to6_bits =
+		get_field32(instruction, INSN_FIELD_C_UIMM8SP_S);
+	uint16_t imm_5to2_bits = imm_5to2and7to6_bits >> 2;
+	uint16_t imm_7to6_bits = imm_5to2and7to6_bits & 0x3;
+	return (imm_5to2_bits << 2) + (imm_7to6_bits << 6);
 }
 
-static inline int16_t get_imm_cswsp(riscv_insn_t instruction) {
-	return (get_bits_field(instruction, 9, 4) << 2)
-		   + (get_bits_field(instruction, 7, 2) << 6);
+// c.sdsp c_rs2 c_uimm9sp_s - offset[5:3|8:6]
+static inline uint16_t get_imm_csdsp(riscv_insn_t instruction) {
+	uint16_t imm_5to3and8to6_bits =
+		get_field32(instruction, INSN_FIELD_C_UIMM9SP_S);
+	uint16_t imm_5to3_bits = imm_5to3and8to6_bits >> 3;
+	uint16_t imm_8to6_bits = imm_5to3and8to6_bits & 0x7;
+	return (imm_5to3_bits << 3) + (imm_8to6_bits << 6);
 }
 
-static inline int16_t get_imm_csdsp(riscv_insn_t instruction) {
-	return (get_bits_field(instruction, 10, 3) << 3)
-		   + (get_bits_field(instruction, 7, 3) << 6);
+// c.lw rd_p rs1_p c_uimm7lo c_uimm7hi - offset[2|6] offset[5:3]
+static inline uint16_t get_imm_clw(riscv_insn_t instruction) {
+	uint16_t uimm_2and6_bits = get_field32(instruction, INSN_FIELD_C_UIMM7LO);
+	uint16_t uimm_2_bit = uimm_2and6_bits >> 1;
+	uint16_t uimm_6_bit = uimm_2and6_bits & 0x1;
+	uint16_t uimm_5to3_bits = get_field32(instruction, INSN_FIELD_C_UIMM7HI);
+	return (uimm_2_bit << 2) + (uimm_5to3_bits << 3) + (uimm_6_bit << 6);
 }
 
-static inline int16_t get_imm_clw(riscv_insn_t instruction) {
-	return (get_bits_field(instruction, 6, 1) << 2)
-	       + (get_bits_field(instruction, 10, 3) << 3)
-		   + (get_bits_field(instruction, 5, 1) << 6);
+// c.ld rd_p rs1_p c_uimm8lo c_uimm8hi - offset[7:6] offset[5:3]
+static inline uint16_t get_imm_cld(riscv_insn_t instruction) {
+	uint16_t uimm_7to6_bits = get_field32(instruction, INSN_FIELD_C_UIMM8LO);
+	uint16_t uimm_5to3_bits = get_field32(instruction, INSN_FIELD_C_UIMM8HI);
+	return (uimm_5to3_bits << 3) + (uimm_7to6_bits << 6);
 }
 
-static inline int16_t get_imm_cld(riscv_insn_t instruction) {
-	return (get_bits_field(instruction, 10, 3) << 3)
-		   + (get_bits_field(instruction, 5, 2) << 6);
+// c.lq rd_p rs1_p c_uimm9lo c_uimm9hi - offset[7:6] offset[5|4|8]
+static inline uint16_t get_imm_clq(riscv_insn_t instruction) {
+	uint16_t uimm_7to6_bits = get_field32(instruction, INSN_FIELD_C_UIMM9LO);
+	uint16_t uimm_5to4and8_bits = get_field32(instruction, INSN_FIELD_C_UIMM9HI);
+	uint16_t uimm_5to4_bits = uimm_5to4and8_bits >> 1;
+	uint16_t uimm_8_bit = uimm_5to4and8_bits & 0x1;
+	return (uimm_5to4_bits << 4) + (uimm_7to6_bits << 6) + (uimm_8_bit << 8);
 }
 
-static inline int16_t get_imm_clq(riscv_insn_t instruction) {
-	return (get_bits_field(instruction, 11, 1) << 4)
-		   + (get_bits_field(instruction, 12, 1) << 5)
-		   + (get_bits_field(instruction, 5, 2) << 6)
-		   + (get_bits_field(instruction, 10, 1) << 8);
+// c.lqsp rd_n0 c_uimm10sphi c_uimm10splo - offset[5] offset[4|9:6]
+static inline uint16_t get_imm_clqsp(riscv_insn_t instruction) {
+	uint16_t uimm_4and9to6_bits =
+		get_field32(instruction, INSN_FIELD_C_UIMM10SPLO);
+	uint16_t uimm_4_bit = uimm_4and9to6_bits >> 4;
+	uint16_t uimm_9to6_bits = uimm_4and9to6_bits & 0xf;
+	uint16_t uimm_5_bit = get_field32(instruction, INSN_FIELD_C_UIMM10SPHI);
+	return (uimm_4_bit << 4) + (uimm_5_bit << 5) + (uimm_9to6_bits << 6);
+}
+
+// c.sqsp c_rs2 c_uimm10sp_s - offset[5:4|9:6]
+static inline uint16_t get_imm_csqsp(riscv_insn_t instruction) {
+	uint16_t uimm_5to4and9to6_bits =
+		get_field32(instruction, INSN_FIELD_C_UIMM10SP_S);
+	uint16_t uimm_5to4_biits = uimm_5to4and9to6_bits >> 4;
+	uint16_t uimm_9to6_bits = uimm_5to4and9to6_bits & 0xf;
+	return (uimm_5to4_biits << 4) + (uimm_9to6_bits << 6);
 }
 
 static inline uint32_t get_rs1_c(riscv_insn_t instruction) {
@@ -1742,9 +1779,7 @@ static inline int get_memaddr_storeload(struct target *target,
 				return ERROR_FAIL;
 			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
 				return ERROR_FAIL;
-			imm = (get_bits_field(instruction, 6, 1) << 4)
-				  + (get_bits_field(instruction, 12, 1) << 5)
-				  + (get_bits_field(instruction, 2, 4) << 6);
+			imm = get_imm_clqsp(instruction);
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.LQSP memory address=0x%" PRIx64,
 							 mem_addr);
@@ -1792,8 +1827,7 @@ static inline int get_memaddr_storeload(struct target *target,
 		if (riscv_xlen(target) == 128) { // MATCH_C_SQSP
 			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
 				return ERROR_FAIL;
-			imm = (get_bits_field(instruction, 11, 2) << 4)
-				  + (get_bits_field(instruction, 7, 4) << 6);
+			imm = get_imm_csqsp(instruction);
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.SQSP memory address=0x%" PRIx64,
 							 mem_addr);
