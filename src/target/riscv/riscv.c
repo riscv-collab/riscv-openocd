@@ -535,9 +535,12 @@ static void riscv_deinit_target(struct target *target)
 	LOG_TARGET_DEBUG(target, "riscv_deinit_target()");
 
 	struct riscv_info *info = target->arch_info;
-	struct target_type *tt = get_target_type(target);
-	if (!tt)
-		LOG_TARGET_ERROR(target, "Could not identify target type.");
+	struct target_type *tt = NULL;
+	if (info->dtm_version != DTM_DTMCS_VERSION_UNKNOWN) {
+		tt = get_target_type(target);
+		if (!tt)
+			LOG_TARGET_ERROR(target, "Could not identify target type.");
+	}
 
 	if (riscv_flush_registers(target) != ERROR_OK)
 		LOG_TARGET_ERROR(target, "Failed to flush registers. Ignoring this error.");
