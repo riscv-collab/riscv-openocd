@@ -1722,17 +1722,24 @@ static inline int get_memaddr_storeload(struct target *target,
 	switch (opcode) {
 	case MATCH_LB:
 		/* fallthrough */
+	case MATCH_FLH & ~INSN_FIELD_FUNCT3:
+		/* fallthrough */
 	case MATCH_SB:
+		/* fallthrough */
+	case MATCH_FSH & ~INSN_FIELD_FUNCT3:
 		rs1 = get_field32(instruction, INSN_FIELD_RS1);
 		if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
 			return ERROR_FAIL;
-		if (opcode == MATCH_SB) {
+		if (opcode == MATCH_SB || opcode == (MATCH_FSH & ~INSN_FIELD_FUNCT3)) {
 			LOG_TARGET_DEBUG(target, "%x is store instruction", instruction);
 			imm = get_field32(instruction, INSN_FIELD_IMM12LO) |
 				  (get_field32(instruction, INSN_FIELD_IMM12HI) << 5);
-		} else {
+		} else if (opcode == MATCH_LB ||
+				   opcode == (MATCH_FLH & ~INSN_FIELD_FUNCT3)) {
 			LOG_TARGET_DEBUG(target, "%x is load instruction", instruction);
 			imm = get_field32(instruction, INSN_FIELD_IMM12);
+		} else {
+			return ERROR_FAIL;
 		}
 		/* sign extend 12-bit imm to 16-bits */
 		if (imm & (1 << 11))
