@@ -40,6 +40,7 @@ proc run_test {} {
     ocd_connect
 
     foreach mode $modes {
+        verbose "testing $mode translation mode" 1
         ocdtlb_run_expect "reset halt"
 
         init_with_config $mode $ENTRY_ADDR $va_list $pa_list
