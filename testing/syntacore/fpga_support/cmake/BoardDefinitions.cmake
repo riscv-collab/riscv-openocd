@@ -106,22 +106,22 @@ function(addSCR7L2Config RELEASE_NAME BITSTREAM)
 
   registerFPGAConfiguration(${CONFIG_RVV_MCORE2_NORTOS}
     BITSTREAM ${BITSTREAM}
-    OPENOCD_BOARD twin_scr7rvv_x_mcore2_nortos
+    OPENOCD_BOARD scr7rvv_x_mcore2_nortos
     ${TESTING_CYCLE}
   )
   registerFPGAConfiguration(${CONFIG_MCORE2_NORTOS}
     BITSTREAM ${BITSTREAM}
-    OPENOCD_BOARD twin_scr7_x_mcore2_nortos
+    OPENOCD_BOARD scr7_x_mcore2_nortos
     ${TESTING_CYCLE}
   )
   registerFPGAConfiguration(${CONFIG_MCORE2_RTOSHW}
     BITSTREAM ${BITSTREAM}
-    OPENOCD_BOARD twin_scr7_x_mcore2_rtoshw
+    OPENOCD_BOARD scr7_x_mcore2_rtoshw
     ${TESTING_CYCLE}
   )
   registerFPGAConfiguration(${CONFIG_SMP2}
     BITSTREAM ${BITSTREAM}
-    OPENOCD_BOARD twin_scr7_x_smp2
+    OPENOCD_BOARD scr7_x_smp2
     ${TESTING_CYCLE}
   )
 endfunction()
@@ -141,17 +141,17 @@ function(addSCR9L2Config RELEASE_NAME BITSTREAM)
 
   registerFPGAConfiguration("twin_norvv_${RELEASE_NAME}_score_nortos"
     BITSTREAM ${BITSTREAM}
-    OPENOCD_BOARD twin_scr9norvv_x_1core_nortos
+    OPENOCD_BOARD scr9norvv_x_1core_nortos
     ${TESTING_CYCLE}
   )
   registerFPGAConfiguration("twin_norvv_${RELEASE_NAME}_score_rtoshw"
     BITSTREAM ${BITSTREAM}
-    OPENOCD_BOARD twin_scr9norvv_x_1core_rtoshw
+    OPENOCD_BOARD scr9norvv_x_1core_rtoshw
     ${TESTING_CYCLE}
   )
   registerFPGAConfiguration("twin_rvv_${RELEASE_NAME}_score_nortos"
     BITSTREAM ${BITSTREAM}
-    OPENOCD_BOARD twin_scr9_x_1core_nortos
+    OPENOCD_BOARD scr9_x_1core_nortos
     ${TESTING_CYCLE}
   )
 endfunction()
@@ -191,28 +191,28 @@ endfunction()
 registerFPGAConfiguration(arty100_scr1_32
   BITSTREAM_FROM_NAS
   BITSTREAM "scr1_#18494.rar"
-  OPENOCD_BOARD arty100_scr1_32
+  OPENOCD_BOARD scr1_32
   ARTY_STAND_TOOL
   ZALMAN_NIGHTLY
 )
 registerFPGAConfiguration(arty100_scr3_32
   BITSTREAM_FROM_NAS
   BITSTREAM rv32_single_scr3_tcm_ipic_hiperf.rar
-  OPENOCD_BOARD arty100_scr3_32
+  OPENOCD_BOARD scr3_32
   ARTY_STAND_TOOL
   ZALMAN_NIGHTLY
 )
 registerFPGAConfiguration(arty100_scr4_32_imcaf
   BITSTREAM_FROM_NAS
   BITSTREAM rv32_single_scr4_tcm_l1_ipic_hiperf_256MB_wo_D.tar.gz
-  OPENOCD_BOARD arty100_scr4_32_imcaf
+  OPENOCD_BOARD scr4_32_imcaf
   ARTY_STAND_TOOL
   ZALMAN_NIGHTLY
 )
 registerFPGAConfiguration(arty100_scr4_32_imcafd
   BITSTREAM_FROM_NAS
   BITSTREAM rv32_single_scr4_tcm_l1_ipic_hiperf_256MB.tar.gz
-  OPENOCD_BOARD arty100_scr4_32_imcafd
+  OPENOCD_BOARD scr4_32_imcafd
   ARTY_STAND_TOOL
   ZALMAN_NIGHTLY
 )
@@ -220,17 +220,17 @@ registerFPGAConfiguration(arty100_scr4_32_imcafd
 # Twin stands
 registerFPGAConfiguration(twin_scr5_32
   BITSTREAM scr5_rv32
-  OPENOCD_BOARD twin_scr5_32
+  OPENOCD_BOARD scr5_32
   TWIN_NIGHTLY
 )
 registerFPGAConfiguration(twin_scr5_64
   BITSTREAM scr5_rv64_tcm
-  OPENOCD_BOARD twin_scr5_64
+  OPENOCD_BOARD scr5_64
   TWIN_NIGHTLY
 )
 registerFPGAConfiguration(twin_scr6
   BITSTREAM rv64_cluster_single_scr6_eval
-  OPENOCD_BOARD twin_scr6
+  OPENOCD_BOARD scr6
   TWIN_NIGHTLY
 )
 
