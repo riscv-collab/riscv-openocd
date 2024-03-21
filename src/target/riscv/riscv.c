@@ -1890,7 +1890,6 @@ static inline int get_memaddr_storeload(struct target *target,
 			mem_addr += imm;
 			LOG_TARGET_DEBUG(target, "C.LQ memory address=0x%" PRIx64,
 							 mem_addr);
-			break;
 		} else { // MATCH_C_FLD
 			if (!misa_d)
 				return ERROR_FAIL;
