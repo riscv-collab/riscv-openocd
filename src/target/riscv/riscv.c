@@ -3046,11 +3046,21 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 			return ERROR_FAIL;
 	}
 
+	/* The hart apparently became unavailable while halted, so we want to resume it */
+	if (state == RISCV_STATE_HALTED && previous_riscv_state == RISCV_STATE_UNAVAILABLE) {
+		if (r->handle_became_available &&
+				r->handle_became_available(target, previous_riscv_state) != ERROR_OK)
+			return ERROR_FAIL;
+		if (riscv_get_hart_state(target, &state) != ERROR_OK)
+			return ERROR_FAIL;
+	}
+
 	if (target->state == TARGET_UNKNOWN || state != previous_riscv_state) {
 		switch (state) {
 			case RISCV_STATE_HALTED:
-				if (previous_riscv_state == RISCV_STATE_UNAVAILABLE)
+				if (previous_riscv_state == RISCV_STATE_UNAVAILABLE) {
 					LOG_TARGET_INFO(target, "became available (halted)");
+				}
 
 				LOG_TARGET_DEBUG(target, "  triggered a halt; previous_target_state=%d",
 					previous_target_state);
@@ -3097,8 +3107,9 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 				break;
 
 			case RISCV_STATE_RUNNING:
-				if (previous_riscv_state == RISCV_STATE_UNAVAILABLE)
+				if (previous_riscv_state == RISCV_STATE_UNAVAILABLE) {
 					LOG_TARGET_INFO(target, "became available (running)");
+				}
 
 				LOG_TARGET_DEBUG(target, "  triggered running");
 				target->state = TARGET_RUNNING;
@@ -3109,8 +3120,16 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 				break;
 
 			case RISCV_STATE_UNAVAILABLE:
-				LOG_TARGET_DEBUG(target, "  became unavailable");
-				LOG_TARGET_INFO(target, "became unavailable.");
+				if (previous_riscv_state == RISCV_STATE_HALTED) {
+					LOG_TARGET_DEBUG(target, "  became unavailable (halted)");
+					LOG_TARGET_INFO(target, "became unavailable (halted).");
+				} else if (previous_riscv_state == RISCV_STATE_RUNNING) {
+					LOG_TARGET_DEBUG(target, "  became unavailable (running)");
+					LOG_TARGET_INFO(target, "became unavailable (running).");
+				} else {
+					LOG_TARGET_DEBUG(target, "  became unavailable");
+					LOG_TARGET_INFO(target, "became unavailable.");
+				}
 				target->state = TARGET_UNAVAILABLE;
 				if (r->handle_became_unavailable &&
 						r->handle_became_unavailable(target, previous_riscv_state) != ERROR_OK)
@@ -3213,8 +3232,10 @@ int riscv_openocd_poll(struct target *target)
 			continue;
 
 		enum riscv_next_action next_action;
-		if (riscv_poll_hart(t, &next_action) != ERROR_OK)
+		if (riscv_poll_hart(t, &next_action) != ERROR_OK) {
+			LOG_TARGET_INFO(target, "riscv_poll_hart failed - next_action: %d", next_action);
 			return ERROR_FAIL;
+		}
 
 		switch (next_action) {
 			case RPH_NONE:
@@ -3271,8 +3292,10 @@ int riscv_openocd_poll(struct target *target)
 	foreach_smp_target(entry, targets) {
 		struct target *t = entry->target;
 		struct riscv_info *info = riscv_info(t);
-		if (info->tick && info->tick(t) != ERROR_OK)
+		if (info->tick && info->tick(t) != ERROR_OK) {
+			LOG_TARGET_INFO(target, "info_tick failed - t_coreid: %d", t->coreid);
 			return ERROR_FAIL;
+		}
 	}
 
 	/* Sample memory if any target is running. */

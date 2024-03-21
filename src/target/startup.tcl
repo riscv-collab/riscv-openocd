@@ -131,6 +131,11 @@ proc ocd_process_reset_inner { MODE } {
 				}
 			}
 
+			# no need to wait for a target that is unavailable anyway
+			if { [$t curstate] == "unavailable" } {
+				continue
+			}
+
 			# Wait up to 1 second for target to halt. Why 1sec? Cause
 			# the JTAG tap reset signal might be hooked to a slow
 			# resistor/capacitor circuit - and it might take a while
@@ -142,8 +147,11 @@ proc ocd_process_reset_inner { MODE } {
 			# Did we succeed?
 			set s [$t curstate]
 
+			if { $s == "unavailable" } {
+				continue
+			}
 			if { $s != "halted" } {
-				return -code error [format "TARGET: %s - Not halted" $t]
+				return -code error [format "TARGET: %s - Not halted (%s)" $t $s]
 			}
 		}
 	}
@@ -158,6 +166,9 @@ proc ocd_process_reset_inner { MODE } {
 			# don't wait for targets where examination is deferred
 			# they can not be halted anyway at this point
 			if { ![$t was_examined] && [$t examine_deferred] } {
+				continue
+			}
+			if { [$t curstate] == "unavailable" } {
 				continue
 			}
 
