@@ -515,6 +515,9 @@ static void free_wp_triggers_cache(struct target *target)
 {
 	RISCV_INFO(r);
 
+	if (!r->wp_triggers_negative_cache)
+		return;
+
 	for (unsigned int i = 0; i < r->trigger_count; ++i) {
 		struct tdata1_cache *elem_1, *tmp_1;
 		list_for_each_entry_safe(elem_1, tmp_1, &r->wp_triggers_negative_cache[i], elem_tdata1) {
@@ -528,6 +531,7 @@ static void free_wp_triggers_cache(struct target *target)
 		}
 	}
 	free(r->wp_triggers_negative_cache);
+	r->wp_triggers_negative_cache = NULL;
 }
 
 static void riscv_deinit_target(struct target *target)
@@ -4558,6 +4562,28 @@ COMMAND_HANDLER(riscv_set_enable_trigger_feature)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(handle_re_examine_target)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (target->watchpoints || target->breakpoints) {
+		LOG_TARGET_ERROR(target, "Please, remove all breakpoints and watchpoints.");
+		return ERROR_FAIL;
+	}
+
+	if (riscv_flush_registers(target) != ERROR_OK) {
+		LOG_TARGET_ERROR(target, "Flush of register cache failed.");
+		return ERROR_FAIL;
+	}
+
+	free_wp_triggers_cache(target);
+	r->triggers_enumerated = false;
+
+	target_reset_examined(target);
+	return target_examine_one(target);
+}
+
 static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "dump_sample_buf",
@@ -4813,6 +4839,13 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.mode = COMMAND_ANY,
 		.usage = "[('eq'|'napot'|'ge_lt'|'all') ('wp'|'none')]",
 		.help = "Control whether OpenOCD is allowed to use certain RISC-V trigger features for watchpoints."
+	},
+	{
+		.name = "re_examine",
+		.handler = handle_re_examine_target,
+		.mode = COMMAND_EXEC,
+		.help = "Enforce (re)examination of target",
+		.usage = "",
 	},
 	COMMAND_REGISTRATION_DONE
 };
