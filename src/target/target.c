@@ -486,8 +486,10 @@ int target_poll(struct target *target)
 	}
 
 	retval = target->type->poll(target);
-	if (retval != ERROR_OK)
+	if (retval != ERROR_OK) {
+		LOG_TARGET_INFO(target, "target->type->poll failed");
 		return retval;
+	}
 
 	if (target->halt_issued) {
 		if (target->state == TARGET_HALTED)
