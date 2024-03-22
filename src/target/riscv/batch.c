@@ -18,7 +18,13 @@
 
 static void dump_field(int idle, const struct scan_field *field);
 
-struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_t idle)
+typedef struct {
+	struct list_head list;
+	size_t idle_count;
+	size_t until_scan;
+} idle_count_info_t;
+
+struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_t idle_count)
 {
 	scans += BATCH_RESERVED_SCANS;
 	struct riscv_batch *out = calloc(1, sizeof(*out));
@@ -29,7 +35,7 @@ struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_
 
 	out->target = target;
 	out->allocated_scans = scans;
-	out->idle_count = idle;
+	INIT_LIST_HEAD(&out->idle_counts);
 	out->last_scan = RISCV_SCAN_TYPE_INVALID;
 
 	out->data_out = NULL;
@@ -37,6 +43,15 @@ struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_
 	out->fields = NULL;
 	out->bscan_ctxt = NULL;
 	out->read_keys = NULL;
+
+	idle_count_info_t * const new_entry = malloc(sizeof(*new_entry));
+	if (!new_entry) {
+		LOG_ERROR("Out of memory!");
+		goto alloc_error;
+	}
+	new_entry->until_scan = scans;
+	new_entry->idle_count = idle_count;
+	list_add(&new_entry->list, &out->idle_counts);
 
 	/* FIXME: There is potential for memory usage reduction. We could allocate
 	 * smaller buffers than DMI_SCAN_BUF_SIZE (that is, buffers that correspond to
@@ -78,6 +93,10 @@ alloc_error:
 
 void riscv_batch_free(struct riscv_batch *batch)
 {
+	idle_count_info_t *entry, *tmp;
+	list_for_each_entry_safe(entry, tmp, &batch->idle_counts, list)
+		free(entry);
+
 	free(batch->data_in);
 	free(batch->data_out);
 	free(batch->fields);
@@ -91,24 +110,49 @@ bool riscv_batch_full(struct riscv_batch *batch)
 	return riscv_batch_available_scans(batch) == 0;
 }
 
-int riscv_batch_run(struct riscv_batch *batch)
+static void fill_jtag_queue(const struct riscv_batch *batch, size_t start_i)
 {
-	if (batch->used_scans == 0) {
-		LOG_TARGET_DEBUG(batch->target, "Ignoring empty batch.");
-		return ERROR_OK;
+	size_t i = start_i;
+	const idle_count_info_t *idle_counts_entry;
+	list_for_each_entry(idle_counts_entry, &batch->idle_counts, list) {
+		const size_t idle_count = idle_counts_entry->idle_count;
+		const size_t until = MIN(batch->used_scans,
+				idle_counts_entry->until_scan);
+		for (; i < until; ++i) {
+			const struct scan_field * const field = batch->fields + i;
+			if (bscan_tunnel_ir_width != 0)
+				riscv_add_bscan_tunneled_scan(batch->target, field,
+						batch->bscan_ctxt + i);
+			else
+				jtag_add_dr_scan(batch->target->tap, 1, field, TAP_IDLE);
+
+			if (idle_count > 0)
+				jtag_add_runtest(idle_count, TAP_IDLE);
+		}
 	}
+	assert(i == batch->used_scans);
+}
 
-	riscv_batch_add_nop(batch);
-
-	for (size_t i = 0; i < batch->used_scans; ++i) {
-		if (bscan_tunnel_ir_width != 0)
-			riscv_add_bscan_tunneled_scan(batch->target, batch->fields + i, batch->bscan_ctxt + i);
-		else
-			jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
-
-		if (batch->idle_count > 0)
-			jtag_add_runtest(batch->idle_count, TAP_IDLE);
+static void batch_dump_fields(const struct riscv_batch *batch, size_t start_i)
+{
+	size_t i = start_i;
+	const idle_count_info_t *idle_counts_entry;
+	list_for_each_entry(idle_counts_entry, &batch->idle_counts, list) {
+		const size_t idle_count = idle_counts_entry->idle_count;
+		const size_t until = MIN(batch->used_scans,
+				idle_counts_entry->until_scan);
+		for (; i < until; ++i)
+			dump_field(idle_count, batch->fields + i);
 	}
+	assert(i == batch->used_scans);
+}
+
+static int riscv_batch_run_from(struct riscv_batch *batch, size_t start_i)
+{
+	LOG_TARGET_DEBUG(batch->target, "Running scans [%zu, %zu)",
+			start_i, batch->used_scans);
+
+	fill_jtag_queue(batch, start_i);
 
 	keep_alive();
 
@@ -121,16 +165,60 @@ int riscv_batch_run(struct riscv_batch *batch)
 
 	if (bscan_tunnel_ir_width != 0) {
 		/* need to right-shift "in" by one bit, because of clock skew between BSCAN TAP and DM TAP */
-		for (size_t i = 0; i < batch->used_scans; ++i) {
+		for (size_t i = start_i; i < batch->used_scans; ++i) {
 			if ((batch->fields + i)->in_value)
 				buffer_shr((batch->fields + i)->in_value, DMI_SCAN_BUF_SIZE, 1);
 		}
 	}
 
-	for (size_t i = 0; i < batch->used_scans; ++i)
-		dump_field(batch->idle_count, batch->fields + i);
-
+	batch_dump_fields(batch, start_i);
 	return ERROR_OK;
+}
+
+int riscv_batch_run(struct riscv_batch *batch)
+{
+	if (batch->used_scans == 0) {
+		LOG_TARGET_DEBUG(batch->target, "Ignoring empty batch.");
+		return ERROR_OK;
+	}
+	riscv_batch_add_nop(batch);
+	return riscv_batch_run_from(batch, 0);
+}
+
+bool riscv_batch_was_busy(const struct riscv_batch *batch, size_t scan_i)
+{
+	assert(scan_i < batch->used_scans);
+	const struct scan_field *field = batch->fields + scan_i;
+	const uint64_t in = buf_get_u64(field->in_value, 0, field->num_bits);
+	return get_field(in, DTM_DMI_OP) == DTM_DMI_OP_BUSY;
+}
+
+size_t riscv_batch_first_busy(const struct riscv_batch *batch)
+{
+	assert(batch->used_scans);
+	assert(riscv_batch_dmi_busy_encountered(batch));
+	size_t first_busy = 0;
+	while (!riscv_batch_was_busy(batch, first_busy))
+		++first_busy;
+	return first_busy;
+}
+
+int riscv_batch_continue(struct riscv_batch *batch, size_t new_idle)
+{
+	assert(riscv_batch_dmi_busy_encountered(batch));
+	const size_t busy_scan = riscv_batch_first_busy(batch);
+	LOG_TARGET_DEBUG(batch->target, "Scan %zu returned busy.", busy_scan);
+
+	size_t old_idle;
+	const int result = riscv_batch_change_idle_used_from_scan(batch,
+			new_idle, &old_idle, busy_scan);
+	if (result != ERROR_OK)
+		return result;
+
+	if (new_idle > old_idle)
+		jtag_add_runtest(new_idle - old_idle, TAP_IDLE);
+
+	return riscv_batch_run_from(batch, busy_scan);
 }
 
 void riscv_batch_add_dm_write(struct riscv_batch *batch, uint64_t address, uint32_t data,
@@ -245,7 +333,42 @@ bool riscv_batch_dmi_busy_encountered(const struct riscv_batch *batch)
 		return false;
 
 	assert(batch->last_scan == RISCV_SCAN_TYPE_NOP);
-	const struct scan_field *field = batch->fields + batch->used_scans - 1;
-	const uint64_t in = buf_get_u64(field->in_value, 0, field->num_bits);
-	return get_field(in, DTM_DMI_OP) == DTM_DMI_OP_BUSY;
+	return riscv_batch_was_busy(batch, batch->used_scans - 1);
+}
+
+/* Returns the entry in `batch->idle_counts` that defines idle_count for the scan. */
+static idle_count_info_t *find_idle_counts_entry(struct riscv_batch *batch, size_t scan_idx)
+{
+	assert(!list_empty(&batch->idle_counts));
+
+	idle_count_info_t *entry;
+	list_for_each_entry(entry, &batch->idle_counts, list)
+		if (entry->until_scan > scan_idx)
+			break;
+	assert(!list_entry_is_head(entry, &batch->idle_counts, list));
+	return entry;
+}
+
+int riscv_batch_change_idle_used_from_scan(struct riscv_batch *batch, size_t new_idle,
+		size_t *old_idle, size_t scan_idx)
+{
+	idle_count_info_t * const new_entry = malloc(sizeof(*new_entry));
+	if (!new_entry) {
+		LOG_ERROR("Out of memory!");
+		return ERROR_FAIL;
+	}
+	new_entry->until_scan = scan_idx;
+	idle_count_info_t *old_entry = find_idle_counts_entry(batch, scan_idx);
+	/* Add new entry before the old one. */
+	list_add_tail(&new_entry->list, &old_entry->list);
+	assert(new_entry->until_scan < old_entry->until_scan);
+	/* new entry now defines the range until the scan (non-inclusive) */
+	new_entry->idle_count = old_entry->idle_count;
+	/* old entry now defines the range from the scan (inclusive) */
+	if (old_idle)
+		*old_idle = old_entry->idle_count;
+	old_entry->idle_count = new_idle;
+	LOG_DEBUG("Will use idle == %zu from scan %zu until scan %zu.", old_entry->idle_count,
+			new_entry->until_scan, old_entry->until_scan);
+	return ERROR_OK;
 }

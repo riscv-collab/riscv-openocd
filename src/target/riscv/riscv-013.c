@@ -948,25 +948,49 @@ static int execute_abstract_command(struct target *target, uint32_t command,
 	return ERROR_OK;
 }
 
-static riscv_reg_t read_abstract_arg(struct target *target, unsigned index,
-		unsigned size_bits)
+static void add_data_regs_read(struct riscv_batch *batch, unsigned int index,
+		unsigned int size_bits)
 {
+	const unsigned int size_in_words = size_bits / 32;
+	assert(size_bits % 32 == 0);
+	const unsigned int offset = index * size_in_words;
+	for (unsigned int i = 0; i < size_in_words; ++i) {
+		const unsigned int reg_address = DM_DATA0 + offset + i;
+		riscv_batch_add_dm_read(batch, reg_address);
+	}
+}
+
+static riscv_reg_t read_data_regs(struct riscv_batch *batch,
+		unsigned int index, unsigned int size_bits)
+{
+	const unsigned int size_in_words = size_bits / 32;
+	assert(size_bits % 32 == 0);
+	assert(size_in_words * sizeof(uint32_t) <= sizeof(riscv_reg_t));
 	riscv_reg_t value = 0;
-	uint32_t v;
-	unsigned offset = index * size_bits / 32;
-	switch (size_bits) {
-		default:
-			LOG_TARGET_ERROR(target, "Unsupported size: %d bits", size_bits);
-			return ~0;
-		case 64:
-			if (dm_read(target, &v, DM_DATA0 + offset + 1) == ERROR_OK)
-				value |= ((uint64_t)v) << 32;
-			/* falls through */
-		case 32:
-			if (dm_read(target, &v, DM_DATA0 + offset) == ERROR_OK)
-				value |= v;
+	for (unsigned int i = 0; i < size_in_words; ++i) {
+		const uint32_t v = riscv_batch_get_dmi_read_data(batch, i);
+		value |= (riscv_reg_t)v << (i * 32);
 	}
 	return value;
+}
+
+static int batch_run_timeout(struct target *target, struct riscv_batch *batch);
+
+static int read_abstract_arg(struct target *target, uint64_t *value,
+		unsigned int index, unsigned int size_bits)
+{
+	assert(value);
+	RISCV013_INFO(info);
+	const unsigned char size_in_words = size_bits / 32;
+	assert(size_bits % 32 == 0);
+	struct riscv_batch * const batch = riscv_batch_alloc(target, size_in_words,
+			info->dmi_busy_delay);
+	add_data_regs_read(batch, index, size_bits);
+	int result = batch_run_timeout(target, batch);
+	if (result == ERROR_OK)
+		*value = read_data_regs(batch, index, size_bits);
+	riscv_batch_free(batch);
+	return result;
 }
 
 static int write_abstract_arg(struct target *target, unsigned index,
@@ -1065,7 +1089,7 @@ static int register_read_abstract_with_size(struct target *target,
 	}
 
 	if (value)
-		*value = read_abstract_arg(target, 0, size);
+		return read_abstract_arg(target, value, 0, size);
 
 	return ERROR_OK;
 }
@@ -2514,19 +2538,80 @@ static int sb_write_address(struct target *target, target_addr_t address,
 		(uint32_t)address, false, ensure_success);
 }
 
+static int maybe_add_delays_reset(const struct target *target, struct riscv_batch *batch)
+{
+	RISCV_INFO(r);
+	if (r->reset_delays_wait < 0)
+		return ERROR_OK;
+	/* TODO: riscv_batch_run() adds a nop to the end od the batch. This
+	 * behavior is a bit peculiar and should probably be changed. */
+	const size_t scans_to_run = batch->used_scans + 1;
+	if ((size_t)r->reset_delays_wait >= scans_to_run) {
+		r->reset_delays_wait -= scans_to_run;
+		return ERROR_OK;
+	}
+	const int result = riscv_batch_change_idle_used_from_scan(batch, 0,
+			/*discard old_idle*/ NULL, r->reset_delays_wait);
+	r->reset_delays_wait = -1;
+	LOG_TARGET_DEBUG(target, "reset_delays_wait done");
+	RISCV013_INFO(info);
+	info->dmi_busy_delay = 0;
+	info->ac_busy_delay = 0;
+	return result;
+}
+
 static int batch_run(const struct target *target, struct riscv_batch *batch)
 {
-	RISCV013_INFO(info);
-	RISCV_INFO(r);
-	if (r->reset_delays_wait >= 0) {
-		r->reset_delays_wait -= batch->used_scans;
-		if (r->reset_delays_wait <= 0) {
-			batch->idle_count = 0;
-			info->dmi_busy_delay = 0;
-			info->ac_busy_delay = 0;
-		}
-	}
+	int result = maybe_add_delays_reset(target, batch);
+	if (result != ERROR_OK)
+		return result;
 	return riscv_batch_run(batch);
+}
+
+static int batch_run_timeout(struct target *target, struct riscv_batch *batch)
+{
+	RISCV013_INFO(info);
+	const time_t start = time(NULL);
+	int result = batch_run(target, batch);
+	if (result == ERROR_OK && !riscv_batch_dmi_busy_encountered(batch))
+		return ERROR_OK;
+
+	while (time(NULL) - start < riscv_command_timeout_sec) {
+		/* TODO: In general, r->reset_delays_wait should be decresed here.
+		 * This is not an issue for now, since it can be increased only
+		 * by `riscv reset_delays` command, and the cause for the busy
+		 * to be encountered in the batch is, most probably these
+		 * delays being reset.
+		 * TODO: riscv_batch_continue() will increase the delays for
+		 * the scans for which the delays were defined by the same list
+		 * entry.
+		 * Now consider the batch of three scans:
+		 * 1st scan uses idle_count 1 (defined by the first list entry)
+		 * 2nd scan uses idle_count 2 (defined by the second list entry)
+		 * 3rd scan uses idle_count 1 (defined by the third list entry)
+		 *
+		 * When the batch is executed, a dmi_busy is encountered on the first scan.
+		 * So info->dmi_busy_delay and the idle_count for the first
+		 * scan (in the first list entry) are increased.
+		 * However, the value in the 3rd list entry is not increased,
+		 * meaning it will also encounter dmi_busy and
+		 * info->dmi_busy_delay will be increased twice.
+		 */
+		increase_dmi_busy_delay(target);
+		result = riscv_batch_continue(batch, info->dmi_busy_delay);
+		if (result != ERROR_OK || !riscv_batch_dmi_busy_encountered(batch))
+			return result;
+	}
+	assert(result == ERROR_OK);
+	assert(riscv_batch_dmi_busy_encountered(batch));
+	/* Reset dmi_busy_delay, so the value doesn't get too big. */
+	LOG_TARGET_DEBUG(target, "dmi_busy_delay is reset.");
+	info->dmi_busy_delay = 0;
+	LOG_TARGET_ERROR(target, "DMI operation didn't complete in %d seconds. "
+			"The target is either really slow or broken. You could increase "
+			"the timeout with riscv set_command_timeout_sec.",
+			riscv_command_timeout_sec);
+	return ERROR_TIMEOUT_REACHED;
 }
 
 static int sba_supports_access(struct target *target, unsigned int size_bytes)
@@ -3566,7 +3651,11 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 		if (info->has_aampostincrement == YNM_MAYBE) {
 			if (result == ERROR_OK) {
 				/* Safety: double-check that the address was really auto-incremented */
-				riscv_reg_t new_address = read_abstract_arg(target, 1, riscv_xlen(target));
+				riscv_reg_t new_address;
+				result = read_abstract_arg(target, &new_address, 1, riscv_xlen(target));
+				if (result != ERROR_OK)
+					return result;
+
 				if (new_address == address + size) {
 					LOG_TARGET_DEBUG(target, "aampostincrement is supported on this target.");
 					info->has_aampostincrement = YNM_YES;
@@ -3589,7 +3678,10 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 			return result;
 
 		/* Copy arg0 to buffer (rounded width up to nearest 32) */
-		riscv_reg_t value = read_abstract_arg(target, 0, width32);
+		riscv_reg_t value;
+		result = read_abstract_arg(target, &value, 0, width32);
+		if (result != ERROR_OK)
+			return result;
 		buf_set_u64(p, 0, 8 * size, value);
 
 		if (info->has_aampostincrement == YNM_YES)
@@ -3652,7 +3744,11 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 		if (info->has_aampostincrement == YNM_MAYBE) {
 			if (result == ERROR_OK) {
 				/* Safety: double-check that the address was really auto-incremented */
-				riscv_reg_t new_address = read_abstract_arg(target, 1, riscv_xlen(target));
+				riscv_reg_t new_address;
+				result = read_abstract_arg(target, &new_address, 1, riscv_xlen(target));
+				if (result != ERROR_OK)
+					return result;
+
 				if (new_address == address + size) {
 					LOG_TARGET_DEBUG(target, "aampostincrement is supported on this target.");
 					info->has_aampostincrement = YNM_YES;
@@ -4026,10 +4122,12 @@ static int read_word_from_dm_data_regs(struct target *target,
 		struct memory_access_info access, uint32_t index)
 {
 	assert(access.element_size <= 8);
-	const uint64_t value = read_abstract_arg(target, /*index*/ 0,
+	uint64_t value;
+	int result = read_abstract_arg(target, &value, /*index*/ 0,
 			access.element_size > 4 ? 64 : 32);
-	set_buffer_and_log_read(access, index, value);
-	return ERROR_OK;
+	if (result == ERROR_OK)
+		set_buffer_and_log_read(access, index, value);
+	return result;
 }
 
 static int read_word_from_s1(struct target *target,
