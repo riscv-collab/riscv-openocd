@@ -4,19 +4,22 @@ proc run_test {} {
     return [ocd_test_unsupported]
   }
 
-  global OPENOCD_ROOT
-
-  set LogFileRelative [utils_spawn_universal_launcher \
+  set LogFileAbsolute [utils_spawn_universal_launcher \
     [list --i-know-what-im-doing "[standInfoGet adapter_config]" --run-command shutdown] \
     i-know-better-relative \
     expect_success]
 
-  set LogFileAbsolute [utils_spawn_universal_launcher \
-    [list --i-know-what-im-doing "${OPENOCD_ROOT}/[standInfoGet adapter_config]" --run-command shutdown] \
-    i-know-better-absolute \
-    expect_success]
+  set LogsToCheck [list $LogFileAbsolute]
 
-  foreach Log [list $LogFileRelative $LogFileAbsolute] {
+  if { [standInfoGet adapter_config_relative] ne "" } {
+    set LogFileRelative [utils_spawn_universal_launcher \
+      [list --i-know-what-im-doing "[standInfoGet adapter_config_relative]" --run-command shutdown] \
+      i-know-better-absolute \
+      expect_success]
+    lappend LogsToCheck $LogFileRelative
+  }
+
+  foreach Log $LogsToCheck {
     exec grep --text -F "Target successfully examined" $Log
     exec grep --text -F "Listening on port 3333 for gdb connections" $Log
   }

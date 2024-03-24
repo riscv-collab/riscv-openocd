@@ -116,11 +116,19 @@ pipeline {
       steps {
         echo "Building project"
         dir ("$BUILD_MOUNT") {
+          // This file contains information about debug adapter used to
+          // interact with fpga. We copy it so we don't need to mount the
+          // storage
+          sh 'cp ~/.config/stand.info/tests.stand.info.json ${SOURCE_DIR}/.tests.stand.info.json'
           sh '${MAKE_PY} --image $DOCKER_IMAGE container run -p -m . --credentials ${WD}/credentials.json'
           sh '${MAKE_PY} --image $DOCKER_IMAGE pass'
           sh '${MAKE_PY} --image $DOCKER_IMAGE sh --container-user root usermod -g plugdev $(whoami)'
           sh '${MAKE_PY} --image $DOCKER_IMAGE conan-config --credentials ${WD}/credentials.json'
-          sh '${MAKE_PY} --image $DOCKER_IMAGE just-config -b ${BUILD_DIR} --profile:host default --options:host test=True'
+          sh """
+            ${MAKE_PY} --image $DOCKER_IMAGE just-config -b ${BUILD_DIR}     \
+              --profile:host default --options:host test=True --options:test \
+              adapter-info=${SOURCE_DIR}/.tests.stand.info.json
+          """
           sh '${MAKE_PY} --image $DOCKER_IMAGE build -b ${BUILD_DIR} --target openocd'
         }
       }

@@ -88,8 +88,6 @@ proc run_test {} {
     return [ocd_test_unsupported]
   }
 
-  global OPENOCD_ROOT
-
   set AdapterConfig [standInfoGet adapter_config]
 
   set Log [utils_spawn_universal_launcher \
@@ -111,17 +109,20 @@ proc run_test {} {
 
   set ExtendedInteractiveLog [utils_spawn_universal_launcher \
     [list --i-know-what-im-doing - --run-command shutdown --debug-adapter-serial ""] \
-    interactive_extended_relative \
+    interactive_extended_absolute \
     interactive]
   set AdapterList [interactiveTestExtractAdapterList $spawn_id]
   interactiveTestSelectAdapterAndInspect $spawn_id $AdapterList $AdapterConfig
 
-  set ExtendedInteractiveLog [utils_spawn_universal_launcher \
-    [list --i-know-what-im-doing - --run-command shutdown --debug-adapter-serial ""] \
-    interactive_extended_absolute \
-    interactive]
-  set AdapterList [interactiveTestExtractAdapterList $spawn_id]
-  interactiveTestSelectAdapterAndInspect $spawn_id $AdapterList "${OPENOCD_ROOT}/$AdapterConfig"
+  if { [standInfoGet adapter_config_relative] ne "" } {
+    set ExtendedInteractiveLog [utils_spawn_universal_launcher \
+      [list --i-know-what-im-doing - --run-command shutdown --debug-adapter-serial ""] \
+      interactive_extended_relative \
+      interactive]
+    set AdapterList [interactiveTestExtractAdapterList $spawn_id]
+    interactiveTestSelectAdapterAndInspect $spawn_id $AdapterList [standInfoGet adapter_config_relative]
+  }
+
 
   set ExtendedInteractiveLog [utils_spawn_universal_launcher \
     [list --i-know-what-im-doing $AdapterConfig --run-command shutdown --debug-adapter-serial ""] \

@@ -15,8 +15,6 @@ set_board_info openocd,abi_regnames 0
 set_board_info openocd,hidden_triggers 0
 set_board_info openocd,ide_cloak 0
 
-set_board_info env,stand zalman
-
 set_board_info openocd,ocd_tool_target_flags [list \
  -f [get_support_file ocd/example_score_nortos.cfg] \
 ]

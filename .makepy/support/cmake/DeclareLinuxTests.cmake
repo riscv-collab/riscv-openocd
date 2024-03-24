@@ -21,6 +21,17 @@ if (NOT DEFINED DEJAGNU_DIR)
   message(FATAL_ERROR "DEJAGNU_DIR is not defined")
 endif()
 
+if (OPENOCD_DEBUG_ADAPTER_INFO)
+  message("Stand info file specified: ${OPENOCD_DEBUG_ADAPTER_INFO}")
+  file(READ ${OPENOCD_DEBUG_ADAPTER_INFO} STAND_INFO_JSON)
+  string(JSON OPENOCD_DEBUG_ADAPTER_CONFIG GET ${STAND_INFO_JSON} adapter_config)
+  string(JSON OPENOCD_DEBUG_ADAPTER_SERIAL GET ${STAND_INFO_JSON} adapter_serial)
+  string(JSON OPENOCD_DEBUG_ADAPTER_SPEED  GET ${STAND_INFO_JSON} adapter_speed)
+  message("  Debug adapter config: ${OPENOCD_DEBUG_ADAPTER_CONFIG}")
+  message("  Debug adapter serial: ${OPENOCD_DEBUG_ADAPTER_SERIAL}")
+  message("  Debug adapter speed: ${OPENOCD_DEBUG_ADAPTER_SPEED}")
+endif()
+
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/local_init.exp.in
   local_init.exp @ONLY)

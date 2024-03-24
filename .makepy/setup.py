@@ -103,6 +103,15 @@ class _JustConfigCommand(_Command):
             help=conan_help,
         )
         parser.add_argument(
+            "-o:t",
+            "--options:test",
+            dest="test_options",
+            type=str,
+            default=[],
+            action="append",
+            help=conan_help,
+        )
+        parser.add_argument(
             "-s",
             "--settings",
             "-s:h",
@@ -176,16 +185,19 @@ class _JustConfigCommand(_Command):
         # TODO: should we remove all these "cwd" statements?
         _run_shell(["conan", "source", _repo_path], cwd=_repo_path)
         _run_shell(install_cmd, cwd=_repo_path)
-        _run_shell(
-            [
-                makepy,
-                "--no-history-dump",
-                "config",
-                "--build-path",
-                args.build_path,
-            ],
-            cwd=_repo_path,
+        config_cmd = [
+            makepy,
+            "--no-history-dump",
+            "config",
+            "--build-path",
+            args.build_path,
+        ]
+        config_cmd.extend(
+            _itertools.chain.from_iterable(
+                [f"--{test_option}"] for test_option in args.test_options
+            )
         )
+        _run_shell(config_cmd, cwd=_repo_path)
 
 
 class _ConfigCommand(_Command):
@@ -194,6 +206,15 @@ class _ConfigCommand(_Command):
 
     def help(self) -> str:
         return "CMake config."
+
+    def amend_parser(self, parser: _ArgumentParser) -> None:
+        parser.add_argument(
+            "--adapter-info",
+            dest="adapter_info",
+            type=str,
+            default=None,
+            help="json file with debug adapter properties",
+        )
 
     def command(self, args: _Namespace) -> None:
         _shutil.rmtree(_repo_path / "build-aux", ignore_errors=True)
@@ -208,6 +229,8 @@ class _ConfigCommand(_Command):
             "--toolchain",
             (args.build_path / "conan_toolchain.cmake").absolute(),
         ]
+        if args.adapter_info is not None:
+            cmd.extend([f"-DOPENOCD_DEBUG_ADAPTER_INFO={args.adapter_info}"])
         _run_shell(cmd)
 
 
