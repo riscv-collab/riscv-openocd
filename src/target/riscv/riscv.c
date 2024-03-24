@@ -1721,11 +1721,8 @@ static inline int get_memaddr_storeload(struct target *target,
 
 	switch (opcode) {
 	case MATCH_LB:
-		/* fallthrough */
 	case MATCH_FLH & ~INSN_FIELD_FUNCT3:
-		/* fallthrough */
 	case MATCH_SB:
-		/* fallthrough */
 	case MATCH_FSH & ~INSN_FIELD_FUNCT3:
 		rs1 = get_field32(instruction, INSN_FIELD_RS1);
 		if (riscv_get_register(target, &mem_addr, rs1) != ERROR_OK)
