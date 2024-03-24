@@ -1746,8 +1746,11 @@ static inline int get_memaddr_storeload(struct target *target,
 		break;
 
 	case MATCH_C_LWSP:
-		if (get_field32(instruction, INSN_FIELD_RD) == 0) // the code points with rd=x0 are reserved
+		if (get_field32(instruction, INSN_FIELD_RD) == 0) {
+			LOG_TARGET_DEBUG(target,
+				"The code points with rd = x0 are reserved for C.LWSP");
 			return ERROR_FAIL;
+		}
 		if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
 			return ERROR_FAIL;
 		imm = get_imm_clwsp(instruction);
@@ -1757,8 +1760,11 @@ static inline int get_memaddr_storeload(struct target *target,
 
 	case MATCH_C_LDSP: // if xlen >= 64 or MATCH_C_FLWSP:
 		if (riscv_xlen(target) > 32) { // MATCH_C_LDSP
-			if (get_field32(instruction, INSN_FIELD_RD) == 0) // the code points with rd=x0 are reserved
+			if (get_field32(instruction, INSN_FIELD_RD) == 0) {
+				LOG_TARGET_DEBUG(target,
+					"The code points with rd = x0 are reserved for C.LDSP");
 				return ERROR_FAIL;
+			}
 			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
 				return ERROR_FAIL;
 			imm = get_imm_cldsp(instruction);
@@ -1779,8 +1785,11 @@ static inline int get_memaddr_storeload(struct target *target,
 
 	case MATCH_C_FLDSP: // or MATCH_C_LQSP if RV128C
 		if (riscv_xlen(target) == 128) { // MATCH_C_LQSP
-			if (get_field32(instruction, INSN_FIELD_RD) == 0) // the code points with rd=x0 are reserved
+			if (get_field32(instruction, INSN_FIELD_RD) == 0) {
+				LOG_TARGET_DEBUG(target,
+					"The code points with rd = x0 are reserved for C.LQSP");
 				return ERROR_FAIL;
+			}
 			if (riscv_get_register(target, &mem_addr, GDB_REGNO_SP) != ERROR_OK)
 				return ERROR_FAIL;
 			imm = get_imm_clqsp(instruction);
