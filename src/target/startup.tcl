@@ -129,6 +129,9 @@ proc ocd_process_reset_inner { MODE } {
 				} else {
 					$t invoke-event examine-end
 				}
+				if { [$t curstate] == "unavailable" } {
+					continue
+				}
 			}
 
 			# Wait up to 1 second for target to halt. Why 1sec? Cause
@@ -143,7 +146,7 @@ proc ocd_process_reset_inner { MODE } {
 			set s [$t curstate]
 
 			if { $s != "halted" } {
-				return -code error [format "TARGET: %s - Not halted" $t]
+				return -code error [format "TARGET: %s - Not halted - Maybe unavailable %s" $t $s]
 			}
 		}
 	}
@@ -158,6 +161,9 @@ proc ocd_process_reset_inner { MODE } {
 			# don't wait for targets where examination is deferred
 			# they can not be halted anyway at this point
 			if { ![$t was_examined] && [$t examine_deferred] } {
+				continue
+			}
+			if { [$t curstate] == "unavailable" } {
 				continue
 			}
 

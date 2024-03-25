@@ -1797,7 +1797,7 @@ static int set_dcsr_ebreak(struct target *target, bool step)
 static int halt_set_dcsr_ebreak(struct target *target)
 {
 	RISCV013_INFO(info);
-	LOG_TARGET_DEBUG(target, "Halt to set DCSR.ebreak*");
+	LOG_TARGET_INFO(target, "Halt to set DCSR.ebreak*");
 
 	/* Remove this hart from the halt group.  This won't work on all targets
 	 * because the debug spec allows halt groups to be hard-coded, but I
@@ -1830,7 +1830,7 @@ static int halt_set_dcsr_ebreak(struct target *target)
 		foreach_smp_target(entry, targets) {
 			struct target *t = entry->target;
 			if (riscv013_halt_prep(t) != ERROR_OK) {
-				LOG_TARGET_DEBUG(target, "riscv013_halt_prep failed - t_coreid: %d", t->coreid);
+				LOG_TARGET_INFO(target, "riscv013_halt_prep failed - t_coreid: %d", t->coreid);
 				return ERROR_FAIL;
 			}
 		}
@@ -1846,15 +1846,15 @@ static int halt_set_dcsr_ebreak(struct target *target)
 	}
 	halt_result = riscv013_halt_go(target);
 	if (halt_result == ERROR_OK) {
-//		if (dm013_select_target(target) != ERROR_OK) {
-//			LOG_TARGET_DEBUG(target, "dm013_select_target failed");
-//			return ERROR_FAIL;
-//		}
-//		if (set_dcsr_ebreak(target, false) == ERROR_OK) {
-//			if (dm013_select_target(target) != ERROR_OK) {
-//				LOG_TARGET_DEBUG(target, "dm013_select_target failed");
-//				return ERROR_FAIL;
-//			}
+		if (dm013_select_target(target) != ERROR_OK) {
+			LOG_TARGET_INFO(target, "dm013_select_target failed");
+			return ERROR_FAIL;
+		}
+		if (set_dcsr_ebreak(target, false) == ERROR_OK) {
+			if (dm013_select_target(target) != ERROR_OK) {
+				LOG_TARGET_INFO(target, "dm013_select_target failed");
+				return ERROR_FAIL;
+			}
 			resume_result = riscv013_step_or_resume_current_hart(target, false);
 			if (resume_result == ERROR_OK) {
 				target->state = TARGET_RUNNING;
@@ -1867,10 +1867,10 @@ static int halt_set_dcsr_ebreak(struct target *target)
 				LOG_TARGET_INFO(target, "riscv013_step_or_resume_current_hart failed");
 				result = ERROR_FAIL;
 			}
-//		} else {
-//			LOG_TARGET_DEBUG(target, "set_dcsr_ebreak failed");
-//			result = ERROR_FAIL;
-//		}
+		} else {
+			LOG_TARGET_INFO(target, "set_dcsr_ebreak failed");
+			result = ERROR_FAIL;
+		}
 	} else if (halt_result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE) {
 		LOG_TARGET_INFO(target, "riscv013_halt_go aborted");
 	} else {
@@ -2073,6 +2073,7 @@ static int examine(struct target *target)
 	const bool hart_unavailable_at_examine_start = state_at_examine_start == RISCV_STATE_UNAVAILABLE;
 	if (hart_unavailable_at_examine_start) {
 		LOG_TARGET_DEBUG(target, "Did not fully examine hart %d as it was unavailable, deferring examine.", info->index);
+		target->state = TARGET_UNAVAILABLE;
 		target->defer_examine = true;
 		return ERROR_OK;
 	}
