@@ -5251,6 +5251,10 @@ static int riscv013_step_or_resume_current_hart(struct target *target,
 		return ERROR_FAIL;
 	}
 
+	if (dm013_select_target(target) != ERROR_OK) {
+		return ERROR_FAIL;
+	}
+
 	dm013_info_t *dm = get_dm(target);
 	/* Issue the resume command, and then wait for the current hart to resume. */
 	uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE | DM_DMCONTROL_RESUMEREQ;
