@@ -1840,35 +1840,23 @@ static int halt_set_dcsr_ebreak(struct target *target)
 	int halt_result = ERROR_OK;
 	int resume_result = ERROR_OK;
 
-	if (dm013_select_target(target) != ERROR_OK) {
-		LOG_TARGET_INFO(target, "dm013_select_target failed");
-		return ERROR_FAIL;
-	}
 	halt_result = riscv013_halt_go(target);
 	if (halt_result == ERROR_OK) {
-		if (dm013_select_target(target) != ERROR_OK) {
-			LOG_TARGET_INFO(target, "dm013_select_target failed");
-			return ERROR_FAIL;
-		}
-		if (set_dcsr_ebreak(target, false) == ERROR_OK) {
-			if (dm013_select_target(target) != ERROR_OK) {
-				LOG_TARGET_INFO(target, "dm013_select_target failed");
-				return ERROR_FAIL;
-			}
-			resume_result = riscv013_step_or_resume_current_hart(target, false);
+		if (riscv013_resume_prep(target) == ERROR_OK) {
+			resume_result = riscv013_resume_go(target);
 			if (resume_result == ERROR_OK) {
 				target->state = TARGET_RUNNING;
 				target->debug_reason = DBG_REASON_NOTHALTED;
 				info->dcsr_ebreak_is_set = true;
 			} else if (resume_result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE) {
-				LOG_TARGET_INFO(target, "riscv013_step_or_resume_current_hart aborted");
+				LOG_TARGET_INFO(target, "riscv013_resume_go aborted");
 				target->state = TARGET_UNAVAILABLE;
 			} else {
-				LOG_TARGET_INFO(target, "riscv013_step_or_resume_current_hart failed");
+				LOG_TARGET_INFO(target, "riscv013_resume_go failed");
 				result = ERROR_FAIL;
 			}
 		} else {
-			LOG_TARGET_INFO(target, "set_dcsr_ebreak failed");
+			LOG_TARGET_INFO(target, "resume_prep failed");
 			result = ERROR_FAIL;
 		}
 	} else if (halt_result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE) {
@@ -2729,7 +2717,7 @@ static int riscv013_get_hart_state(struct target *target, enum riscv_hart_state 
 		return ERROR_FAIL;
 	if (get_field(dmstatus, DM_DMSTATUS_ANYHAVERESET)) {
 //		LOG_TARGET_INFO(target, "Hart unexpectedly reset!");
-		info->dcsr_ebreak_is_set = false;
+//		info->dcsr_ebreak_is_set = false;
 		/* TODO: Can we make this more obvious to eg. a gdb user? */
 		uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE |
 			DM_DMCONTROL_ACKHAVERESET;
@@ -5274,6 +5262,9 @@ static int riscv013_step_or_resume_current_hart(struct target *target,
 			LOG_TARGET_INFO(target, "dmstatus_read aborted");
 			target->state = TARGET_UNAVAILABLE;
 			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+		}
+		if (get_field(dmstatus, DM_DMSTATUS_ANYHAVERESET)) {
+			dmcontrol = dmcontrol | DM_DMCONTROL_ACKHAVERESET;
 		}
 		if (get_field(dmstatus, DM_DMSTATUS_ALLRESUMEACK) == 0)
 			continue;
