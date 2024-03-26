@@ -13,7 +13,23 @@
 # If you experience difficulties using the tool or would like to introduce new
 # functionality - feel free to contact OpenOCD maintainer at Syntacore.
 
-set STAND_DB_DEFAULT_PATH ~/.stand_db/openocd_adapters
+proc getDefaultStandDbPath {} {
+  set DB_ROOT ~/
+  # don't fetch stand_db from root user if possible
+  if { [info exists ::env(SUDO_USER)] } {
+    if {![catch {
+        if { [exec whoami] eq "root" } {
+          set USER_INFO [exec getent passwd $::env(SUDO_USER)]
+          set USER_HOME [lindex [split $USER_INFO :] 5]
+        }
+      } err]} {
+      set DB_ROOT $USER_HOME
+    }
+  }
+  return [file join $DB_ROOT .stand_db/openocd_adapters]
+}
+
+set STAND_DB_DEFAULT_PATH [getDefaultStandDbPath]
 
 set COMMAND_LINE_OPTIONS [dict create \
   --auto-config "flag. try to guess which configuration file should be used for debug adapter" \
