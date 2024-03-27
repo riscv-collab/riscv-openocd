@@ -1,5 +1,7 @@
 @Library("jenkins-lib@v3-volatile") _
 
+import tools.automation.TI
+
 def distPrepair(vars) {
   sh(""" ./make.py distr-prep -r "${vars.releaseString}" """)
 }
@@ -55,6 +57,12 @@ workflow('openocd') {
               buildPath      : ['build/Release']]]
         }
         script { vars ->
+          if (vars.ti >= TI.POSTCOMMIT) {
+            withCredentials([string(credentialsId: 'artifactory_cicdsc_api_key', variable: 'ART_API_KEY')]) {
+                sh("./.ci/utils/check_nightly_status.sh $ART_API_KEY")
+            }
+          }
+
           buildProject(vars)
           try {
             if (vars.testingType == 'spike') {
@@ -69,29 +77,16 @@ workflow('openocd') {
         }
     }
 
-    job('deploy') {
+    deploy {
         resources {
             cpu('4', '4')
             memory('16Gi')
         }
-        dependsOn('main-build', 'tests')
         matrix {
             [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default']],
              [image          : ['cpp_ubuntu_22'],
               profile        : ['makepy_sc_mingw']]]
-        }
-        rules { vars ->
-            include(vars.name in vars.deploy)
-            include(vars.branch == vars.defaultBranch)
-        }
-        script { vars ->
-            withCredentials([string(credentialsId: 'artifactory_cicdsc_api_key', variable: 'ART_API_KEY')]) {
-              sh("./.ci/utils/check_nightly_status.sh $ART_API_KEY")
-            }
-            // TODO: use conan mechanism to set version string
-            distPrepair(vars)
-            makepy.deployPackage(vars.name, assumeRelease: vars.assumeRelease, profile: vars.profile)
         }
     }
 
@@ -120,20 +115,6 @@ workflow('openocd') {
                 sh(""" ./make.py sh .makepy/support/utils/upload_development_build.sh \
                     \$(find build/deploy -maxdepth 1 -name '*bundle*') $ART_API_KEY """)
             }
-        }
-    }
-
-    job('deploy_tag') {
-        dependsOn 'deploy'
-        matrix {
-            [[image: ['cpp_ubuntu_18']]]
-        }
-        rules { vars ->
-            include(vars.name in vars.deploy)
-            include(vars.branch == vars.defaultBranch)
-        }
-        script { vars ->
-            makepy.deployTag(vars.name, assumeRelease: vars.assumeRelease)
         }
     }
 }
