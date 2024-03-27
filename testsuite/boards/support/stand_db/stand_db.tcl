@@ -26,7 +26,7 @@ proc standInfoGet { parameter } {
 
     set ADAPTER_INFO(default_speed) ${OPENOCD_DEBUG_ADAPTER_SPEED}
     set ADAPTER_INFO(adapter_id) ${OPENOCD_DEBUG_ADAPTER_SERIAL}
-    if { [file pathtype ${OPENOCD_DEBUG_ADAPTER_CONFIG}] eq absolute } {
+    if { [file pathtype ${OPENOCD_DEBUG_ADAPTER_CONFIG}] eq "absolute" } {
       set ADAPTER_INFO(adapter_config) "${OPENOCD_DEBUG_ADAPTER_CONFIG}"
       set ADAPTER_INFO(adapter_config_relative) ""
       set ROOT_TEST ${OPENOCD_ROOT}
