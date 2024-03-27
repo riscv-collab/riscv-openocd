@@ -2514,18 +2514,32 @@ static int sb_write_address(struct target *target, target_addr_t address,
 		(uint32_t)address, false, ensure_success);
 }
 
+static int maybe_add_delays_reset(const struct target *target, struct riscv_batch *batch)
+{
+	RISCV_INFO(r);
+	if (r->reset_delays_wait < 0)
+		return ERROR_OK;
+	/* TODO: riscv_batch_run() adds a nop to the end od the batch. This
+	 * behavior is a bit peculiar and should probably be changed. */
+	const size_t scans_to_run = batch->used_scans + 1;
+	if ((size_t)r->reset_delays_wait >= scans_to_run) {
+		r->reset_delays_wait -= scans_to_run;
+		return ERROR_OK;
+	}
+	const int result = riscv_batch_change_idle_used_from_scan(batch, 0, r->reset_delays_wait);
+	r->reset_delays_wait = -1;
+	LOG_TARGET_DEBUG(target, "reset_delays_wait done");
+	RISCV013_INFO(info);
+	info->dmi_busy_delay = 0;
+	info->ac_busy_delay = 0;
+	return result;
+}
+
 static int batch_run(const struct target *target, struct riscv_batch *batch)
 {
-	RISCV013_INFO(info);
-	RISCV_INFO(r);
-	if (r->reset_delays_wait >= 0) {
-		r->reset_delays_wait -= batch->used_scans;
-		if (r->reset_delays_wait <= 0) {
-			batch->idle_count = 0;
-			info->dmi_busy_delay = 0;
-			info->ac_busy_delay = 0;
-		}
-	}
+	int result = maybe_add_delays_reset(target, batch);
+	if (result != ERROR_OK)
+		return result;
 	return riscv_batch_run(batch);
 }
 
