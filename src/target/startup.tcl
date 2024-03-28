@@ -145,6 +145,9 @@ proc ocd_process_reset_inner { MODE } {
 			# Did we succeed?
 			set s [$t curstate]
 
+			if { $s == "unavailable" } {
+				continue
+			}
 			if { $s != "halted" } {
 				return -code error [format "TARGET: %s - Not halted - Maybe unavailable %s" $t $s]
 			}
