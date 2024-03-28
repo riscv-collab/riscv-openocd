@@ -1,7 +1,40 @@
 def boards = []
 def UploadResults = 0
+def workspaceId
 
-def runTests(boards){
+def runTestsHwrs(List boards, String fpgaName, String workspaceId) {
+  def maxDurationMinutesPerBoard = 9
+  def maxDurationMinutes = maxDurationMinutesPerBoard * boards.size()
+  stage("lock ${fpgaName}") {
+    sh "${MAKE_PY} --image ${DOCKER_IMAGE} dev lock --name ${fpgaName} --duration ${maxDurationMinutes}m --override-workspace-id ${workspaceId} --blocking"
+  }
+  for (board in boards) {
+    stage("${board}") {
+      // we need to run tests for all boards, so should continue on failure
+      catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+        timeout(maxDurationMinutesPerBoard) {
+          dir("$WD") {
+            sh """
+            #!/bin/bash
+            set +x
+            echo "${board}"
+            ${MAKE_PY} sh \
+              make prepare_board \
+                  -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile \
+                  TARGET_BOARD=${board}
+            ${MAKE_PY} --image ${DOCKER_IMAGE} -l debug build \
+                  -b ${BUILD_DIR} --target OpenOCDTestsOn_${board}
+            """
+          }
+        }
+      }
+    }
+  }
+  // note: unlock will be done in post always step (see end of the script),
+  // as finally block won't be executed in case of job cancellation
+}
+
+def runTestsClassic(boards){
   tests = [:]
   for (brbd in boards) {
     // https://devops.stackexchange.com/a/8875
@@ -33,6 +66,7 @@ def runTests(boards){
   parallel tests
 }
 
+// noinspection GroovyAssignabilityCheck
 pipeline {
   agent { label params.AGENT }
   options {
@@ -174,13 +208,26 @@ pipeline {
     stage('RunTests') {
       steps {
         script {
-          runTests(boards)
+          switch(params.AGENT) {
+            case 'twin_server':
+              workspaceId = (params.OVERRIDE_WS_ID ?: env.BUILD_TAG) as String
+              runTestsHwrs(boards, "fpga_twin", workspaceId)
+              break
+            case 'zalman':
+              runTestsClassic(boards)
+              break
+          }
         }
       }
     }
   }
   post {
     always {
+      script {
+        if (workspaceId) {
+          sh "${MAKE_PY} --image ${DOCKER_IMAGE} dev unlock --override-workspace-id ${workspaceId}"
+        }
+      }
       sh "${MAKE_PY} history"
       sh "${MAKE_PY} container clean"
       sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/testing ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
