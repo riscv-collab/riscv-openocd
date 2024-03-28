@@ -1,22 +1,14 @@
 #!/usr/bin/env python3
 
-import argparse as _argparse
 import itertools as _itertools
 import logging as _logging
-import multiprocessing as _multiprocessing
-import os as _os
 import shutil as _shutil
-import sys as _sys
 from argparse import ArgumentParser as _ArgumentParser
 from argparse import Namespace as _Namespace
-from multiprocessing import cpu_count as _cpu_count
 from pathlib import Path as _Path
-from subprocess import CalledProcessError as _CalledProcessError
-from typing import Any as _Any
 
 import git as _git
-import makepy.utils as _utils
-import requests as _requests  # type: ignore
+from hwrs import HWRSSuite as _HWRSSuite
 from makepy import ArgsHook as _ArgsHook
 from makepy import Command as _Command
 from makepy import Conductor as _Conductor
@@ -353,6 +345,8 @@ def _main() -> None:
     conductor.add(_PrivilegedContainerHook())
     conductor.add(_BuildArgsHook())
     conductor.add(_ParallelHook(commands=["build"]))
+
+    conductor.add(_HWRSSuite())
 
     format_cmd, lint_cmd = _build_formatter_and_linter()
     conductor.add(format_cmd)
