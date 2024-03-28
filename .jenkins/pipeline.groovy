@@ -103,7 +103,6 @@ workflow('openocd') {
               profile        : ['makepy_sc_mingw']]]
         }
         rules { vars ->
-            include(vars.name in vars.deploy)
             include(vars.name in vars.deploy && vars.branch == vars.defaultBranch)
         }
         script { vars ->
