@@ -7,7 +7,7 @@ from argparse import ArgumentParser as _ArgumentParser
 from argparse import Namespace as _Namespace
 from pathlib import Path as _Path
 
-import git as _git
+from _ocd_test_suite import _OcdTestSuite
 from hwrs import HWRSSuite as _HWRSSuite
 from makepy import ArgsHook as _ArgsHook
 from makepy import Command as _Command
@@ -313,6 +313,7 @@ class _BuildCommand(_Command):
 def _build_formatter_and_linter() -> tuple[_FormatCommand, _LintCommand]:
     python_files = [
         _repo_path / "make.py",
+        _repo_path / ".makepy" / "_ocd_test_suite.py",
         _repo_path / ".makepy" / "setup.py",
         _repo_path / ".makepy" / "support" / "utils" / "conan_the_deployer.py",
         _repo_path / "conanfile.py",
@@ -360,6 +361,8 @@ def _main() -> None:
     conductor.add(_JustConfigCommand())
     conductor.add(_ConfigCommand())
     conductor.add(_BuildCommand())
+
+    conductor.add(_OcdTestSuite())
 
     conductor.add(_PrivilegedContainerHook())
     conductor.add(_BuildArgsHook())

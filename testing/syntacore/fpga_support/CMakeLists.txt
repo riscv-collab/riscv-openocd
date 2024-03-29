@@ -13,6 +13,33 @@ printAvailableFPGAConfigurations()
 set(ARTY_BITSTREAM_FTP_STORAGE ${SYNTACORE_NAS_SERVER}/pub/exchange/ot-sc/arty-a7-100t)
 
 add_custom_target(fpga_configuration_registry)
+
+function(generate_configurations_json)
+  get_property(AVAILABLE_FPGA_CONFIGURATIONS
+               TARGET FpgaBoardInfo
+               PROPERTY ALL_CONFIGURATIONS)
+  set(JSON "")
+  foreach(config ${AVAILABLE_FPGA_CONFIGURATIONS})
+    get_property(bitstream TARGET ${config} PROPERTY BITSTREAM)
+    get_property(openocd_board TARGET ${config} PROPERTY OPENOCD_BOARD)
+    if(JSON STREQUAL "")
+    else()
+      set(JSON "${JSON},")
+    endif()
+    set(JSON "${JSON}'${config}':{'bitstream':'${bitstream}','openocd_board':'${openocd_board}'}")
+  endforeach()
+  add_custom_command(
+    OUTPUT 'configurations.json'
+    COMMAND ${CMAKE_COMMAND} -E echo \"{${JSON}}\" >configurations.json
+    COMMAND sed "s/\\\'/\\\"/g" -i configurations.json
+  )
+  add_custom_target(fpga_configurations_json
+    DEPENDS 'configurations.json'
+  )
+  add_dependencies(fpga_configuration_registry fpga_configurations_json)
+endfunction()
+generate_configurations_json()
+
 function(generate_configuration_registry registry_name configs)
   add_custom_command(
     OUTPUT ${registry_name}

@@ -248,17 +248,17 @@ registerFPGAConfiguration(arty100_scr4_32_imcafd
 
 # Twin stands
 registerFPGAConfiguration(twin_scr5_32
-  BITSTREAM scr5_rv32
+  BITSTREAM remote:/home/stand/users/aap-sc/BITSTREAMS/rv32_cluster_single_scr5_l1_l2_plic_hiperf/vcu118_top_new.bit
   OPENOCD_BOARD scr5_32
   TWIN_NIGHTLY
 )
 registerFPGAConfiguration(twin_scr5_64
-  BITSTREAM scr5_rv64_tcm
+  BITSTREAM remote:/home/stand/users/aap-sc/BITSTREAMS/rv64_cluster_single_scr5_tcm_l1_l2_plic_hiperf/vcu118_top_new.bit
   OPENOCD_BOARD scr5_64
   TWIN_NIGHTLY
 )
 registerFPGAConfiguration(twin_scr6
-  BITSTREAM rv64_cluster_single_scr6_eval
+  BITSTREAM remote:/home/stand/users/aap-sc/BITSTREAMS/rv64_cluster_single_scr6_eval/vcu118_top_new.bit
   OPENOCD_BOARD scr6
   TWIN_NIGHTLY
 )
@@ -268,26 +268,26 @@ registerFPGAConfiguration(twin_scr6
 # subsequent versions have only 1 hart, we need an additional work to handle
 # 1-hart bitstreams
 addSCR7X2_L2Config(scr7_l2_23ww46.4.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww46.4.0/scr7_l2_23ww46.4.0.bit
+  remote:/home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww46.4.0/scr7_l2_23ww46.4.0.bit
   TWIN_NIGHTLY
 )
 addSCR7L2Config(scr7_l2_24ww13.5.0
-  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_24ww13.5.0/scr7_l2_24ww13.5.0.bit
+  remote:/home/stand/users/aap-sc/BITSTREAMS/scr7_l2_24ww13.5.0/scr7_l2_24ww13.5.0.bit
   TWIN_NIGHTLY
 )
 addSCR7L2Config(scr7_dev
-  scr7_l2
+  remote:/home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww46.4.0/scr7_l2_23ww46.4.0.bit
 )
 
 # SCR9 testing
 addSCR9L2Config(scr9_l2_23ww45.4.0.bit
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww45.4.0/scr9_l2_23ww45.4.0.bit
+  remote:/home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww45.4.0/scr9_l2_23ww45.4.0.bit
   TWIN_NIGHTLY
 )
 addSCR9L2Config(scr9_l2_24ww13.5.0.bit
-  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_24ww13.5.0/scr9_l2_24ww13.5.0.bit
+  remote:/home/stand/users/aap-sc/BITSTREAMS/scr9_l2_24ww13.5.0/scr9_l2_24ww13.5.0.bit
   TWIN_NIGHTLY
 )
 addSCR9L2Config(scr9_dev
-  scr9_l2
+  remote:/home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww45.4.0/scr9_l2_23ww45.4.0.bit
 )
