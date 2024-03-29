@@ -320,7 +320,7 @@ proc getAdapterInterfaceConfigDirectory {} {
 proc findDebugInterfaceConfigPath {ConfigurationFile} {
   # we always specify absolute paths to configuration files
   set FullPath $ConfigurationFile
-  if { [file pathtype $ConfigurationFile] ne absolute } {
+  if { [file pathtype $ConfigurationFile] ne "absolute" } {
     if {[string first share $ConfigurationFile] == 0} {
       set FullPath "[getOpenOCDRootDir]/$ConfigurationFile"
     } else {
