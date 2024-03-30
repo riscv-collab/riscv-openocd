@@ -210,8 +210,12 @@ pipeline {
         script {
           switch(params.AGENT) {
             case 'twin_server':
-              workspaceId = (params.OVERRIDE_WS_ID ?: env.BUILD_TAG) as String
-              runTestsHwrs(boards, "fpga_twin", workspaceId)
+              if (params.SKIP_LOCK) {
+                runTestsClassic(boards)
+              } else {
+                workspaceId = (params.OVERRIDE_WS_ID ?: env.BUILD_TAG) as String
+                runTestsHwrs(boards, "fpga_twin", workspaceId)
+              }
               break
             case 'zalman':
               runTestsClassic(boards)
