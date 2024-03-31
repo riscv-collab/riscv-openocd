@@ -179,8 +179,11 @@ proc tsuplib_launch_openocd { tool_name \
     $target_flags \
   ]
 
+  global testsuitedir
+  set launcher_app $testsuitedir/lib/app_launch.sh
+
   verbose "spawning openocd: $OPENOCD $openocd_args" 1
-  spawn $OPENOCD {*}$openocd_args
+  spawn $launcher_app $OPENOCD "" $ocd_test_log {*}$openocd_args
 
   tool_state_update openocd_spawn_id $spawn_id
 }
