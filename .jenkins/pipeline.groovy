@@ -8,15 +8,10 @@ def buildProject(vars) {
 }
 
 workflow('openocd') {
-    parameters {
-        [
-          stringParam(name: 'releaseString', defaultValue: '', description: ''),
-        ]
-    }
 
     job('lint') {
         matrix {
-            [["image": ['cpp_ubuntu_18']]]
+            [["image": ['cpp_ubuntu_20']]]
         }
         script { vars -> makepy.lint() }
     }
@@ -39,6 +34,55 @@ workflow('openocd') {
         script { vars -> buildProject(vars) }
     }
 
+    job('fpga-postcommit') {
+        resources {
+            cpu('1', '1')
+            memory('4Gi')
+        }
+        matrix {
+            [[image        : ['cpp_ubuntu_20']]]
+        }
+        rules { vars ->
+            include(vars.ti >= TI.POSTCOMMIT)
+        }
+        script { vars ->
+            withCredentials([string(credentialsId: 'artifactory_cicdsc_api_key', variable: 'ART_API_KEY')]) {
+                sh("./.ci/utils/check_nightly_status.sh $ART_API_KEY")
+            }
+        }
+    }
+
+    job('tests-sanitized-nightly') {
+        resources {
+            cpu('10', '10')
+            memory('16Gi')
+        }
+        matrix {
+             [[image          : ['cpp_ubuntu_20'],
+               profile        : ['default'],
+               testingType    : ['spike'],
+               // unfortunatly, we can't enable Strict sanitization, since jimtcl has bugs like this:
+               // https://github.com/msteveb/jimtcl/issues/300
+               // https://github.com/msteveb/jimtcl/issues/301
+               testOpt        : ['--options:host test=True --sanitize-level=Enabled',
+                                 '--options:host test=True --tests-options tests-valgrid-path=valgrind'],
+               buildPath      : ['build/Release']]]
+        }
+        rules { vars ->
+            include(vars.ti >= TI.NIGHTLY)
+        }
+        script { vars ->
+            buildProject(vars)
+            try {
+              sh("./make.py build --build-path ${vars.buildPath} --target OpenOCDTestsOn_spike --parallel 8")
+              sh("./make.py sh ./.makepy/support/utils/check_sanitizer_logs.sh build/Release/testing/dejagnu")
+            } catch (Exception ex) {
+              artifacts.push("build/Release/testing", "artifacts-${vars.testingType}-${vars.image}-${vars.profile}", retention: '1w')
+              error "wasted!"
+            }
+        }
+    }
+
     job('tests') {
         resources {
             cpu('10', '10')
@@ -52,12 +96,6 @@ workflow('openocd') {
               buildPath      : ['build/Release']]]
         }
         script { vars ->
-          if (vars.ti >= TI.POSTCOMMIT) {
-            withCredentials([string(credentialsId: 'artifactory_cicdsc_api_key', variable: 'ART_API_KEY')]) {
-                sh("./.ci/utils/check_nightly_status.sh $ART_API_KEY")
-            }
-          }
-
           buildProject(vars)
           try {
             if (vars.testingType == 'spike') {
@@ -66,7 +104,7 @@ workflow('openocd') {
               sh("./make.py build --build-path ${vars.buildPath} --target RISCVTestsDebug --parallel 8")
             }
           } catch (Exception ex) {
-            artifacts.push("build/Release/testing", "artifacts-${vars.testingType}-${vars.image}-${vars.profile}", retention: 'ignore')
+            artifacts.push("build/Release/testing", "artifacts-${vars.testingType}-${vars.image}-${vars.profile}", retention: '1w')
             error "wasted!"
           }
         }
