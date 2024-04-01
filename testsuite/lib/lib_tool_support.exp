@@ -130,6 +130,11 @@ proc tsuplib_update_binary_prefix { tool_name test_file_name } {
   tool_state_update default_bin_prefix $test_identifier
 }
 
+proc tsuplib_get_app_launcher {}  {
+  global testsuitedir
+  return $testsuitedir/lib/app_launch.sh
+}
+
 proc tsuplib_launch_openocd { tool_name \
                               test_file_name \
                               interface_flags \
@@ -179,11 +184,14 @@ proc tsuplib_launch_openocd { tool_name \
     $target_flags \
   ]
 
-  global testsuitedir
-  set launcher_app $testsuitedir/lib/app_launch.sh
-
-  verbose "spawning openocd: $OPENOCD $openocd_args" 1
-  spawn $launcher_app $OPENOCD "" $ocd_test_log {*}$openocd_args
+  set valgrind_path ""
+  global OPENOCD_TESTS_VALGRIND_PATH
+  if { [info exists OPENOCD_TESTS_VALGRIND_PATH] } {
+    set valgrind_path $OPENOCD_TESTS_VALGRIND_PATH
+  }
+  verbose "spawning openocd: $valgrind_path $OPENOCD $openocd_args" 1
+  set launcher_script [tsuplib_get_app_launcher]
+  spawn $launcher_script $OPENOCD $valgrind_path $ocd_test_log {*}$openocd_args
 
   tool_state_update openocd_spawn_id $spawn_id
 }

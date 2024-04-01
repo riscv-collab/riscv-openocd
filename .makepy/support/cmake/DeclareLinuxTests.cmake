@@ -21,15 +21,19 @@ if (NOT DEFINED DEJAGNU_DIR)
   message(FATAL_ERROR "DEJAGNU_DIR is not defined")
 endif()
 
-if (OPENOCD_DEBUG_ADAPTER_INFO)
-  message("Stand info file specified: ${OPENOCD_DEBUG_ADAPTER_INFO}")
-  file(READ ${OPENOCD_DEBUG_ADAPTER_INFO} STAND_INFO_JSON)
+if (OPENOCD_TESTS_DEBUG_ADAPTER_INFO)
+  message("Stand info file specified: ${OPENOCD_TESTS_DEBUG_ADAPTER_INFO}")
+  file(READ ${OPENOCD_TESTS_DEBUG_ADAPTER_INFO} STAND_INFO_JSON)
   string(JSON OPENOCD_DEBUG_ADAPTER_CONFIG GET ${STAND_INFO_JSON} adapter_config)
   string(JSON OPENOCD_DEBUG_ADAPTER_SERIAL GET ${STAND_INFO_JSON} adapter_serial)
   string(JSON OPENOCD_DEBUG_ADAPTER_SPEED  GET ${STAND_INFO_JSON} adapter_speed)
   message("  Debug adapter config: ${OPENOCD_DEBUG_ADAPTER_CONFIG}")
   message("  Debug adapter serial: ${OPENOCD_DEBUG_ADAPTER_SERIAL}")
   message("  Debug adapter speed: ${OPENOCD_DEBUG_ADAPTER_SPEED}")
+endif()
+
+if (OPENOCD_TESTS_VALGRIND_PATH)
+  message("OpenOCD tests will run openocd under valgrind: ${OPENOCD_TESTS_VALGRIND_PATH}")
 endif()
 
 configure_file(

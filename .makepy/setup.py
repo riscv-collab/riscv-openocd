@@ -219,6 +219,13 @@ class _ConfigCommand(_Command):
             help="json file with debug adapter properties",
         )
         parser.add_argument(
+            "--tests-valgrid-path",
+            dest="tests_valgrind_path",
+            type=str,
+            default=None,
+            help="run OpenOCD under valgrid when running tests",
+        )
+        parser.add_argument(
             "--sanitize-level",
             dest="sanitize_level",
             choices=[None, "Enabled", "Strict"],
@@ -240,10 +247,19 @@ class _ConfigCommand(_Command):
             "--toolchain",
             (args.build_path / "conan_toolchain.cmake").absolute(),
         ]
+
         if args.tests_adapter_info is not None:
             cmd.extend(
-                [f"-DOPENOCD_DEBUG_ADAPTER_INFO={args.tests_adapter_info}"]
+                [
+                    f"-DOPENOCD_TESTS_DEBUG_ADAPTER_INFO={args.tests_adapter_info}"
+                ]
             )
+
+        if args.tests_valgrind_path:
+            cmd.extend(
+                [f"-DOPENOCD_TESTS_VALGRIND_PATH={args.tests_valgrind_path}"]
+            )
+
         if args.sanitize_level is None:
             pass
         elif args.sanitize_level == "Enabled":
