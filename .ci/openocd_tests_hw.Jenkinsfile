@@ -160,8 +160,8 @@ pipeline {
           sh '${MAKE_PY} --image $DOCKER_IMAGE conan-config --credentials ${WD}/credentials.json'
           sh """
             ${MAKE_PY} --image $DOCKER_IMAGE just-config -b ${BUILD_DIR}     \
-              --profile:host default --options:host test=True --options:test \
-              adapter-info=${SOURCE_DIR}/.tests.stand.info.json
+              --profile:host default --options:host test=True \
+              --tests_options tests-adapter-info=${SOURCE_DIR}/.tests.stand.info.json
           """
           sh '${MAKE_PY} --image $DOCKER_IMAGE build -b ${BUILD_DIR} --target openocd'
         }

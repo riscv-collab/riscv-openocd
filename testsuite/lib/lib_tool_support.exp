@@ -172,9 +172,9 @@ proc tsuplib_launch_openocd { tool_name \
   }
 
   set openocd_args [concat \
-    "-d$OPENOCD_LOG_LEVEL" \
+    -d$OPENOCD_LOG_LEVEL \
     -l \
-    "$ocd_test_log" \
+    $ocd_test_log \
     $interface_flags \
     $target_flags \
   ]

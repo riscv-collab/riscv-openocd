@@ -50,8 +50,13 @@ set(OPENOCD_EXTRA_CFLAGS "")
 
 option(SC_OPENOCD_ENABLE_SANITIZERS "Enable sanitizers")
 if (SC_OPENOCD_ENABLE_SANITIZERS)
+  #set(OPENOCD_EXTRA_CFLAGS
+  #  "${OPENOCD_EXTRA_CFLAGS} -fsanitize=address,undefined -Wl,-ldl")
   set(OPENOCD_EXTRA_CFLAGS
-    "${OPENOCD_EXTRA_CFLAGS} -fsanitize=address,undefined -Wl,-ldl")
+    "${OPENOCD_EXTRA_CFLAGS} -fsanitize=undefined -Wl,-ldl")
+  if (SC_OPENOCD_STRICT_SANITIZERS)
+    set(OPENOCD_EXTRA_CFLAGS "${OPENOCD_EXTRA_CFLAGS} -fno-sanitize-recover")
+  endif()
 endif()
 
 set(OPENOCD_CFLAGS "$<$<CONFIG:Debug>:-O0 -g> ${OPENOCD_EXTRA_CFLAGS}")

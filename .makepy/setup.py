@@ -95,15 +95,6 @@ class _JustConfigCommand(_Command):
             help=conan_help,
         )
         parser.add_argument(
-            "-o:t",
-            "--options:test",
-            dest="test_options",
-            type=str,
-            default=[],
-            action="append",
-            help=conan_help,
-        )
-        parser.add_argument(
             "-s",
             "--settings",
             "-s:h",
@@ -122,6 +113,22 @@ class _JustConfigCommand(_Command):
             default=[],
             action="append",
             help=conan_help,
+        )
+
+        parser.add_argument(
+            "--tests-options",
+            dest="tests_options",
+            type=str,
+            default=[],
+            action="append",
+            help="additional parameters relevant for testing",
+        )
+        parser.add_argument(
+            "--sanitize-level",
+            dest="sanitize_level",
+            type=str,
+            default=None,
+            help="ASan/UBSan sanitizaion flags",
         )
 
     def _get_output_folder(self, build_path: _Path) -> _Path:
@@ -184,11 +191,15 @@ class _JustConfigCommand(_Command):
             "--build-path",
             args.build_path,
         ]
+
         config_cmd.extend(
             _itertools.chain.from_iterable(
-                [f"--{test_option}"] for test_option in args.test_options
+                [f"--{option}"] for option in args.tests_options
             )
         )
+        if args.sanitize_level is not None:
+            config_cmd.extend([f"--sanitize-level={args.sanitize_level}"])
+
         _run_shell(config_cmd, cwd=_repo_path)
 
 
@@ -201,11 +212,19 @@ class _ConfigCommand(_Command):
 
     def amend_parser(self, parser: _ArgumentParser) -> None:
         parser.add_argument(
-            "--adapter-info",
-            dest="adapter_info",
+            "--tests-adapter-info",
+            dest="tests_adapter_info",
             type=str,
             default=None,
             help="json file with debug adapter properties",
+        )
+        parser.add_argument(
+            "--sanitize-level",
+            dest="sanitize_level",
+            choices=[None, "Enabled", "Strict"],
+            type=str,
+            default=None,
+            help="controls ASan/UBSan behavior if enabled",
         )
 
     def command(self, args: _Namespace) -> None:
@@ -221,8 +240,21 @@ class _ConfigCommand(_Command):
             "--toolchain",
             (args.build_path / "conan_toolchain.cmake").absolute(),
         ]
-        if args.adapter_info is not None:
-            cmd.extend([f"-DOPENOCD_DEBUG_ADAPTER_INFO={args.adapter_info}"])
+        if args.tests_adapter_info is not None:
+            cmd.extend(
+                [f"-DOPENOCD_DEBUG_ADAPTER_INFO={args.tests_adapter_info}"]
+            )
+        if args.sanitize_level is None:
+            pass
+        elif args.sanitize_level == "Enabled":
+            cmd.extend(["-DSC_OPENOCD_ENABLE_SANITIZERS=ON"])
+        elif args.sanitize_level == "Strict":
+            cmd.extend(["-DSC_OPENOCD_ENABLE_SANITIZERS=ON"])
+            cmd.extend(["-DSC_OPENOCD_STRICT_SANITIZERS=ON"])
+        else:
+            raise ValueError(
+                f"unknown sanitization level {args.sanitize_level}"
+            )
         _run_shell(cmd)
 
 
