@@ -161,7 +161,7 @@ pipeline {
           sh """
             ${MAKE_PY} --image $DOCKER_IMAGE just-config -b ${BUILD_DIR}     \
               --profile:host default --options:host test=True \
-              --tests_options tests-adapter-info=${SOURCE_DIR}/.tests.stand.info.json
+              --tests-options tests-adapter-info=${SOURCE_DIR}/.tests.stand.info.json
           """
           sh '${MAKE_PY} --image $DOCKER_IMAGE build -b ${BUILD_DIR} --target openocd'
         }
