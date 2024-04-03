@@ -1,0 +1,39 @@
+proc run_test {} {
+  if {[target_info cpu,cores_num] < 2} { return [ocd_test_unsupported] }
+  if {[target_info openocd,smp_target]} { return [ocd_test_unsupported] }
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  # created by compile executable
+  ocd_compile_executable "pc_resumed.S" "$default_bin_prefix.exe"
+
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set ENTRY_T1_ADDR [tool_state_get_program_symbol _entry_t1]
+  set LOOP_ADDR [tool_state_get_program_symbol loop]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "resume"
+
+  ocdtlb_do_expect_running
+
+  if {[catch {ocdtlb_run_expect "reg pc"} pc]} {
+	  return [ocd_test_unsupported]
+  }
+
+  ocdtlb_run_expect "targets 1"
+  ocdtlb_run_expect "reg pc $ENTRY_T1_ADDR"
+  ocdtlb_run_expect "resume"
+  ocdtlb_run_expect "targets 0"
+
+  ocdtlb_wait_for [subst -nocommands {[ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]] == $LOOP_ADDR}]
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
+

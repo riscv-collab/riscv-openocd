@@ -145,6 +145,15 @@ proc ocdtlb_wait_resume { {how ""} } {
   }
 }
 
+proc ocdtlb_wait_for {condition {timeout_ms ""}} {
+  if {$timeout_ms eq ""} { set timeout_ms [ocd_resume_delay] }
+  set start [clock milliseconds]
+  while {[clock milliseconds] < ($start + $timeout_ms)} {
+    if {[expr $condition]} { return }
+  }
+  error "timed out after waiting ${timeout_ms} ms for '${condition}'"
+}
+
 # NOTE: this function always does at least one step
 proc ocdtlb_do_expect_step_until { end_address iteration_limit } {
   set count 0
