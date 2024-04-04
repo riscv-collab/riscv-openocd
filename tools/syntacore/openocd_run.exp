@@ -842,11 +842,11 @@ proc runSpikeIfNeeded {} {
   ]
   # these are resonable defaults if no extra args specified
   set ExtraSpikeArgs [list \
-    --isa=rv64gcv \
+    --isa=rv64gcv_zicntr \
     --dm-progsize=6 \
     --dm-sba=0 \
     --dm-abstract-rti=0 \
-    -m0x40000000:0x1000,0x80000000:0xa00000 \
+    -m0x40000000:0x1000,0x80000000:0xa000000 \
   ]
   if {[llength $SETTINGS(extra_spike_args)] != 0} {
     set ExtraSpikeArgs $SETTINGS(extra_spike_args)
