@@ -42,6 +42,54 @@ class Package(_conan.ConanFile):
         "!external_sources/*",
     ]
 
+    def set_name(self) -> None:
+        self.name = self.name or "openocd"  # type: ignore
+
+        source_folder = _Path(__file__).parent
+
+        commit_msg_io_string = _io.StringIO()
+        self.run(
+            "git log -1 --oneline --format=%B",
+            cwd=source_folder,
+            stdout=commit_msg_io_string,
+        )
+        commit_message = commit_msg_io_string.getvalue().strip()
+
+        merge_base_io_string = _io.StringIO()
+        self.run(
+            "git merge-base origin/riscv HEAD",
+            cwd=source_folder,
+            stdout=merge_base_io_string,
+        )
+        riscv_merge_base = merge_base_io_string.getvalue().strip()[:8]
+
+        is_clean_io_string = _io.StringIO()
+        self.run(
+            "git status --porcelain",
+            cwd=source_folder,
+            stdout=is_clean_io_string,
+        )
+        dirty_marker = "" if is_clean_io_string.getvalue() == "" else "-dirty"
+
+        relstr_prefix = "SYNTACORE_RELSTR: "
+        commit_message_lines = [s.strip() for s in commit_message.splitlines()]
+        release_string = next(
+            filter(lambda s: s.startswith(relstr_prefix), commit_message_lines),
+            "",
+        )
+        release_string = release_string.removeprefix(relstr_prefix).strip()
+
+        commit_hash = _Git(self).get_commit()[:8]
+        release_string = f"{release_string}-g{commit_hash}{dirty_marker}"
+        version_info = (
+            f"riscv-upstream-{riscv_merge_base}-cs-{commit_hash}{dirty_marker}"
+        )
+
+        with open(
+            source_folder / "__sc_version.txt", "w", encoding="utf-8"
+        ) as version_file:
+            version_file.write(f"{release_string}\n{version_info}")
+
     # pylint: disable=not-callable
     def requirements(self) -> None:
         conanfile_json = _Path(__file__).parent / "conandeps.json"

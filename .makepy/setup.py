@@ -306,42 +306,6 @@ class _BuildCommand(_Command):
         _run_shell(cmd)
 
 
-class _PrepareDistribution(_Command):
-    def name(self) -> str:
-        return "distr-prep"
-
-    def help(self) -> str:
-        return 'prepares sources for "distribution" build'
-
-    def amend_parser(self, parser: _ArgumentParser) -> None:
-        parser.add_argument(
-            "-r",
-            "--release_string",
-            dest="release_string",
-            type=str,
-            default="development-build",
-            help="release string.",
-        )
-
-    def command(self, args: _Namespace) -> None:
-        repo = _git.Repo.init(_repo_path)
-        commit_hash = repo.head.commit.hexsha[:8]
-        release_string = args.release_string.strip()
-        if release_string == "":
-            release_string = "development_build"
-        release_string = f"{release_string}-g{commit_hash}"
-        riscv_merge_base = _run_shell(
-            ["git", "merge-base", "origin/riscv", "HEAD"],
-            capture_output=True,
-            cwd=_repo_path,
-        ).stdout[0:7]
-        version_info = f"riscv-upstream-{riscv_merge_base}-cs-{commit_hash}"
-        with open(
-            _repo_path / "__sc_version.txt", "w", encoding="utf-8"
-        ) as version_file:
-            version_file.write(f"{release_string}\n{version_info}")
-
-
 def _build_formatter_and_linter() -> tuple[_FormatCommand, _LintCommand]:
     python_files = [
         _repo_path / "make.py",
@@ -388,7 +352,6 @@ def _main() -> None:
     conductor.add(_JustConfigCommand())
     conductor.add(_ConfigCommand())
     conductor.add(_BuildCommand())
-    conductor.add(_PrepareDistribution())
 
     conductor.add(_PrivilegedContainerHook())
     conductor.add(_BuildArgsHook())

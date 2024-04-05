@@ -2,12 +2,7 @@
 
 import tools.automation.TI
 
-def distPrepair(vars) {
-  sh(""" ./make.py distr-prep -r "${vars.releaseString}" """)
-}
-
 def buildProject(vars) {
-  distPrepair(vars)
   sh("./make.py just-config --profile:host ${vars.profile} --build-path ${vars.buildPath} ${vars.testOpt}")
   sh("./make.py build --build-path ${vars.buildPath} --target openocd")
 }
