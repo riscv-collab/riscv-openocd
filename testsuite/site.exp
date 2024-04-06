@@ -1,9 +1,5 @@
 set target_triplet     "riscv64-unknown-elf"
 
-#TODO: looks like unused
-set LDFLAGS_FOR_TARGET ""
-set CFLAGS_FOR_TARGET  ""
-
 if {![info exist OPENOCD_ROOT]} {
   set OPENOCD_ROOT $env(OPENOCD_ROOT)
 } else {

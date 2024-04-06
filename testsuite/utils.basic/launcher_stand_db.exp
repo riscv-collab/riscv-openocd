@@ -3,7 +3,7 @@ proc run_test {} {
   if {[target_info sim] ne ""} {
     return [ocd_test_unsupported]
   }
-  set BoardSerial [standInfoGet adapter_id]
+  set BoardSerial [standInfoGet adapter_serial]
   set AdapterConfig [standInfoGet adapter_config]
   set BinPrefix [tool_state_get default_bin_prefix]
   set TestStandDatabase "${BinPrefix}_test_stand_db.db"
@@ -43,7 +43,7 @@ proc run_test {} {
   set LogStandDBDisabled [utils_spawn_universal_launcher \
     [list \
       --stand-db /dev/null \
-      --debug-adapter-serial "[standInfoGet adapter_id]" \
+      --debug-adapter-serial "[standInfoGet adapter_serial]" \
       --run-command shutdown \
     ] \
     stand_db_disabled \
@@ -53,7 +53,7 @@ proc run_test {} {
   set LogStandDBNotFound [utils_spawn_universal_launcher \
     [list \
       --stand-db /tmp/blabla/bleh/bla/ble/bla/blue/really/not_found.db \
-      --debug-adapter-serial "[standInfoGet adapter_id]" \
+      --debug-adapter-serial "[standInfoGet adapter_serial]" \
       --run-command shutdown \
     ] \
     stand_db_not_found \

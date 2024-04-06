@@ -34,7 +34,7 @@ proc interactiveTestExtractAdapterList { spawn_id } {
 }
 
 proc interactiveTestSelectAdapterAndInspect { spawn_id DebugAdaptersList {enforce_config ""}} {
-  set ExpectedID [standInfoGet adapter_id]
+  set ExpectedID [standInfoGet adapter_serial]
   if {[catch {interactiveTestFindAdapterIndex $DebugAdaptersList $ExpectedID} Index]} {
     close
     wait

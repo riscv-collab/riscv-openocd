@@ -95,7 +95,7 @@ set SETTINGS(extra_spike_args) []
 set SETTINGS(no_openocd_targets) 0
 set SETTINGS(reset_adapter) 0
 
-set DEBUG_ADAPTER_INFO(adapter_id) ""
+set DEBUG_ADAPTER_INFO(adapter_string) ""
 set DEBUG_ADAPTER_INFO(adapter_serial) 0
 set DEBUG_ADAPTER_INFO(openocd_config) 0
 set DEBUG_ADAPTER_INFO(usb_bus_id) ""
@@ -1028,7 +1028,7 @@ proc deriveAdapterConfiguration { } {
   set AdapterIndex [selectDebugAdapter $DebugAdapters]
   set Adapter [lindex $DebugAdapters $AdapterIndex]
 
-  set DEBUG_ADAPTER_INFO(adapter_id) $Adapter
+  set DEBUG_ADAPTER_INFO(adapter_string) $Adapter
   set DEBUG_ADAPTER_INFO(adapter_serial) [lindex [split $Adapter "|"] 0]
   set DEBUG_ADAPTER_INFO(openocd_config) [deriveAdapterConfig $Adapter]
   # SERIAL| Bus 001 Device 004: ID 0000:0000 Vendor/Adapter Name

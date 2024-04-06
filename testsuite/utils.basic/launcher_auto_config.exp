@@ -8,7 +8,7 @@ proc run_test {} {
   set LogSerialMismatch [utils_spawn_universal_launcher \
     [list \
       --stand-db /dev/null \
-      --debug-adapter-serial "[standInfoGet adapter_id]" \
+      --debug-adapter-serial "[standInfoGet adapter_serial]" \
       --auto-config \
       --run-command shutdown \
     ] \

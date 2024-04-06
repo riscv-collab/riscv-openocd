@@ -33,7 +33,7 @@ proc utils_build_ul_args { args } {
     lappend target_args --stand-db
     lappend target_args /dev/null
     lappend target_args --debug-adapter-serial
-    lappend target_args [standInfoGet adapter_id]
+    lappend target_args [standInfoGet adapter_serial]
     lappend target_args --speed
     lappend target_args [standInfoGet default_speed]
     # FIXME: for whatever reason we have random failures on SCR[6-9]
