@@ -33,6 +33,8 @@ set_board_info cpu,sv57x4 1
 
 set_board_info cpu,misaligned_access_support 0
 
+set_board_info cpu,dm_run_read_pc 0
+
 set_board_info cpu,dm_abstract_csr 0
 set_board_info cpu,dm_abstract_fpr 0
 set_board_info cpu,dm_is_slow 0

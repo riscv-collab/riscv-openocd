@@ -10,7 +10,6 @@ proc run_test {} {
     global subdir
 
     set default_bin_prefix [tool_state_get default_bin_prefix]
-    # TODO: env is unused for now
     set openocd_adapter_flags [standInfoGetInterfaceFlags]
 
     set target_cfg_flags [list \
@@ -28,7 +27,6 @@ proc run_test {} {
       [list -f $srcdir/$subdir/universal_config_tests/common_test_init.tcl] \
       $test_script_flags \
     ]
-    # [list -d2]
 
     set NCORES [target_info cpu,cores_num]
     set ::env(NCORES) $NCORES

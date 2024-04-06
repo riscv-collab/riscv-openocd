@@ -13,13 +13,13 @@ proc run_test {} {
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
   ocdtlb_run_expect "resume"
 
-  # TODO: implement proper board parameter
-  if {[target_info sim] ne ""} {
-    ocdtlb_run_expect "reg pc" expect_failure
-  } else {
+  if {[target_info cpu,dm_run_read_pc]} {
     ocdtlb_run_expect "reg pc"
+  } else {
+    ocdtlb_run_expect "reg pc" expect_failure
   }
-  # Seems like Syntacore processors does not support writes to PC
+
+  # Seems like Syntacore processors do not support writes to PC
   ocdtlb_run_expect "reg pc $ENTRY_ADDR" expect_failure
 
   ocdtlb_run_expect "reg sp" expect_failure

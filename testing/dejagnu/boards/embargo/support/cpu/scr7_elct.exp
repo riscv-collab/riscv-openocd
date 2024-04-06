@@ -21,7 +21,6 @@ set_board_info cpu,wp_eq_matches_on_crossing 0
 set_board_info cpu,wp_napot_matches_on_crossing 1
 set_board_info cpu,wp_gelt_matches_on_crossing 1
 
-# TODO: which one is supported by ELCT?
 set_board_info cpu,sv32 0
 set_board_info cpu,sv39 1
 set_board_info cpu,sv48 0
@@ -33,6 +32,8 @@ set_board_info cpu,sv48x4 0
 set_board_info cpu,sv57x4 0
 
 set_board_info cpu,misaligned_access_support 0
+
+set_board_info cpu,dm_run_read_pc 1
 
 set_board_info cpu,dm_abstract_csr 1
 set_board_info cpu,dm_abstract_fpr 1
