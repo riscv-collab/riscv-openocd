@@ -15,18 +15,19 @@ proc run_test {} {
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 
   set supported_widths { 8 16 32}
-# TODO: It seems that 64-bit read mem does not work correctly
-#  if {$xlen64} {
-#    lappend supported_widths 64
-#  }
+  if {$xlen64} {
+    lappend supported_widths 64
+  }
 
   set expected_data1(8)  {0xad}
   set expected_data1(16) {0xddad}
   set expected_data1(32) {0xbaddad}
+  set expected_data1(64) {0xdeadbabe00baddad}
 
   set expected_data2(8)  {0xad 0xdd}
   set expected_data2(16) {0xddad 0xba}
   set expected_data2(32) {0xbaddad 0xdeadbabe}
+  set expected_data2(64) {0xdeadbabe00baddad 0xfeedbabedadc0def}
 
   foreach width $supported_widths {
     set response [ocdtlb_run_expect "read_memory $MEM_ADDR $width 1"]
