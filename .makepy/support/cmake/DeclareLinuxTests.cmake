@@ -93,6 +93,36 @@ list(APPEND TEST_BOARDS ${SPIKE_TEST_BOARDS})
 set(TESTING_ROOT "${CMAKE_BINARY_DIR}/testing")
 
 set(DEJAGNU_TESTING_ROOT "${TESTING_ROOT}/dejagnu")
+
+function(addBoardTestsDependency
+         board_tests_target_name
+         tool_tests_target_name
+         spike_tests_parking_slot)
+
+  if(NOT TARGET ${board_tests_target_name})
+    add_custom_target(${board_tests_target_name} DEPENDS ${tool_tests_target_name})
+    message(STATUS "Primary ${board_tests_target_name} defined")
+    message(STATUS "    ${board_tests_target_name} depends on ${tool_tests_target_name}")
+
+    if(board_tests_target MATCHES "^OpenOCDTestsOn_spike")
+      add_dependencies("${spike_tests_parking_slot}" ${board_tests_target_name})
+    endif()
+  else()
+    get_property(
+      board_test_deps
+      TARGET ${board_tests_target_name}
+      PROPERTY TOOL_DEPENDENCIES)
+    list(GET board_test_deps -1 last_added_tool)
+    add_dependencies(${last_added_tool} ${tool_tests_target_name})
+    message(STATUS "    ${last_added_tool} depends on ${tool_tests_target_name}")
+  endif()
+
+  set_property(
+    TARGET ${board_tests_target_name}
+    PROPERTY TOOL_DEPENDENCIES ${tool_tests_target_name}
+    APPEND)
+endfunction()
+
 function(addNextToolToTestForBoard tool_name board_config_name)
   set(tool_dir "${DEJAGNU_TESTING_ROOT}/${board_config_name}/${tool_name}")
   set(tool_run_dir "${tool_dir}/runs")
@@ -132,30 +162,9 @@ function(addNextToolToTestForBoard tool_name board_config_name)
         --outdir=${tool_summary_dir}
         --local_init ${CMAKE_BINARY_DIR}/local_init.exp
     DEPENDS openocd)
+  addBoardTestsDependency(
+    ${board_tests_target} ${board_tool_target} "OpenOCDTestsOn_spike")
   # cmake-format: on
-
-  if(NOT TARGET ${board_tests_target})
-    add_custom_target(${board_tests_target} DEPENDS ${board_tool_target})
-    message(STATUS "Primary ${board_tests_target} defined")
-
-    if(board_tests_target MATCHES "^OpenOCDTestsOn_spike")
-      add_dependencies("OpenOCDTestsOn_spike" ${board_tests_target})
-    endif()
-
-  else()
-    get_property(
-      board_test_deps
-      TARGET ${board_tests_target}
-      PROPERTY TOOL_DEPENDENCIES)
-    list(GET board_test_deps -1 last_added_tool)
-    add_dependencies(${last_added_tool} ${board_tool_target})
-    message(DEBUG "  ${last_added_tool} depends on ${board_tool_target}")
-  endif()
-  message(STATUS "   test target for tool testing ${board_tool_target} defined")
-  set_property(
-    TARGET ${board_tests_target}
-    PROPERTY TOOL_DEPENDENCIES ${board_tool_target}
-    APPEND)
 endfunction()
 
 function(addOpenOCDTestsForBoard board_config)
