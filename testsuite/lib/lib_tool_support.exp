@@ -131,8 +131,8 @@ proc tsuplib_update_binary_prefix { tool_name test_file_name } {
 }
 
 proc tsuplib_get_app_launcher {}  {
-  global testsuitedir
-  return $testsuitedir/lib/app_launch.sh
+  global srcdir
+  return $srcdir/lib/app_launch.sh
 }
 
 proc tsuplib_launch_openocd { tool_name \

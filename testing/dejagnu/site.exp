@@ -1,8 +1,8 @@
 # load the default site.exp distributed with the basic testsuite
-source [file join $testsuitedir site.exp]
+source [file join $srcdir site.exp]
 # make sure that we add path to boards from the original testsuite
 # this will ensure that common library functions are available
-lappend boards_dir [file join $testsuitedir boards]
+lappend boards_dir [file join $srcdir boards]
 set auxiliary_boards [file join [file dirname [file normalize [info script]]] boards]
 verbose "Extra boards directory $auxiliary_boards" 1
 # load auxiliary boards which should be in the same directory as this site.exp
