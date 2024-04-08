@@ -87,7 +87,7 @@ function(registerFPGAConfiguration CONFIGURATION_NAME)
   )
 endfunction()
 
-function(addSCR7L2Config RELEASE_NAME BITSTREAM)
+function(addSCR7X2_L2Config RELEASE_NAME BITSTREAM)
   set(options TWIN_NIGHTLY)
   cmake_parse_arguments(PARSE_ARGV 1 SCR7BOARD_ARG
     "${options}" "" ""
@@ -122,6 +122,35 @@ function(addSCR7L2Config RELEASE_NAME BITSTREAM)
   registerFPGAConfiguration(${CONFIG_SMP2}
     BITSTREAM ${BITSTREAM}
     OPENOCD_BOARD scr7_x_smp2
+    ${TESTING_CYCLE}
+  )
+endfunction()
+
+function(addSCR7L2Config RELEASE_NAME BITSTREAM)
+  set(options TWIN_NIGHTLY)
+  cmake_parse_arguments(PARSE_ARGV 1 SCR7BOARD_ARG
+    "${options}" "" ""
+  )
+
+  if (SCR7BOARD_ARG_TWIN_NIGHTLY)
+    set(TESTING_CYCLE TWIN_NIGHTLY)
+  else()
+    set(TESTING_CYCLE TWIN_UNSTABLE)
+  endif()
+
+  registerFPGAConfiguration("twin_norvv_${RELEASE_NAME}_score_nortos"
+    BITSTREAM ${BITSTREAM}
+    OPENOCD_BOARD scr7norvv_x_1core_nortos
+    ${TESTING_CYCLE}
+  )
+  registerFPGAConfiguration("twin_norvv_${RELEASE_NAME}_score_rtoshw"
+    BITSTREAM ${BITSTREAM}
+    OPENOCD_BOARD scr7norvv_x_1core_rtoshw
+    ${TESTING_CYCLE}
+  )
+  registerFPGAConfiguration("twin_rvv_${RELEASE_NAME}_score_nortos"
+    BITSTREAM ${BITSTREAM}
+    OPENOCD_BOARD scr7_x_1core_nortos
     ${TESTING_CYCLE}
   )
 endfunction()
@@ -235,11 +264,15 @@ registerFPGAConfiguration(twin_scr6
 )
 
 # SCR7 testing
-# TODO: scr7_l2_23ww46.4.0 is the last SCR7 bitstream that has 2 harts
+# scr7_l2_23ww46.4.0 is the last SCR7 bitstream that has 2 harts
 # subsequent versions have only 1 hart, we need an additional work to handle
 # 1-hart bitstreams
-addSCR7L2Config(scr7_l2_23ww46.4.0
+addSCR7X2_L2Config(scr7_l2_23ww46.4.0
   /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww46.4.0/scr7_l2_23ww46.4.0.bit
+  TWIN_NIGHTLY
+)
+addSCR7L2Config(scr7_l2_24ww13.5.0
+  /home/stand/users/aap-sc/BITSTREAMS/scr7_l2_24ww13.5.0/scr7_l2_24ww13.5.0.bit
   TWIN_NIGHTLY
 )
 addSCR7L2Config(scr7_dev
@@ -249,6 +282,10 @@ addSCR7L2Config(scr7_dev
 # SCR9 testing
 addSCR9L2Config(scr9_l2_23ww45.4.0.bit
   /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww45.4.0/scr9_l2_23ww45.4.0.bit
+  TWIN_NIGHTLY
+)
+addSCR9L2Config(scr9_l2_24ww13.5.0.bit
+  /home/stand/users/aap-sc/BITSTREAMS/scr9_l2_24ww13.5.0/scr9_l2_24ww13.5.0.bit
   TWIN_NIGHTLY
 )
 addSCR9L2Config(scr9_dev
