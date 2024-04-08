@@ -75,7 +75,7 @@ class Package(_conan.ConanFile):
         commit_message_lines = [s.strip() for s in commit_message.splitlines()]
         release_string = next(
             filter(lambda s: s.startswith(relstr_prefix), commit_message_lines),
-            "",
+            "development-build",
         )
         release_string = release_string.removeprefix(relstr_prefix).strip()
 
