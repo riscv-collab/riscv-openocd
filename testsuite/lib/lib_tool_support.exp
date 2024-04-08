@@ -66,6 +66,7 @@ proc tsuplib_target_info_check {} {
     cpu,sv48x4 \
     cpu,sv57x4 \
     cpu,misaligned_access_support \
+    cpu,dm_run_read_pc \
     cpu,dm_abstract_csr \
     cpu,dm_abstract_fpr \
     cpu,dm_sba_access_enable \
