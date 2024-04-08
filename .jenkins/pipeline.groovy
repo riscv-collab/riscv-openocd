@@ -3,8 +3,10 @@
 import tools.automation.TI
 
 def buildProject(vars) {
-  sh("./make.py just-config --profile:host ${vars.profile} --build-path ${vars.buildPath} ${vars.testOpt}")
-  sh("./make.py build --build-path ${vars.buildPath} --target openocd")
+  sh(""" ./make.py just-config --profile:host ${vars.profile} \
+          --options:host build_type=${vars.buildType} \
+          --build-path build/${vars.buildType} ${vars.testOpt} """)
+  sh("./make.py build --build-path build/${vars.buildType} --target openocd")
 }
 
 workflow('openocd') {
@@ -24,11 +26,11 @@ workflow('openocd') {
         matrix {
             [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               testOpt        : [''],
-              buildPath      : ['build/Release'],
+              buildType      : ['Release'],
               profile        : ['default']],
              [image          : ['cpp_ubuntu_22'],
               testOpt        : [''],
-              buildPath      : ['build/Release'],
+              buildType      : ['Release'],
               profile        : ['makepy_sc_mingw']]]
         }
         script { vars -> buildProject(vars) }
@@ -66,7 +68,7 @@ workflow('openocd') {
                // https://github.com/msteveb/jimtcl/issues/301
                testOpt        : ['--options:host test=True --sanitize-level=Enabled',
                                  '--options:host test=True --tests-options tests-valgrid-path=valgrind'],
-               buildPath      : ['build/Release']]]
+               buildType      : ['Debug', 'Release']]]
         }
         rules { vars ->
             include(vars.ti >= TI.NIGHTLY)
@@ -74,10 +76,12 @@ workflow('openocd') {
         script { vars ->
             buildProject(vars)
             try {
-              sh("./make.py build --build-path ${vars.buildPath} --target OpenOCDTestsOn_spike --parallel 8")
-              sh("./make.py sh ./.makepy/support/utils/check_sanitizer_logs.sh build/Release/testing/dejagnu")
+              sh("./make.py build --build-path build/${vars.buildType} --target OpenOCDTestsOn_spike --parallel 8")
+              sh("./make.py sh ./.makepy/support/utils/check_sanitizer_logs.sh build/${vars.buildType}/testing/dejagnu")
             } catch (Exception ex) {
-              artifacts.push("build/Release/testing", "artifacts-${vars.testingType}-${vars.image}-${vars.profile}", retention: '1w')
+              artifacts.push("build/${vars.buildType}/testing",
+                             "artifacts-${vars.testingType}-${vars.image}-${vars.profile}-${vars.buildType}",
+                             retention: '1w')
               error "wasted!"
             }
         }
@@ -93,18 +97,20 @@ workflow('openocd') {
               profile        : ['default'],
               testingType    : ['spike', 'external'],
               testOpt        : ['--options:host test=True'],
-              buildPath      : ['build/Release']]]
+              buildType      : ['Release']]]
         }
         script { vars ->
           buildProject(vars)
           try {
             if (vars.testingType == 'spike') {
-              sh("./make.py build --build-path ${vars.buildPath} --target OpenOCDTestsOn_spike --parallel 8")
+              sh("./make.py build --build-path build/${vars.buildType} --target OpenOCDTestsOn_spike --parallel 8")
             } else {
-              sh("./make.py build --build-path ${vars.buildPath} --target RISCVTestsDebug --parallel 8")
+              sh("./make.py build --build-path build/${vars.buildType} --target RISCVTestsDebug --parallel 8")
             }
           } catch (Exception ex) {
-            artifacts.push("build/Release/testing", "artifacts-${vars.testingType}-${vars.image}-${vars.profile}", retention: '1w')
+            artifacts.push("build/${vars.buildType}/testing",
+                           "artifacts-${vars.testingType}-${vars.image}-${vars.profile}-${vars.buildType}",
+                           retention: '1w')
             error "wasted!"
           }
         }
