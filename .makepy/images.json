@@ -18,5 +18,10 @@
     "display_name": "cpp_centos_7",
     "nametag": "<default_image_registry>/sc/cpp_centos:7.0.21",
     "os": "posix"
+  },
+  {
+    "display_name": "cpp_rocky_8",
+    "nametag": "<default_image_registry>/sc/cpp_rocky:8.9.1",
+    "os": "posix"
   }
 ]

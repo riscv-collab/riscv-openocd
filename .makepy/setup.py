@@ -333,11 +333,14 @@ def _main() -> None:
     conductor.add(_GenericSuite())
     conductor.add(_SyntacoreSuite())
     configs = _ConanConfigs()
-    configs.add_x86()
-    configs.add_x86(options={"test": "True"})
+    configs.add_windows()
+    configs.add_ubuntu18()
+    configs.add_ubuntu18(options={"test": "True"})
     configs.add_ubuntu20()
     configs.add_ubuntu20(options={"test": "True"})
     configs.add_ubuntu22()
+    configs.add_centos7()
+    configs.add_rocky8()
     # NOTE: currently, we don't run tests on ubuntu_22
     # configs.add_ubuntu22(options={"test": "True"})
     conductor.add(

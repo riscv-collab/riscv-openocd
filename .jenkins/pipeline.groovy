@@ -24,7 +24,7 @@ workflow('openocd') {
             memory('16Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+            [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               testOpt        : [''],
               buildType      : ['Release'],
               profile        : ['default']],
@@ -122,7 +122,7 @@ workflow('openocd') {
             memory('16Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+            [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default']],
              [image          : ['cpp_ubuntu_22'],
               profile        : ['makepy_sc_mingw']]]
@@ -136,7 +136,7 @@ workflow('openocd') {
         }
         dependsOn 'deploy'
         matrix {
-            [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+            [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default']],
              [image          : ['cpp_ubuntu_22'],
               profile        : ['makepy_sc_mingw']]]
