@@ -349,6 +349,7 @@ def _main() -> None:
             start_version="cd481a97e9ae604880b8239679bf83534e83b381",
             start_semver="0.11.0",
             configs=configs,
+            release_branch="sc/stable",
         )
     )
 
