@@ -3,6 +3,7 @@ import io as _io
 import json as _json
 import multiprocessing as _multiprocessing
 import os as _os
+import re as _re
 import sys as _sys
 from pathlib import Path as _Path
 from urllib.parse import urlparse as _urlparse
@@ -47,14 +48,6 @@ class Package(_conan.ConanFile):
 
         source_folder = _Path(__file__).parent
 
-        commit_msg_io_string = _io.StringIO()
-        self.run(
-            "git log -1 --oneline --format=%B",
-            cwd=source_folder,
-            stdout=commit_msg_io_string,
-        )
-        commit_message = commit_msg_io_string.getvalue().strip()
-
         merge_base_io_string = _io.StringIO()
         self.run(
             "git merge-base origin/riscv HEAD",
@@ -71,16 +64,14 @@ class Package(_conan.ConanFile):
         )
         dirty_marker = "" if is_clean_io_string.getvalue() == "" else "-dirty"
 
-        relstr_prefix = "SYNTACORE_RELSTR: "
-        commit_message_lines = [s.strip() for s in commit_message.splitlines()]
-        release_string = next(
-            filter(lambda s: s.startswith(relstr_prefix), commit_message_lines),
-            "development-build",
-        )
-        release_string = release_string.removeprefix(relstr_prefix).strip()
+        split_version = str(self.version).split("+", maxsplit=1)
+        version_string = split_version[1] if len(split_version) > 1 else ""
+        version_string = _re.sub(r"[\W_]+", "_", version_string).strip()
+        if version_string == "":
+            version_string = "development_build"
 
         commit_hash = _Git(self).get_commit()[:8]
-        release_string = f"{release_string}-g{commit_hash}{dirty_marker}"
+        release_string = f"{version_string}-g{commit_hash}{dirty_marker}"
         version_info = (
             f"riscv-upstream-{riscv_merge_base}-cs-{commit_hash}{dirty_marker}"
         )

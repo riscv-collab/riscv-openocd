@@ -145,9 +145,15 @@ class _JustConfigCommand(_Command):
 
     def command(self, args: _Namespace) -> None:
         _shutil.rmtree(_repo_path / "external_sources", ignore_errors=True)
-        makepy = _repo_path / "make.py"
+        makepy = [
+            _repo_path / "make.py",
+            "--no-history-dump",
+            "--logging-level",
+            args.logging_level.lower(),
+        ]
         output_folder = self._get_output_folder(args.build_path)
         install_cmd = [
+            *makepy,
             "conan",
             "install",
             "--profile:host",
@@ -179,14 +185,12 @@ class _JustConfigCommand(_Command):
                 ["--options:build", setting] for setting in args.build_options
             )
         )
-        install_cmd.append(_repo_path)
 
         # TODO: should we remove all these "cwd" statements?
-        _run_shell(["conan", "source", _repo_path], cwd=_repo_path)
+        _run_shell([*makepy, "conan", "source"], cwd=_repo_path)
         _run_shell(install_cmd, cwd=_repo_path)
         config_cmd = [
-            makepy,
-            "--no-history-dump",
+            *makepy,
             "config",
             "--build-path",
             args.build_path,
