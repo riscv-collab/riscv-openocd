@@ -142,7 +142,7 @@ workflow('openocd') {
               profile        : ['makepy_sc_mingw']]]
         }
         rules { vars ->
-            include(vars.name in vars.deploy && vars.branch == vars.defaultBranch)
+            include(vars.name in vars.deploy)
         }
         script { vars ->
             String packageRef = makepy.getConanVars(vars.name, false).packageRef
