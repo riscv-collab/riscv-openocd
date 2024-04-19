@@ -5842,7 +5842,6 @@ bool reg_is_initialized(const struct reg *reg)
 	}
 	assert(reg->arch_info);
 	assert(((riscv_reg_info_t *)reg->arch_info)->target);
-	assert((!reg->exist && !reg->value) || (reg->exist && reg->value));
 	assert(reg->valid || !reg->dirty);
 	return true;
 }
@@ -6194,14 +6193,10 @@ static int resize_reg(const struct target *target, uint32_t regno, bool exist,
 	free(reg->value);
 	reg->size = size;
 	reg->exist = exist;
-	if (reg->exist) {
-		reg->value = malloc(DIV_ROUND_UP(reg->size, 8));
-		if (!reg->value) {
-			LOG_ERROR("Failed to allocate memory.");
-			return ERROR_FAIL;
-		}
-	} else {
-		reg->value = NULL;
+	reg->value = malloc(DIV_ROUND_UP(reg->size, 8));
+	if (!reg->value) {
+		LOG_ERROR("Failed to allocate memory.");
+		return ERROR_FAIL;
 	}
 	assert(reg_is_initialized(reg));
 	return ERROR_OK;
