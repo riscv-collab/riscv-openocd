@@ -377,7 +377,6 @@ proc tsuplib_internal_tclrpc_send_command {msg {mode "catch"} } {
     tsuplib_internal_error "expecting tclrpc client type, detected: <$ocd_client_type>"
   }
 
-  # NOTE: currently, catch_and_capture is only for debugging purposes
   if { $mode == "catch_and_capture" } {
     verbose ">>>> capture { set code \[catch { $msg } opr\] }"  2
     send "set log \[capture { set code \[catch { $msg } opr\] } \] ; set opr \"\$code:\$log\$opr\"\x1a"
@@ -392,8 +391,8 @@ proc tsuplib_internal_tclrpc_send_command {msg {mode "catch"} } {
   }
 }
 
-proc tsuplib_tclrpc_run_command {msg {extra_timeout ""}} {
-  tsuplib_internal_tclrpc_send_command $msg
+proc tsuplib_tclrpc_run_command {msg {extra_timeout ""} {capture_mode "catch"} } {
+  tsuplib_internal_tclrpc_send_command $msg $capture_mode
   set effective_timeout [target_info env,preferred_timeout]
   if {$extra_timeout ne ""} {
     set effective_timeout [expr { $extra_timeout + $effective_timeout }]

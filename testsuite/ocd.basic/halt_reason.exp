@@ -1,0 +1,117 @@
+proc run_test {} {
+  set xlen64 [expr [target_info cpu,xlen] == 64]
+
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "halt_reason.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set MAIN_ADDR [tool_state_get_program_symbol main]
+  set LOAD_INSTR_ADDR [tool_state_get_program_symbol load_instr]
+  set SIMPLE_INSTR_ADDR [tool_state_get_program_symbol simple_instr]
+  set LOAD_ADDR [tool_state_get_program_symbol work_area_start]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "resume $ENTRY_ADDR"
+  ocdtlb_run_expect "halt"
+
+  # CAPTURED LINE:
+  #   riscv.cpu3 halted due to debug-request.
+  # POLL OUTPUT:
+  #   background polling: on
+  #   TAP: riscv.tap (enabled)
+  set PollAfterHalt [ocdtlb_run_catch_and_capture "poll"]
+  ocdtlb_expect_substring "halted due to debug-request." $PollAfterHalt
+
+  ocdtlb_run_expect "step"
+  set PollAfterStep [ocdtlb_run_catch_and_capture "poll"]
+  ocdtlb_expect_substring "halted due to single-step." $PollAfterStep
+
+  set ResumeCapture [ocdtlb_run_catch_and_capture "resume"]
+  if {[string first halt $ResumeCapture] != -1} {
+    error "unexpected output of *resume* command detected: $ResumeCapture"
+  }
+
+  ocdtlb_run_expect "halt"
+  ocdtlb_run_expect "bp $MAIN_ADDR 4"
+  ocdtlb_run_expect "resume $ENTRY_ADDR"
+  ocdtlb_wait_resume wait_halt
+  set PollAfterSwBp [ocdtlb_run_catch_and_capture "poll"]
+  ocdtlb_expect_substring "halted due to breakpoint." $PollAfterSwBp
+  ocdtlb_run_expect "rbp $MAIN_ADDR"
+
+  # Here we test a situation when only HW breakpoint is set
+  if {[target_info cpu,has_hw_breakpoints]} {
+    ocdtlb_run_expect "bp $SIMPLE_INSTR_ADDR 4 hw"
+    ocdtlb_run_expect "resume $ENTRY_ADDR"
+    ocdtlb_wait_resume wait_halt
+    set PollOnBpHalt_Single [ocdtlb_run_catch_and_capture "poll"]
+
+    ocdtlb_expect_substring "halted due to breakpoint." $PollOnBpHalt_Single
+    #if {[target_info cpu,hwbp_hit_bit_support]} {
+    #  ocdtlb_expect_substring "halted due to breakpoint." $PollOnBpHalt_Single
+    #} else {
+    #  ocdtlb_expect_substring "halted due to undefined." $PollOnBpHalt_Single
+    #}
+    ocdtlb_run_expect "rbp $SIMPLE_INSTR_ADDR"
+  }
+
+  if {[target_info cpu,has_watchpoints]} {
+    # Here we test a situation when only Watchpoint is set
+    ocdtlb_run_expect "wp $LOAD_ADDR 4"
+    ocdtlb_run_expect "resume $ENTRY_ADDR"
+    ocdtlb_wait_resume wait_halt
+    set PollOnWpHalt_Single [ocdtlb_run_catch_and_capture "poll"]
+
+    ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpHalt_Single
+    #if {[target_info cpu,wp_hit_bit_support]} {
+    #  ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpHalt_Single
+    #} else {
+    #  ocdtlb_expect_substring "halted due to undefined." $PollOnWpHalt_Single
+    #}
+    ocdtlb_run_expect "rwp $LOAD_ADDR"
+  }
+
+  if {[target_info cpu,has_hw_breakpoints] && [target_info cpu,has_watchpoints]} {
+    # Here we test a situation when both HW breakpoints and Watchpoints are set
+    ocdtlb_run_expect "wp $LOAD_ADDR 4"
+    ocdtlb_run_expect "bp $SIMPLE_INSTR_ADDR 4 hw"
+
+    ocdtlb_run_expect "resume $ENTRY_ADDR"
+    ocdtlb_wait_resume wait_halt
+    set PollOnWpHalt [ocdtlb_run_catch_and_capture "poll"]
+
+    ocdtlb_run_expect "resume"
+    ocdtlb_wait_resume wait_halt
+    set PollOnBpHalt [ocdtlb_run_catch_and_capture "poll"]
+
+    ocdtlb_run_expect "resume"
+    ocdtlb_wait_resume wait_halt
+    set PollOnWpAgain [ocdtlb_run_catch_and_capture "poll"]
+
+    ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpHalt
+    ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpAgain
+    #if {[target_info cpu,wp_hit_bit_support]} {
+    #  ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpHalt
+    #  ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpAgain
+    #} else {
+    #  ocdtlb_expect_substring "halted due to undefined." $PollOnWpHalt
+    #  ocdtlb_expect_substring "halted due to undefined." $PollOnWpAgain
+    #}
+
+    ocdtlb_expect_substring "halted due to breakpoint." $PollOnBpHalt
+    #if {[target_info cpu,hwbp_hit_bit_support]} {
+    #  ocdtlb_expect_substring "halted due to breakpoint." $PollOnBpHalt
+    #} else {
+    #  ocdtlb_expect_substring "halted due to undefined." $PollOnBpHalt
+    #}
+  }
+  return [ocd_test_pass]
+}
+
+return [run_test]

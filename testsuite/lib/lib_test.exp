@@ -197,9 +197,9 @@ proc ocdtlb_fetch_variable_from_tcl { variable } {
   return [string range [join $purged_lines "\n"] 2 end]
 }
 
-proc ocdtlb_run_catch_and_capture { command } {
+proc ocdtlb_run_catch_and_capture { command {extra_timeout ""} } {
   verbose "cmd(catch_and_capture): ${command}" 1
-  set response [tsuplib_tclrpc_run_command "capture { catch { $command } err }"]
+  set response [tsuplib_tclrpc_run_command $command $extra_timeout catch_and_capture]
   verbose "<<<<" 3
   return $response
 }
