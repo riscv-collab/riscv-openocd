@@ -49,6 +49,8 @@ proc tsuplib_target_info_check {} {
     cpu,v_ext_elen \
     cpu,v_ext_misa_writable \
     cpu,trigger_count \
+    cpu,has_hw_breakpoints \
+    cpu,hwbp_hit_bit_support \
     cpu,has_watchpoints \
     cpu,has_watchpoints_equal \
     cpu,has_watchpoints_napot \
@@ -57,6 +59,7 @@ proc tsuplib_target_info_check {} {
     cpu,wp_eq_matches_on_crossing \
     cpu,wp_napot_matches_on_crossing \
     cpu,wp_gelt_matches_on_crossing \
+    cpu,wp_hit_bit_support \
     cpu,sv32 \
     cpu,sv39 \
     cpu,sv48 \
@@ -69,6 +72,7 @@ proc tsuplib_target_info_check {} {
     cpu,dm_run_read_pc \
     cpu,dm_abstract_csr \
     cpu,dm_abstract_fpr \
+    cpu,dm_is_slow \
     cpu,dm_sba_access_enable \
     memory,reset_vector \
     memory,has_high_pa \

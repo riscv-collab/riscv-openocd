@@ -12,6 +12,9 @@ set_board_info cpu,v_ext_misa_writable 0
 
 set_board_info cpu,trigger_count 4
 
+set_board_info cpu,has_hw_breakpoints 1
+set_board_info cpu,hwbp_hit_bit_support 1
+
 set_board_info cpu,has_watchpoints 1
 set_board_info cpu,has_watchpoints_equal 1
 set_board_info cpu,has_watchpoints_napot 1
@@ -20,6 +23,7 @@ set_board_info cpu,has_watchpoints_data_mask 0
 set_board_info cpu,wp_eq_matches_on_crossing 0
 set_board_info cpu,wp_napot_matches_on_crossing 0
 set_board_info cpu,wp_gelt_matches_on_crossing 0
+set_board_info cpu,wp_hit_bit_support 1
 
 set_board_info cpu,sv32 1
 set_board_info cpu,sv39 0
