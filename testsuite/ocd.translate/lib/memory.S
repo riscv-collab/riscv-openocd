@@ -3,6 +3,7 @@
 .global end
 
 .text
+.balign 4096
 _entry:
   addi    x1, x0, 1
 main:

@@ -33,7 +33,7 @@ proc run_test {} {
     set va_offset 0xa0000
     set virtual_address 0x[format %x [expr {$table_addr + $va_offset}]]
 
-    set pa_offset 0xb0000
+    set pa_offset 0x10000
     set physical_address 0x[format %x [expr {$table_addr + $pa_offset}]]
 
     set va_list [list $virtual_address]
