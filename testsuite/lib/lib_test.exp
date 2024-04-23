@@ -188,10 +188,10 @@ proc ocdtlb_fetch_variable_from_tcl { variable } {
     error "unexpected response format (retunrn code is not zero) $raw_response"
   }
   set rsp_lines [split $raw_response "\n"]
-  if {[lindex $rsp_lines end] ne "0\x1a"} {
-    error "unexpected respose format (does not end with zero+^Z) $raw_response"
+  if {[lindex $rsp_lines end] ne "0"} {
+    error "unexpected respose format (does not end with zero+) $raw_response"
   }
-  # drop last "0^Z" that represents return code of "catch {capture { ... } }" call
+  # drop last "0" that represents return code of "catch {capture { ... } }" call
   set purged_lines [lreplace $rsp_lines end end]
   # re-join lines and drop initial return code "0:..."
   return [string range [join $purged_lines "\n"] 2 end]
@@ -237,6 +237,13 @@ proc ocdtlb_run_expect_raw {command parser_name {expect_op_fail 0} {extra_timeou
   }
 
   return $parsed
+}
+
+proc ocdtlb_target_command { TGT command } {
+  if { $TGT eq "current" } {
+    set TGT [ocdtlb_rsp_get [ocdtlb_run_expect "target current"]]
+  }
+  return [ocdtlb_rsp_get [ocdtlb_run_expect "$TGT $command"]]
 }
 
 proc ocdtlb_run_expect {command {expect_op_fail 0}  {extra_timeout ""} } {
@@ -295,6 +302,8 @@ proc ocdtlb_run_expect {command {expect_op_fail 0}  {extra_timeout ""} } {
     {^riscv +set_ebreak[m,s,u]$}       { set parser parse_show_ebreak }
     {^riscv +set_enable_virt2phys +[^ ]+} { set parser parse_set_enable_virt2phys }
     {^riscv +re_examine$}   { set parser parse_re_examine }
+    {^[^ ]+ +debug_reason$} { set parser parse_debug_reason }
+    {^target +current$}     { set parser parse_target_current }
     default {
       error "could not select parser for ($command), consider using *_raw call"
     }

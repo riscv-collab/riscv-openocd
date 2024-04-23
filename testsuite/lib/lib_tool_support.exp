@@ -397,14 +397,18 @@ proc tsuplib_tclrpc_run_command {msg {extra_timeout ""} {capture_mode "catch"} }
   if {$extra_timeout ne ""} {
     set effective_timeout [expr { $extra_timeout + $effective_timeout }]
   }
-  if {[target_info cpu,dm_is_slow] == 1} {
+  if {[target_info cpu,dm_is_slow]} {
     set effective_timeout [expr { $effective_timeout * 10 }]
   }
   verbose "effective timeout for the command: $effective_timeout" 3
   set timeout $effective_timeout
   expect {
     \x1a {
-      return $expect_out(buffer)
+      # drop the last character, which is 0x1a (aka end-of-file), this character
+      # marks the end of TCL-RPC message. We don't want it in our results,
+      # as such "characters" are not printed (skipped) in the debug
+      # output while still affecting many string operations (like comparisons).
+      return [string range $expect_out(buffer) 0 end-1]
     }
     eof {
       tsuplib_internal_error "tclrpc: unexpected EOF while waiting results of <$msg>"

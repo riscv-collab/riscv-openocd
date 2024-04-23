@@ -523,7 +523,7 @@ proc parse_virt2phys { report } {
 proc parse_riscv_info { report } {
   set TYPE "riscv_info"
 
-  array set info_array [string range $report 0 end-1]
+  array set info_array [string range $report 0 end]
 
   return [internal_parse_success $TYPE $report [array get info_array]]
 }
@@ -558,4 +558,16 @@ proc parse_re_examine { report } {
   set TYPE "re_examine"
 
   return [internal_parse_success $TYPE $report {info "re_examine passed"}]
+}
+
+proc parse_debug_reason { report } {
+  set TYPE "debug_reason"
+
+  return [internal_parse_success $TYPE $report [list value $report]]
+}
+
+proc parse_target_current { report } {
+  set TYPE "target_current"
+
+  return [internal_parse_success $TYPE $report [list value $report]]
 }

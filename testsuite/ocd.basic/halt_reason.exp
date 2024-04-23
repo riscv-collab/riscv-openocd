@@ -20,17 +20,12 @@ proc run_test {} {
   ocdtlb_run_expect "resume $ENTRY_ADDR"
   ocdtlb_run_expect "halt"
 
-  # CAPTURED LINE:
-  #   riscv.cpu3 halted due to debug-request.
-  # POLL OUTPUT:
-  #   background polling: on
-  #   TAP: riscv.tap (enabled)
-  set PollAfterHalt [ocdtlb_run_catch_and_capture "poll"]
-  ocdtlb_expect_substring "halted due to debug-request." $PollAfterHalt
+  set AfterHalt [ocdtlb_target_command current debug_reason]
+  ocdtlb_expect_equal "debug-request" $AfterHalt
 
   ocdtlb_run_expect "step"
-  set PollAfterStep [ocdtlb_run_catch_and_capture "poll"]
-  ocdtlb_expect_substring "halted due to single-step." $PollAfterStep
+  set AfterStep [ocdtlb_target_command current debug_reason]
+  ocdtlb_expect_equal "single-step" $AfterStep
 
   set ResumeCapture [ocdtlb_run_catch_and_capture "resume"]
   if {[string first halt $ResumeCapture] != -1} {
@@ -41,8 +36,8 @@ proc run_test {} {
   ocdtlb_run_expect "bp $MAIN_ADDR 4"
   ocdtlb_run_expect "resume $ENTRY_ADDR"
   ocdtlb_wait_resume wait_halt
-  set PollAfterSwBp [ocdtlb_run_catch_and_capture "poll"]
-  ocdtlb_expect_substring "halted due to breakpoint." $PollAfterSwBp
+  set AfterSwBp [ocdtlb_target_command current debug_reason]
+  ocdtlb_expect_equal "breakpoint" $AfterSwBp
   ocdtlb_run_expect "rbp $MAIN_ADDR"
 
   # Here we test a situation when only HW breakpoint is set
@@ -50,14 +45,9 @@ proc run_test {} {
     ocdtlb_run_expect "bp $SIMPLE_INSTR_ADDR 4 hw"
     ocdtlb_run_expect "resume $ENTRY_ADDR"
     ocdtlb_wait_resume wait_halt
-    set PollOnBpHalt_Single [ocdtlb_run_catch_and_capture "poll"]
+    set OnBpHalt_Single [ocdtlb_target_command current debug_reason]
 
-    ocdtlb_expect_substring "halted due to breakpoint." $PollOnBpHalt_Single
-    #if {[target_info cpu,hwbp_hit_bit_support]} {
-    #  ocdtlb_expect_substring "halted due to breakpoint." $PollOnBpHalt_Single
-    #} else {
-    #  ocdtlb_expect_substring "halted due to undefined." $PollOnBpHalt_Single
-    #}
+    ocdtlb_expect_equal "breakpoint" $OnBpHalt_Single
     ocdtlb_run_expect "rbp $SIMPLE_INSTR_ADDR"
   }
 
@@ -66,14 +56,9 @@ proc run_test {} {
     ocdtlb_run_expect "wp $LOAD_ADDR 4"
     ocdtlb_run_expect "resume $ENTRY_ADDR"
     ocdtlb_wait_resume wait_halt
-    set PollOnWpHalt_Single [ocdtlb_run_catch_and_capture "poll"]
+    set OnWpHalt_Single [ocdtlb_target_command current debug_reason]
 
-    ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpHalt_Single
-    #if {[target_info cpu,wp_hit_bit_support]} {
-    #  ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpHalt_Single
-    #} else {
-    #  ocdtlb_expect_substring "halted due to undefined." $PollOnWpHalt_Single
-    #}
+    ocdtlb_expect_equal "watchpoint" $OnWpHalt_Single
     ocdtlb_run_expect "rwp $LOAD_ADDR"
   }
 
@@ -84,32 +69,19 @@ proc run_test {} {
 
     ocdtlb_run_expect "resume $ENTRY_ADDR"
     ocdtlb_wait_resume wait_halt
-    set PollOnWpHalt [ocdtlb_run_catch_and_capture "poll"]
+    set OnWpHalt [ocdtlb_target_command current debug_reason]
 
     ocdtlb_run_expect "resume"
     ocdtlb_wait_resume wait_halt
-    set PollOnBpHalt [ocdtlb_run_catch_and_capture "poll"]
+    set OnBpHalt [ocdtlb_target_command current debug_reason]
 
     ocdtlb_run_expect "resume"
     ocdtlb_wait_resume wait_halt
-    set PollOnWpAgain [ocdtlb_run_catch_and_capture "poll"]
+    set OnWpAgain [ocdtlb_target_command current debug_reason]
 
-    ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpHalt
-    ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpAgain
-    #if {[target_info cpu,wp_hit_bit_support]} {
-    #  ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpHalt
-    #  ocdtlb_expect_substring "halted due to watchpoint." $PollOnWpAgain
-    #} else {
-    #  ocdtlb_expect_substring "halted due to undefined." $PollOnWpHalt
-    #  ocdtlb_expect_substring "halted due to undefined." $PollOnWpAgain
-    #}
-
-    ocdtlb_expect_substring "halted due to breakpoint." $PollOnBpHalt
-    #if {[target_info cpu,hwbp_hit_bit_support]} {
-    #  ocdtlb_expect_substring "halted due to breakpoint." $PollOnBpHalt
-    #} else {
-    #  ocdtlb_expect_substring "halted due to undefined." $PollOnBpHalt
-    #}
+    ocdtlb_expect_equal "watchpoint" $OnWpHalt
+    ocdtlb_expect_equal "watchpoint" $OnWpAgain
+    ocdtlb_expect_equal "breakpoint" $OnBpHalt
   }
   return [ocd_test_pass]
 }
