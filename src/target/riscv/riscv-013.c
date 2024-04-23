@@ -197,6 +197,7 @@ typedef struct {
 	uint8_t datasize;
 	uint8_t dataaccess;
 	int16_t dataaddr;
+	uint8_t nscratch;
 
 	/* The width of the hartsel field. */
 	unsigned hartsellen;
@@ -1776,20 +1777,45 @@ static int set_dcsr_ebreak(struct target *target, bool step)
 
 	RISCV_INFO(r);
 	RISCV013_INFO(info);
-	riscv_reg_t original_dcsr, dcsr;
-	/* We want to twiddle some bits in the debug CSR so debugging works. */
-	if (riscv_get_register(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-		return ERROR_FAIL;
-	original_dcsr = dcsr;
-	dcsr = set_field(dcsr, CSR_DCSR_STEP, step);
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKM, r->riscv_ebreakm);
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKS, r->riscv_ebreaks && riscv_supports_extension(target, 'S'));
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKU, r->riscv_ebreaku && riscv_supports_extension(target, 'U'));
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKVS, r->riscv_ebreaku && riscv_supports_extension(target, 'H'));
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKVU, r->riscv_ebreaku && riscv_supports_extension(target, 'H'));
-	if (dcsr != original_dcsr &&
-			riscv_set_register(target, GDB_REGNO_DCSR, dcsr) != ERROR_OK)
-		return ERROR_FAIL;
+
+	if ((info->nscratch >= 1) && has_sufficient_progbuf(target, 6)) {
+		uint64_t ebreak_bits = 0;
+		if (r->riscv_ebreakm)
+			ebreak_bits |= CSR_DCSR_EBREAKM;
+		if (r->riscv_ebreaks && riscv_supports_extension(target, 'S'))
+			ebreak_bits |= CSR_DCSR_EBREAKS;
+		if (r->riscv_ebreaku && riscv_supports_extension(target, 'U'))
+			ebreak_bits |= CSR_DCSR_EBREAKU;
+		if (r->riscv_ebreaku && riscv_supports_extension(target, 'H'))
+			ebreak_bits |= CSR_DCSR_EBREAKVS;
+		if (r->riscv_ebreaku && riscv_supports_extension(target, 'H'))
+			ebreak_bits |= CSR_DCSR_EBREAKVU;
+		struct riscv_program program;
+		riscv_program_init(&program, target);
+		riscv_program_insert(&program, csrw(S0, CSR_DSCRATCH0));
+		riscv_program_insert(&program, lui(S0, ebreak_bits));
+		riscv_program_insert(&program, csrrs(ZERO, S0, CSR_DCSR));
+		if (step)
+			riscv_program_insert(&program, csrsi(CSR_DCSR, 0x4));
+		riscv_program_insert(&program, csrr(S0, CSR_DSCRATCH0));
+		if (riscv_program_exec(&program, target) != ERROR_OK)
+			return ERROR_FAIL;
+	} else {
+		riscv_reg_t original_dcsr, dcsr;
+		/* We want to twiddle some bits in the debug CSR so debugging works. */
+		if (riscv_get_register(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+			return ERROR_FAIL;
+		original_dcsr = dcsr;
+		dcsr = set_field(dcsr, CSR_DCSR_STEP, step);
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKM, r->riscv_ebreakm);
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKS, r->riscv_ebreaks && riscv_supports_extension(target, 'S'));
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKU, r->riscv_ebreaku && riscv_supports_extension(target, 'U'));
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKVS, r->riscv_ebreaku && riscv_supports_extension(target, 'H'));
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKVU, r->riscv_ebreaku && riscv_supports_extension(target, 'H'));
+		if (dcsr != original_dcsr &&
+				riscv_set_register(target, GDB_REGNO_DCSR, dcsr) != ERROR_OK)
+			return ERROR_FAIL;
+	}
 	info->dcsr_ebreak_is_set = true;
 	return ERROR_OK;
 }
@@ -1997,6 +2023,7 @@ static int examine(struct target *target)
 	info->datasize = get_field(hartinfo, DM_HARTINFO_DATASIZE);
 	info->dataaccess = get_field(hartinfo, DM_HARTINFO_DATAACCESS);
 	info->dataaddr = get_field(hartinfo, DM_HARTINFO_DATAADDR);
+	info->nscratch = get_field(hartinfo, DM_HARTINFO_NSCRATCH);
 
 	if (!get_field(dmstatus, DM_DMSTATUS_AUTHENTICATED)) {
 		LOG_TARGET_ERROR(target, "Debugger is not authenticated to target Debug Module. "
