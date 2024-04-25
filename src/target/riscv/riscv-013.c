@@ -32,7 +32,7 @@
 #include "debug_reg_printer.h"
 #include "field_helpers.h"
 
-static int riscv013_on_step_or_resume(struct target *target, bool step);
+static int riscv013_on_step_or_resume(struct target *target, bool skip, bool step);
 static int riscv013_step_or_resume_current_hart(struct target *target,
 		bool step);
 static int riscv013_clear_abstract_error(struct target *target);
@@ -1778,25 +1778,40 @@ static int set_dcsr_ebreak(struct target *target, bool step)
 	RISCV_INFO(r);
 	RISCV013_INFO(info);
 
-	if ((info->nscratch >= 1) && has_sufficient_progbuf(target, 6)) {
-		uint64_t ebreak_bits = 0;
+	if ((info->nscratch >= 1) && has_sufficient_progbuf(target, 8)) {
+		uint64_t set_ebreak_bits = 0;
+		uint64_t clr_ebreak_bits = 0;
 		if (r->riscv_ebreakm)
-			ebreak_bits |= CSR_DCSR_EBREAKM;
+			set_ebreak_bits |= CSR_DCSR_EBREAKM;
+		else
+			clr_ebreak_bits |= CSR_DCSR_EBREAKM;
 		if (r->riscv_ebreaks && riscv_supports_extension(target, 'S'))
-			ebreak_bits |= CSR_DCSR_EBREAKS;
+			set_ebreak_bits |= CSR_DCSR_EBREAKS;
+		else
+			clr_ebreak_bits |= CSR_DCSR_EBREAKS;
 		if (r->riscv_ebreaku && riscv_supports_extension(target, 'U'))
-			ebreak_bits |= CSR_DCSR_EBREAKU;
+			set_ebreak_bits |= CSR_DCSR_EBREAKU;
+		else
+			clr_ebreak_bits |= CSR_DCSR_EBREAKU;
 		if (r->riscv_ebreaku && riscv_supports_extension(target, 'H'))
-			ebreak_bits |= CSR_DCSR_EBREAKVS;
+			set_ebreak_bits |= CSR_DCSR_EBREAKVS;
+		else
+			clr_ebreak_bits |= CSR_DCSR_EBREAKVS;
 		if (r->riscv_ebreaku && riscv_supports_extension(target, 'H'))
-			ebreak_bits |= CSR_DCSR_EBREAKVU;
+			set_ebreak_bits |= CSR_DCSR_EBREAKVU;
+		else
+			clr_ebreak_bits |= CSR_DCSR_EBREAKVU;
 		struct riscv_program program;
 		riscv_program_init(&program, target);
 		riscv_program_insert(&program, csrw(S0, CSR_DSCRATCH0));
-		riscv_program_insert(&program, lui(S0, ebreak_bits));
+		riscv_program_insert(&program, lui(S0, set_ebreak_bits));
 		riscv_program_insert(&program, csrrs(ZERO, S0, CSR_DCSR));
+		riscv_program_insert(&program, lui(S0, clr_ebreak_bits));
+		riscv_program_insert(&program, csrrc(ZERO, S0, CSR_DCSR));
 		if (step)
 			riscv_program_insert(&program, csrsi(CSR_DCSR, 0x4));
+		else
+			riscv_program_insert(&program, csrci(CSR_DCSR, 0x4));
 		riscv_program_insert(&program, csrr(S0, CSR_DSCRATCH0));
 		if (riscv_program_exec(&program, target) != ERROR_OK)
 			return ERROR_FAIL;
@@ -1822,8 +1837,7 @@ static int set_dcsr_ebreak(struct target *target, bool step)
 
 static int halt_set_dcsr_ebreak(struct target *target)
 {
-	RISCV013_INFO(info);
-	LOG_TARGET_INFO(target, "Halt to set DCSR.ebreak*");
+	LOG_TARGET_DEBUG(target, "Halt to set DCSR.ebreak*");
 
 	/* Remove this hart from the halt group.  This won't work on all targets
 	 * because the debug spec allows halt groups to be hard-coded, but I
@@ -1868,12 +1882,11 @@ static int halt_set_dcsr_ebreak(struct target *target)
 
 	halt_result = riscv013_halt_go(target);
 	if (halt_result == ERROR_OK) {
-		if (riscv013_resume_prep(target) == ERROR_OK) {
-			resume_result = riscv013_resume_go(target);
+		if (riscv013_on_step_or_resume(target, true, false) == ERROR_OK) {
+			resume_result = riscv013_step_or_resume_current_hart(target, false);
 			if (resume_result == ERROR_OK) {
 				target->state = TARGET_RUNNING;
 				target->debug_reason = DBG_REASON_NOTHALTED;
-				info->dcsr_ebreak_is_set = true;
 			} else if (resume_result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE) {
 				LOG_TARGET_INFO(target, "riscv013_resume_go aborted");
 				target->state = TARGET_UNAVAILABLE;
@@ -2061,9 +2074,6 @@ static int examine(struct target *target)
 			if (get_field(s, DM_DMSTATUS_ANYHAVERESET))
 				dm_write(target, DM_DMCONTROL,
 						set_dmcontrol_hartsel(DM_DMCONTROL_DMACTIVE | DM_DMCONTROL_ACKHAVERESET, i));
-			if (get_field(s, DM_DMSTATUS_HASRESETHALTREQ))
-				dm_write(target, DM_DMCONTROL,
-						set_dmcontrol_hartsel(DM_DMCONTROL_DMACTIVE | DM_DMCONTROL_CLRRESETHALTREQ, i));
 		}
 
 		LOG_TARGET_DEBUG(target, "Detected %d harts.", dm->hart_count);
@@ -2084,10 +2094,10 @@ static int examine(struct target *target)
 	if (riscv_get_hart_state(target, &state_at_examine_start) != ERROR_OK)
 		return ERROR_FAIL;
 
-	/* Skip full examination of hart if it is unavailable */
+	/* Skip full examination and reporting of hart if it is currently unavailable */
 	const bool hart_unavailable_at_examine_start = state_at_examine_start == RISCV_STATE_UNAVAILABLE;
 	if (hart_unavailable_at_examine_start) {
-		LOG_TARGET_DEBUG(target, "Did not fully examine hart %d as it was unavailable, deferring examine.", info->index);
+		LOG_TARGET_DEBUG(target, "Did not fully examine hart %d as it was currently unavailable, deferring examine.", info->index);
 		target->state = TARGET_UNAVAILABLE;
 		target->defer_examine = true;
 		return ERROR_OK;
@@ -2743,8 +2753,8 @@ static int riscv013_get_hart_state(struct target *target, enum riscv_hart_state 
 	if (dmstatus_read(target, &dmstatus, true) != ERROR_OK)
 		return ERROR_FAIL;
 	if (get_field(dmstatus, DM_DMSTATUS_ANYHAVERESET)) {
-//		LOG_TARGET_INFO(target, "Hart unexpectedly reset!");
-//		info->dcsr_ebreak_is_set = false;
+		LOG_TARGET_DEBUG(target, "Hart unexpectedly reset!");
+		info->dcsr_ebreak_is_set = false;
 		/* TODO: Can we make this more obvious to eg. a gdb user? */
 		uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE |
 			DM_DMCONTROL_ACKHAVERESET;
@@ -2781,7 +2791,6 @@ static int riscv013_get_hart_state(struct target *target, enum riscv_hart_state 
 static int handle_became_available(struct target *target,
 		enum riscv_hart_state previous_riscv_state)
 {
-	RISCV013_INFO(info);
 	if (dm013_select_target(target) != ERROR_OK) {
 		LOG_TARGET_INFO(target, "dm013_select_target failed");
 		return ERROR_FAIL;
@@ -2791,7 +2800,6 @@ static int handle_became_available(struct target *target,
 	if (result == ERROR_OK) {
 		target->state = TARGET_RUNNING;
 		target->debug_reason = DBG_REASON_NOTHALTED;
-		info->dcsr_ebreak_is_set = true;
 	} else if (result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE) {
 		LOG_TARGET_INFO(target, "riscv013_step_or_resume_current_hart aborted");
 		target->state = TARGET_UNAVAILABLE;
@@ -5025,7 +5033,12 @@ static int riscv013_halt_go(struct target *target)
 							 "Some harts may be unexpectedly halted.");
 		}
 	}
-	if (riscv013_halt_target(target) != ERROR_OK) {
+
+	int result = riscv013_halt_target(target);
+	if (result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE) {
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+	else if (result != ERROR_OK) {
 		return ERROR_FAIL;
 	}
 
@@ -5090,12 +5103,12 @@ static int riscv013_step_current_hart(struct target *target)
 static int riscv013_resume_prep(struct target *target)
 {
 	assert(target->state == TARGET_HALTED);
-	return riscv013_on_step_or_resume(target, false);
+	return riscv013_on_step_or_resume(target, false, false);
 }
 
 static int riscv013_on_step(struct target *target)
 {
-	return riscv013_on_step_or_resume(target, true);
+	return riscv013_on_step_or_resume(target, false, true);
 }
 
 static enum riscv_halt_reason riscv013_halt_reason(struct target *target)
@@ -5231,17 +5244,17 @@ void riscv013_fill_dm_nop_u64(struct target *target, char *buf)
 	riscv013_fill_dmi_nop_u64(target, buf);
 }
 
-static int maybe_execute_fence_i(struct target *target)
+static int maybe_execute_fence_i(struct target *target, bool skip)
 {
-	if (has_sufficient_progbuf(target, 2))
+	if (!skip && has_sufficient_progbuf(target, 2))
 		return execute_fence(target);
 	return ERROR_OK;
 }
 
 /* Helper Functions. */
-static int riscv013_on_step_or_resume(struct target *target, bool step)
+static int riscv013_on_step_or_resume(struct target *target, bool skip, bool step)
 {
-	if (maybe_execute_fence_i(target) != ERROR_OK)
+	if (maybe_execute_fence_i(target, skip) != ERROR_OK)
 		return ERROR_FAIL;
 
 	if (set_dcsr_ebreak(target, step) != ERROR_OK)

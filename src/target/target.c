@@ -689,7 +689,7 @@ int target_examine_one(struct target *target)
 	}
 
 	if (target->defer_examine) {
-		LOG_USER("[%s] Target unavailable for full examination.", target_name(target));
+		LOG_USER("[%s] Target currently unavailable for full examination.", target_name(target));
 		target->defer_examine = defer_state;
 		target_reset_examined(target);
 	} else {
@@ -698,7 +698,7 @@ int target_examine_one(struct target *target)
 	}
 	target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_END);
 
-	LOG_TARGET_INFO(target, "Examination succeed");
+	LOG_TARGET_DEBUG(target, "Examination succeed");
 	return ERROR_OK;
 }
 
