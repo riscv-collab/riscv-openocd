@@ -1,23 +1,26 @@
 .global _entry
 .global _entry_t1
-.global loop
-.global sync
+.global loop1
+.global loop2
+.global sync_mem
 
 .text
 _entry:
-  la a0, mem
+  nop
+  la a0, sync_mem
 wait:
-  amoswap.w.aqrl t0, x0, (a0)
+  amoadd.w.aqrl t0, zero, (a0)
   beqz t0, wait
-loop:
-  j loop
+loop1:
+  j loop1
 
 _entry_t1:
-  la a0, mem
+  la a0, sync_mem
   li t0, 1
   amoadd.w.aqrl x0, t0, (a0)
-  j loop
+loop2:
+  j loop2
 
-.balign 8
-mem:
+.balign 64
+sync_mem:
 .8byte 0x0

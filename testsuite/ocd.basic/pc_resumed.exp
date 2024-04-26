@@ -1,3 +1,33 @@
+proc print_test_context {} {
+      set pc [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+      set a0 [ocdtlb_rsp_get [ocdtlb_run_expect "reg a0"]]
+      set t0 [ocdtlb_rsp_get [ocdtlb_run_expect "reg t0"]]
+      puts "-------"
+      puts "  PC: $pc"
+      puts "  A0: $a0"
+      puts "  T0: $t0"
+}
+
+proc trace_failure_context {MEM} {
+      print_test_context
+
+      ocdtlb_run_expect "step"
+      print_test_context
+
+      ocdtlb_run_expect "step"
+      print_test_context
+
+      ocdtlb_run_expect "step"
+      print_test_context
+
+      set response [ocdtlb_run_expect "mdw $MEM"]
+      set bytes [dict get $response data]
+      puts "  MEM\[${MEM}\]: $bytes"
+      puts "..."
+}
+
+
+
 proc run_test {} {
   if {[target_info cpu,cores_num] < 2} { return [ocd_test_unsupported] }
   if {[target_info openocd,smp_target]} { return [ocd_test_unsupported] }
@@ -9,7 +39,8 @@ proc run_test {} {
 
   set ENTRY_ADDR [tool_state_get_program_symbol _entry]
   set ENTRY_T1_ADDR [tool_state_get_program_symbol _entry_t1]
-  set LOOP_ADDR [tool_state_get_program_symbol loop]
+  set LOOP_ADDR [tool_state_get_program_symbol loop1]
+  set SYNC_MEM_ADDR [tool_state_get_program_symbol sync_mem]
 
   ocd_connect
 
@@ -17,6 +48,14 @@ proc run_test {} {
   ocdtlb_run_expect "reset halt"
 
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "step"
+  ocdtlb_run_expect "targets 1"
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "step"
+  ocdtlb_run_expect "targets 0"
+
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
   ocdtlb_run_expect "resume"
 
@@ -29,8 +68,18 @@ proc run_test {} {
   ocdtlb_run_expect "resume"
   ocdtlb_run_expect "targets 0"
 
-  ocdtlb_wait_for [subst -nocommands {[ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]] == $LOOP_ADDR}]
-
+  set IT_NUM 0
+  set TIME_START   [clock milliseconds]
+  while { [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]] != ${LOOP_ADDR} } {
+    incr IT_NUM
+    set TIME_CURRENT ${TIME_START}
+    set DURATION [expr { ${TIME_CURRENT} - ${TIME_START} }]
+    if { ${DURATION} > 5000  } {
+      puts "Current PC is not equal to ${LOOP_ADDR}. Tried for ${DURATION} ms, ${IT_NUM} iterations"
+      trace_failure_context ${SYNC_MEM_ADDR}
+      return [ocd_test_fail]
+    }
+  }
   return [ocd_test_pass]
 }
 
