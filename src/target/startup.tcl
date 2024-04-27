@@ -129,9 +129,11 @@ proc ocd_process_reset_inner { MODE } {
 				} else {
 					$t invoke-event examine-end
 				}
-				if { [$t curstate] == "unavailable" } {
-					continue
-				}
+			}
+
+			# no need to wait for a target that is unavailable anyway
+			if { [$t curstate] == "unavailable" } {
+				continue
 			}
 
 			# Wait up to 1 second for target to halt. Why 1sec? Cause
@@ -149,7 +151,7 @@ proc ocd_process_reset_inner { MODE } {
 				continue
 			}
 			if { $s != "halted" } {
-				return -code error [format "TARGET: %s - Not halted - Maybe unavailable %s" $t $s]
+				return -code error [format "TARGET: %s - Not halted (%s)" $t $s]
 			}
 		}
 	}

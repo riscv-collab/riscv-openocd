@@ -2979,7 +2979,9 @@ static int deassert_reset(struct target *target)
 
 	info->dmi_busy_delay = orig_dmi_busy_delay;
 
-	if (target->reset_halt) {
+	if (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
+		target->state = TARGET_UNAVAILABLE;
+	} else if (target->reset_halt) {
 		target->state = TARGET_HALTED;
 		target->debug_reason = DBG_REASON_DBGRQ;
 	} else {
