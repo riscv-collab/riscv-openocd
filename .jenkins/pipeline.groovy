@@ -87,7 +87,7 @@ workflow('openocd') {
                buildType      : ['Debug', 'Release']]]
         }
         rules { vars ->
-            include(vars.ti >= TI.NIGHTLY)
+            include(vars.ti >= TI.POSTCOMMIT)
         }
         script { vars ->
             buildProject(vars)
