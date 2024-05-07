@@ -1,0 +1,24 @@
+load_board_description "baremetal-fpga-common"
+
+set_board_cpu scr7_elct 8
+
+set_board_info memory,has_high_pa 0
+set_board_info memory,ocd_work_area 0
+set_board_info memory,reset_vector 0x0000000002000200
+
+set_board_info ldscript "-T[get_support_file ldscripts/scr7_elct.ld]"
+
+set_board_info openocd,extra_csr 0
+set_board_info openocd,hwthreads 0
+set_board_info openocd,smp_target 0
+set_board_info openocd,abi_regnames 0
+set_board_info openocd,hidden_triggers 0
+set_board_info openocd,ide_cloak 0
+
+set_board_info openocd,ocd_tool_target_flags [list \
+ -f [get_support_file ocd/elct_full.cfg] \
+]
+
+# NOT compatible for now
+# set_board_info openocd,jtag_tool_tap_definition_flags \
+#   [jtag_tool_tap_definition_flags jtag_8tap_irlen5.cfg]
