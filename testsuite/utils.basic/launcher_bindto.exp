@@ -1,10 +1,24 @@
 proc run_test {} {
-  set LogFile [utils_spawn_universal_launcher \
+  set BindToSetLog [utils_spawn_universal_launcher \
     [list --verbose --bindto 0.0.0.0 --run-command shutdown] \
-    bindto \
+    bindto_set \
     expect_success]
+  exec grep --text -F "command - bindto 0.0.0.0" $BindToSetLog
 
-  exec grep --text -F "command - bindto 0.0.0.0" $LogFile
+  set BindToDefaultLog [utils_spawn_universal_launcher \
+    [list --verbose --run-command shutdown] \
+    bindto_default \
+    expect_success]
+  exec grep --text -F "command - bindto 0.0.0.0" $BindToDefaultLog
+
+  set BindToEmptyLog [utils_spawn_universal_launcher \
+    [list --verbose --bindto "" --run-command shutdown] \
+    bindto_empty \
+    expect_success]
+  if {![catch { exec grep --text -F "command - bindto" $BindToEmptyLog } result]} {
+    error "Unexpected bindto command encountered"
+  }
+
   return [ocd_test_pass]
 }
 

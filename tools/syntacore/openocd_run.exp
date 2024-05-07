@@ -33,7 +33,7 @@ set STAND_DB_DEFAULT_PATH [getDefaultStandDbPath]
 
 set COMMAND_LINE_OPTIONS [dict create \
   --auto-config "flag. try to guess which configuration file should be used for debug adapter" \
-  --bindto "value:value. issue bindto configuration command. Typically this is something like 0.0.0.0" \
+  --bindto "value:value. issue bindto configuration command. Default is 0.0.0.0. Pass empty string to disable." \
   --bitbang-port "devel:value:port. rbb port (for connection to spike simulator)" \
   --configure-hook "value:file. TCL script to execute during configuration phase. The file is loaded right before init" \
   --debug-adapter-index "value:index. specify selected adapter" \
@@ -87,7 +87,7 @@ set SETTINGS(telnet) 0
 set SETTINGS(telnet_port) 4444
 set SETTINGS(ide_mode) 0
 set SETTINGS(unlock_usb_devices) ""
-set SETTINGS(bindto) ""
+set SETTINGS(bindto) 0.0.0.0
 set SETTINGS(configure_hook) ""
 set SETTINGS(load_extra_scripts) 1
 set SETTINGS(extra_run_commands) []
