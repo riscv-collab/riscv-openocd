@@ -19,9 +19,9 @@ if { $NCORES == 1 } {
 set idx 0
 foreach name [target names] {
   echo $name
-  set AREA_SIZE 0x10000
-  set AREA_BASE [expr {0x3ff0000 - $idx * $AREA_SIZE}]
-  set AREA_BACKUP 1
+  set AREA_SIZE   0
+  set AREA_BASE   0
+  set AREA_BACKUP 0
 
   set wa_base [$name cget -work-area-phys]
   set wa_size [$name cget -work-area-size]

@@ -1,5 +1,3 @@
-sc_target_config work-area-enable 0
-
 init
 
 foreach name [target names] {

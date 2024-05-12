@@ -44,14 +44,21 @@ proc run_test {} {
   ocd_launch_script chipname_test.tcl
   ocd_launch_script harts_num_test.tcl
   ocd_launch_script hooks_test.tcl
-  ocd_launch_script work_area_enable.tcl
-  ocd_launch_script work_area_disable.tcl
   ocd_launch_script reset_config_test.tcl
   ocd_launch_script reset_config_test2.tcl
   ocd_launch_script defaults.tcl
 
-  # return [ocd_test_pass]
-  pass universal_config
+  ocd_launch_script work_area_default.tcl
+  ocd_launch_script work_area_enable.tcl
+  ocd_launch_script work_area_disable.tcl
+  if {![catch {ocd_launch_script work_area_no_base.tcl} err]} {
+    error "script should return an error if no *work-area-phys* is specified"
+  }
+  if {![catch {ocd_launch_script work_area_no_size.tcl} err]} {
+    error "script should return an error if no *work-area-size* is specified"
+  }
+
+  return [ocd_test_pass]
 }
 
 return [run_test]
