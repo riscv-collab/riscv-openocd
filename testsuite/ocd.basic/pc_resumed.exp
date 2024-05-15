@@ -33,6 +33,14 @@ proc run_test {} {
   if {[target_info openocd,smp_target]} { return [ocd_test_unsupported] }
   if {![target_info cpu,dm_run_read_pc]} { return [ocd_test_unsupported] }
 
+  # NOTE: the test uses AMO operation without specifying cacheability settings
+  # AMO operations may not work in such setups. So we expect to run this test
+  # only on a simulator
+  if {[target_info sim] eq ""} {
+    return [ocd_test_unsupported]
+  }
+
+
   set default_bin_prefix [tool_state_get default_bin_prefix]
   # created by compile executable
   ocd_compile_executable "pc_resumed.S" "$default_bin_prefix.exe"
