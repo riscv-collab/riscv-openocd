@@ -721,7 +721,7 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
 
   if {[expr {$SETTINGS(adapter_speed) > 0}]} {
     lappend OpenOCDArgs -c
-    lappend OpenOCDArgs "sc_target_config adapter_speed $SETTINGS(adapter_speed)"
+    lappend OpenOCDArgs "adapter speed $SETTINGS(adapter_speed)"
   }
   if {$SETTINGS(smp) == 1} {
     lappend OpenOCDArgs -c
