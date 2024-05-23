@@ -20,8 +20,8 @@ workflow('openocd') {
 
     job('main-build') {
         resources {
-            cpu('4', '4')
-            memory('16Gi')
+            cpu('0.8', '4')
+            memory('0.3Gi', '16Gi')
         }
         matrix {
             [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
@@ -38,8 +38,8 @@ workflow('openocd') {
 
     job('fpga-postcommit') {
         resources {
-            cpu('1', '1')
-            memory('4Gi')
+            cpu('0.1', '1')
+            memory('0.1Gi', '4Gi')
         }
         matrix {
             [[image        : ['cpp_ubuntu_20']]]
@@ -90,7 +90,7 @@ workflow('openocd') {
     job('tests') {
         resources {
             cpu('10', '10')
-            memory('16Gi')
+            memory('0.4Gi', '16Gi')
         }
         matrix {
             [[image          : ['cpp_ubuntu_18', 'cpp_ubuntu_20'],
@@ -119,7 +119,7 @@ workflow('openocd') {
     job('tests-transferable') {
         resources {
             cpu('10', '10')
-            memory('16Gi')
+            memory('0.7Gi', '16Gi')
         }
         matrix {
             [[image          : ['cpp_ubuntu_20'],
@@ -143,8 +143,8 @@ workflow('openocd') {
 
     deploy {
         resources {
-            cpu('4', '4')
-            memory('16Gi')
+            cpu('1.2', '4')
+            memory('0.3Gi', '16Gi')
         }
         matrix {
             [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
