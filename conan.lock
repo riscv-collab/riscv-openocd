@@ -12,7 +12,7 @@
         "openocd_source_deps/0.0.1-rc.0.196+sc.sc-dt.2024.04@sc/main#5513fdee860169719eda87901ad40fc42755df72%1714151648.104",
         "gdb_source_deps/0.0.1-rc.0.196+sc.sc-dt.2024.04@sc/main#da8938ccd11eeb9ea4879d58ffb624c11bd7dc1c%1714151667.074",
         "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
-        "external_openocd_tests/0.0.3-rc.0.196+sc.sc-dt.2024.04@sc/main#359b45dd07841f085c1d580b24c4651f8b83a465%1714151644.909",
+        "external_openocd_tests/0.0.3-rc.0.218+sc.main@sc/main#58081d0cd90605f8bc8fcc20e93f986ec539893e%1716462425.531",
         "dejagnu/1.6.3-rc.0.196+sc.sc-dt.2024.04@sc/main#82b5b8566b089ee017899523baa4d0e63dc062d8%1714151650.996",
         "c4core/0.1.11#5c6caad554b14584140f7e66c47eefb5%1699016213.432"
     ],
