@@ -16,9 +16,7 @@
 /* Reserve extra room in the batch (needed for the last NOP operation) */
 #define BATCH_RESERVED_SCANS 1
 
-static void dump_field(int idle, const struct scan_field *field);
-
-struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_t idle)
+struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans)
 {
 	scans += BATCH_RESERVED_SCANS;
 	struct riscv_batch *out = calloc(1, sizeof(*out));
@@ -29,8 +27,9 @@ struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans, size_
 
 	out->target = target;
 	out->allocated_scans = scans;
-	out->idle_count = idle;
 	out->last_scan = RISCV_SCAN_TYPE_INVALID;
+	out->was_run = false;
+	out->used_idle_count = 0;
 
 	out->data_out = NULL;
 	out->data_in = NULL;
@@ -91,23 +90,53 @@ bool riscv_batch_full(struct riscv_batch *batch)
 	return riscv_batch_available_scans(batch) == 0;
 }
 
-int riscv_batch_run(struct riscv_batch *batch)
+static bool riscv_batch_was_scan_busy(const struct riscv_batch *batch,
+		size_t scan_idx)
 {
-	if (batch->used_scans == 0) {
-		LOG_TARGET_DEBUG(batch->target, "Ignoring empty batch.");
-		return ERROR_OK;
-	}
+	assert(batch->was_run);
+	assert(scan_idx < batch->used_scans);
+	const struct scan_field *field = batch->fields + scan_idx;
+	assert(field->in_value);
+	const uint64_t in = buf_get_u64(field->in_value, 0, field->num_bits);
+	return get_field(in, DTM_DMI_OP) == DTM_DMI_OP_BUSY;
+}
 
-	riscv_batch_add_nop(batch);
+static void add_idle_if_increased(struct riscv_batch *batch, size_t new_idle_count)
+{
+	if (!batch->was_run)
+		return;
+	if (batch->used_idle_count <= new_idle_count)
+		return;
+	const size_t idle_change = new_idle_count - batch->used_idle_count;
+	LOG_TARGET_DEBUG(batch->target,
+			"Idle count increased. Adding %zu idle cycles before the batch.",
+			idle_change);
+	jtag_add_runtest(idle_change, TAP_IDLE);
+}
 
-	for (size_t i = 0; i < batch->used_scans; ++i) {
+int riscv_batch_run_from(struct riscv_batch *batch, size_t start_idx,
+		size_t idle_count, bool resets_delays, size_t reset_delays_after)
+{
+	assert(batch->used_scans);
+	assert(batch->last_scan == RISCV_SCAN_TYPE_NOP);
+	assert(!batch->was_run || riscv_batch_was_scan_busy(batch, start_idx));
+	assert(start_idx == 0 || !riscv_batch_was_scan_busy(batch, start_idx - 1));
+
+	add_idle_if_increased(batch, idle_count);
+
+	LOG_TARGET_DEBUG(batch->target, "Running batch of scans [%zu, %zu)",
+			start_idx, batch->used_scans);
+
+	for (size_t i = start_idx; i < batch->used_scans; ++i) {
 		if (bscan_tunnel_ir_width != 0)
 			riscv_add_bscan_tunneled_scan(batch->target, batch->fields + i, batch->bscan_ctxt + i);
 		else
 			jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
 
-		if (batch->idle_count > 0)
-			jtag_add_runtest(batch->idle_count, TAP_IDLE);
+		const bool delays_were_reset = resets_delays
+			&& (i >= reset_delays_after);
+		if (idle_count > 0 && !delays_were_reset)
+			jtag_add_runtest(idle_count, TAP_IDLE);
 	}
 
 	keep_alive();
@@ -121,15 +150,18 @@ int riscv_batch_run(struct riscv_batch *batch)
 
 	if (bscan_tunnel_ir_width != 0) {
 		/* need to right-shift "in" by one bit, because of clock skew between BSCAN TAP and DM TAP */
-		for (size_t i = 0; i < batch->used_scans; ++i) {
+		for (size_t i = start_idx; i < batch->used_scans; ++i) {
 			if ((batch->fields + i)->in_value)
 				buffer_shr((batch->fields + i)->in_value, DMI_SCAN_BUF_SIZE, 1);
 		}
 	}
 
-	for (size_t i = 0; i < batch->used_scans; ++i)
-		dump_field(batch->idle_count, batch->fields + i);
+	for (size_t i = start_idx; i < batch->used_scans; ++i)
+		riscv_log_dmi_scan(batch->target, idle_count, batch->fields + i,
+				/*discard_in*/ false);
 
+	batch->was_run = true;
+	batch->used_idle_count = idle_count;
 	return ERROR_OK;
 }
 
@@ -200,52 +232,29 @@ void riscv_batch_add_nop(struct riscv_batch *batch)
 	batch->used_scans++;
 }
 
-static void dump_field(int idle, const struct scan_field *field)
-{
-	static const char * const op_string[] = {"-", "r", "w", "?"};
-	static const char * const status_string[] = {"+", "?", "F", "b"};
-
-	if (debug_level < LOG_LVL_DEBUG)
-		return;
-
-	assert(field->out_value);
-	uint64_t out = buf_get_u64(field->out_value, 0, field->num_bits);
-	unsigned int out_op = get_field(out, DTM_DMI_OP);
-	unsigned int out_data = get_field(out, DTM_DMI_DATA);
-	unsigned int out_address = out >> DTM_DMI_ADDRESS_OFFSET;
-
-	if (field->in_value) {
-		uint64_t in = buf_get_u64(field->in_value, 0, field->num_bits);
-		unsigned int in_op = get_field(in, DTM_DMI_OP);
-		unsigned int in_data = get_field(in, DTM_DMI_DATA);
-		unsigned int in_address = in >> DTM_DMI_ADDRESS_OFFSET;
-
-		log_printf_lf(LOG_LVL_DEBUG,
-				__FILE__, __LINE__, __func__,
-				"%db %s %08x @%02x -> %s %08x @%02x; %di",
-				field->num_bits, op_string[out_op], out_data, out_address,
-				status_string[in_op], in_data, in_address, idle);
-	} else {
-		log_printf_lf(LOG_LVL_DEBUG,
-				__FILE__, __LINE__, __func__, "%db %s %08x @%02x -> ?; %di",
-				field->num_bits, op_string[out_op], out_data, out_address, idle);
-	}
-}
-
 size_t riscv_batch_available_scans(struct riscv_batch *batch)
 {
 	assert(batch->allocated_scans >= (batch->used_scans + BATCH_RESERVED_SCANS));
 	return batch->allocated_scans - batch->used_scans - BATCH_RESERVED_SCANS;
 }
 
-bool riscv_batch_dmi_busy_encountered(const struct riscv_batch *batch)
+bool riscv_batch_was_batch_busy(const struct riscv_batch *batch)
 {
-	if (batch->used_scans == 0)
-		/* Empty batch */
-		return false;
-
+	assert(batch->was_run);
+	assert(batch->used_scans);
 	assert(batch->last_scan == RISCV_SCAN_TYPE_NOP);
-	const struct scan_field *field = batch->fields + batch->used_scans - 1;
-	const uint64_t in = buf_get_u64(field->in_value, 0, field->num_bits);
-	return get_field(in, DTM_DMI_OP) == DTM_DMI_OP_BUSY;
+	return riscv_batch_was_scan_busy(batch, batch->used_scans - 1);
+}
+
+size_t riscv_batch_finished_scans(const struct riscv_batch *batch)
+{
+	if (!riscv_batch_was_batch_busy(batch)) {
+		/* Whole batch succeeded. */
+		return batch->used_scans;
+	}
+	assert(batch->used_scans);
+	size_t first_busy = 0;
+	while (!riscv_batch_was_scan_busy(batch, first_busy))
+		++first_busy;
+	return first_busy;
 }

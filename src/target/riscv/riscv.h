@@ -440,6 +440,8 @@ void riscv_fill_dm_write(struct target *target, char *buf, uint64_t a, uint32_t 
 void riscv_fill_dm_read(struct target *target, char *buf, uint64_t a);
 int riscv_get_dmi_scan_length(struct target *target);
 
+uint32_t riscv_get_dmi_address(const struct target *target, uint32_t dm_address);
+
 int riscv_enumerate_triggers(struct target *target);
 
 int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint);
@@ -452,7 +454,7 @@ void riscv_semihosting_init(struct target *target);
 
 enum semihosting_result riscv_semihosting(struct target *target, int *retval);
 
-void riscv_add_bscan_tunneled_scan(struct target *target, struct scan_field *field,
+void riscv_add_bscan_tunneled_scan(struct target *target, const struct scan_field *field,
 		riscv_bscan_tunneled_scan_context_t *ctxt);
 
 int riscv_read_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer);
