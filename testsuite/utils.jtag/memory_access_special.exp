@@ -1,4 +1,8 @@
 proc run_test {} {
+    if {[lsearch [target_info sim,options] {--dm-progsize=0}] != -1} {
+	    return [ocd_test_unsupported]
+    }
+
     set default_bin_prefix [tool_state_get default_bin_prefix]
     ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe"
 
