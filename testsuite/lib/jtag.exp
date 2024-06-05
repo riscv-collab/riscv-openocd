@@ -80,4 +80,3 @@ proc jtag_connect { {need_scan_and_restart 1} } {
     }
   }
 }
-

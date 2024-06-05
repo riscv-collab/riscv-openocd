@@ -360,4 +360,3 @@ proc ocd_compile_executable { src_name outputname { extra_flags {} } } {
   describe_program "$outputname"
   return $result
 }
-

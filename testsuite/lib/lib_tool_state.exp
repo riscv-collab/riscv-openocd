@@ -73,4 +73,3 @@ proc tool_state_get_program_symbol { symbol } {
   global TOOL_STATE
   return $TOOL_STATE(program_symtab,$symbol)
 }
-

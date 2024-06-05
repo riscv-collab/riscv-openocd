@@ -25,4 +25,3 @@ proc describe_program { elf_filename } {
     tool_state_compiled_program_update_symtab $global_lbl "0x$trimmed_addr"
   }
 }
-
