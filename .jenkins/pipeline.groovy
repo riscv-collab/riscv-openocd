@@ -51,7 +51,7 @@ workflow('openocd') {
         script { vars -> buildProject(vars) }
     }
 
-    job('fpga-postcommit') {
+    job('fpga-nightly-status') {
         resources {
             cpu('0.1', '1')
             memory('0.1Gi', '4Gi')
@@ -60,7 +60,7 @@ workflow('openocd') {
             [[image        : ['cpp_ubuntu_20']]]
         }
         rules { vars ->
-            include(vars.ti >= TI.POSTCOMMIT)
+            include(vars.ti >= TI.NIGHTLY)
         }
         script { vars ->
             withCredentials([string(credentialsId: 'artifactory_cicdsc_api_key', variable: 'ART_API_KEY')]) {
@@ -69,7 +69,7 @@ workflow('openocd') {
         }
     }
 
-    job('tests-sanitized-nightly') {
+    job('tests-sanitized') {
         resources {
             cpu('10', '10')
             memory('16Gi')
@@ -182,7 +182,7 @@ workflow('openocd') {
         }
     }
 
-    job('tests-fpga-run') {
+    job('tests-fpga-run-nightly') {
         resources {
             cpu('0.5', '1')
             memory('4Gi')
@@ -195,7 +195,7 @@ workflow('openocd') {
               stand          : ['twin']]]
         }
         rules { vars ->
-            include(vars.ti >= TI.POSTCOMMIT)
+            include(vars.ti >= TI.NIGHTLY)
         }
         script { vars ->
             def stand = "fpga_${vars.stand}"
