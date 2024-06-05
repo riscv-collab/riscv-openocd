@@ -776,13 +776,13 @@ proc expectForTargetExamination { OpenOCDSpawnID TimeoutValue } {
     }
     timeout {
       printErrorMessage "timeout detected during target examine"
-      close
-      wait
+      close -i $OpenOCDSpawnID
+      wait -i $OpenOCDSpawnID
       exit 1
     }
     eof {
       printErrorMessage "EOF while waiting for examine"
-      wait
+      wait -i $OpenOCDSpawnID
       exit 1
     }
   }
@@ -798,13 +798,13 @@ proc expectForTelnetServer { OpenOCDSpawnID TimeoutValue } {
     }
     timeout {
       printErrorMessage "timeout detected while waiting for Telnet server"
-      close
-      wait
+      close -i $OpenOCDSpawnID
+      wait -i $OpenOCDSpawnID
       exit 1
     }
     eof {
       printErrorMessage "EOF while waiting for Telnet server"
-      wait
+      wait -i $OpenOCDSpawnID
       exit 1
     }
   }
@@ -947,7 +947,13 @@ proc runTelnetClient { OpenOCDSpawnID } {
     }
     expect {
       -i $OpenOCDSpawnID
-      eof { send_user -- "OpenOCD process terminated\n" }
+      eof { send_user -- "OpenOCD process terminated (SIGINT)\n" }
+      timeout {
+        send_user -- "OpenOCD is still running, sending SIGKILL signal this time\n"
+        exec kill -s SIGKILL [exp_pid -i $OpenOCDSpawnID]
+        close -i $OpenOCDSpawnID
+        send_user -- "OpenOCD process terminated (SIGKILL)\n"
+      }
     }
   }
 }
