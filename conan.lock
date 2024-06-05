@@ -1,28 +1,30 @@
 {
     "version": "0.5",
     "requires": [
-        "testgen-model-interface/0.1.0-rc.0.25+sc.sc-dt.2024.04@sc/main#b8504aefb863964c44bb844c6df51c9fbbc1b982%1714151615.321",
+        "testgen-model-interface/0.1.0-rc.0.26+sc.sc-dt.2024.05@sc/main#84881e282d04f0047208650d57f59ec3f08a20d6%1717236558.138",
+        "sc-zstd/1.5.6-rc.0.221+sc.sc-dt.2024.05@sc/main#1ee2c307f8221e1c239fecda9a41a96aeae1c23e%1717261128.351",
+        "sc-zstd/1.5.6-rc.0.207+sc.main@sc/main#28f0e9bd145b13b2deb01c1ce68b51ccec0cebef%1714113415.513",
         "sc-lzma/5.4.6-rc.0.196+sc.sc-dt.2024.04@sc/main#e40f151d8e9ea6a946937965dc1abdb6530955aa%1714168611.575",
-        "riscv-isa-sim/0.1.0-rc.0.183+sc.sc-dt.2024.04@sc/main#4ae63bdf1772843242199a1ae559f413fcd76979%1714152611.13",
-        "riscv-gdb/13.2.0-rc.0.107+sc.sc-dt.2024.04@sc/main#674eac133171e9e381a7ecfc29694b178fdcdd87%1714170321.95",
-        "riscv-gcc/12.2.1-rc.0.105+sc.sc-dt.2024.04@sc/main#0f3b6aca0180ffbc3f5210305431bace5ab6569f%1714165656.417",
-        "riscv-binutils/2.38.0-rc.0.36+sc.sc-dt.2024.04@sc/main#ab1ef54525d1be3254967dfd57fca3746eb9c453%1714162940.957",
+        "riscv-isa-sim/0.1.0-rc.0.186+sc.sc-dt.2024.05@sc/main#6c3ecb53041bdb4bebd6ad36b245e4604f9fbde2%1717237469.927",
+        "riscv-gdb/13.2.0-rc.0.123+sc.sc-dt.2024.05@sc/main#9a66598b9ff45a3f838abecd5ee2db9046363288%1717276406.622",
+        "riscv-gcc/13.2.0-rc.0.123+sc.sc-dt.2024.05@sc/main#34724b8bf3c08da3657a3a560d5dc012ed2bc721%1717266976.418",
+        "riscv-binutils/2.42.0-rc.0.43+sc.sc-dt.2024.05@sc/main#b1f09198e80992f54b1cf951c6b3168c0f659d0e%1717262149.643",
         "rapidyaml/0.5.0#c6f48c5eb99c1d0bad5c4ac8e6960375%1699016203.526",
         "python/3.10.7-rc.0.196+sc.sc-dt.2024.04@sc/main#19ea03369e8e9b19cf9d30706ac0b2c118361818%1714168612.662",
-        "openocd_source_deps/0.0.1-rc.0.196+sc.sc-dt.2024.04@sc/main#5513fdee860169719eda87901ad40fc42755df72%1714151648.104",
-        "gdb_source_deps/0.0.1-rc.0.196+sc.sc-dt.2024.04@sc/main#da8938ccd11eeb9ea4879d58ffb624c11bd7dc1c%1714151667.074",
+        "openocd_source_deps/0.0.1-rc.0.217+sc.sc-dt.2024.05@sc/main#f3ce4a33dcfaf5c76b1c9d3221637f1d6fea6e32%1717236589.008",
+        "gdb_source_deps/0.0.1-rc.0.217+sc.sc-dt.2024.05@sc/main#47ca71a57f1692bdeac587968e93aec19598f86b%1717236589.598",
         "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
-        "external_openocd_tests/0.0.3-rc.0.218+sc.main@sc/main#58081d0cd90605f8bc8fcc20e93f986ec539893e%1716462425.531",
-        "dejagnu/1.6.3-rc.0.196+sc.sc-dt.2024.04@sc/main#82b5b8566b089ee017899523baa4d0e63dc062d8%1714151650.996",
+        "external_openocd_tests/0.0.3-rc.0.220+sc.sc-dt.2024.05@sc/main#10e2b54bd867bb6a21828e7ba24909f8bcc2fff1%1717236587.134",
+        "dejagnu/1.6.3-rc.0.217+sc.sc-dt.2024.05@sc/main#9ee1fc6a8092d3f2c1c835ee6cbce4b1c4731829%1717236587.731",
         "c4core/0.1.11#5c6caad554b14584140f7e66c47eefb5%1699016213.432"
     ],
     "build_requires": [
-        "riscv-newlib/4.3.0-rc.0.31+sc.sc-dt.2024.04@sc/main#ca71db1d9ad4daed0c48d4cbf78074ebaa853b9a%1714156669.769",
-        "riscv-glibc/2.33.0-rc.0.42+sc.sc-dt.2024.04@sc/main#f7618f284e82e2561e8e63c3b10dab3394f06739%1714155659.687",
-        "riscv-gcc-raw/12.2.1-rc.0.106+sc.sc-dt.2024.04@sc/main#737858927d1cb1d416c2d70035696e1261b6dc81%1714154645.867",
-        "riscv-binutils-raw/2.38.0-rc.0.36+sc.sc-dt.2024.04@sc/main#5be99bccb0ee70646dd54ffaffff5438fd19ce37%1714152637.338",
-        "multilib-desc/1.0.0-rc.0.178+sc.sc-dt.2024.04@sc/main#ede53c6e144be6e32a04b32973adaf7f15666641%1714151630.321",
-        "glibc-linux-headers/5.10.5-rc.0.88+sc.main@sc/main#cded0422f0b06fc8a462d722139e790ee2b4286b%1699523647.321"
+        "riscv-newlib/4.4.0-rc.0.36+sc.sc-dt.2024.05@sc/main#35ad526d7c48fe552170d7b651cf4bd33a86046b%1717247226.926",
+        "riscv-glibc/2.38.0-rc.0.49+sc.sc-dt.2024.05@sc/main#6c5cb72088d3547774846e9b26a1b6b36c402de9%1717242017.88",
+        "riscv-gcc-raw/13.2.0-rc.0.123+sc.sc-dt.2024.05@sc/main#6a7afece7f89c853846e1ddea5fbf1bc391aa57d%1717240709.912",
+        "riscv-binutils-raw/2.42.0-rc.0.46+sc.sc-dt.2024.05@sc/main#aeab05302176ea833767149c395eee74190537d8%1717237557.529",
+        "multilib-desc/1.0.0-rc.0.217+sc.sc-dt.2024.05@sc/main#26f62314cea7ea547e488265561266c20aa0cabc%1717236599.328",
+        "glibc-linux-headers/6.6.3-rc.0.219+sc.sc-dt.2024.05@sc/main#62228c75c6dec40e7bfb4cf87a3425443a23cdde%1717237565.611"
     ],
     "python_requires": []
 }
