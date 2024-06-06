@@ -346,7 +346,7 @@ proc tsuplib_tclrcp_connect {} {
       verbose "netcat successfully connected!" 1
     }
     "open\n" {
-      puts "unexpected netcat msg: $expect_out(buffer)"
+      puts "unexpected netcat msg: [string range $expect_out(buffer) 0 end-1]"
       verbose "netcat successfully connected (inverse lookup error?)!" 1
     }
     "\n" {
