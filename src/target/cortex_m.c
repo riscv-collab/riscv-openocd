@@ -2202,8 +2202,9 @@ void cortex_m_deinit_target(struct target *target)
 	free(cortex_m);
 }
 
-int cortex_m_profiling(struct target *target, uint32_t *samples,
-			      uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
+int cortex_m_profiling(struct target *target, uint32_t *samples, uint32_t* sample_address_hi32,
+			bool with_range, uint64_t start_address, uint64_t end_address,
+			uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
 {
 	struct timeval timeout, now;
 	struct armv7m_common *armv7m = target_to_armv7m(target);
@@ -2217,7 +2218,8 @@ int cortex_m_profiling(struct target *target, uint32_t *samples,
 	}
 	if (reg_value == 0) {
 		LOG_TARGET_INFO(target, "PCSR sampling not supported on this processor.");
-		return target_profiling_default(target, samples, max_num_samples, num_samples, seconds);
+		return target_profiling_default(target, samples, sample_address_hi32, with_range,
+				start_address, end_address, max_num_samples, num_samples, seconds);
 	}
 
 	gettimeofday(&timeout, NULL);
@@ -2243,12 +2245,17 @@ int cortex_m_profiling(struct target *target, uint32_t *samples,
 			if (read_count > 1024)
 				read_count = 1024;
 
+			// this case ignores with_range flag, all samples are collected
+			// and will be filtered out later on write_gmon
 			retval = mem_ap_read_buf_noincr(armv7m->debug_ap,
 						(void *)&samples[sample_count],
 						4, read_count, DWT_PCSR);
 			sample_count += read_count;
 		} else {
-			target_read_u32(target, DWT_PCSR, &samples[sample_count++]);
+			target_read_u32(target, DWT_PCSR, &reg_value);
+			if (!with_range || (reg_value >= start_address && reg_value < end_address)) {
+				samples[sample_count++] = reg_value;
+			}
 		}
 
 		if (retval != ERROR_OK) {

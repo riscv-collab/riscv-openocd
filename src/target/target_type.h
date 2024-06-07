@@ -297,7 +297,8 @@ struct target_type {
 
 	/* do target profiling
 	 */
-	int (*profiling)(struct target *target, uint32_t *samples,
+	int (*profiling)(struct target *target, uint32_t *samples, uint32_t *sample_address_hi32,
+			bool with_range, uint64_t start_address, uint64_t end_address,
 			uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds);
 
 	/* Return the number of address bits this target supports. This will

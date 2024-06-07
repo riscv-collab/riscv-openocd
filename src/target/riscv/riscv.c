@@ -3194,7 +3194,7 @@ static int riscv_arch_state(struct target *target)
 	assert(target->state == TARGET_HALTED);
 	const bool semihosting_active = target->semihosting &&
 		target->semihosting->is_active;
-	LOG_USER("%s halted due to %s.%s",
+	LOG_DEBUG("%s halted due to %s.%s",
 			target_name(target),
 			debug_reason_name(target),
 			semihosting_active ? " Semihosting is active." : "");

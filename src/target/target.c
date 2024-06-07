@@ -1470,11 +1470,12 @@ unsigned int target_data_bits(struct target *target)
 	return 32;
 }
 
-static int target_profiling(struct target *target, uint32_t *samples,
+static int target_profiling(struct target *target, uint32_t *samples, uint32_t *sample_address_hi32,
+			bool with_range, uint64_t start_address, uint64_t end_address,
 			uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
 {
-	return target->type->profiling(target, samples, max_num_samples,
-			num_samples, seconds);
+	return target->type->profiling(target, samples, sample_address_hi32, with_range,
+			start_address, end_address, max_num_samples, num_samples, seconds);
 }
 
 static int handle_target(void *priv);
@@ -2293,7 +2294,8 @@ static int target_gdb_fileio_end_default(struct target *target,
 	return ERROR_OK;
 }
 
-int target_profiling_default(struct target *target, uint32_t *samples,
+int target_profiling_default(struct target *target, uint32_t *samples, uint32_t *sample_address_hi32,
+		bool with_range, uint64_t start_address, uint64_t end_address,
 		uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
 {
 	struct timeval timeout, now;
@@ -2305,6 +2307,7 @@ int target_profiling_default(struct target *target, uint32_t *samples,
 			" target as often as we can...");
 
 	uint32_t sample_count = 0;
+	bool warn_printed = false;
 	/* hopefully it is safe to cache! We want to stop/restart as quickly as possible. */
 	struct reg *reg = register_get_by_name(target->reg_cache, "pc", true);
 
@@ -2312,8 +2315,25 @@ int target_profiling_default(struct target *target, uint32_t *samples,
 	for (;;) {
 		target_poll(target);
 		if (target->state == TARGET_HALTED) {
-			uint32_t t = buf_get_u32(reg->value, 0, 32);
-			samples[sample_count++] = t;
+			// update reg value if cached value is not valid
+			if (!reg->valid) reg->type->get(reg);
+
+			uint64_t t = buf_get_u64(reg->value, 0, reg->size);
+
+			if (!with_range || (t >= start_address && t < end_address)) {
+				if (sample_count == 0) {
+					// set high 32 bits of address as of the first sample
+					*sample_address_hi32 = (uint32_t)(t >> 32);
+				}
+				if ((t >> 32) != *sample_address_hi32 && !warn_printed) {
+					LOG_WARNING("Samples do not fit into single 32-bit slice, "
+							"some samples will be skipped");
+					warn_printed = true;
+					continue;
+				}
+				samples[sample_count++] = (uint32_t)(t & 0xffffffff);
+			}
+
 			/* current pc, addr = 0, do not handle breakpoints, not debugging */
 			retval = target_resume(target, 1, 0, 0, 0);
 			target_poll(target);
@@ -4174,6 +4194,21 @@ static void write_long(FILE *f, int l, struct target *target)
 	write_data(f, val, 4);
 }
 
+static void write_vma(FILE *f, uint64_t l, struct target *target)
+{
+	struct reg *reg = register_get_by_name(target->reg_cache, "pc", true);
+	if (reg->size == 64) {
+		uint8_t val[8];
+		target_buffer_set_u64(target, val, l);
+		write_data(f, val, 8);
+	}
+	else {
+		uint8_t val[4];
+		target_buffer_set_u32(target, val, l);
+		write_data(f, val, 4);
+	}
+}
+
 static void write_string(FILE *f, char *s)
 {
 	write_data(f, s, strlen(s));
@@ -4182,8 +4217,9 @@ static void write_string(FILE *f, char *s)
 typedef unsigned char UNIT[2];  /* unit of profiling */
 
 /* Dump a gmon.out histogram file. */
-static void write_gmon(uint32_t *samples, uint32_t sample_num, const char *filename, bool with_range,
-			uint32_t start_address, uint32_t end_address, struct target *target, uint32_t duration_ms)
+static void write_gmon(uint32_t *samples, uint32_t sample_address_hi32, uint32_t sample_num,
+		const char *filename, bool with_range, uint64_t start_address, uint64_t end_address,
+		struct target *target, uint32_t duration_ms)
 {
 	uint32_t i;
 	FILE *f = fopen(filename, "w");
@@ -4199,42 +4235,43 @@ static void write_gmon(uint32_t *samples, uint32_t sample_num, const char *filen
 	write_data(f, &zero, 1);
 
 	/* figure out bucket size */
-	uint32_t min;
-	uint32_t max;
+	uint64_t min;
+	uint64_t max;
 	if (with_range) {
 		min = start_address;
 		max = end_address;
 	} else {
-		min = samples[0];
-		max = samples[0];
+		min = ((uint64_t)sample_address_hi32 << 32) | samples[0];
+		max = ((uint64_t)sample_address_hi32 << 32) | samples[0];
 		for (i = 0; i < sample_num; i++) {
-			if (min > samples[i])
-				min = samples[i];
-			if (max < samples[i])
-				max = samples[i];
+			uint64_t sample = ((uint64_t)sample_address_hi32 << 32) | samples[i];
+			if (min > sample)
+				min = sample;
+			if (max < sample)
+				max = sample;
 		}
 
 		/* max should be (largest sample + 1)
 		 * Refer to binutils/gprof/hist.c (find_histogram_for_pc) */
-		if (max < UINT32_MAX)
+		if (max < UINT64_MAX)
 			max++;
 
 		/* gprof requires (max - min) >= 2 */
 		while ((max - min) < 2) {
-			if (max < UINT32_MAX)
+			if (max < UINT64_MAX)
 				max++;
 			else
 				min--;
 		}
 	}
 
-	uint32_t address_space = max - min;
+	uint64_t address_space = max - min;
 
 	/* FIXME: What is the reasonable number of buckets?
 	 * The profiling result will be more accurate if there are enough buckets. */
-	static const uint32_t max_buckets = 128 * 1024; /* maximum buckets. */
-	uint32_t num_buckets = address_space / sizeof(UNIT);
-	if (num_buckets > max_buckets)
+	static const uint32_t max_buckets = 128 * 1024 * 1024; /* maximum buckets. */
+	uint64_t num_buckets = address_space / sizeof(UNIT);
+	if (num_buckets > (uint64_t)max_buckets)
 		num_buckets = max_buckets;
 	int *buckets = malloc(sizeof(int) * num_buckets);
 	if (!buckets) {
@@ -4243,22 +4280,23 @@ static void write_gmon(uint32_t *samples, uint32_t sample_num, const char *filen
 	}
 	memset(buckets, 0, sizeof(int) * num_buckets);
 	for (i = 0; i < sample_num; i++) {
-		uint32_t address = samples[i];
+		uint64_t address = ((uint64_t)sample_address_hi32 << 32) | samples[i];
 
 		if ((address < min) || (max <= address))
 			continue;
 
-		long long a = address - min;
-		long long b = num_buckets;
-		long long c = address_space;
+		int64_t a = address - min;
+		int64_t b = num_buckets;
+		int64_t c = address_space;
 		int index_t = (a * b) / c; /* danger!!!! int32 overflows */
 		buckets[index_t]++;
 	}
 
+
 	/* append binary memory gmon.out &profile_hist_hdr ((char*)&profile_hist_hdr + sizeof(struct gmon_hist_hdr)) */
-	write_long(f, min, target);			/* low_pc */
-	write_long(f, max, target);			/* high_pc */
-	write_long(f, num_buckets, target);	/* # of buckets */
+	write_vma(f, min, target);			/* low_pc */
+	write_vma(f, max, target);			/* high_pc */
+	write_long(f, (uint32_t)num_buckets, target);	/* # of buckets */
 	float sample_rate = sample_num / (duration_ms / 1000.0);
 	write_long(f, sample_rate, target);
 	write_string(f, "seconds");
@@ -4304,13 +4342,13 @@ COMMAND_HANDLER(handle_profile_command)
 
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], offset);
 
-	uint32_t start_address = 0;
-	uint32_t end_address = 0;
+	uint64_t start_address = 0;
+	uint64_t end_address = 0;
 	bool with_range = false;
 	if (CMD_ARGC == 4) {
 		with_range = true;
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], start_address);
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[3], end_address);
+		COMMAND_PARSE_NUMBER(u64, CMD_ARGV[2], start_address);
+		COMMAND_PARSE_NUMBER(u64, CMD_ARGV[3], end_address);
 		if (start_address > end_address || (end_address - start_address) < 2) {
 			command_print(CMD, "Error: end - start < 2");
 			return ERROR_COMMAND_ARGUMENT_INVALID;
@@ -4322,6 +4360,7 @@ COMMAND_HANDLER(handle_profile_command)
 		LOG_ERROR("No memory to store samples.");
 		return ERROR_FAIL;
 	}
+	uint32_t sample_address_hi32 = 0;
 
 	uint64_t timestart_ms = timeval_ms();
 	/**
@@ -4329,8 +4368,9 @@ COMMAND_HANDLER(handle_profile_command)
 	 * annoying halt/resume step; for example, ARMv7 PCSR.
 	 * Provide a way to use that more efficient mechanism.
 	 */
-	retval = target_profiling(target, samples, MAX_PROFILE_SAMPLE_NUM,
-				&num_of_samples, offset);
+	retval = target_profiling(target, samples, &sample_address_hi32,
+				with_range, start_address, end_address,
+				MAX_PROFILE_SAMPLE_NUM, &num_of_samples, offset);
 	if (retval != ERROR_OK) {
 		free(samples);
 		return retval;
@@ -4369,7 +4409,7 @@ COMMAND_HANDLER(handle_profile_command)
 		return retval;
 	}
 
-	write_gmon(samples, num_of_samples, CMD_ARGV[1],
+	write_gmon(samples, sample_address_hi32, num_of_samples, CMD_ARGV[1],
 		   with_range, start_address, end_address, target, duration_ms);
 	command_print(CMD, "Wrote %s", CMD_ARGV[1]);
 

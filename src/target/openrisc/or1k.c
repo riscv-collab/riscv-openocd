@@ -1200,7 +1200,8 @@ static int or1k_checksum_memory(struct target *target, target_addr_t address,
 	return ERROR_FAIL;
 }
 
-static int or1k_profiling(struct target *target, uint32_t *samples,
+static int or1k_profiling(struct target *target, uint32_t *samples, uint32_t *sample_address_hi32,
+		bool with_range, uint64_t start_address, uint64_t end_address,
 		uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
 {
 	struct timeval timeout, now;
@@ -1233,7 +1234,9 @@ static int or1k_profiling(struct target *target, uint32_t *samples,
 			return retval;
 		}
 
-		samples[sample_count++] = reg_value;
+		if (!with_range || (reg_value >= start_address && reg_value < end_address)) {
+			samples[sample_count++] = reg_value;
+		}
 
 		gettimeofday(&now, NULL);
 		if ((sample_count >= max_num_samples) || timeval_compare(&now, &timeout) > 0) {

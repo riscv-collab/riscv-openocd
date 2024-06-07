@@ -332,7 +332,8 @@ int cortex_m_remove_watchpoint(struct target *target, struct watchpoint *watchpo
 void cortex_m_enable_breakpoints(struct target *target);
 void cortex_m_enable_watchpoints(struct target *target);
 void cortex_m_deinit_target(struct target *target);
-int cortex_m_profiling(struct target *target, uint32_t *samples,
+int cortex_m_profiling(struct target *target, uint32_t *samples, uint32_t* sample_address_hi32,
+	bool with_range, uint64_t start_address, uint64_t end_address,
 	uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds);
 
 #endif /* OPENOCD_TARGET_CORTEX_M_H */

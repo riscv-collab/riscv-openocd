@@ -787,8 +787,9 @@ void target_handle_md_output(struct command_invocation *cmd,
 	struct target *target, target_addr_t address, unsigned size,
 	unsigned count, const uint8_t *buffer, bool include_address);
 
-int target_profiling_default(struct target *target, uint32_t *samples, uint32_t
-		max_num_samples, uint32_t *num_samples, uint32_t seconds);
+int target_profiling_default(struct target *target, uint32_t *samples, uint32_t *sample_address_hi32,
+		bool with_range, uint64_t start_address, uint64_t end_address,
+		uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds);
 
 #define ERROR_TARGET_INVALID	(-300)
 #define ERROR_TARGET_INIT_FAILED (-301)
