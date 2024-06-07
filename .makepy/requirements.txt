@@ -1,4 +1,4 @@
-makepy==1.67.3
+makepy==1.71.0
 black==24.1.1
 cmakelang==0.6.13
 isort==5.13.2
