@@ -13,6 +13,11 @@ proc try_to_instantiate_bitstream {STAND_NAME PLATFORM} {
 
   set timeout 120
 
+  set REMOTE_PREFIX remote:
+  if {[string first $REMOTE_PREFIX $PLATFORM] == 0} {
+    set PLATFORM [string range $PLATFORM [string length $REMOTE_PREFIX] end]
+  }
+
   # check if platform starts with "/"
   if {[string first / $PLATFORM] == 0} {
     set EXPECTED_PATTERN "Flashing bitstream completed!"
