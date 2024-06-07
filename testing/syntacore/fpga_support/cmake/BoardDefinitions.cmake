@@ -263,10 +263,6 @@ registerFPGAConfiguration(twin_scr6
   TWIN_NIGHTLY
 )
 
-# SCR7 testing
-# scr7_l2_23ww46.4.0 is the last SCR7 bitstream that has 2 harts
-# subsequent versions have only 1 hart, we need an additional work to handle
-# 1-hart bitstreams
 addSCR7X2_L2Config(scr7_l2_23ww46.4.0
   remote:/home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww46.4.0/scr7_l2_23ww46.4.0.bit
   TWIN_NIGHTLY
@@ -275,17 +271,25 @@ addSCR7L2Config(scr7_l2_24ww13.5.0
   remote:/home/stand/users/aap-sc/BITSTREAMS/scr7_l2_24ww13.5.0/scr7_l2_24ww13.5.0.bit
   TWIN_NIGHTLY
 )
+addSCR7L2Config(scr7_l2_24ww20.4.0
+  remote:/home/stand/users/aap-sc/BITSTREAMS/scr7_l2_24ww20.4.0/scr7_l2_24ww20.4.0.bit
+  TWIN_NIGHTLY
+)
 addSCR7L2Config(scr7_dev
   remote:/home/stand/users/aap-sc/BITSTREAMS/scr7_l2_23ww46.4.0/scr7_l2_23ww46.4.0.bit
 )
 
 # SCR9 testing
-addSCR9L2Config(scr9_l2_23ww45.4.0.bit
+addSCR9L2Config(scr9_l2_23ww45.4.0
   remote:/home/stand/users/aap-sc/BITSTREAMS/scr9_l2_23ww45.4.0/scr9_l2_23ww45.4.0.bit
   TWIN_NIGHTLY
 )
-addSCR9L2Config(scr9_l2_24ww13.5.0.bit
+addSCR9L2Config(scr9_l2_24ww13.5.0
   remote:/home/stand/users/aap-sc/BITSTREAMS/scr9_l2_24ww13.5.0/scr9_l2_24ww13.5.0.bit
+  TWIN_NIGHTLY
+)
+addSCR9L2Config(scr9_l2_24ww21.1.0
+  remote:/home/stand/users/aap-sc/BITSTREAMS/scr9_l2_24ww21.1.0/scr9_l2_24ww21.1.0.bit
   TWIN_NIGHTLY
 )
 addSCR9L2Config(scr9_dev
