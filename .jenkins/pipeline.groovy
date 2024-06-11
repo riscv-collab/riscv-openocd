@@ -47,12 +47,8 @@ workflow('openocd') {
             fs('1.0Gi', '1.2Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_18', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+            [[image          : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               extraOpts      : ['', '--options:host elct_support=True'],
-              buildType      : ['Release'],
-              profile        : ['default']],
-             [image          : ['cpp_centos_7'],
-              extraOpts      : [''],
               buildType      : ['Release'],
               profile        : ['default']],
              [image          : ['cpp_ubuntu_22'],
@@ -70,7 +66,7 @@ workflow('openocd') {
             fs('1.0Gi', '1.0Gi')
         }
         matrix {
-            [[image        : ['cpp_ubuntu_20']]]
+            [[image : ['cpp_ubuntu_20']]]
         }
         rules { vars ->
             include(vars.ti >= TI.NIGHTLY)
@@ -127,10 +123,11 @@ workflow('openocd') {
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
-            [[image          : ['cpp_ubuntu_18', 'cpp_ubuntu_20'],
+            [[image          : ['cpp_rocky_8', 'cpp_ubuntu_20'],
               profile        : ['default'],
               testingType    : ['spike', 'external'],
-              extraOpts      : ['--options:host test=True', '--options:host elct_support=True --options:host test=True'],
+              extraOpts      : ['--options:host test=True',
+                                '--options:host elct_support=True --options:host test=True'],
               buildType      : ['Release']]]
         }
         script { vars ->
@@ -276,13 +273,11 @@ workflow('openocd') {
             fs('1.0Gi', '1.3Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_18', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+            [[image          : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default'],
               extraArgs      : ['', '--options:host elct_support=True']],
              [image          : ['cpp_ubuntu_22'],
-              profile        : ['makepy_sc_mingw', 'mp_armhf']],
-             [image          : ['cpp_centos_7'],
-              profile        : ['default']]]
+              profile        : ['makepy_sc_mingw', 'mp_armhf']]]
         }
     }
 
@@ -294,7 +289,7 @@ workflow('openocd') {
         }
         dependsOn 'deploy'
         matrix {
-            [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+            [[image          : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default']],
              [image          : ['cpp_ubuntu_22'],
               profile        : ['makepy_sc_mingw', 'mp_armhf']]]
