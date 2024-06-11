@@ -27,6 +27,11 @@ workflow('openocd') {
     }
 
     job('lint') {
+        resources {
+            cpu('0.2', '1.9')
+            memory('0.1Gi', '0.7Gi')
+            fs('1.0Gi', '1.0Gi')
+        }
         matrix {
             [["image": ['cpp_ubuntu_20']]]
         }
@@ -36,7 +41,8 @@ workflow('openocd') {
     job('main-build') {
         resources {
             cpu('0.8', '4')
-            memory('0.3Gi', '16Gi')
+            memory('0.3Gi', '16.2Gi')
+            fs('1.0Gi', '1.0Gi')
         }
         matrix {
             [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
@@ -71,8 +77,9 @@ workflow('openocd') {
 
     job('tests-sanitized') {
         resources {
-            cpu('10', '10')
-            memory('16Gi')
+            cpu('6.9', '10')
+            memory('1.2Gi', '16Gi')
+            fs('7.2Gi', '18.1Gi')
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
@@ -105,8 +112,9 @@ workflow('openocd') {
 
     job('tests') {
         resources {
-            cpu('10', '10')
-            memory('0.4Gi', '16Gi')
+            cpu('10.0', '10')
+            memory('1.5Gi', '23.5Gi')
+            fs('12.0Gi', '30.1Gi')
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
@@ -135,8 +143,9 @@ workflow('openocd') {
 
     job('tests-transferable') {
         resources {
-            cpu('10', '10')
-            memory('0.7Gi', '16Gi')
+            cpu('10.0', '10')
+            memory('0.9Gi', '22.8Gi')
+            fs('13.3Gi', '33.3Gi')
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
@@ -161,8 +170,9 @@ workflow('openocd') {
 
     job('tests-fpga-build') {
         resources {
-            cpu('4', '4')
-            memory('16Gi')
+            cpu('0.7', '4')
+            memory('0.4Gi', '16Gi')
+            fs('4.5Gi', '11.2Gi')
         }
         matrix {
             [[image          : ['cpp_ubuntu_20'],
@@ -260,8 +270,9 @@ workflow('openocd') {
 
     job('deploy_artifactory') {
         resources {
-            cpu('4', '4')
-            memory('8Gi')
+            cpu('0.2', '4')
+            memory('0.1Gi', '8Gi')
+            fs('1.0Gi', '1.0Gi')
         }
         dependsOn 'deploy'
         matrix {
