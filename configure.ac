@@ -396,6 +396,10 @@ AC_ARG_ENABLE([remote-bitbang],
   AS_HELP_STRING([--enable-remote-bitbang], [Enable building support for the Remote Bitbang driver]),
   [build_remote_bitbang=$enableval], [build_remote_bitbang=yes])
 
+AC_ARG_ENABLE([elct-support],
+  AS_HELP_STRING([--enable-elct-support], [Enable building extra commands for ELCT.]),
+  [elct_support=$enableval], [elct_support=no])
+
 AS_CASE(["${host_cpu}"],
   [i?86|x86*], [],
   [
@@ -682,6 +686,12 @@ AS_IF([test "x$enable_jansson" != xno], [
 	])
 ])
 
+AS_IF([test "x$enable_elct_support" = xyes], [
+    AC_DEFINE([ELCT_SUPPORT],[1], [1 if ELCT support is included.])
+], [
+    AC_DEFINE([ELCT_SUPPORT],[0], [0 if ELCT support is excluded.])
+])
+
 for hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
 	PKG_CHECK_MODULES([HIDAPI],[$hidapi_lib],[
 		use_hidapi=yes
@@ -806,6 +816,8 @@ AM_CONDITIONAL([RSHIM], [test "x$build_rshim" = "xyes"])
 AM_CONDITIONAL([DMEM], [test "x$build_dmem" = "xyes"])
 AM_CONDITIONAL([HAVE_CAPSTONE], [test "x$enable_capstone" != "xno"])
 AM_CONDITIONAL([HAVE_JANSSON], [test "x$enable_jansson" != "xno"])
+
+AM_CONDITIONAL([ELCT_SUPPORT], [test "x$enable_elct_support" = "xyes"])
 
 AM_CONDITIONAL([INTERNAL_JIMTCL], [test "x$use_internal_jimtcl" = "xyes"])
 AM_CONDITIONAL([INTERNAL_LIBJAYLINK], [test "x$use_internal_libjaylink" = "xyes"])

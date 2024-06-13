@@ -257,7 +257,9 @@ static struct command_context *setup_command_handler(Jim_Interp *interp)
 		&cti_register_commands,
 		&dap_register_commands,
 		&arm_tpiu_swo_register_commands,
+#if ELCT_SUPPORT
 		&elct_register_commands,
+#endif
 		NULL
 	};
 	for (unsigned i = 0; command_registrants[i]; i++) {
@@ -364,7 +366,9 @@ int openocd_main(int argc, char *argv[])
 	/* free all DAP and CTI objects */
 	arm_cti_cleanup_all();
 	dap_cleanup_all();
+#if ELCT_SUPPORT
 	elct_cleanup();
+#endif
 
 	adapter_quit();
 

@@ -11,6 +11,7 @@
         "rapidyaml/0.5.0#c6f48c5eb99c1d0bad5c4ac8e6960375%1699016203.526",
         "python-gcc-12/3.10.7-rc.0.227+sc.sc-dt.2024.05.sp1@sc/main#ff0629e02925e1f006ab13082de5aaf791bff791%1717664662.782",
         "openocd_source_deps/0.0.1-rc.0.217+sc.sc-dt.2024.05@sc/main#f3ce4a33dcfaf5c76b1c9d3221637f1d6fea6e32%1717236589.008",
+        "jansson/2.14#42fc601d5b8e236e050e48f2321ef851%1712843826.616",
         "gdb_source_deps/0.0.1-rc.0.217+sc.sc-dt.2024.05@sc/main#47ca71a57f1692bdeac587968e93aec19598f86b%1717236589.598",
         "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
         "external_openocd_tests/0.0.3-rc.0.220+sc.sc-dt.2024.05@sc/main#10e2b54bd867bb6a21828e7ba24909f8bcc2fff1%1717236587.134",

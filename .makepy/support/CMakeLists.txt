@@ -74,7 +74,7 @@ ExternalProject_Add(
     # is an overkill. So we link with udev dynamically using the library found
     # in the build environment.
     env
-      PKG_CONFIG_PATH=${OCD_PKG_CONFIG_LIB}:${OCD_PKG_CONFIG_LIB64}
+      PKG_CONFIG_PATH=${OCD_PKG_CONFIG_LIB}:${OCD_PKG_CONFIG_LIB64}:$ENV{PKG_CONFIG_PATH}
       CC=${CMAKE_C_COMPILER}
       CFLAGS=${OPENOCD_CFLAGS}
     ${OPENOCD_SOURCES}/configure

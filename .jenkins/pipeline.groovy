@@ -5,7 +5,7 @@ import tools.automation.TI
 def buildProject(vars, target = "openocd") {
   sh(""" ./make.py just-config --profile:host ${vars.profile} \
           --options:host build_type=${vars.buildType} \
-          --build-path build/${vars.buildType} ${vars.testOpt} """)
+          --build-path build/${vars.buildType} ${vars.extraOpts} """)
   sh("./make.py build --build-path build/${vars.buildType} --target ${target}")
 }
 
@@ -45,12 +45,16 @@ workflow('openocd') {
             fs('1.0Gi', '1.0Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
-              testOpt        : [''],
+            [[image          : ['cpp_ubuntu_18', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+              extraOpts      : ['', '--options:host elct_support=True'],
+              buildType      : ['Release'],
+              profile        : ['default']],
+             [image          : ['cpp_centos_7'],
+              extraOpts      : [''],
               buildType      : ['Release'],
               profile        : ['default']],
              [image          : ['cpp_ubuntu_22'],
-              testOpt        : [''],
+              extraOpts      : [''],
               buildType      : ['Release'],
               profile        : ['makepy_sc_mingw']]]
         }
@@ -89,8 +93,10 @@ workflow('openocd') {
                // unfortunatly, we can't enable Strict sanitization, since jimtcl has bugs like this:
                // https://github.com/msteveb/jimtcl/issues/300
                // https://github.com/msteveb/jimtcl/issues/301
-               testOpt        : ['--options:host test=True --sanitize-level=Enabled',
-                                 '--options:host test=True --tests-options tests-valgrid-path=valgrind'],
+               extraOpts      : ['--options:host test=True --sanitize-level=Enabled',
+                                 '--options:host test=True --sanitize-level=Enabled --options:host elct_support=True',
+                                 '--options:host test=True --tests-options tests-valgrid-path=valgrind',
+                                 '--options:host test=True --tests-options tests-valgrid-path=valgrind --options:host elct_support=True'],
                buildType      : ['Debug', 'Release']]]
         }
         rules { vars ->
@@ -121,7 +127,7 @@ workflow('openocd') {
             [[image          : ['cpp_ubuntu_18', 'cpp_ubuntu_20'],
               profile        : ['default'],
               testingType    : ['spike', 'external'],
-              testOpt        : ['--options:host test=True'],
+              extraOpts      : ['--options:host test=True', '--options:host elct_support=True --options:host test=True'],
               buildType      : ['Release']]]
         }
         script { vars ->
@@ -151,7 +157,7 @@ workflow('openocd') {
         matrix {
             [[image          : ['cpp_ubuntu_20'],
               profile        : ['default'],
-              testOpt        : ['--options:host test=True'],
+              extraOpts      : ['--options:host test=True'],
               buildType      : ['Release']]]
         }
         script { vars ->
@@ -177,7 +183,7 @@ workflow('openocd') {
         matrix {
             [[image          : ['cpp_ubuntu_20'],
               profile        : ['default'],
-              testOpt        : ['--options:host test=True'],
+              extraOpts      : ['--options:host test=True'],
               buildType      : ['Release']]]
         }
         rules { vars ->
@@ -261,10 +267,13 @@ workflow('openocd') {
             memory('0.3Gi', '16Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
-              profile        : ['default']],
+            [[image          : ['cpp_ubuntu_18', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+              profile        : ['default'],
+              extraArgs      : ['', '--options:host elct_support=True']],
              [image          : ['cpp_ubuntu_22'],
-              profile        : ['makepy_sc_mingw']]]
+              profile        : ['makepy_sc_mingw']],
+             [image          : ['cpp_centos_7'],
+              profile        : ['default']]]
         }
     }
 

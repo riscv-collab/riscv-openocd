@@ -339,15 +339,16 @@ def _main() -> None:
     conductor.add(_SyntacoreSuite())
     configs = _ConanConfigs()
     configs.add_windows()
-    configs.add_ubuntu18()
-    configs.add_ubuntu18(options={"test": "True"})
-    configs.add_ubuntu20()
-    configs.add_ubuntu20(options={"test": "True"})
-    configs.add_ubuntu22()
+    configs.add_ubuntu18(
+        options={"elct_support": [False, True], "test": [False, True]}
+    )
+    configs.add_ubuntu20(
+        options={"elct_support": [False, True], "test": [False, True]}
+    )
+    configs.add_ubuntu22(options={"elct_support": [False, True]})
     configs.add_centos7()
-    configs.add_rocky8()
+    configs.add_rocky8(options={"elct_support": [False, True]})
     # NOTE: currently, we don't run tests on ubuntu_22
-    # configs.add_ubuntu22(options={"test": "True"})
     conductor.add(
         _ConanSuite(
             name="openocd",

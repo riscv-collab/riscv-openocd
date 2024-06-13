@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+if ELCT_SUPPORT
 noinst_LTLIBRARIES += %D%/libelct.la
+endif
 
 %C%_libelct_la_CPPFLAGS = $(AM_CPPFLAGS)
 

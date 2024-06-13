@@ -10,6 +10,7 @@ from urllib.parse import urlparse as _urlparse
 
 import conan as _conan
 from conan.tools.cmake import CMakeToolchain as _CMakeToolchain
+from conan.tools.gnu import PkgConfigDeps as _PkgConfigDeps
 from conan.tools.scm import Git as _Git
 
 # isort: off
@@ -22,8 +23,16 @@ _sys.path.append(str(_Path(__file__).parent / ".makepy"))
 class Package(_conan.ConanFile):
     name = "openocd"
     settings = "os", "arch"
-    options = {"test": [True, False], "build_type": ["Release", "Debug"]}
-    default_options = {"test": False, "build_type": "Release"}
+    options = {
+        "test": [True, False],
+        "build_type": ["Release", "Debug"],
+        "elct_support": [True, False],
+    }
+    default_options = {
+        "test": False,
+        "build_type": "Release",
+        "elct_support": False,
+    }
     revision_mode = "scm"
     cmake_find_mode = "both"
     package_type = "application"
@@ -91,6 +100,10 @@ class Package(_conan.ConanFile):
 
         if self.settings.os != "Linux":
             return
+
+        if self.options.elct_support:
+            self.requires(deps["jansson"], options={"shared": False})
+
         if self.options.test != "True":
             return
 
@@ -141,7 +154,13 @@ class Package(_conan.ConanFile):
             toolchain.variables["CMAKE_BUILD_TYPE"] = self.options.build_type
             toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
 
+        if self.options.elct_support:
+            toolchain.variables["ENABLE_ELCT_SUPPORT"] = "ON"
+
         toolchain.generate()
+
+        pc = _PkgConfigDeps(self)
+        pc.generate()
 
     def build(self) -> None:
         self.run(

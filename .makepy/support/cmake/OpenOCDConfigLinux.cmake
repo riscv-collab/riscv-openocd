@@ -46,3 +46,11 @@ set(OPENOCD_CONFIGURE_OPTIONS
     # --with-capstone # Capstone is disabled, since 0.11 has the support only
     # for arm and aarch64
 )
+option(ENABLE_ELCT_SUPPORT "Enable ELCT support.")
+if (ENABLE_ELCT_SUPPORT)
+  set (OPENOCD_CONFIGURE_OPTIONS
+       ${OPENOCD_CONFIGURE_OPTIONS}
+       --enable-elct-support
+       --with-jansson
+  )
+endif()

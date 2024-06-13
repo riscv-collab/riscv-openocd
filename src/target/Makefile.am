@@ -3,8 +3,11 @@
 %C%_libtarget_la_LIBADD = %D%/openrisc/libopenrisc.la \
 	%D%/riscv/libriscv.la \
 	%D%/xtensa/libxtensa.la \
-	%D%/espressif/libespressif.la \
-	%D%/elct/libelct.la
+	%D%/espressif/libespressif.la
+
+if ELCT_SUPPORT
+%C%_libtarget_la_LIBADD += %D%/elct/libelct.la
+endif
 
 %C%_libtarget_la_CPPFLAGS = $(AM_CPPFLAGS)
 
