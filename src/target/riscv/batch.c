@@ -157,6 +157,8 @@ int riscv_batch_run_from(struct riscv_batch *batch, size_t start_idx,
 	LOG_TARGET_DEBUG(batch->target, "Running batch of scans [%zu, %zu)",
 			start_idx, batch->used_scans);
 
+	select_dmi(batch->target);
+
 	for (size_t i = start_idx; i < batch->used_scans; ++i) {
 		if (bscan_tunnel_ir_width != 0)
 			riscv_add_bscan_tunneled_scan(batch->target, batch->fields + i, batch->bscan_ctxt + i);

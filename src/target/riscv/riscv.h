@@ -378,6 +378,7 @@ extern int bscan_tunnel_ir_width;
 
 int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_ptr);
 void select_dmi_via_bscan(struct target *target);
+void select_dmi(struct target *target);
 
 /*** OpenOCD Interface */
 int riscv_openocd_poll(struct target *target);

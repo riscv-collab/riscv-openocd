@@ -435,7 +435,7 @@ void riscv_log_dmi_scan(const struct target *target, int idle, const struct scan
 
 /*** Utility functions. ***/
 
-static void select_dmi(struct target *target)
+void select_dmi(struct target *target)
 {
 	if (bscan_tunnel_ir_width != 0) {
 		select_dmi_via_bscan(target);
