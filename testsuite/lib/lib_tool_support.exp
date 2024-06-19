@@ -331,37 +331,10 @@ proc tsuplib_tclrcp_connect {} {
   # we use raw to avoid translation of \x1a to ^D
   # -echo just disables echoing of sent symbols
   set stty_init "raw -echo"
-  spawn nc -nv 127.0.0.1 [tool_state_get openocd_tclrpc_port]
+  spawn nc -n 127.0.0.1 [tool_state_get openocd_tclrpc_port]
   tool_state_update client_spawn_id $spawn_id
   tool_state_update client_type tclrpc
   unset stty_init
-
-  # Output from netcat is expected to look like this
-  #   "Connection to 127.0.0.1 3333 port [tcp/*] succeeded!"
-  # However, for reasons that are not quite clear at the moment sometimes
-  # we get something like this:
-  #   "(UNKNOWN) [127.0.0.1] 37345 (?) open"
-  expect {
-    "succeeded!\n" {
-      verbose "netcat successfully connected!" 1
-    }
-    "open\n" {
-      puts "unexpected netcat msg: [string range $expect_out(buffer) 0 end-1]"
-      verbose "netcat successfully connected (inverse lookup error?)!" 1
-    }
-    "\n" {
-      puts "netcat warning: $expect_out(buffer)"
-      exp_continue
-    }
-    eof {
-      tool_state_steal client_spawn_id
-      wait -nowait
-      tsuplib_internal_error "netcat (tclrpc client): unexpected EOF while waiting for connection"
-    }
-    timeout {
-      tsuplib_internal_error "netcat (tclrpc client): timeout has reached while waiting for connection"
-    }
-  }
 
   tsuplib_internal_tclrpc_send_command "echo \"Hi there!\"" capture
   expect {
