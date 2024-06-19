@@ -39,6 +39,7 @@ set COMMAND_LINE_OPTIONS [dict create \
   --debug-adapter-index "value:index. specify selected adapter" \
   --debug-adapter-serial "value:serial. specify serial number of debug adapter" \
   --disable-interactive-mode "flag. disables interactive selection of debug adapter" \
+  --disable-ebreak "flag. disable halt-on-ebreak behavior for all privilege levels." \
   --help "flag. prints this help" \
   --ide-mode "flag. hide most of CSRs. Useful if you want to debug an application using IDE (like Eclipse)" \
   --i-know-what-im-doing "value:config_file. Use only if your really understand the purpose of this flag" \
@@ -68,6 +69,7 @@ foreach OptKey [dict keys $COMMAND_LINE_OPTIONS] {
 
 set SETTINGS(help_mode) 0
 set SETTINGS(interactive) 1
+set SETTINGS(disable_ebreak) 0
 set SETTINGS(stand_db) $STAND_DB_DEFAULT_PATH
 set SETTINGS(autoconfig) 0
 set SETTINGS(smp) 0
@@ -188,6 +190,8 @@ for { set i 0 } { $i < $argc } { incr i } {
 
   if { $option == $COMMAND_LINE_ARG(--disable-interactive-mode) } {
     set SETTINGS(interactive) 0
+  } elseif { $option == $COMMAND_LINE_ARG(--disable-ebreak) } {
+    set SETTINGS(disable_ebreak) 1
   } elseif { $option == $COMMAND_LINE_ARG(--auto-config) } {
     set SETTINGS(autoconfig) 1
   } elseif { $option == $COMMAND_LINE_ARG(--scan-only) } {
@@ -726,6 +730,10 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
   if {$SETTINGS(smp) == 1} {
     lappend OpenOCDArgs -c
     lappend OpenOCDArgs "sc_target_config smp_configuration 1"
+  }
+  if {$SETTINGS(disable_ebreak) == 1} {
+    lappend OpenOCDArgs -c
+    lappend OpenOCDArgs "sc_target_config disable_ebreak 1"
   }
   if {$SETTINGS(bindto) != ""} {
     lappend OpenOCDArgs -c
