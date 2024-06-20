@@ -1,0 +1,44 @@
+proc check_reg {num name size value} {
+  switch -regexp $name {
+    v\d{1,2} {
+      ocdtlb_expect_equal [target_info cpu,has_v_ext] 1
+      #TODO: Check other fields.
+    }
+    vlenb  -
+    vstart -
+    vxsat  -
+    vxrm   -
+    vcsr   -
+    vl     -
+    vtype {
+      ocdtlb_expect_equal [target_info cpu,has_v_ext] 1
+      ocdtlb_expect_equal [target_info cpu,xlen]      $size
+    }
+    #TODO: Check other regs.
+  }
+}
+
+proc run_test {} {
+  ocd_connect
+
+  set regs [ocdtlb_run_expect "reg"]
+  set nums   [ocdtlb_rsp_get $regs found_num]
+  set names  [ocdtlb_rsp_get $regs found_name]
+  set sizes  [ocdtlb_rsp_get $regs found_size]
+  set values [ocdtlb_rsp_get $regs found_value]
+
+  foreach reg_num $nums reg_name $names reg_size $sizes value $values {
+    check_reg $reg_num $reg_name $reg_size $value
+  }
+  if {![target_info cpu,has_v_ext]} {
+    foreach reg_name {vlenb vstart vxsat vxrm vcsr vl vtype} {
+      ocdtlb_expect_missing $reg_name $names
+    }
+    if {[lsearch -regexp $names v\d{1,2}] != -1} {
+      return [ocd_test_fail]
+    }
+  }
+  return [ocd_test_pass]
+}
+
+return [run_test]
