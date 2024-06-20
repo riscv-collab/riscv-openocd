@@ -94,8 +94,8 @@ ExternalProject_Add(
 # cmake-format: on
 
 set(TESTSUITE_NAME ocd_transferable_testsuite)
-add_custom_command(
-  OUTPUT ${OPENOCD_TESTSUITE_INSTALL_PATH}/${TESTSUITE_NAME}.tar.gz
+add_custom_target(
+  transferable_testsuite
   COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/utils/make_distr.sh
           ${CMAKE_BINARY_DIR}
           ${OPENOCD_TESTSUITE_INSTALL_PATH}
@@ -103,9 +103,6 @@ add_custom_command(
   DEPENDS openocd
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
-
-add_custom_target(transferable_testsuite
-                  DEPENDS ${OPENOCD_TESTSUITE_INSTALL_PATH}/${TESTSUITE_NAME}.tar.gz)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND SC_OPENOCD_ENABLE_TESTS)
   include(cmake/DeclareLinuxTests.cmake)

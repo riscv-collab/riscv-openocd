@@ -12,10 +12,6 @@ DISTRIB_LOCATION="${OUTPUT}/${PACKAGE_NAME}"
 source "${INPUT}/conanrunenv-x86_64.sh"
 
 echo "output: ${OUTPUT}"
-if test -d ${OUTPUT}; then
-  echo "${OUTPUT} directory already exists. Aborting"
-  exit 1
-fi
 set -x
 set -e
 mkdir -p "${DISTRIB_LOCATION}"
