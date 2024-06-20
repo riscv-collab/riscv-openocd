@@ -1,0 +1,38 @@
+proc access_regs {ro_regs rw_regs expect_failure} {
+  foreach reg $ro_regs {
+    ocdtlb_run_expect "reg $reg" $expect_failure
+    ocdtlb_run_expect "reg $reg 0" 1
+  }
+  foreach reg $rw_regs {
+    ocdtlb_run_expect "reg $reg" $expect_failure
+    ocdtlb_run_expect "reg $reg 0" $expect_failure
+  }
+}
+
+proc run_test {} {
+  set ro_vector_regs {vlenb}
+  set rw_vector_regs {vstart vxsat vxrm vcsr vl vtype}
+  for {set i 0} {$i < 32} {incr i} {
+	  lappend rw_vector_regs v$i
+  }
+
+  ocd_connect
+  ocdtlb_run_expect "reset halt"
+
+  if {![target_info cpu,v_ext_misa_writable]} {
+    set expect_failure [expr {![target_info cpu,has_v_ext]}]
+    access_regs $ro_vector_regs $rw_vector_regs $expect_failure
+    return [ocd_test_pass]
+  }
+
+  access_regs $ro_vector_regs $rw_vector_regs 1
+  set reset_misa [ocdtlb_rsp_get [ocdtlb_run_expect "reg misa"]]
+  set misa_with_v [expr { $reset_misa | ( 1 << 21 ) }]
+  ocdtlb_run_expect "reg misa $misa_with_v"
+  ocdtlb_run_expect "riscv re_examine"
+  access_regs $ro_vector_regs $rw_vector_regs 0
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
