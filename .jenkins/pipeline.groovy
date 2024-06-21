@@ -40,9 +40,9 @@ workflow('openocd') {
 
     job('main-build') {
         resources {
-            cpu('0.8', '4')
-            memory('0.3Gi', '16.2Gi')
-            fs('1.0Gi', '1.0Gi')
+            cpu('0.9', '4')
+            memory('0.4Gi', '16.2Gi')
+            fs('1.0Gi', '1.2Gi')
         }
         matrix {
             [[image          : ['cpp_ubuntu_18', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
@@ -65,6 +65,7 @@ workflow('openocd') {
         resources {
             cpu('0.1', '1')
             memory('0.1Gi', '4Gi')
+            fs('1.0Gi', '1.0Gi')
         }
         matrix {
             [[image        : ['cpp_ubuntu_20']]]
@@ -81,9 +82,9 @@ workflow('openocd') {
 
     job('tests-sanitized') {
         resources {
-            cpu('6.9', '10')
+            cpu('6.8', '10')
             memory('1.2Gi', '16Gi')
-            fs('7.2Gi', '18.1Gi')
+            fs('11.8Gi', '21.5Gi')
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
@@ -119,8 +120,8 @@ workflow('openocd') {
     job('tests') {
         resources {
             cpu('10.0', '10')
-            memory('1.5Gi', '23.5Gi')
-            fs('12.0Gi', '30.1Gi')
+            memory('0.6Gi', '23.5Gi')
+            fs('11.3Gi', '30.1Gi')
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
@@ -150,8 +151,8 @@ workflow('openocd') {
     job('tests-transferable') {
         resources {
             cpu('10.0', '10')
-            memory('0.9Gi', '22.8Gi')
-            fs('13.3Gi', '33.3Gi')
+            memory('0.7Gi', '22.8Gi')
+            fs('14.1Gi', '33.3Gi')
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
@@ -177,8 +178,8 @@ workflow('openocd') {
     job('tests-fpga-build') {
         resources {
             cpu('0.7', '4')
-            memory('0.4Gi', '16Gi')
-            fs('4.5Gi', '11.2Gi')
+            memory('0.5Gi', '16Gi')
+            fs('7.4Gi', '13.5Gi')
         }
         matrix {
             [[image          : ['cpp_ubuntu_20'],
@@ -200,8 +201,9 @@ workflow('openocd') {
 
     job('tests-fpga-run-nightly') {
         resources {
-            cpu('0.5', '1')
-            memory('4Gi')
+            cpu('0.1', '1')
+            memory('0.3Gi', '4Gi')
+            fs('3.2Gi', '5.8Gi')
         }
         dependsOn 'tests-fpga-build'
         matrix {
@@ -263,8 +265,9 @@ workflow('openocd') {
 
     deploy {
         resources {
-            cpu('1.2', '4')
+            cpu('0.7', '4')
             memory('0.3Gi', '16Gi')
+            fs('1.0Gi', '1.3Gi')
         }
         matrix {
             [[image          : ['cpp_ubuntu_18', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
