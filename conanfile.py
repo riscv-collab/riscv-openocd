@@ -96,6 +96,21 @@ class Package(_conan.ConanFile):
         with open(conanfile_json, "r", encoding="UTF-8") as file:
             deps = _json.loads(file.read())
 
+        if self.settings.os == "Linux":
+            self.requires(deps["libudev"])
+        #'libusb' may depend on 'libudev'
+        self.requires(deps["libusb"], options={"shared": False})
+        #'libftdi' depends on 'libusb'
+        self.requires(
+            deps["libftdi"],
+            options={
+                "shared": False,
+                "enable_cpp_wrapper": False,
+                "use_streaming": False,
+            },
+        )
+        #'hidapi' may depend on 'libudev' and 'libusb'
+        self.requires(deps["hidapi"], options={"shared": False})
         self.requires(deps["openocd_source_deps"])
 
         if self.settings.os != "Linux":
@@ -161,6 +176,13 @@ class Package(_conan.ConanFile):
 
         pc = _PkgConfigDeps(self)
         pc.generate()
+        # hidapi is included using "hidapi.h", not "hidapi/hidapi.h".
+        hidapi_pc_path = _Path(self.build_folder) / "hidapi.pc"
+        hidapi_pc_data = hidapi_pc_path.read_text(encoding="utf-8")
+        hidapi_pc_data = hidapi_pc_data.replace(
+            "${includedir}", "${includedir}/hidapi"
+        )
+        hidapi_pc_path.write_text(hidapi_pc_data, encoding="utf-8")
 
     def build(self) -> None:
         self.run(

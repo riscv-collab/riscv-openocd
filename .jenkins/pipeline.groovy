@@ -56,7 +56,7 @@ workflow('openocd') {
              [image          : ['cpp_ubuntu_22'],
               extraOpts      : [''],
               buildType      : ['Release'],
-              profile        : ['makepy_sc_mingw']]]
+              profile        : ['makepy_sc_mingw', 'mp_armhf']]]
         }
         script { vars -> buildProject(vars) }
     }
@@ -274,7 +274,7 @@ workflow('openocd') {
               profile        : ['default'],
               extraArgs      : ['', '--options:host elct_support=True']],
              [image          : ['cpp_ubuntu_22'],
-              profile        : ['makepy_sc_mingw']],
+              profile        : ['makepy_sc_mingw', 'mp_armhf']],
              [image          : ['cpp_centos_7'],
               profile        : ['default']]]
         }
@@ -291,7 +291,7 @@ workflow('openocd') {
             [[image          : ['cpp_ubuntu_18', 'cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default']],
              [image          : ['cpp_ubuntu_22'],
-              profile        : ['makepy_sc_mingw']]]
+              profile        : ['makepy_sc_mingw', 'mp_armhf']]]
         }
         rules { vars ->
             include(vars.name in vars.deploy)

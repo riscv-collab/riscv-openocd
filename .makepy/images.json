@@ -11,7 +11,7 @@
   },
   {
     "display_name": "cpp_ubuntu_22",
-    "nametag": "<default_image_registry>/sc/cpp_ubuntu:22.1.19",
+    "nametag": "<default_image_registry>/sc/cpp_ubuntu:22.1.28",
     "os": "posix"
   },
   {

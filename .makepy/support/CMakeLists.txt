@@ -37,7 +37,6 @@ get_filename_component(OPENOCD_SOURCES ${CMAKE_SOURCE_DIR}/../.. ABSOLUTE)
 
 # cmake-format: off
 set(OCD_PKG_CONFIG_LIB ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig)
-set(OCD_PKG_CONFIG_LIB64 ${DEPENDENCIES_INSTALL_PATH}/lib64/pkgconfig)
 
 set(OPENOCD_SCRIPTS_INSTALL_DIR
   ${OPENOCD_INSTALL_PATH}/share/openocd/scripts/syntacore)
@@ -60,7 +59,7 @@ if (SC_OPENOCD_ENABLE_SANITIZERS)
   endif()
 endif()
 
-set(OPENOCD_CFLAGS "$<$<CONFIG:Debug>:-O0 -g> ${OPENOCD_EXTRA_CFLAGS}")
+set(OPENOCD_CFLAGS "$<$<CONFIG:Debug>:-O0 -g> $<$<BOOL:${CMAKE_SYSROOT}>:--sysroot=${CMAKE_SYSROOT}> ${OPENOCD_EXTRA_CFLAGS}")
 ExternalProject_Add(
   openocd
   PREFIX OpenOCDBuild
@@ -74,7 +73,7 @@ ExternalProject_Add(
     # is an overkill. So we link with udev dynamically using the library found
     # in the build environment.
     env
-      PKG_CONFIG_PATH=${OCD_PKG_CONFIG_LIB}:${OCD_PKG_CONFIG_LIB64}:$ENV{PKG_CONFIG_PATH}
+      PKG_CONFIG_PATH=${OCD_PKG_CONFIG_LIB}:$ENV{PKG_CONFIG_PATH}
       CC=${CMAKE_C_COMPILER}
       CFLAGS=${OPENOCD_CFLAGS}
     ${OPENOCD_SOURCES}/configure
