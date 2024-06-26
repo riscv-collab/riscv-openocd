@@ -1,4 +1,4 @@
-makepy==1.71.0
+makepy==1.77.3
 black==24.1.1
 cmakelang==0.6.13
 isort==5.13.2
@@ -73,3 +73,7 @@ tzlocal==5.2
 urllib3==1.26.18
 websocket-client==1.7.0
 xmodem==0.4.7
+annotated-types==0.7.0
+pydantic==2.7.4
+pydantic_core==2.18.4
+pytimeparse==1.1.8
