@@ -14,6 +14,8 @@ workflow('openocd') {
     parameters {
         [string(name: 'fpgaTestsWorkspaceId', defaultValue: null,
                 description: 'Tests on FPGA: Predefined HWRS reversion id for nightly runs'),
+         string(name: 'fpgaTestsReservationMaxWaitHours', defaultValue: '48',
+                description: 'Tests on FPGA: Maximum time to wait for a reservation'),
          string(name: 'fpgaTestsPlatformTimeoutMinutes', defaultValue: '10',
                 description: 'Tests on FPGA: Maximum minutes to run test for individual platform'),
          choiceParam(name: 'fpgaTestsPlatformsList',
@@ -200,6 +202,7 @@ workflow('openocd') {
     }
 
     job('tests-fpga-run-nightly') {
+        timeout(8 + params.fpgaTestsReservationMaxWaitHours as Integer)
         resources {
             cpu('0.1', '1')
             memory('0.3Gi', '4Gi')
@@ -220,6 +223,7 @@ workflow('openocd') {
             def host = "${vars.stand}.lab.dev.syntacore.com"
             def workspaceId = params.fpgaTestsWorkspaceId ?: env.BUILD_TAG
             def maxDurationMinutesPerConfiguration = params.fpgaTestsPlatformTimeoutMinutes as Integer
+            def reservationMaxWaitHours = params.fpgaTestsReservationMaxWaitHours as Integer
 
             artifacts.pop("${vars.profile}/${vars.image}/testsuite'")
             artifacts.pop("${vars.profile}/${vars.image}/fpga_info'")
@@ -227,16 +231,17 @@ workflow('openocd') {
             def configurations = readFile(params.fpgaTestsPlatformsList).tokenize("\n")
             def maxDurationMinutes = maxDurationMinutesPerConfiguration * configurations.size()
 
-            sh(""" ./make.py dev lock --name ${stand} \
-                    --duration ${maxDurationMinutes}m \
-                    --override-workspace-id ${workspaceId} \
-                    --blocking """)
-
             def options = """ --build-path build/${vars.buildType} \
                                       --host ${host} \
                                       --override-workspace-id ${workspaceId} """
 
             try {
+                sh(""" ./make.py dev lock --name ${stand} \
+                                          --duration ${maxDurationMinutes}m \
+                                          --max-wait ${reservationMaxWaitHours}h \
+                                          --override-workspace-id ${workspaceId} \
+                                          --blocking """)
+
                 sh("./make.py test-suite --install ${options}")
 
                 for (configuration in configurations) {
@@ -244,15 +249,16 @@ workflow('openocd') {
                     catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                         try {
                             timeout(maxDurationMinutesPerConfiguration) {
-                                sh("./make.py test-suite --run ${configuration} ${options}")
+                                sh(""" ./make.py test-suite --run-platform ${configuration} \
+                                                            --run-tool jtag ocd utils \
+                                                            ${options} """)
                             }
-                        } catch (Throwable e) {
+                        } finally {
                             artifacts.push(
                                     "build/${vars.buildType}/testing/lgrw/${configuration}.tar.gz",
                                     "logs",
                                     retention: '1w'
                             )
-                            throw e
                         }
                     }
                 }

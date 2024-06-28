@@ -6,16 +6,21 @@ import logging as _logging
 from argparse import ArgumentParser as _ArgumentParser
 from argparse import Namespace as _Namespace
 from pathlib import Path as _Path
+from typing import TYPE_CHECKING as _TYPE_CHECKING
 
 from hwrs import HWRSHook as _HWRSHook
+from lgrw import ConanHelper as _ConanHelper
 from lgrw import FpgaBoard as _FpgaBoard
-from lgrw._conan_support import ConanHelper
 from makepy import Command as _Command
 from makepy import Hook as _Hook
 from makepy import Suite as _Suite
 from makepy.syntacore import (
     SyntacoreCredentialsHook as _SyntacoreCredentialsHook,
 )
+
+if _TYPE_CHECKING:
+    # pylint: disable=ungrouped-imports
+    from lgrw._lgrunner import LabgridRunner as _LabgridRunner
 
 _logger = _logging.getLogger()
 
@@ -66,9 +71,23 @@ class _OcdTestSuiteCommand(_Command):
         )
 
         parser.add_argument(
-            "--run",
+            "--dry-run",
+            action="store_true",
+            help="Don't run anything on host, logging the execution.",
+        )
+
+        parser.add_argument(
+            "--run-tool",
             type=str,
-            help="Run tests for given platform",
+            nargs="*",
+            help="Run tests of given tools.",
+        )
+
+        parser.add_argument(
+            "--run-platform",
+            default=None,
+            type=str,
+            help="Run tests for given platform.",
         )
 
         parser.add_argument(
@@ -86,6 +105,8 @@ class _OcdTestSuiteCommand(_Command):
         local_build_path = args.build_path
         credentials = args.credentials
 
+        # OpenOCD is *not* used by LGRW. It is passed only to provide correct
+        # environment.
         openocd = (
             local_build_path
             / "install_testsuite"
@@ -93,156 +114,49 @@ class _OcdTestSuiteCommand(_Command):
             / "openocd"
         )
 
-        local_testsuite_gz = (
-            local_build_path
-            / "install_testsuite"
-            / "ocd_transferable_testsuite.tar.gz"
-        )
         local_dir = local_build_path / "testing" / "lgrw"
         local_dir.mkdir(parents=True, exist_ok=True)
 
-        remote_stand_info = _Path(
-            "/home/stand/.config/stand.info/tests.stand.info.json"
-        )
-        remote_dir = _Path("/home/stand/.ci") / workspace_id
-        remote_testsuite_gz = remote_dir / "ocd_transferable_testsuite.tar.gz"
-        remote_testsuite = remote_dir / "ocd_transferable_testsuite"
+        remote_install = _Path("/home/stand/.ci") / workspace_id
 
         board = _FpgaBoard(
             host,
             credentials,
             openocd,
             local_build_path / "testing" / "lgrw-state",
+            args.dry_run,
         )
 
-        try:
-            if args.install:
-                with board.labgrid() as runner:
-                    if (
-                        runner.run_shell(
-                            [
-                                "mkdir",
-                                "-p",
-                                remote_dir,
-                            ],
-                            check=False,
-                        ).returncode
-                        != 0
-                    ):
-                        raise RuntimeError(
-                            f"Install failed: installation for workspace {workspace_id} already exists. "
-                            f"Please either:\n"
-                            f"- run `--cleanup` to remove it"
-                            f"- omit `--install` to reuse"
-                        )
+        bitstream_path = None
+        if args.run_platform:
+            platform_desc = _get_platform_desc(
+                args.platforms, args.run_platform
+            )
+            bitstream_path = _Path(platform_desc["bitstream"])
+            openocd_board = platform_desc["openocd_board"]
 
-                    runner.send(
-                        local_testsuite_gz,
-                        remote_testsuite_gz,
-                        capture_output=True,
+        with board.labgrid() as runner:
+            try:
+                if args.install:
+                    _install_testsuite(
+                        runner,
+                        local_build_path / "install_testsuite",
+                        remote_install,
                     )
-                    runner.run_shell(
-                        [
-                            "tar",
-                            "-xzf",
-                            remote_testsuite_gz,
-                            "-C",
-                            remote_dir,
-                        ]
-                    )
-
-            if args.run:
-                configuration_name = str(args.run)
-                _logger.info("Running %s", configuration_name)
-
-                with open(args.platforms, encoding="utf-8") as json_file:
-                    fpga_configurations = json.load(json_file)
-
-                if configuration_name not in fpga_configurations:
-                    raise RuntimeError(
-                        f"Unknown fpga configuration: {configuration_name}, "
-                        f"available: {fpga_configurations.keys()}"
-                    )
-
-                configuration = fpga_configurations[configuration_name]
-                openocd_board = configuration["openocd_board"]
-                bitstream_path = configuration["bitstream"]
-
-                _logger.info("Configuration:\n%s", json.dumps(configuration))
-
-                conan = ConanHelper({})
-
-                # Here the "cores" and "memory" used for normal LGRW usage (to run bare-metal programs and linux).
-                # They are not used in our runs, but required in LGRW api, so can't be omitted.
-                bitstream = conan.bitstream(
-                    {
-                        "path": bitstream_path,
-                        "cores": 1,
-                        "memory": "syntacore",
-                    }
-                )
-                board.flash(bitstream)
-
-                with board.labgrid() as runner:
-                    local_stand_info = local_dir / "tests.stand.info.json"
-                    runner.receive(remote_stand_info, local_stand_info)
-
-                    with open(local_stand_info, encoding="utf-8") as json_file:
-                        stand_info = json.load(json_file)
-
-                    adapter_serial = stand_info["adapter_serial"]
-                    adapter_config = stand_info["adapter_config"]
-                    adapter_speed = stand_info["adapter_speed"]
-
-                    work_dir = remote_dir / configuration_name
-                    summary_dir = work_dir / "SUMMARY"
-
-                    command: list[str | _Path] = []
-                    command += ["mkdir", work_dir, "&&"]
-                    command += ["mkdir", summary_dir, "&&"]
-                    command += ["cd", remote_dir / configuration_name, "&&"]
-                    command += [
-                        f'DEJAGNU="{remote_testsuite}/site.exp"',
-                        f'OPENOCD_DEBUG_ADAPTER_SERIAL="{adapter_serial}"',
-                        f'OPENOCD_DEBUG_ADAPTER_CONFIG="{adapter_config}"',
-                        f'OPENOCD_DEBUG_ADAPTER_SPEED="{adapter_speed}"',
-                        f"{remote_testsuite}/dejagnu/bin/runtest",
-                        "--tool",
-                        "ocd",
-                        "--srcdir",
-                        f"{remote_testsuite}/acceptance_tests/testsuite",
-                        "--target_board",
+                if bitstream_path:
+                    _flash_board(board, bitstream_path)
+                if args.run_platform and args.run_tool:
+                    _run_testsuite(
+                        runner,
+                        local_dir,
+                        remote_install,
+                        args.run_platform,
                         openocd_board,
-                        f"--outdir={summary_dir}",
-                    ]
-
-                    if runner.run_shell(command, check=False).returncode != 0:
-                        remote_log_tar_gz = (
-                            remote_dir / f"{configuration_name}.tar.gz"
-                        )
-                        if (
-                            runner.run_shell(
-                                [
-                                    "tar",
-                                    "-C",
-                                    remote_dir,
-                                    "-czf",
-                                    remote_log_tar_gz,
-                                    configuration_name,
-                                ],
-                                check=False,
-                            ).returncode
-                            == 0
-                        ):
-                            runner.receive(
-                                remote_log_tar_gz,
-                                local_dir / f"{configuration_name}.tar.gz",
-                            )
-
-                        raise RuntimeError("Tests failed.")
-        finally:
-            if args.cleanup:
-                runner.run_shell(["rm", "-rf", remote_dir])
+                        args.run_tool,
+                    )
+            finally:
+                if args.cleanup:
+                    runner.run_shell(["rm", "-rf", remote_install])
 
 
 def _safe_file_name(unsafe_name: str) -> str:
@@ -252,3 +166,165 @@ def _safe_file_name(unsafe_name: str) -> str:
     safe_name = "".join(filter(lambda c: c.isalnum() or c == "-", safe_name))
 
     return safe_name
+
+
+def _install_testsuite(
+    runner: _LabgridRunner, local_install: _Path, remote_install: _Path
+) -> None:
+    testsuite_gz = "ocd_transferable_testsuite.tar.gz"
+    local_testsuite_gz = local_install / testsuite_gz
+    if (
+        runner.run_shell(
+            [
+                "test",
+                "-d",
+                remote_install,
+            ],
+            check=False,
+        ).returncode
+        == 0
+    ):
+        raise RuntimeError(
+            f"Install failed: installation in {remote_install} already exists. "
+            f"Please either:\n"
+            f"- run `--cleanup` to remove it"
+            f"- omit `--install` to reuse"
+        )
+
+    runner.run_shell(
+        [
+            "mkdir",
+            "-p",
+            remote_install,
+        ],
+    )
+    remote_testsuite_gz = remote_install / testsuite_gz
+    runner.send(
+        local_testsuite_gz,
+        remote_testsuite_gz,
+        capture_output=True,
+    )
+    runner.run_shell(
+        [
+            "tar",
+            "-xzf",
+            remote_testsuite_gz,
+            "-C",
+            remote_install,
+        ]
+    )
+
+
+def _flash_board(board: _FpgaBoard, bitstream_path: _Path) -> None:
+    conan = _ConanHelper({})
+
+    # Here the "cores" and "memory" used for normal LGRW usage (to run bare-metal programs and linux).
+    # They are not used in our runs, but required in LGRW api, so can't be omitted.
+    bitstream = conan.bitstream(
+        {
+            "path": bitstream_path,
+            "cores": 1,
+            "memory": "syntacore",
+        }
+    )
+    board.flash(bitstream)
+
+
+def _get_stand_info(runner: _LabgridRunner, local_dir: _Path) -> dict[str, str]:
+    local_stand_info = local_dir / "tests.stand.info.json"
+    remote_stand_info = _Path(
+        "/home/stand/.config/stand.info/tests.stand.info.json"
+    )
+    runner.receive(remote_stand_info, local_stand_info)
+
+    with open(local_stand_info, encoding="utf-8") as json_file:
+        stand_info: dict[str, str] = json.load(json_file)
+    return stand_info
+
+
+def _get_platform_desc(platforms: _Path, platform_name: str) -> dict[str, str]:
+    with open(platforms, encoding="utf-8") as json_file:
+        platform_descriptions: dict[str, dict[str, str]] = json.load(json_file)
+
+    if platform_name not in platform_descriptions:
+        raise RuntimeError(
+            f"Unknown platform: {platform_name}, "
+            f"available: {platform_descriptions.keys()}"
+        )
+
+    return platform_descriptions[platform_name]
+
+
+def _run_testsuite(
+    runner: _LabgridRunner,
+    local_dir: _Path,
+    remote_dir: _Path,
+    platform_name: str,
+    openocd_board: str,
+    tools: list[str],
+) -> None:
+    stand_info = _get_stand_info(runner, local_dir)
+
+    failures = [
+        not _run_tool_tests(
+            runner,
+            remote_dir,
+            stand_info,
+            platform_name,
+            openocd_board,
+            tool,
+        )
+        for tool in tools
+    ]
+
+    log_tar_gz = f"{platform_name}.tar.gz"
+    remote_log_tar_gz = remote_dir / log_tar_gz
+    runner.run_shell(
+        [
+            "tar",
+            "-C",
+            remote_dir,
+            "-czf",
+            remote_log_tar_gz,
+            platform_name,
+        ],
+    )
+    runner.receive(
+        remote_log_tar_gz,
+        local_dir / log_tar_gz,
+    )
+    if any(failures):
+        raise RuntimeError("Tests failed.")
+
+
+def _run_tool_tests(
+    runner: _LabgridRunner,
+    remote_dir: _Path,
+    stand_info: dict[str, str],
+    platform_name: str,
+    openocd_board: str,
+    tool: str,
+) -> bool:
+    run_base_dir = remote_dir / platform_name / tool
+    work_dir = run_base_dir / "runs"
+    summary_dir = run_base_dir / "SUMMARY"
+    remote_testsuite = remote_dir / "ocd_transferable_testsuite"
+    command: list[str | _Path] = []
+    command += ["mkdir -p", work_dir, "&&"]
+    command += ["mkdir -p", summary_dir, "&&"]
+    command += ["cd", work_dir, "&&"]
+    command += [
+        f'DEJAGNU="{remote_testsuite}/site.exp"',
+        f'OPENOCD_DEBUG_ADAPTER_SERIAL="{stand_info["adapter_serial"]}"',
+        f'OPENOCD_DEBUG_ADAPTER_CONFIG="{stand_info["adapter_config"]}"',
+        f'OPENOCD_DEBUG_ADAPTER_SPEED="{stand_info["adapter_speed"]}"',
+        f"{remote_testsuite}/dejagnu/bin/runtest",
+        "--tool",
+        tool,
+        "--srcdir",
+        f"{remote_testsuite}/acceptance_tests/testsuite",
+        "--target_board",
+        openocd_board,
+        f"--outdir={summary_dir}",
+    ]
+    return bool(runner.run_shell(command, check=False).returncode == 0)
