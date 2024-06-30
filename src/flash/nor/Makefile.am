@@ -80,6 +80,7 @@ NOR_DRIVERS = \
 	%D%/w600.c \
 	%D%/xcf.c \
 	%D%/xmc1xxx.c \
+	%D%/rqspi.c \
 	%D%/xmc4xxx.c
 
 NORHEADERS = \
