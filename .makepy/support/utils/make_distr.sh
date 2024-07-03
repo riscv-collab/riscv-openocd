@@ -62,4 +62,24 @@ puts "Debug Adapter Configuration: \${OPENOCD_DEBUG_ADAPTER_CONFIG}"
 
 EOF
 
+cat << EOF > "${DISTRIB_LOCATION}/run.sh"
+#!/usr/bin/env bash
+
+SCRIPT_DIR=\$( cd -- "\$( dirname -- "\${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+echo "
+export DEJAGNU=\"\${SCRIPT_DIR}/site.exp\"
+export OPENOCD_DEBUG_ADAPTER_SERIAL=SERIAL
+export OPENOCD_DEBUG_ADAPTER_CONFIG=CONFIG
+export OPENOCD_DEBUG_ADAPTER_SPEED=1000
+\${SCRIPT_DIR}/dejagnu/bin/runtest \\\\
+  --srcdir \"\${SCRIPT_DIR}/acceptance_tests/testsuite\" \\\\
+  --out-dir=test_results \\\\
+  --target_board elct_mcore2_nortos \\\\
+  --tool ocd
+"
+EOF
+
+chmod +x "${DISTRIB_LOCATION}/run.sh"
+
 tar -C "${OUTPUT}" -czf "${OUTPUT}/${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
