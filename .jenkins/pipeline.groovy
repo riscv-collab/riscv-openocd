@@ -216,7 +216,7 @@ workflow('openocd') {
               stand          : ['twin']]]
         }
         rules { vars ->
-            include(vars.ti >= TI.NIGHTLY)
+            include(vars.ti >= TI.POSTCOMMIT)
         }
         script { vars ->
             def stand = "fpga_${vars.stand}"
