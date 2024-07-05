@@ -60,25 +60,6 @@ workflow('openocd') {
         script { vars -> buildProject(vars) }
     }
 
-    job('fpga-nightly-status') {
-        resources {
-            cpu('0.1', '1')
-            memory('0.1Gi', '4Gi')
-            fs('1.0Gi', '1.0Gi')
-        }
-        matrix {
-            [[image : ['cpp_ubuntu_20']]]
-        }
-        rules { vars ->
-            include(vars.ti >= TI.NIGHTLY)
-        }
-        script { vars ->
-            withCredentials([string(credentialsId: 'artifactory_cicdsc_api_key', variable: 'ART_API_KEY')]) {
-                sh("./.ci/utils/check_nightly_status.sh $ART_API_KEY")
-            }
-        }
-    }
-
     job('tests-sanitized') {
         resources {
             cpu('6.8', '10')
