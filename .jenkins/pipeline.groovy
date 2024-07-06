@@ -54,6 +54,7 @@ workflow('openocd') {
              [image          : ['cpp_ubuntu_22'],
               extraOpts      : [''],
               buildType      : ['Release'],
+              extraOpts      : ['', '--options:host elct_support=True'],
               profile        : ['makepy_sc_mingw', 'mp_armhf']]]
         }
         script { vars -> buildProject(vars) }
@@ -157,7 +158,8 @@ workflow('openocd') {
         matrix {
             [[image          : ['cpp_ubuntu_20'],
               profile        : ['default'],
-              extraOpts      : ['--options:host test=True'],
+              extraOpts      : ['--options:host test=True',
+                                '--options:host elct_support=True --options:host test=True'],
               buildType      : ['Release']]]
         }
         script { vars ->
@@ -183,7 +185,7 @@ workflow('openocd') {
         matrix {
             [[image          : ['cpp_ubuntu_20'],
               profile        : ['default'],
-              extraOpts      : ['--options:host test=True'],
+              extraOpts      : ['--options:host elct_support=True --options:host test=True'],
               buildType      : ['Release']]]
         }
         rules { vars ->
@@ -277,7 +279,8 @@ workflow('openocd') {
               profile        : ['default'],
               extraArgs      : ['', '--options:host elct_support=True']],
              [image          : ['cpp_ubuntu_22'],
-              profile        : ['makepy_sc_mingw', 'mp_armhf']]]
+              profile        : ['makepy_sc_mingw', 'mp_armhf'],
+              extraArgs      : ['', '--options:host elct_support=True']]]
         }
     }
 
