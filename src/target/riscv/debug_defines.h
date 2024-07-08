@@ -3,8 +3,8 @@
  * https://github.com/riscv/riscv-debug-spec/ (40b9a05)
  */
 
-#ifndef DEBUG_DEFINES_H
-#define DEBUG_DEFINES_H
+#ifndef OPENOCD_TARGET_RISCV_DEBUG_DEFINES_H
+#define OPENOCD_TARGET_RISCV_DEBUG_DEFINES_H
 #define DTM_IDCODE                          0x01
 /*
  * Identifies the release version of this part.
@@ -3153,4 +3153,5 @@ typedef struct {
 	struct riscv_debug_reg_field_list_t (* const get_fields_head)(riscv_debug_reg_ctx_t context);
 } riscv_debug_reg_info_t;
 riscv_debug_reg_info_t get_riscv_debug_reg_info(enum riscv_debug_reg_ordinal reg_ordinal);
-#endif
+
+#endif /* OPENOCD_TARGET_RISCV_DEBUG_DEFINES_H */
