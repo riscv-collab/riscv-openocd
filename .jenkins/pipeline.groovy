@@ -241,7 +241,7 @@ workflow('openocd') {
                                           --override-workspace-id ${workspaceId} \
                                           --blocking """)
 
-                sh("./make.py test-suite --install ${options}")
+                sh("./make.py test-suite --install --force ${options}")
 
                 for (configuration in configurations) {
                     // we need to run tests for all configurations, so should continue on failure

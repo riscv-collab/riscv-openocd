@@ -77,6 +77,12 @@ class _OcdTestSuiteCommand(_Command):
         )
 
         parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Ignore some errors. Use with caution.",
+        )
+
+        parser.add_argument(
             "--run-tool",
             type=str,
             nargs="*",
@@ -142,6 +148,7 @@ class _OcdTestSuiteCommand(_Command):
                         runner,
                         local_build_path / "install_testsuite",
                         remote_install,
+                        args.force,
                     )
                 if bitstream_path:
                     _flash_board(board, bitstream_path)
@@ -169,7 +176,10 @@ def _safe_file_name(unsafe_name: str) -> str:
 
 
 def _install_testsuite(
-    runner: _LabgridRunner, local_install: _Path, remote_install: _Path
+    runner: _LabgridRunner,
+    local_install: _Path,
+    remote_install: _Path,
+    force: bool,
 ) -> None:
     testsuite_gz = "ocd_transferable_testsuite.tar.gz"
     local_testsuite_gz = local_install / testsuite_gz
@@ -184,12 +194,16 @@ def _install_testsuite(
         ).returncode
         == 0
     ):
-        raise RuntimeError(
-            f"Install failed: installation in {remote_install} already exists. "
-            f"Please either:\n"
-            f"- run `--cleanup` to remove it"
-            f"- omit `--install` to reuse"
-        )
+        cause = f"installation in {remote_install} already exists."
+        if force:
+            _logger.warning(cause)
+        else:
+            raise RuntimeError(
+                f"Install failed: {cause}"
+                "Please either:\n"
+                f"- run `--cleanup` to remove it"
+                f"- omit `--install` to reuse"
+            )
 
     runner.run_shell(
         [
