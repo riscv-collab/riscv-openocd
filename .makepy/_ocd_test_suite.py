@@ -216,7 +216,6 @@ def _install_testsuite(
     runner.send(
         local_testsuite_gz,
         remote_testsuite_gz,
-        capture_output=True,
     )
     runner.run_shell(
         [
