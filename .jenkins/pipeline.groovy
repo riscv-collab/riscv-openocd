@@ -201,7 +201,7 @@ workflow('openocd') {
     }
 
     job('tests-fpga-run-nightly') {
-        timeout(8 + params.fpgaTestsReservationMaxWaitHours as Integer)
+        timeout(8 + (params.fpgaTestsReservationMaxWaitHours as Integer))
         resources {
             cpu('0.1', '1')
             memory('0.3Gi', '4Gi')
