@@ -338,7 +338,8 @@ def _main() -> None:
     conductor.add(_GenericSuite())
     conductor.add(_SyntacoreSuite())
     configs = _ConanConfigs()
-    configs.add_windows()
+    configs.add(profile="mp_armhf", options={"elct_support": True})
+    configs.add_windows(options={"elct_support": [False, True]})
     configs.add_ubuntu18(options={"elct_support": [False, True]})
     configs.add_centos7(options={"elct_support": [False, True]})
     configs.add_ubuntu20(
