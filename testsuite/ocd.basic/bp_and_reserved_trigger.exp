@@ -1,0 +1,48 @@
+proc get_all_tdatas {} {
+  set tdatas {}
+  set trigger_count [target_info cpu,trigger_count]
+  for {set t 0} {$t < $trigger_count} {incr t} {
+    ocdtlb_run_expect "reg tselect $t"
+    lappend tdatas [ocdtlb_rsp_get [ocdtlb_run_expect "reg tdata1"]]
+    lappend tdatas [ocdtlb_rsp_get [ocdtlb_run_expect "reg tdata2"]]
+  }
+  return $tdatas
+}
+
+proc tdatas_diff_index {tdatas_before tdatas_after} {
+  set diff_idx 0
+  foreach {tdata1_before tdata2_before} $tdatas_before \
+          {tdata1_after  tdata2_after } $tdatas_after {
+    if {   ($tdata1_before != $tdata1_after) \
+        || ($tdata2_before != $tdata2_after)} {
+      return $diff_idx
+    }
+    incr diff_idx
+  }
+}
+
+proc run_test {} {
+  ocd_connect
+
+  ocdtlb_run_expect "reset halt"
+  set bp_addr [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+  ocdtlb_run_expect "bp $bp_addr 4 hw"
+  set tdatas_with_bp [get_all_tdatas]
+  ocdtlb_run_expect "rbp all"
+  set tdatas_without_bp [get_all_tdatas]
+  set trigg_to_reserve [tdatas_diff_index $tdatas_with_bp $tdatas_without_bp]
+  ocdtlb_run_expect "riscv reserve_trigger $trigg_to_reserve on"
+  set tdatas $tdatas_without_bp
+  while {![catch {ocdtlb_run_expect "bp $bp_addr 4 hw"} err]} {
+    set tdatas_new [get_all_tdatas]
+    set trigger_used [tdatas_diff_index $tdatas_new $tdatas]
+    if {$trigg_to_reserve == $trigger_used} {
+      return [ocd_test_fail]
+    }
+    set tdatas $tdatas_new
+    incr bp_addr 4
+  }
+  return [ocd_test_pass]
+}
+
+return [run_test]

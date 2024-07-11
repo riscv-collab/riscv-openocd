@@ -1,0 +1,34 @@
+proc expect_same_elems {lleft lright} {
+    foreach left  [lsort -integer $lleft] \
+	    right [lsort -integer $lright] {
+      ocdtlb_expect_equal $left $right
+    }
+    ocdtlb_expect_equal [llength $lleft] [llength $lright]
+}
+
+proc run_test {} {
+  ocd_connect
+
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_expect_equal "" \
+	              [ocdtlb_rsp_get [ocdtlb_run_expect "riscv reserve_trigger"]]
+
+  set trigger_count [target_info cpu,trigger_count]
+  set reserved_triggers {}
+  for {set t 0} {$t < $trigger_count} {incr t} {
+    ocdtlb_run_expect "riscv reserve_trigger $t on"
+    lappend reserved_triggers $t
+    expect_same_elems $reserved_triggers \
+	              [ocdtlb_rsp_get [ocdtlb_run_expect "riscv reserve_trigger"]]
+  }
+  for {set t 0} {$t < $trigger_count} {incr t} {
+    ocdtlb_run_expect "riscv reserve_trigger $t off"
+    set reserved_triggers [lreplace $reserved_triggers 0 0]
+    expect_same_elems $reserved_triggers \
+	              [ocdtlb_rsp_get [ocdtlb_run_expect "riscv reserve_trigger"]]
+  }
+  return [ocd_test_pass]
+}
+
+return [run_test]

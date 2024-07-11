@@ -317,6 +317,7 @@ proc ocdtlb_run_expect {command {expect_op_fail 0}  {extra_timeout ""} } {
     {^target +current$}     { set parser parse_target_current }
     {^jtag +names$}          { set parser parse_jtag_names }
     {^jtag +execute .*$}     { set parser parse_jtag_execute }
+    {^riscv +reserve_trigger(( +[^ ]+){2})?} { set parser parse_reserve_trigger }
     default {
       error "could not select parser for ($command), consider using *_raw call"
     }

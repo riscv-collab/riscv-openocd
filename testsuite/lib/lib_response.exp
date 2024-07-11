@@ -595,3 +595,9 @@ proc parse_jtag_execute { report } {
 
   return [internal_parse_success $TYPE $report [list value $report]]
 }
+
+proc parse_reserve_trigger { report } {
+  set TYPE "reserve_trigger"
+
+  return [internal_parse_success $TYPE $report [list value $report]]
+}
