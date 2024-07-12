@@ -1,0 +1,74 @@
+if {![target_info cpu,has_s_mode]} {
+  return [ocd_test_unsupported]
+}
+
+proc run_test {} {
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "S-mode.S" "$default_bin_prefix.exe"
+
+  # created by compile executable
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set END_ADDR [tool_state_get_program_symbol end]
+
+  ocd_connect
+
+  #ebreaks on
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "riscv set_ebreakm off"
+  ocdtlb_run_expect "riscv set_ebreaks on"
+  ocdtlb_run_expect "riscv set_ebreaku off"
+  ocdtlb_run_expect "resume"
+
+  ocdtlb_wait_resume wait_halt
+
+  set response [ocdtlb_run_expect "targets"]
+
+  set active_idx [dict get $response active_idx]
+  set states     [dict get $response states]
+  set active_state [lindex $states $active_idx]
+
+  if {![string match $active_state "halted"]} {
+    perror "unexpected state: $active_state, expecting halted"
+    return [ocd_test_fail]
+  }
+
+  set response_pc [ocdtlb_run_expect "reg pc"]
+  set current_pc  [ocdtlb_rsp_get $response_pc]
+
+  if {![expr { $current_pc == $END_ADDR}]} {
+    perror "unexpected current pc: $current_pc, expecting $END_ADDR"
+    return [ocd_test_fail]
+  }
+
+  ocdtlb_run_expect "reset halt"
+  
+  set END_ADDR [tool_state_get_program_symbol loop]
+
+  #ebreaks off
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc $ENTRY_ADDR"
+  ocdtlb_run_expect "riscv set_ebreakm off"
+  ocdtlb_run_expect "riscv set_ebreaks off"
+  ocdtlb_run_expect "riscv set_ebreaku off"
+  ocdtlb_run_expect "resume"
+ 
+  ocdtlb_wait_resume
+
+  ocdtlb_run_expect "halt"
+
+  set response_pc [ocdtlb_run_expect "reg pc"]
+  set current_pc  [ocdtlb_rsp_get $response_pc]
+
+  if {![expr { $current_pc == $END_ADDR}]} {
+    perror "unexpected current pc: $current_pc, expecting $END_ADDR"
+    return [ocd_test_fail]
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
