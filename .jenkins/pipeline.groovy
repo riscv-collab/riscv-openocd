@@ -241,28 +241,31 @@ workflow('openocd') {
                                           --override-workspace-id ${workspaceId} \
                                           --blocking """)
 
-                sh("./make.py test-suite --install --force ${options}")
+                try {
+                    sh("./make.py test-suite --install --force ${options}")
 
-                for (configuration in configurations) {
-                    // we need to run tests for all configurations, so should continue on failure
-                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                        try {
-                            timeout(maxDurationMinutesPerConfiguration) {
-                                sh(""" ./make.py test-suite --run-platform ${configuration} \
-                                                            --run-tool jtag ocd utils \
-                                                            ${options} """)
+                    for (configuration in configurations) {
+                        // we need to run tests for all configurations, so should continue on failure
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            try {
+                                timeout(maxDurationMinutesPerConfiguration) {
+                                    sh(""" ./make.py test-suite --run-platform ${configuration} \
+                                                                --run-tool jtag ocd utils \
+                                                                ${options} """)
+                                }
+                            } finally {
+                                artifacts.push(
+                                        "build/${vars.buildType}/testing/lgrw/${configuration}.tar.gz",
+                                        "logs",
+                                        retention: '1w'
+                                )
                             }
-                        } finally {
-                            artifacts.push(
-                                    "build/${vars.buildType}/testing/lgrw/${configuration}.tar.gz",
-                                    "logs",
-                                    retention: '1w'
-                            )
                         }
                     }
+                } finally {
+                    sh("./make.py test-suite --cleanup ${options}")
                 }
             } finally {
-                sh("./make.py test-suite --cleanup ${options} || true")
                 sh("./make.py dev unlock --override-workspace-id ${workspaceId}")
             }
         }
