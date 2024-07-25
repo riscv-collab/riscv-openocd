@@ -1,10 +1,10 @@
 {
     "version": "0.5",
     "requires": [
-        "testgen-model-interface/0.1.0-rc.0.28+sc.sc-dt.2024.06@sc/main#e0577a7634bfe8406266e7e90fdc84cc1032a809%1719590114.85",
+        "testgen-model-interface/0.1.0-rc.0.26+sc.main@sc/main#64f6244050e86ed982a6db1baa7f339e067d2394%1718983472.611",
         "sc-zstd/1.5.6-rc.0.237+sc.sc-dt.2024.06@sc/main#2af3f86d6d491b749806cde1edc2b7cb754b8c08%1719610257.774",
         "sc-lzma/5.4.6-rc.0.237+sc.sc-dt.2024.06@sc/main#2322fba1dc88c1997179712442883326dd062c08%1719627937.629",
-        "riscv-isa-sim/0.1.0-rc.0.189+sc.sc-dt.2024.06@sc/main#8322cacaeccdc0bb82d404f10f57982239ce21bb%1719590917.792",
+        "riscv-isa-sim/0.1.0-rc.0.250+sc.main@sc/main#778b5583878b753e9c82cc228fe00552bf04f89f%1721993739.967",
         "riscv-gdb/13.2.0-rc.0.133+sc.sc-dt.2024.06@sc/main#fc8f698d7d185b516a6dc7092aec7cabd993fb79%1719628842.932",
         "riscv-gcc/13.2.0-rc.0.125+sc.sc-dt.2024.06@sc/main#dd6eada1fd3a9e3a6aa0b84bc78d658a8eee2b4c%1719618091.779",
         "riscv-binutils/2.42.0-rc.0.47+sc.sc-dt.2024.06@sc/main#92fbfb8394a95aae8177471016a706e48144bd25%1719611041.837",
@@ -18,7 +18,7 @@
         "hidapi/0.13.1#20fbe2186ac901286e0f5e7181cf1db7%1718294130.61",
         "gdb_source_deps/0.0.1-rc.0.235+sc.sc-dt.2024.06@sc/main#183f81bb03803c67268f828b830d70492ada0981%1719590198.933",
         "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
-        "external_openocd_tests/0.0.3-rc.0.235+sc.sc-dt.2024.06@sc/main#73b26910a79908f21362df16561793595209b3d4%1719590166.737",
+        "external_openocd_tests/0.0.3-rc.0.257+sc.main@sc/main#5dd72ee3ff81a6fd8f476f43e9cfccf8f2d6a1ed%1722013912.371",
         "dejagnu/1.6.3-rc.0.235+sc.sc-dt.2024.06@sc/main#582f29d0dbc511a08e991b34db08289f77a1865d%1719590179.486",
         "c4core/0.1.11#5c6caad554b14584140f7e66c47eefb5%1699016213.432"
     ],
