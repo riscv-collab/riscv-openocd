@@ -45,6 +45,9 @@ proc tsuplib_target_info_check {} {
     cpu,has_s_mode \
     cpu,has_h_ext \
     cpu,has_v_ext \
+    cpu,has_pmp \
+    cpu,has_pmp_napot \
+    cpu,has_pmp_top \
     cpu,v_ext_vlen \
     cpu,v_ext_elen \
     cpu,v_ext_misa_writable \
