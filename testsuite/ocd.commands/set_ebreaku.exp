@@ -1,6 +1,6 @@
-if {![target_info cpu,has_u_mode]} {
-  return [ocd_test_unsupported]
-}
+if {![target_info cpu,has_u_mode]} { return [ocd_test_unsupported] }
+if {![target_info cpu,has_pmp]} { return [ocd_test_unsupported] }
+if {![target_info cpu,has_pmp_top]} { return [ocd_test_unsupported] }
 
 proc run_test {} {
   set default_bin_prefix [tool_state_get default_bin_prefix]
@@ -45,7 +45,7 @@ proc run_test {} {
   }
 
   ocdtlb_run_expect "reset halt"
-  
+
   set END_ADDR [tool_state_get_program_symbol loop]
 
   #ebreaku off

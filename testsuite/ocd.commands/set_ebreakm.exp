@@ -5,7 +5,7 @@ proc run_test {} {
   # created by compile executable
   set ENTRY_ADDR [tool_state_get_program_symbol _entry]
   set END_ADDR [tool_state_get_program_symbol end]
-  
+
   ocd_connect
 
   ocdtlb_run_expect "targets 0"
@@ -41,7 +41,7 @@ proc run_test {} {
   }
 
   ocdtlb_run_expect "reset halt"
-  
+
   set END_ADDR [tool_state_get_program_symbol loop]
 
   #ebreakm off

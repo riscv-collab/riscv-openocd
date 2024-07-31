@@ -15,4 +15,3 @@ end:
 .balign 4
 loop:
     j loop
-  

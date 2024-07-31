@@ -6,7 +6,17 @@
 
 .text
 _entry:
-  nop
+  li t0, -1
+#if __riscv_xlen >= 64
+  srli t0, t0, 8
+#endif
+  csrw pmpaddr0, t0
+  // pmpcfg.entry.bit0 - Read access
+  // pmpcfg.entry.bit1 - Write access
+  // pmpcfg.entry.bit2 - Execute access
+  // pmpcfg.entry.bit3-4 - Address match mode (TOR, A=1 ; NAPOT, A=3)
+  li t0, 0x2f
+  csrw pmpcfg0, t0
 main:
   la       t0, change_mode
   csrw     mtvec, t0
@@ -28,4 +38,3 @@ change_mode:
   la t2, loop
   csrw mtvec, t2
   mret
-  
