@@ -1,0 +1,22 @@
+proc run_test {} {
+  set script_to_run "[ocdtlb_test_resource_path run_script_ebreak_disabled.tcl]"
+  set LogFile [utils_spawn_universal_launcher \
+    [list \
+      --disable-ebreak \
+      --run-script $script_to_run \
+      --run-command "check_ebreak_disabled" \
+    ] \
+    ebreak_disabled \
+    expect_success]
+  set LogFile [utils_spawn_universal_launcher \
+    [list \
+      --run-script $script_to_run \
+      --run-command "check_ebreak_enabled" \
+    ] \
+    ebreak_enabled \
+    expect_success]
+
+  return [ocd_test_pass]
+}
+
+return [run_test]

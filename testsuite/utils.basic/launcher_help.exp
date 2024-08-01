@@ -9,6 +9,7 @@ proc run_test {} {
     configure-hook \
     debug-adapter-index \
     debug-adapter-serial \
+    disable-ebreak \
     disable-interactive-mode \
     help \
     ide-mode \

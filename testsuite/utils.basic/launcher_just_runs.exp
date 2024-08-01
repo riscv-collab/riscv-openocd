@@ -26,7 +26,7 @@ proc run_test {} {
     [list --single-core] single_core]
 
   lappend Logs [just_run_with_command \
-    [list --ide-mode]    ide_mode]
+    [list --ide-mode] ide_mode]
 
   lappend Logs [just_run_with_command \
     [list --bindto 0.0.0.0] bindto]
@@ -42,6 +42,9 @@ proc run_test {} {
 
   lappend Logs [just_run_with_command \
     [list --no-extra-scripts] no_extra_scripts]
+
+  lappend Logs [just_run_with_command \
+    [list --disable-ebreak] disable_ebreak]
 
   foreach Log $Logs {
     exec grep --text -F "Target successfully examined" $Log
