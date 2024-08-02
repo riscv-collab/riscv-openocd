@@ -370,4 +370,39 @@ proc sc_experimental_pmu_setup { pmu_selectors pmu_ctrs_max args } {
     return $pmu_ctrs
 }
 
+proc sc_experimental_sync_resume args {
+    if {[llength $args] != 0} {
+	set targets $args
+    } else {
+	set targets [target names]
+    }
+
+    set taps {}
+    foreach target $targets {
+	    lappend taps [$target cget -chain-position]
+    }
+
+    if {[llength [lsort -unique $taps]] != [llength $taps]} {
+        error "Only the case of one TAP per target is supported."
+    }
+
+    set op_len 2
+    set op_write 2
+    set data_len 32
+    # set "dmactive" and "resumereq"
+    set dmcontrol_val [expr { 1 | 1 << 30 }]
+    set dmcontrol_addr 0x10
+
+    set ir_list {}
+    set dr_list {}
+    foreach tap $taps target $targets {
+        array set rvi [$target riscv info]
+        set addr_len [lindex [array get rvi dm.abits] 1]
+	lappend ir_list 0x11
+	lappend dr_list $op_len:$op_write,$data_len:0x[format %08x $dmcontrol_val],$addr_len:0x[format %x $dmcontrol_addr]
+    }
+    jtag execute scan $taps -ir $ir_list -dr $dr_list
+    poll
+}
+
 echo "--- LOADED SC FPGA LIBRARY ---"

@@ -1,0 +1,30 @@
+proc run_test {} {
+  set LogFile [utils_spawn_universal_launcher \
+    [list \
+      --verbose \
+      --run-command {reset halt} \
+      --run-command {
+        if {[catch {sc_experimental_sync_resume {*}[target names]} err]} {
+          if {$err eq "Only the case of one TAP per target is supported."} {
+            shutdown
+          }
+          error $err
+	}
+      } \
+      --run-command {
+        foreach target [target names] {
+          if {[$target debug_reason] ne "target-not-halted"} {
+            error "$target is not resumed!"
+          }
+        }
+      } \
+      --run-command shutdown
+      ] \
+    fpga_lib_sync_resume_test \
+    expect_success]
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
+
