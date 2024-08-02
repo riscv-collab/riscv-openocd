@@ -577,3 +577,15 @@ proc parse_target_current { report } {
 
   return [internal_parse_success $TYPE $report [list value $report]]
 }
+
+proc parse_jtag_names { report } {
+  set TYPE "jtag_names"
+
+  return [internal_parse_success $TYPE $report [list value [string trim $report "\n\r\t\x1a"]]]
+}
+
+proc parse_jtag_execute { report } {
+  set TYPE "jtag_execute"
+
+  return [internal_parse_success $TYPE $report [list value $report]]
+}

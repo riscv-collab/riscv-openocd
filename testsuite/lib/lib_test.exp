@@ -303,7 +303,7 @@ proc ocdtlb_run_expect {command {expect_op_fail 0}  {extra_timeout ""} } {
     {^scan_chain}           { set parser parse_scan_chain }
     {^runtest +[^ ]+}       { set parser parse_runtest }
     {^wait_halt$}           { set parser parse_wait_halt }
-    {^poll$}                { set parser parse_poll }
+    {^poll( +(disable|enable))?$} { set parser parse_poll }
     {^virt2phys +[^ ]+}     { set parser parse_virt2phys }
     {^riscv +info}          { set parser parse_riscv_info }
     {^riscv +icount +set +}  { set parser parse_icount }
@@ -314,6 +314,8 @@ proc ocdtlb_run_expect {command {expect_op_fail 0}  {extra_timeout ""} } {
     {^riscv +re_examine$}   { set parser parse_re_examine }
     {^[^ ]+ +debug_reason$} { set parser parse_debug_reason }
     {^target +current$}     { set parser parse_target_current }
+    {^jtag +names$}          { set parser parse_jtag_names }
+    {^jtag +execute .*$}     { set parser parse_jtag_execute }
     default {
       error "could not select parser for ($command), consider using *_raw call"
     }

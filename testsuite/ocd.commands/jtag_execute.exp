@@ -1,0 +1,28 @@
+proc run_test {} {
+    ocd_connect
+
+    ocdtlb_run_expect "poll disable"
+    set jtag_names [ocdtlb_rsp_get [ocdtlb_run_expect "jtag names"]]
+    set tap_name [lindex $jtag_names 0]
+    set expect_failure 1
+    set bypass 0x0
+    ocdtlb_run_expect "jtag execute scan $tap_name"
+    ocdtlb_run_expect "jtag execute scan unknown_tap" $expect_failure
+    ocdtlb_run_expect "jtag execute scan" $expect_failure
+
+
+    ocdtlb_run_expect "jtag execute scan $tap_name -ir $bypass"
+    ocdtlb_run_expect "jtag execute unknown_cmd $tap_name -ir $bypass" $expect_failure
+    ocdtlb_run_expect "jtag execute scan $tap_name -ir not_a_number" $expect_failure
+    ocdtlb_run_expect "jtag execute scan -ir $tap_name $bypass 0" $expect_failure
+
+    set dtmcs 0x10
+    ocdtlb_run_expect "jtag execute scan $tap_name -ir $dtmcs -dr 32:0"
+    ocdtlb_run_expect "jtag execute scan $tap_name -ir $dtmcs -dr 1:0,31:0"
+    ocdtlb_run_expect "jtag execute scan $tap_name -dr 32:0"
+    ocdtlb_run_expect "jtag execute scan $tap_name -ir $dtmcs -dr 1:0,31:0"
+
+    return [ocd_test_pass]
+}
+
+return [run_test]
