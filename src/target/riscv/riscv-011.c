@@ -13,6 +13,8 @@
 #include "config.h"
 #endif
 
+#include "riscv-011.h"
+
 #include "target/target.h"
 #include "target/algorithm.h"
 #include "target/target_type.h"
@@ -22,6 +24,8 @@
 #include "target/breakpoints.h"
 #include "helper/time_support.h"
 #include "riscv.h"
+#include "riscv_reg.h"
+#include "riscv-011_reg.h"
 #include "asm.h"
 #include "gdb_regs.h"
 #include "field_helpers.h"
@@ -210,8 +214,6 @@ typedef struct {
 
 static int poll_target(struct target *target, bool announce);
 static int riscv011_poll(struct target *target);
-static int get_register(struct target *target, riscv_reg_t *value,
-		enum gdb_regno regid);
 
 /*** Utility functions. ***/
 
@@ -739,7 +741,7 @@ static int wait_for_debugint_clear(struct target *target, bool ignore_first)
 
 		if (!bits.interrupt)
 			return ERROR_OK;
-		if (time(NULL) - start > riscv_command_timeout_sec) {
+		if (time(NULL) - start > riscv_get_command_timeout_sec()) {
 			LOG_ERROR("Timed out waiting for debug int to clear."
 				  "Increase timeout with riscv set_command_timeout_sec.");
 			return ERROR_FAIL;
@@ -1023,7 +1025,7 @@ static int wait_for_state(struct target *target, enum target_state state)
 			return result;
 		if (target->state == state)
 			return ERROR_OK;
-		if (time(NULL) - start > riscv_command_timeout_sec) {
+		if (time(NULL) - start > riscv_get_command_timeout_sec()) {
 			LOG_ERROR("Timed out waiting for state %d. "
 				  "Increase timeout with riscv set_command_timeout_sec.", state);
 			return ERROR_FAIL;
@@ -1045,7 +1047,7 @@ static int read_remote_csr(struct target *target, uint64_t *value, uint32_t csr)
 	uint32_t exception = cache_get32(target, info->dramsize-1);
 	if (exception) {
 		LOG_WARNING("Got exception 0x%x when reading %s", exception,
-				gdb_regno_name(target, GDB_REGNO_CSR0 + csr));
+				riscv_reg_gdb_regno_name(target, GDB_REGNO_CSR0 + csr));
 		*value = ~0;
 		return ERROR_FAIL;
 	}
@@ -1111,7 +1113,7 @@ static int execute_resume(struct target *target, bool step)
 
 	LOG_DEBUG("step=%d", step);
 
-	if (riscv_flush_registers(target) != ERROR_OK)
+	if (riscv_reg_flush_all(target) != ERROR_OK)
 		return ERROR_FAIL;
 
 	maybe_write_tselect(target);
@@ -1184,7 +1186,7 @@ static int full_step(struct target *target, bool announce)
 			return result;
 		if (target->state != TARGET_DEBUG_RUNNING)
 			break;
-		if (time(NULL) - start > riscv_command_timeout_sec) {
+		if (time(NULL) - start > riscv_get_command_timeout_sec()) {
 			LOG_ERROR("Timed out waiting for step to complete."
 					"Increase timeout with riscv set_command_timeout_sec");
 			return ERROR_FAIL;
@@ -1225,7 +1227,7 @@ static int update_mstatus_actual(struct target *target)
 	/* Force reading the register. In that process mstatus_actual will be
 	 * updated. */
 	riscv_reg_t mstatus;
-	return get_register(target, &mstatus, GDB_REGNO_MSTATUS);
+	return riscv011_get_register(target, &mstatus, GDB_REGNO_MSTATUS);
 }
 
 /*** OpenOCD target functions. ***/
@@ -1247,7 +1249,7 @@ static int register_read(struct target *target, riscv_reg_t *value, int regnum)
 
 	uint32_t exception = cache_get32(target, info->dramsize-1);
 	if (exception) {
-		LOG_WARNING("Got exception 0x%x when reading %s", exception, gdb_regno_name(target, regnum));
+		LOG_WARNING("Got exception 0x%x when reading %s", exception, riscv_reg_gdb_regno_name(target, regnum));
 		*value = ~0;
 		return ERROR_FAIL;
 	}
@@ -1322,14 +1324,14 @@ static int register_write(struct target *target, unsigned int number,
 	uint32_t exception = cache_get32(target, info->dramsize-1);
 	if (exception) {
 		LOG_WARNING("Got exception 0x%x when writing %s", exception,
-				gdb_regno_name(target, number));
+				riscv_reg_gdb_regno_name(target, number));
 		return ERROR_FAIL;
 	}
 
 	return ERROR_OK;
 }
 
-static int get_register(struct target *target, riscv_reg_t *value,
+int riscv011_get_register(struct target *target, riscv_reg_t *value,
 		enum gdb_regno regid)
 {
 	riscv011_info_t *info = get_info(target);
@@ -1377,7 +1379,7 @@ static int get_register(struct target *target, riscv_reg_t *value,
 
 /* This function is intended to handle accesses to registers through register
  * cache. */
-static int set_register(struct target *target, enum gdb_regno regid,
+int riscv011_set_register(struct target *target, enum gdb_regno regid,
 		riscv_reg_t value)
 {
 	assert(target->reg_cache);
@@ -1595,7 +1597,7 @@ static int examine(struct target *target)
 	}
 
 	/* Update register list to match discovered XLEN/supported extensions. */
-	riscv_init_registers(target);
+	riscv011_reg_init_all(target);
 
 	info->never_halted = true;
 
@@ -2342,10 +2344,10 @@ static int wait_for_authbusy(struct target *target)
 		uint32_t dminfo = dbus_read(target, DMINFO);
 		if (!get_field(dminfo, DMINFO_AUTHBUSY))
 			break;
-		if (time(NULL) - start > riscv_command_timeout_sec) {
+		if (time(NULL) - start > riscv_get_command_timeout_sec()) {
 			LOG_ERROR("Timed out after %ds waiting for authbusy to go low (dminfo=0x%x). "
 					"Increase the timeout with riscv set_command_timeout_sec.",
-					riscv_command_timeout_sec,
+					riscv_get_command_timeout_sec(),
 					dminfo);
 			return ERROR_FAIL;
 		}
@@ -2391,8 +2393,6 @@ static int init_target(struct command_context *cmd_ctx,
 {
 	LOG_DEBUG("init");
 	RISCV_INFO(generic_info);
-	generic_info->get_register = get_register;
-	generic_info->set_register = set_register;
 	generic_info->read_memory = read_memory;
 	generic_info->authdata_read = &riscv011_authdata_read;
 	generic_info->authdata_write = &riscv011_authdata_write;
@@ -2404,7 +2404,7 @@ static int init_target(struct command_context *cmd_ctx,
 
 	/* Assume 32-bit until we discover the real value in examine(). */
 	generic_info->xlen = 32;
-	riscv_init_registers(target);
+	riscv011_reg_init_all(target);
 
 	return ERROR_OK;
 }
