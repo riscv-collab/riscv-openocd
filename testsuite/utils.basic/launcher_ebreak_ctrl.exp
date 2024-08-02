@@ -1,5 +1,5 @@
 proc run_test {} {
-  set script_to_run "[ocdtlb_test_resource_path run_script_ebreak_disabled.tcl]"
+  set script_to_run "[ocdtlb_test_resource_path run_script_ebreak_ctrl.tcl]"
   set LogFile [utils_spawn_universal_launcher \
     [list \
       --disable-ebreak \
@@ -8,10 +8,14 @@ proc run_test {} {
     ] \
     ebreak_disabled \
     expect_success]
+
+  set has_u_mode [target_info cpu,has_u_mode]
+  set has_s_mode [target_info cpu,has_s_mode]
+
   set LogFile [utils_spawn_universal_launcher \
     [list \
       --run-script $script_to_run \
-      --run-command "check_ebreak_enabled" \
+      --run-command "check_ebreak_enabled $has_u_mode $has_s_mode" \
     ] \
     ebreak_enabled \
     expect_success]
