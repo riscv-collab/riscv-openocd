@@ -4057,6 +4057,7 @@ int riscv_openocd_poll(struct target *target)
 	unsigned int should_resume = 0;
 	unsigned int halted = 0;
 	unsigned int running = 0;
+	unsigned int running_under_debug = 0;
 	unsigned int cause_groups = 0;
 	struct target_list *entry;
 	foreach_smp_target(entry, targets) {
@@ -4081,6 +4082,8 @@ int riscv_openocd_poll(struct target *target)
 				if (t->state == TARGET_RUNNING ||
 					t->state == TARGET_DEBUG_RUNNING)
 					running++;
+				if (t->state == TARGET_DEBUG_RUNNING)
+					running_under_debug++;
 				break;
 			case RPH_REMAIN_HALTED:
 				should_remain_halted++;
@@ -4104,6 +4107,12 @@ int riscv_openocd_poll(struct target *target)
 	} else if (should_resume) {
 		LOG_TARGET_DEBUG(target, "resume all");
 		riscv_resume(target, true, 0, 0, 0, false);
+	} else if (halted && running && (running_under_debug == running)) {
+		/* We don't consider the state inconsistent when all running harts are running under debug
+		   control (state == TARGET_DEBUG_RUNNING), to avoid causing early abort of long-running
+		   algorithms run on a single core under SMP. */
+		LOG_TARGET_DEBUG(target, "SMP group is running under debug control: %u halted, %u running",
+					halted, running);
 	} else if (halted && running) {
 		LOG_TARGET_DEBUG(target, "SMP group is in inconsistent state: %u halted, %u running",
 					halted, running);
