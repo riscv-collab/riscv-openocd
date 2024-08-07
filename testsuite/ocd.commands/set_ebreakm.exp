@@ -1,6 +1,7 @@
 proc run_test {} {
   set default_bin_prefix [tool_state_get default_bin_prefix]
-  ocd_compile_executable "M-mode.S" "$default_bin_prefix.exe"
+  ocd_compile_executable "M-mode.S" "$default_bin_prefix.exe" \
+    [list "-DDMTVEC_BALIGN=[target_info cpu,mtvec_balign]"]
 
   # created by compile executable
   set ENTRY_ADDR [tool_state_get_program_symbol _entry]

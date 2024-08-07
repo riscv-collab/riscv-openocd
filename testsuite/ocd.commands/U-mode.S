@@ -25,11 +25,11 @@ main:
 check_u_mode:
   ebreak
 
-.balign 4
+.balign DSTVEC_BALIGN
 loop:
   j loop
 
-.balign 4
+.balign DMTVEC_BALIGN
 change_mode:
   li    t0, 0x0000
   csrw  mstatus, t0

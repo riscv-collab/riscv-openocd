@@ -12,6 +12,6 @@ main:
 end:
   ebreak
 
-.balign 4
+.balign DMTVEC_BALIGN
 loop:
     j loop

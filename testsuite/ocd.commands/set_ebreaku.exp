@@ -4,7 +4,8 @@ if {![target_info cpu,has_pmp_top]} { return [ocd_test_unsupported] }
 
 proc run_test {} {
   set default_bin_prefix [tool_state_get default_bin_prefix]
-  ocd_compile_executable "U-mode.S" "$default_bin_prefix.exe"
+  ocd_compile_executable "U-mode.S" "$default_bin_prefix.exe" \
+    [list "-DDMTVEC_BALIGN=[target_info cpu,mtvec_balign]" "-DDSTVEC_BALIGN=[target_info cpu,stvec_balign]"]
 
   # created by compile executable
   set ENTRY_ADDR [tool_state_get_program_symbol _entry]

@@ -29,6 +29,9 @@ set_board_info cpu,wp_napot_matches_on_crossing 0
 set_board_info cpu,wp_gelt_matches_on_crossing 0
 set_board_info cpu,wp_hit_bit_support 0
 
+set_board_info cpu,mtvec_balign 64
+set_board_info cpu,stvec_balign 4
+
 set_board_info cpu,sv32 0
 set_board_info cpu,sv39 0
 set_board_info cpu,sv48 0
