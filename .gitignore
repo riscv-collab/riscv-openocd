@@ -115,6 +115,7 @@ compile_commands.json
 # makepy
 .makepy/artifacts
 build/
+fpga_info/
 
 conaninfo.txt
 conanmanifest.txt
