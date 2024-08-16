@@ -4,7 +4,7 @@
         "testgen-model-interface/0.1.0-rc.0.29+sc.sc-dt.2024.07@sc/main#08aa2b543b48955ae3711ff7440146b62ef9b26d%1722003228.983",
         "sc-zstd/1.5.6-rc.0.257+sc.sc-dt.2024.07@sc/main#f110cca1afde86e4a3f7c765dce06404725dec41%1722012594.528",
         "sc-lzma/5.6.1-rc.0.257+sc.sc-dt.2024.07@sc/main#96bcc9b466db32487b70cc72e5d90c038906a9bb%1722071205.336",
-        "riscv-isa-sim/0.1.0-rc.0.251+sc.main@sc/main#d6474c36a2c83c383de31638582785e21086d334%1722096922.27",
+        "riscv-isa-sim/0.1.0-rc.0.257+sc.main@sc/main#e234ea7fd018cfa42559b311672993ead3d56266%1723828412.241",
         "riscv-gdb/13.2.0-rc.0.196+sc.sc-dt.2024.07@sc/main#113664845ccd5e68cedbe559ba01602f4e065395%1722072284.122",
         "riscv-gcc/13.2.0-rc.0.130+sc.sc-dt.2024.07@sc/main#8224cedfc3d9310bc1bb988e5a3ba45769c11f59%1722017326.433",
         "riscv-binutils/2.42.0-rc.0.46+sc.sc-dt.2024.07@sc/main#5b6d20a1ef49f6b6c01859df3f7bc74d513a1ff8%1722013408.757",
