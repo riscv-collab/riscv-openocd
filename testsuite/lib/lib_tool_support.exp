@@ -63,6 +63,7 @@ proc tsuplib_target_info_check {} {
     cpu,wp_napot_matches_on_crossing \
     cpu,wp_gelt_matches_on_crossing \
     cpu,wp_hit_bit_support \
+    cpu,has_icount \
     cpu,mtvec_balign \
     cpu,stvec_balign \
     cpu,sv32 \
