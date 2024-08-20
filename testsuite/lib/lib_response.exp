@@ -560,6 +560,12 @@ proc parse_re_examine { report } {
   return [internal_parse_success $TYPE $report {info "re_examine passed"}]
 }
 
+proc parse_icount { report } {
+  set TYPE "icount"
+
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
 proc parse_debug_reason { report } {
   set TYPE "debug_reason"
 

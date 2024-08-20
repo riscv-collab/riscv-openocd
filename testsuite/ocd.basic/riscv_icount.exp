@@ -1,0 +1,100 @@
+if {![target_info cpu,has_icount]} { return [ocd_test_unsupported] }
+if {![target_info cpu,has_pmp]} { return [ocd_test_unsupported] }
+if {![target_info cpu,has_pmp_top]} { return [ocd_test_unsupported] }
+
+proc icount_test_set_and_run { modes count resume_addr stop_addr } {
+  ocdtlb_run_expect "riscv icount set ${modes} ${count}"
+  ocdtlb_run_expect "resume ${resume_addr}"
+  ocdtlb_wait_resume wait_halt
+  ocdtlb_expect_reg_val pc ${stop_addr}
+  ocdtlb_run_expect "riscv icount clear"
+}
+
+proc icount_test_check_mode_miss { modes count resume_addr stop_addr } {
+  ocdtlb_run_expect "bp ${stop_addr} 4"
+  icount_test_set_and_run ${modes} ${count} ${resume_addr} ${stop_addr}
+  ocdtlb_run_expect "rbp all"
+}
+
+proc icount_test_do_basic_test { mode modes_to_miss } {
+
+  set CODE_PAYLOAD_ADDR [tool_state_get_program_symbol code_payload]
+  set INST1_ADDR [tool_state_get_program_symbol code_payload_inst1]
+  set INST5_ADDR [tool_state_get_program_symbol code_payload_inst5]
+  set CODE_BORDER_ADDR [tool_state_get_program_symbol code_payload_sup]
+
+  verbose "checking for icount to hit at <${mode}>" 1
+  icount_test_set_and_run ${mode} 1 ${CODE_PAYLOAD_ADDR} ${INST1_ADDR}
+  icount_test_set_and_run ${mode} 5 ${CODE_PAYLOAD_ADDR} ${INST5_ADDR}
+
+  foreach mode ${modes_to_miss} {
+    verbose "checking for icount to miss at <${mode}>" 1
+    icount_test_check_mode_miss ${mode} 1 ${CODE_PAYLOAD_ADDR} ${CODE_BORDER_ADDR}
+    icount_test_check_mode_miss ${mode} 5 ${CODE_PAYLOAD_ADDR} ${CODE_BORDER_ADDR}
+  }
+}
+
+proc run_test {} {
+  set default_bin_prefix [tool_state_get default_bin_prefix]
+  ocd_compile_executable "asm_icount_basic.S" "$default_bin_prefix.exe" \
+    [list "-DDMTVEC_BALIGN=[target_info cpu,mtvec_balign]" "-DDSTVEC_BALIGN=[target_info cpu,stvec_balign]"]
+
+  # created by compile executable
+  set ENTRY_ADDR [tool_state_get_program_symbol _entry]
+  set STARTUP_END_ADDR [tool_state_get_program_symbol startup_end]
+  set STVECT_ADDR [tool_state_get_program_symbol stvect_start]
+  set MTVECT_ADDR [tool_state_get_program_symbol mtvect_start]
+
+  ocd_connect
+
+  ocdtlb_run_expect "targets 0"
+  ocdtlb_run_expect "reset halt"
+
+  ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+  ocdtlb_run_expect "reg pc ${ENTRY_ADDR}"
+  ocdtlb_run_expect "bp ${STARTUP_END_ADDR} 4"
+  ocdtlb_run_expect "resume"
+
+  ocdtlb_wait_resume wait_halt
+
+  ocdtlb_run_expect "rbp all"
+  if {[target_info cpu,has_s_mode]} {
+    ocdtlb_run_expect "reg stvec ${STVECT_ADDR}"
+  }
+
+  set M_MODE_MISS {}
+  set S_MODE_MISS {m}
+  set U_MODE_MISS {m}
+
+  if {[target_info cpu,has_s_mode]} {
+    lappend M_MODE_MISS s
+  }
+  if {[target_info cpu,has_u_mode]} {
+    lappend M_MODE_MISS u
+    if {[target_info cpu,has_s_mode]} {
+      lappend M_MODE_MISS "s u"
+
+      lappend S_MODE_MISS u
+      lappend S_MODE_MISS "u m"
+
+      lappend U_MODE_MISS s
+      lappend U_MODE_MISS "s m"
+    }
+  }
+
+  icount_test_do_basic_test m ${M_MODE_MISS}
+
+  if {[target_info cpu,has_s_mode]} {
+    ocdtlb_run_expect "reg priv 1"
+    icount_test_do_basic_test s ${S_MODE_MISS}
+  }
+
+  if {[target_info cpu,has_u_mode]} {
+    ocdtlb_run_expect "reg priv 0"
+    icount_test_do_basic_test u ${U_MODE_MISS}
+  }
+
+  return [ocd_test_pass]
+}
+
+return [run_test]
