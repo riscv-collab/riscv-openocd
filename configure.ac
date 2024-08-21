@@ -173,8 +173,7 @@ m4_define([DUMMY_ADAPTER],
 	[[[dummy], [Dummy Adapter], [DUMMY]]])
 
 m4_define([OPTIONAL_LIBRARIES],
-	[[[capstone], [Use Capstone disassembly framework], []],
-	[[jansson], [Use Jansson library to load ELCT ILAs], []]])
+	[[[capstone], [Use Capstone disassembly framework], []]])
 
 AC_ARG_ENABLE([doxygen-html],
   AS_HELP_STRING([--disable-doxygen-html],
@@ -399,9 +398,9 @@ AC_ARG_ENABLE([remote-bitbang],
   AS_HELP_STRING([--enable-remote-bitbang], [Enable building support for the Remote Bitbang driver]),
   [build_remote_bitbang=$enableval], [build_remote_bitbang=yes])
 
-AC_ARG_ENABLE([elct-support],
-  AS_HELP_STRING([--enable-elct-support], [Enable building extra commands for ELCT.]),
-  [elct_support=$enableval], [elct_support=no])
+AC_ARG_ENABLE([syntacore-extensions],
+  AS_HELP_STRING([--enable-syntacore-extensions], [Enable Syntacore extensions.]),
+  [syntacore_extensions=$enableval], [syntacore_extensions=no])
 
 AS_CASE(["${host_cpu}"],
   [i?86|x86*], [],
@@ -676,29 +675,11 @@ AS_IF([test "x$enable_capstone" == xno], [
 	AC_DEFINE([HAVE_CAPSTONE], [0], [0 if you don't have Capstone disassembly framework.])
 ])
 
-AC_ARG_WITH([jansson],
-		AS_HELP_STRING([--with-jansson], [Use Jansson library to load ELCT ILAs (default=auto)])
-	, [
-		enable_jansson=$withval
+AS_IF([test "x$enable_syntacore_extensions" = xyes], [
+		PKG_CHECK_MODULES([JANSSON], [jansson])
+		AC_DEFINE([SYNTACORE_EXTENSIONS],[1], [1 if SYNTACORE_EXTENSIONS support is included.])
 	], [
-		enable_jansson=auto
-])
-
-AS_IF([test "x$enable_jansson" != xno], [
-	PKG_CHECK_MODULES([JANSSON], [jansson], [
-		AC_DEFINE([HAVE_JANSSON], [1], [Define to 1 if you have Jansson library.])
-	], [
-		if test "x$enable_jansson" != xauto; then
-			AC_MSG_ERROR([--with-jansson was given, but test for Jansson failed])
-		fi
-		enable_jansson=no
-	])
-])
-
-AS_IF([test "x$enable_elct_support" = xyes], [
-    AC_DEFINE([ELCT_SUPPORT],[1], [1 if ELCT support is included.])
-], [
-    AC_DEFINE([ELCT_SUPPORT],[0], [0 if ELCT support is excluded.])
+		AC_DEFINE([SYNTACORE_EXTENSIONS],[0], [0 if SYNTACORE_EXTENSIONS support is excluded.])
 ])
 
 for hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
@@ -829,9 +810,8 @@ AM_CONDITIONAL([USE_LIBJAYLINK], [test "x$use_libjaylink" = "xyes"])
 AM_CONDITIONAL([RSHIM], [test "x$build_rshim" = "xyes"])
 AM_CONDITIONAL([DMEM], [test "x$build_dmem" = "xyes"])
 AM_CONDITIONAL([HAVE_CAPSTONE], [test "x$enable_capstone" != "xno"])
-AM_CONDITIONAL([HAVE_JANSSON], [test "x$enable_jansson" != "xno"])
 
-AM_CONDITIONAL([ELCT_SUPPORT], [test "x$enable_elct_support" = "xyes"])
+AM_CONDITIONAL([SYNTACORE_EXTENSIONS], [test "x$enable_syntacore_extensions" = "xyes"])
 
 AM_CONDITIONAL([INTERNAL_JIMTCL], [test "x$use_internal_jimtcl" = "xyes"])
 AM_CONDITIONAL([HAVE_JIMTCL_PKG_CONFIG], [test "x$have_jimtcl_pkg_config" = "xyes"])

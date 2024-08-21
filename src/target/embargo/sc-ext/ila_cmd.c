@@ -6,9 +6,7 @@
 
 #include "ila_cmd.h"
 #include "ila_hw.h"
-#ifdef HAVE_JANSSON
 #include "ila_json.h"
-#endif
 
 static struct ila_device *first;
 static struct ila_device *last;
@@ -111,7 +109,6 @@ COMMAND_HANDLER(handle_ila_new_command)
 		ret = parse_u32(CMD_ARGV[2], &device->sample_depth);
 		if (ret != ERROR_OK)
 			goto free;
-#ifdef HAVE_JANSSON
 	} else if (CMD_ARGC == 2) {
 		device->tap = jtag_tap_by_string(CMD_ARGV[0]);
 		if (!device->tap) {
@@ -122,7 +119,6 @@ COMMAND_HANDLER(handle_ila_new_command)
 		ret = CALL_COMMAND_HANDLER(ila_device_load_json, device, CMD_ARGV[1]);
 		if (ret != ERROR_OK)
 			goto free;
-#endif
 	} else {
 		ret = ERROR_COMMAND_SYNTAX_ERROR;
 		goto free;
@@ -712,11 +708,7 @@ static const struct command_registration ila_subcommand_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.handler = handle_ila_new_command,
 		.help = "Create ila device.",
-#ifdef HAVE_JANSSON
 		.usage = "tapname json_or_probe_width [sample_depth]",
-#else
-		.usage = "tapname probe_width sample_depth",
-#endif
 	},
 	{
 		.name = "print",

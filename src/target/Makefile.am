@@ -5,10 +5,6 @@
 	%D%/xtensa/libxtensa.la \
 	%D%/espressif/libespressif.la
 
-if ELCT_SUPPORT
-%C%_libtarget_la_LIBADD += %D%/elct/libelct.la
-endif
-
 %C%_libtarget_la_CPPFLAGS = $(AM_CPPFLAGS)
 
 STARTUP_TCL_SRCS += %D%/startup.tcl
@@ -246,4 +242,9 @@ include %D%/openrisc/Makefile.am
 include %D%/riscv/Makefile.am
 include %D%/xtensa/Makefile.am
 include %D%/espressif/Makefile.am
-include %D%/elct/Makefile.am
+
+if SYNTACORE_EXTENSIONS
+include %D%/embargo/sc-ext/Makefile.am
+%C%_libtarget_la_LIBADD += %D%/embargo/sc-ext/libscext.la
+endif
+

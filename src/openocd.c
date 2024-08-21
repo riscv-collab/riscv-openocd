@@ -27,12 +27,15 @@
 #include <target/arm_cti.h>
 #include <target/arm_adi_v5.h>
 #include <target/arm_tpiu_swo.h>
-#include <target/elct/elct_cmd.h>
 #include <rtt/rtt.h>
 
 #include <server/server.h>
 #include <server/gdb_server.h>
 #include <server/rtt_server.h>
+
+#if SYNTACORE_EXTENSIONS
+#include <target/embargo/sc-ext/cmd.h>
+#endif
 
 #ifdef HAVE_STRINGS_H
 #include <strings.h>
@@ -257,8 +260,8 @@ static struct command_context *setup_command_handler(Jim_Interp *interp)
 		&cti_register_commands,
 		&dap_register_commands,
 		&arm_tpiu_swo_register_commands,
-#if ELCT_SUPPORT
-		&elct_register_commands,
+#if SYNTACORE_EXTENSIONS
+		&syntacore_extensions_register_commands,
 #endif
 		NULL
 	};
@@ -366,8 +369,8 @@ int openocd_main(int argc, char *argv[])
 	/* free all DAP and CTI objects */
 	arm_cti_cleanup_all();
 	dap_cleanup_all();
-#if ELCT_SUPPORT
-	elct_cleanup();
+#if SYNTACORE_EXTENSIONS
+	syntacore_extensions_cleanup();
 #endif
 
 	adapter_quit();

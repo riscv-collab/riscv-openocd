@@ -50,7 +50,6 @@ option(ENABLE_ELCT_SUPPORT "Enable ELCT support.")
 if (ENABLE_ELCT_SUPPORT)
   set (OPENOCD_CONFIGURE_OPTIONS
        ${OPENOCD_CONFIGURE_OPTIONS}
-       --enable-elct-support
-       --with-jansson
+       --enable-syntacore-extensions
   )
 endif()

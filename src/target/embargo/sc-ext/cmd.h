@@ -5,7 +5,7 @@
 
 #include "helper/command.h"
 
-int elct_register_commands(struct command_context *cmd_ctx);
-void elct_cleanup(void);
+int syntacore_extensions_register_commands(struct command_context *cmd_ctx);
+void syntacore_extensions_cleanup(void);
 
 #endif

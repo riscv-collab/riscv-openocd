@@ -4,7 +4,7 @@
 #include "config.h"
 #endif
 
-#include "elct_cmd.h"
+#include "cmd.h"
 
 #include <helper/log.h>
 
@@ -12,7 +12,7 @@
 #include "bps_cmd.h"
 #include "ila_cmd.h"
 
-int elct_register_commands(struct command_context *cmd_ctx)
+int syntacore_extensions_register_commands(struct command_context *cmd_ctx)
 {
 	int ret;
 
@@ -29,7 +29,7 @@ int elct_register_commands(struct command_context *cmd_ctx)
 	return ret;
 }
 
-void elct_cleanup(void)
+void syntacore_extensions_cleanup(void)
 {
 	ila_cleanup_all();
 }
