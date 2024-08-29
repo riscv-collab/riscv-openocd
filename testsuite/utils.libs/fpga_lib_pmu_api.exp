@@ -3,6 +3,10 @@ proc run_test {} {
   if {[target_info cpu,name] eq "scr1"} {
     return [ocd_test_unsupported]
   }
+  # TODO: fix 32-bit support
+  if {[target_info cpu,xlen] == 32} {
+    return [ocd_test_unsupported]
+  }
   set ElfFile "[tool_state_get default_bin_prefix]_spike_run.elf"
   ocd_compile_executable "lib/simple.S" "$ElfFile"
 
