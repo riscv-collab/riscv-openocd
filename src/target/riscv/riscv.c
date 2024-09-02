@@ -669,6 +669,19 @@ static int stdtrig_set_tx_impl(struct target *target, unsigned int idx,
 	return ERROR_OK;
 }
 
+static int sdtrig_disable_trigger(struct target *target, unsigned int idx)
+{
+	// Select which trigger to use
+	if (riscv_reg_set(target, GDB_REGNO_TSELECT, idx) != ERROR_OK)
+		return ERROR_FAIL;
+
+	// Disable the trigger by writing 0 to it
+	if (riscv_reg_set(target, GDB_REGNO_TDATA1, 0) != ERROR_OK)
+		return ERROR_FAIL;
+
+	return ERROR_OK;
+}
+
 static int sdtrig_set_t1(struct target *target, unsigned int idx,
 		riscv_reg_t tdata1, riscv_reg_t tdata1_ignore_mask)
 {
@@ -897,10 +910,7 @@ static int try_setup_chained_match_triggers(struct target *target,
 			return ERROR_OK;
 		}
 		/* Undo the setting of the previous trigger */
-		// BUG: fixme. once tdata1 is written with zero
-		// we should not readback tdata1
-		int ret_undo = sdtrig_set_t1t2(target, idx,
-				/* tdata1 */ 0, /* tdata2 */0, /* tdata1_mask */ 0);
+		int ret_undo = sdtrig_disable_trigger(target, idx);
 		if (ret_undo != ERROR_OK)
 			return ret_undo;
 
