@@ -835,6 +835,10 @@ static int try_setup_single_match_trigger(struct target *target,
 	for (unsigned int idx = 0;
 			find_next_free_trigger(target, trigger_type, false, &idx) == ERROR_OK;
 			++idx) {
+		if (trigger_type == CSR_TDATA1_TYPE_MCONTROL
+				&& (get_field(trig_info.tdata1, CSR_MCONTROL_MATCH) == CSR_MCONTROL_MATCH_NAPOT)
+				&& r->trigger_maskmax[idx] == 0)
+				continue;
 		ret = try_use_trigger_and_cache_result(target, idx, trig_info.tdata1, trig_info.tdata2,
 			trig_info.tdata1_ignore_mask);
 
@@ -5729,6 +5733,11 @@ int riscv_enumerate_triggers(struct target *target)
 		riscv_reg_t tdata1;
 		if (riscv_reg_get(target, &tdata1, GDB_REGNO_TDATA1) != ERROR_OK)
 			return ERROR_FAIL;
+		int type = get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)));
+		if (type == CSR_TDATA1_TYPE_MCONTROL) {
+			r->trigger_maskmax[t] = get_field(tdata1,
+					CSR_MCONTROL_MASKMAX(riscv_xlen(target)));
+		}
 
 		result = get_trigger_types(target, &r->trigger_tinfo[t], tdata1);
 		if (result == ERROR_FAIL)

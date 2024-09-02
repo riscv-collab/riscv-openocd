@@ -154,6 +154,9 @@ struct riscv_info {
 	/* record the tinfo of each trigger */
 	unsigned int trigger_tinfo[RISCV_MAX_TRIGGERS];
 
+	/* record the tdata1.maskmax of each trigger */
+	unsigned int trigger_maskmax[RISCV_MAX_TRIGGERS];
+
 	/* For each physical trigger contains:
 	 * -1: the hwbp is available
 	 * -4: The trigger is used by the itrigger command
