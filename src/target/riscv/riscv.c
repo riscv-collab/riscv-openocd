@@ -1458,30 +1458,46 @@ static int remove_trigger(struct target *target, int unique_id)
 		return ERROR_FAIL;
 
 	riscv_reg_t tselect;
-	int result = riscv_reg_get(target, &tselect, GDB_REGNO_TSELECT);
-	if (result != ERROR_OK)
-		return result;
+	int ret = riscv_reg_get(target, &tselect, GDB_REGNO_TSELECT);
+	if (ret != ERROR_OK)
+		return ret;
 
-	bool done = false;
-	for (unsigned int i = 0; i < r->trigger_count; i++) {
-		if (r->trigger_unique_id[i] == unique_id) {
-			riscv_reg_set(target, GDB_REGNO_TSELECT, i);
-			riscv_reg_set(target, GDB_REGNO_TDATA1, 0);
+	bool found = false;
+	for (unsigned int i = 0; i < r->trigger_count; ++i) {
+		if (r->trigger_unique_id[i] != unique_id)
+			continue;
+		found = true;
+		int op_status = sdtrig_disable_trigger(target, i);
+		if (op_status != ERROR_OK) {
+			ret = (ret == ERROR_OK) ? op_status : ERROR_FAIL;
+			LOG_TARGET_ERROR(target, "Could not disable trigger %d for bp/wp %d",
+					i, unique_id);
+		} else {
 			r->trigger_unique_id[i] = -1;
-			LOG_TARGET_DEBUG(target, "Stop using resource %d for bp %d",
-				i, unique_id);
-			done = true;
+			LOG_TARGET_DEBUG(target, "Stop using resource %d for bp/wp %d",
+					i, unique_id);
 		}
 	}
-	if (!done) {
+
+	if (ret != ERROR_OK)
 		LOG_TARGET_ERROR(target,
-			"Couldn't find the hardware resources used by hardware trigger.");
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+				"Target may behave in an unexpected manner since not all triggers "
+				"corresponding to bp/wp with id %d were disabled", unique_id);
+
+	if (!found) {
+		LOG_TARGET_ERROR(target,
+				"BUG: could not find the hardware resources used by bp/wp %d",
+				unique_id);
+		ret = ERROR_FAIL;
 	}
 
-	riscv_reg_set(target, GDB_REGNO_TSELECT, tselect);
+	if (riscv_reg_set(target, GDB_REGNO_TSELECT, tselect) != ERROR_OK) {
+		LOG_TARGET_ERROR(target, "Coudld not restore tselect after bp/wp %d "
+				"removal attempt", unique_id);
+		ret = ERROR_FAIL;
+	}
 
-	return ERROR_OK;
+	return ret;
 }
 
 static int riscv_remove_breakpoint(struct target *target,
