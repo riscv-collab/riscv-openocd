@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifndef RISCV_H
-#define RISCV_H
+#ifndef OPENOCD_TARGET_RISCV_RISCV_H
+#define OPENOCD_TARGET_RISCV_RISCV_H
 
 struct riscv_program;
 
@@ -362,12 +362,13 @@ extern struct scan_field select_dtmcontrol;
 extern struct scan_field select_dbus;
 extern struct scan_field select_idcode;
 
+int dtmcontrol_scan(struct target *target, uint32_t out, uint32_t *in_ptr);
+
 extern struct scan_field *bscan_tunneled_select_dmi;
 extern uint32_t bscan_tunneled_select_dmi_num_fields;
 typedef enum { BSCAN_TUNNEL_NESTED_TAP, BSCAN_TUNNEL_DATA_REGISTER } bscan_tunnel_type_t;
 extern int bscan_tunnel_ir_width;
 
-int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_ptr);
 void select_dmi_via_bscan(struct target *target);
 
 /*** OpenOCD Interface */
@@ -433,4 +434,4 @@ int riscv_write_by_any_size(struct target *target, target_addr_t address, uint32
 int riscv_interrupts_disable(struct target *target, uint64_t ie_mask, uint64_t *old_mstatus);
 int riscv_interrupts_restore(struct target *target, uint64_t old_mstatus);
 
-#endif
+#endif /* OPENOCD_TARGET_RISCV_RISCV_H */

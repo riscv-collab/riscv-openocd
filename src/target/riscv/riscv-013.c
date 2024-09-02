@@ -113,7 +113,7 @@ typedef enum {
 
 typedef struct {
 	struct list_head list;
-	int abs_chain_position;
+	unsigned int abs_chain_position;
 	/* The base address to access this DM on DMI */
 	uint32_t base;
 	/* The number of harts connected to this DM. */
@@ -221,7 +221,7 @@ static dm013_info_t *get_dm(struct target *target)
 	if (info->dm)
 		return info->dm;
 
-	int abs_chain_position = target->tap->abs_chain_position;
+	unsigned int abs_chain_position = target->tap->abs_chain_position;
 
 	dm013_info_t *entry;
 	dm013_info_t *dm = NULL;
@@ -432,41 +432,6 @@ static void select_dmi(struct target *target)
 		return;
 	}
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
-}
-
-static int dtmcontrol_scan(struct target *target, uint32_t out, uint32_t *in_ptr)
-{
-	struct scan_field field;
-	uint8_t in_value[4];
-	uint8_t out_value[4] = { 0 };
-
-	if (bscan_tunnel_ir_width != 0)
-		return dtmcontrol_scan_via_bscan(target, out, in_ptr);
-
-	buf_set_u32(out_value, 0, 32, out);
-
-	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
-
-	field.num_bits = 32;
-	field.out_value = out_value;
-	field.in_value = in_value;
-	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
-
-	/* Always return to dmi. */
-	select_dmi(target);
-
-	int retval = jtag_execute_queue();
-	if (retval != ERROR_OK) {
-		LOG_ERROR("failed jtag scan: %d", retval);
-		return retval;
-	}
-
-	uint32_t in = buf_get_u32(field.in_value, 0, 32);
-	LOG_DEBUG("DTMCS: 0x%x -> 0x%x", out, in);
-
-	if (in_ptr)
-		*in_ptr = in;
-	return ERROR_OK;
 }
 
 static int increase_dmi_busy_delay(struct target *target)
@@ -728,7 +693,7 @@ clear_cmderr:
 	return res;
 }
 
-static int execute_abstract_command(struct target *target, uint32_t command,
+int riscv013_execute_abstract_command(struct target *target, uint32_t command,
 		uint32_t *cmderr)
 {
 	assert(cmderr);
@@ -864,7 +829,7 @@ static int write_abstract_arg(struct target *target, unsigned index,
 /**
  * @par size in bits
  */
-static uint32_t access_register_command(struct target *target, uint32_t number,
+uint32_t riscv013_access_register_command(struct target *target, uint32_t number,
 		unsigned size, uint32_t flags)
 {
 	uint32_t command = set_field(0, DM_COMMAND_CMDTYPE, 0);
@@ -921,11 +886,11 @@ static int register_read_abstract_with_size(struct target *target,
 	if (number >= GDB_REGNO_V0 && number <= GDB_REGNO_V31)
 		return ERROR_FAIL;
 
-	uint32_t command = access_register_command(target, number, size,
+	uint32_t command = riscv013_access_register_command(target, number, size,
 			AC_ACCESS_REGISTER_TRANSFER);
 
 	uint32_t cmderr;
-	int result = execute_abstract_command(target, command, &cmderr);
+	int result = riscv013_execute_abstract_command(target, command, &cmderr);
 	if (result != ERROR_OK) {
 		if (cmderr == CMDERR_NOT_SUPPORTED) {
 			if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
@@ -970,7 +935,7 @@ static int register_write_abstract(struct target *target, enum gdb_regno number,
 		return ERROR_FAIL;
 
 	const unsigned int size_bits = register_size(target, number);
-	const uint32_t command = access_register_command(target, number, size_bits,
+	const uint32_t command = riscv013_access_register_command(target, number, size_bits,
 			AC_ACCESS_REGISTER_TRANSFER |
 			AC_ACCESS_REGISTER_WRITE);
 	LOG_DEBUG_REG(target, AC_ACCESS_REGISTER, command);
@@ -2113,70 +2078,9 @@ static int examine(struct target *target)
 	 * program buffer. */
 	r->progbuf_size = info->progbufsize;
 
-	result = register_read_abstract_with_size(target, NULL, GDB_REGNO_S0, 64);
-	if (result == ERROR_OK)
-		r->xlen = 64;
-	else
-		r->xlen = 32;
-
-	/* Save s0 and s1. The register cache hasn't be initialized yet so we
-	 * need to take care of this manually. */
-	uint64_t s0, s1;
-	if (register_read_abstract(target, &s0, GDB_REGNO_S0) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Fatal: Failed to read s0.");
-		return ERROR_FAIL;
-	}
-	if (register_read_abstract(target, &s1, GDB_REGNO_S1) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Fatal: Failed to read s1.");
-		return ERROR_FAIL;
-	}
-
-	if (register_read_direct(target, &r->misa, GDB_REGNO_MISA)) {
-		LOG_TARGET_ERROR(target, "Fatal: Failed to read MISA.");
-		return ERROR_FAIL;
-	}
-
-	uint64_t value;
-	if (register_read_direct(target, &value, GDB_REGNO_VLENB) != ERROR_OK) {
-		if (riscv_supports_extension(target, 'V'))
-			LOG_TARGET_WARNING(target, "Couldn't read vlenb; vector register access won't work.");
-		r->vlenb = 0;
-	} else {
-		r->vlenb = value;
-		LOG_TARGET_INFO(target, "Vector support with vlenb=%d", r->vlenb);
-	}
-
-	if (register_read_direct(target, &value, GDB_REGNO_MTOPI) == ERROR_OK) {
-		r->mtopi_readable = true;
-
-		if (register_read_direct(target, &value, GDB_REGNO_MTOPEI) == ERROR_OK) {
-			LOG_TARGET_INFO(target, "S?aia detected with IMSIC");
-			r->mtopei_readable = true;
-		} else {
-			r->mtopei_readable = false;
-			LOG_TARGET_INFO(target, "S?aia detected without IMSIC");
-		}
-	} else {
-		r->mtopi_readable = false;
-	}
-
-	/* Display this as early as possible to help people who are using
-	 * really slow simulators. */
-	LOG_TARGET_DEBUG(target, " XLEN=%d, misa=0x%" PRIx64, r->xlen, r->misa);
-
-	/* Restore s0 and s1. */
-	if (register_write_direct(target, GDB_REGNO_S0, s0) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Fatal: Failed to write back s0.");
-		return ERROR_FAIL;
-	}
-	if (register_write_direct(target, GDB_REGNO_S1, s1) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Fatal: Failed to write back s1.");
-		return ERROR_FAIL;
-	}
-
-	/* Now init registers based on what we discovered. */
-	if (riscv013_reg_init_all(target) != ERROR_OK)
-		return ERROR_FAIL;
+	result = riscv013_reg_examine_all(target);
+	if (result != ERROR_OK)
+		return result;
 
 	if (set_dcsr_ebreak(target, false) != ERROR_OK)
 		return ERROR_FAIL;
@@ -3657,7 +3561,7 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 
 		/* Execute the command */
 		uint32_t cmderr;
-		result = execute_abstract_command(target, command, &cmderr);
+		result = riscv013_execute_abstract_command(target, command, &cmderr);
 
 		/* TODO: we need to modify error handling here. */
 		/* NOTE: in case of timeout cmderr is set to CMDERR_NONE */
@@ -3679,7 +3583,7 @@ static int read_memory_abstract(struct target *target, target_addr_t address,
 			} else {
 				/* Try the same access but with postincrement disabled. */
 				command = access_memory_command(target, false, width, false, false);
-				result = execute_abstract_command(target, command, &cmderr);
+				result = riscv013_execute_abstract_command(target, command, &cmderr);
 				if (result == ERROR_OK) {
 					LOG_TARGET_DEBUG(target, "aampostincrement is not supported on this target.");
 					info->has_aampostincrement = YNM_NO;
@@ -3750,7 +3654,7 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 
 		/* Execute the command */
 		uint32_t cmderr;
-		result = execute_abstract_command(target, command, &cmderr);
+		result = riscv013_execute_abstract_command(target, command, &cmderr);
 
 		/* TODO: we need to modify error handling here. */
 		/* NOTE: in case of timeout cmderr is set to CMDERR_NONE */
@@ -3772,7 +3676,7 @@ static int write_memory_abstract(struct target *target, target_addr_t address,
 			} else {
 				/* Try the same access but with postincrement disabled. */
 				command = access_memory_command(target, false, width, false, true);
-				result = execute_abstract_command(target, command, &cmderr);
+				result = riscv013_execute_abstract_command(target, command, &cmderr);
 				if (result == ERROR_OK) {
 					LOG_TARGET_DEBUG(target, "aampostincrement is not supported on this target.");
 					info->has_aampostincrement = YNM_NO;
@@ -3818,11 +3722,11 @@ static int read_memory_progbuf_inner_startup(struct target *target,
 	/* AC_ACCESS_REGISTER_POSTEXEC is used to trigger first stage of the
 	 * pipeline (memory -> s1) whenever this command is executed.
 	 */
-	const uint32_t startup_command = access_register_command(target,
+	const uint32_t startup_command = riscv013_access_register_command(target,
 			GDB_REGNO_S1, riscv_xlen(target),
 			AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
 	uint32_t cmderr;
-	if (execute_abstract_command(target, startup_command, &cmderr) != ERROR_OK)
+	if (riscv013_execute_abstract_command(target, startup_command, &cmderr) != ERROR_OK)
 		return ERROR_FAIL;
 	/* TODO: we need to modify error handling here. */
 	/* NOTE: in case of timeout cmderr is set to CMDERR_NONE */
@@ -4305,11 +4209,11 @@ static int read_memory_progbuf_inner_one(struct target *target,
 	if (write_abstract_arg(target, 0, access.target_address, riscv_xlen(target))
 			!= ERROR_OK)
 		return ERROR_FAIL;
-	uint32_t command = access_register_command(target, GDB_REGNO_S1,
+	uint32_t command = riscv013_access_register_command(target, GDB_REGNO_S1,
 			riscv_xlen(target), AC_ACCESS_REGISTER_WRITE |
 			AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
 	uint32_t cmderr;
-	if (execute_abstract_command(target, command, &cmderr) != ERROR_OK)
+	if (riscv013_execute_abstract_command(target, command, &cmderr) != ERROR_OK)
 		return ERROR_FAIL;
 
 	return read_word_from_s1(target, access, 0);
@@ -4648,14 +4552,14 @@ static int write_memory_progbuf_startup(struct target *target, target_addr_t *ad
 
 	/* Write and execute command that moves the value from data0 [, data1]
 	 * into S1 and executes program buffer. */
-	uint32_t command = access_register_command(target,
+	uint32_t command = riscv013_access_register_command(target,
 			GDB_REGNO_S1, riscv_xlen(target),
 			AC_ACCESS_REGISTER_POSTEXEC |
 			AC_ACCESS_REGISTER_TRANSFER |
 			AC_ACCESS_REGISTER_WRITE);
 
 	uint32_t cmderr;
-	if (execute_abstract_command(target, command, &cmderr) != ERROR_OK)
+	if (riscv013_execute_abstract_command(target, command, &cmderr) != ERROR_OK)
 		return ERROR_FAIL;
 
 	log_memory_access64(*address_p, value, size, /*is_read*/ false);
@@ -5326,7 +5230,7 @@ static int riscv013_execute_progbuf(struct target *target, uint32_t *cmderr)
 	run_program = set_field(run_program, AC_ACCESS_REGISTER_TRANSFER, 0);
 	run_program = set_field(run_program, AC_ACCESS_REGISTER_REGNO, 0x1000);
 
-	return execute_abstract_command(target, run_program, cmderr);
+	return riscv013_execute_abstract_command(target, run_program, cmderr);
 }
 
 static void riscv013_fill_dmi_write(struct target *target, char *buf, uint64_t a, uint32_t d)
