@@ -609,6 +609,15 @@ AS_IF([test "x$use_internal_jimtcl" = "xyes"], [
   ], [
     AC_MSG_ERROR([jimtcl not found, run git submodule init and git submodule update.])
   ])
+], [
+  PKG_CHECK_MODULES([JIMTCL], [jimtcl >= 0.79], [
+      have_jimtcl_pkg_config=yes
+    ], [
+      have_jimtcl_pkg_config=no
+      AC_CHECK_HEADER([jim.h], [], [
+        AC_MSG_ERROR([jimtcl is required but not found via pkg-config and system includes])
+      ])
+  ])
 ])
 
 AS_IF([test "x$build_remote_bitbang" = "xyes"], [
@@ -825,6 +834,7 @@ AM_CONDITIONAL([HAVE_JANSSON], [test "x$enable_jansson" != "xno"])
 AM_CONDITIONAL([ELCT_SUPPORT], [test "x$enable_elct_support" = "xyes"])
 
 AM_CONDITIONAL([INTERNAL_JIMTCL], [test "x$use_internal_jimtcl" = "xyes"])
+AM_CONDITIONAL([HAVE_JIMTCL_PKG_CONFIG], [test "x$have_jimtcl_pkg_config" = "xyes"])
 AM_CONDITIONAL([INTERNAL_LIBJAYLINK], [test "x$use_internal_libjaylink" = "xyes"])
 
 # Look for environ alternatives.  Possibility #1: is environ in unistd.h or stdlib.h?
