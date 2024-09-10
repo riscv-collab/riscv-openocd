@@ -20,13 +20,10 @@
 int riscv013_reg_examine_all(struct target *target);
 
 /**
- * This function is used to save the value of a register in cache. The register
- * is marked as dirty, and writeback is delayed for as long as possible.
+ * This function is used to save the value of a GPR in cache. The register is
+ * marked as dirty, and writeback is delayed for as long as possible.
  * Generally used to save registers before program buffer execution.
- *
- * TODO: The interface should be restricted in such a way that only GPRs can be
- * saved.
  */
-int riscv013_reg_save(struct target *target, enum gdb_regno regid);
+int riscv013_reg_save_gpr(struct target *target, enum gdb_regno regid);
 
 #endif /* OPENOCD_TARGET_RISCV_RISCV_013_REG_H */

@@ -30,6 +30,16 @@ static inline bool riscv_reg_impl_is_initialized(const struct reg *reg)
 	assert(reg->valid || !reg->dirty);
 	return true;
 }
+
+static inline bool riscv_reg_impl_is_existing(const struct reg *reg)
+{
+	assert(riscv_reg_impl_is_initialized(reg));
+	if (!reg->exist)
+		return false;
+	assert(reg->size > 0);
+	assert(reg->value);
+	return true;
+}
 /**
  * Initialize register cache. Note, that each specific register cache entry is
  * not initialized by this function.
@@ -171,52 +181,4 @@ int riscv_reg_impl_expose_csrs(const struct target *target);
 /** Hide additional CSRs, as specified by `riscv_info_t::hide_csr` list. */
 void riscv_reg_impl_hide_csrs(const struct target *target);
 
-/**
- * If write is true:
- *   return true iff we are guaranteed that the register will contain exactly
- *       the value we just wrote when it's read.
- * If write is false:
- *   return true iff we are guaranteed that the register will read the same
- *       value in the future as the value we just read.
- */
-static inline bool riscv_reg_impl_gdb_regno_cacheable(enum gdb_regno regno,
-		bool is_write)
-{
-	if (regno == GDB_REGNO_ZERO)
-		return !is_write;
-
-	/* GPRs, FPRs, vector registers are just normal data stores. */
-	if (regno <= GDB_REGNO_XPR31 ||
-			(regno >= GDB_REGNO_FPR0 && regno <= GDB_REGNO_FPR31) ||
-			(regno >= GDB_REGNO_V0 && regno <= GDB_REGNO_V31))
-		return true;
-
-	/* Most CSRs won't change value on us, but we can't assume it about arbitrary
-	 * CSRs. */
-	switch (regno) {
-		case GDB_REGNO_DPC:
-		case GDB_REGNO_VSTART:
-		case GDB_REGNO_VXSAT:
-		case GDB_REGNO_VXRM:
-		case GDB_REGNO_VLENB:
-		case GDB_REGNO_VL:
-		case GDB_REGNO_VTYPE:
-		case GDB_REGNO_MISA:
-		case GDB_REGNO_DCSR:
-		case GDB_REGNO_DSCRATCH0:
-		case GDB_REGNO_MEPC:
-		case GDB_REGNO_SATP:
-			/*
-			 * WARL registers might not contain the value we just wrote, but
-			 * these ones won't spontaneously change their value either. *
-			 */
-			return !is_write;
-
-		case GDB_REGNO_TSELECT:	/* I think this should be above, but then it doesn't work. */
-		case GDB_REGNO_TDATA1:	/* Changes value when tselect is changed. */
-		case GDB_REGNO_TDATA2:  /* Changes value when tselect is changed. */
-		default:
-			return false;
-	}
-}
 #endif /* OPENOCD_TARGET_RISCV_RISCV_REG_IMPL_H */

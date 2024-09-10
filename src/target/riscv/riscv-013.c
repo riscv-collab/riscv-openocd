@@ -986,7 +986,7 @@ static int examine_progbuf(struct target *target)
 		return ERROR_OK;
 	}
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	struct riscv_program program;
@@ -1318,7 +1318,7 @@ static int fpr_read_progbuf(struct target *target, uint64_t *value,
 
 	const unsigned int freg = number - GDB_REGNO_FPR0;
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	struct riscv_program program;
@@ -1348,7 +1348,7 @@ static int csr_read_progbuf(struct target *target, uint64_t *value,
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095);
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	struct riscv_program program;
@@ -1416,7 +1416,7 @@ static int fpr_write_progbuf(struct target *target, enum gdb_regno number,
 	assert(number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31);
 	const unsigned int freg = number - GDB_REGNO_FPR0;
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	struct riscv_program program;
@@ -1446,11 +1446,11 @@ static int vtype_write_progbuf(struct target *target, riscv_reg_t value)
 {
 	assert(target->state == TARGET_HALTED);
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 	if (register_write_abstract(target, GDB_REGNO_S0, value) != ERROR_OK)
 		return ERROR_FAIL;
-	if (riscv013_reg_save(target, GDB_REGNO_S1) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S1) != ERROR_OK)
 		return ERROR_FAIL;
 
 	struct riscv_program program;
@@ -1467,11 +1467,11 @@ static int vl_write_progbuf(struct target *target, riscv_reg_t value)
 {
 	assert(target->state == TARGET_HALTED);
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 	if (register_write_abstract(target, GDB_REGNO_S0, value) != ERROR_OK)
 		return ERROR_FAIL;
-	if (riscv013_reg_save(target, GDB_REGNO_S1) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S1) != ERROR_OK)
 		return ERROR_FAIL;
 
 	struct riscv_program program;
@@ -1490,7 +1490,7 @@ static int csr_write_progbuf(struct target *target, enum gdb_regno number,
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095);
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 	if (register_write_abstract(target, GDB_REGNO_S0, value) != ERROR_OK)
 		return ERROR_FAIL;
@@ -2296,7 +2296,7 @@ int riscv013_get_register_buf(struct target *target, uint8_t *value,
 				&debug_vl, &debug_vsew) != ERROR_OK)
 		return ERROR_FAIL;
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	unsigned int vnum = regno - GDB_REGNO_V0;
@@ -2351,7 +2351,7 @@ int riscv013_set_register_buf(struct target *target, enum gdb_regno regno,
 				&debug_vl, &debug_vsew) != ERROR_OK)
 		return ERROR_FAIL;
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	unsigned int vnum = regno - GDB_REGNO_V0;
@@ -4278,11 +4278,11 @@ static int read_memory_progbuf_inner_fill_progbuf(struct target *target,
 {
 	const bool is_repeated_read = increment == 0;
 
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
-	if (riscv013_reg_save(target, GDB_REGNO_S1) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S1) != ERROR_OK)
 		return ERROR_FAIL;
-	if (is_repeated_read &&	riscv013_reg_save(target, GDB_REGNO_A0) != ERROR_OK)
+	if (is_repeated_read &&	riscv013_reg_save_gpr(target, GDB_REGNO_A0) != ERROR_OK)
 		return ERROR_FAIL;
 
 	struct riscv_program program;
@@ -4376,7 +4376,7 @@ read_memory_progbuf_inner_one(struct target *target, const riscv_mem_access_args
 {
 	assert(riscv_mem_access_is_read(args));
 
-	if (riscv013_reg_save(target, GDB_REGNO_S1) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S1) != ERROR_OK)
 		return mem_access_result(MEM_ACCESS_SKIPPED_REG_SAVE_FAILED);
 
 	struct riscv_program program;
@@ -4951,9 +4951,9 @@ static int write_memory_progbuf_try_to_write(struct target *target,
 
 static int write_memory_progbuf_fill_progbuf(struct target *target, uint32_t size)
 {
-	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
-	if (riscv013_reg_save(target, GDB_REGNO_S1) != ERROR_OK)
+	if (riscv013_reg_save_gpr(target, GDB_REGNO_S1) != ERROR_OK)
 		return ERROR_FAIL;
 
 	struct riscv_program program;
@@ -5058,19 +5058,8 @@ struct target_type riscv013_target = {
 int riscv013_get_register(struct target *target,
 		riscv_reg_t *value, enum gdb_regno rid)
 {
-	/* It would be beneficial to move this redirection to the
-	 * version-independent section, but there is a conflict:
-	 * `dcsr[5]` is `dcsr.v` in current spec, but it is `dcsr.debugint` in 0.11.
-	 */
-	if (rid == GDB_REGNO_PRIV) {
-		uint64_t dcsr;
-		if (riscv_reg_get(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-			return ERROR_FAIL;
-		*value = set_field(0, VIRT_PRIV_V, get_field(dcsr, CSR_DCSR_V));
-		*value = set_field(*value, VIRT_PRIV_PRV, get_field(dcsr, CSR_DCSR_PRV));
-		return ERROR_OK;
-	}
-
+	assert(rid != GDB_REGNO_PC && "'pc' should be read through 'dpc'");
+	assert(rid != GDB_REGNO_PRIV && "'priv' should be read through 'dcsr'");
 	LOG_TARGET_DEBUG(target, "reading register %s",	riscv_reg_gdb_regno_name(target, rid));
 
 	if (dm013_select_target(target) != ERROR_OK)
@@ -5087,6 +5076,8 @@ int riscv013_get_register(struct target *target,
 int riscv013_set_register(struct target *target, enum gdb_regno rid,
 		riscv_reg_t value)
 {
+	assert(rid != GDB_REGNO_PC && "'pc' should be written through 'dpc'");
+	assert(rid != GDB_REGNO_PRIV && "'priv' should be written through 'dcsr'");
 	LOG_TARGET_DEBUG(target, "writing 0x%" PRIx64 " to register %s",
 			value, riscv_reg_gdb_regno_name(target, rid));
 
