@@ -18,7 +18,7 @@
         "hidapi/0.13.1#20fbe2186ac901286e0f5e7181cf1db7%1718294130.61",
         "gdb_source_deps/0.0.1-rc.0.273+sc.sc-dt.2024.08@sc/main#4b17ddf81588af4653dfa62228e03af0aa97664c%1725039126.426",
         "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
-        "external_openocd_tests/0.0.3-rc.0.273+sc.sc-dt.2024.08@sc/main#23d5781b9c9f67e9109055270263570eba4d8e50%1725039088.501",
+        "external_openocd_tests/0.0.3-rc.0.280+sc.main@sc/main#912d2df59978816b877f049d58b65c42133246f8%1726058531.441",
         "dejagnu/1.6.3-rc.0.273+sc.sc-dt.2024.08@sc/main#ce54df25b11d77abb69adbe291b24cb95d69c910%1725039117.045",
         "c4core/0.1.11#5c6caad554b14584140f7e66c47eefb5%1699016213.432"
     ],
