@@ -11387,10 +11387,15 @@ Display/set the current core displayed in GDB. This is needed only if
 @code{riscv smp} was used.
 @end deffn
 
-@deffn {Command} {riscv use_bscan_tunnel} value
+@deffn {Command} {riscv use_bscan_tunnel} width [type]
 Enable or disable use of a BSCAN tunnel to reach the Debug Module. Supply the
-width of the DM transport TAP's instruction register to enable. Supply a
-value of 0 to disable.
+@var{width} of the DM transport TAP's instruction register to enable. The
+@var{width} should fit into 7 bits. Supply a value of 0 to disable.
+Pass a second argument (optional) to indicate Bscan Tunnel Type:
+@enumerate
+@item 0:(default) NESTED_TAP
+@item 1: DATA_REGISTER
+@end enumerate
 
 This BSCAN tunnel interface is specific to SiFive IP. Anybody may implement
 it, but currently there is no good documentation on it. In a nutshell, this
@@ -11555,6 +11560,21 @@ controls which interrupts the trigger fires on, using the same bit assignments
 as in the mie CSR (defined in the RISC-V Privileged Spec).
 
 For details on this trigger type, see the RISC-V Debug Specification.
+@end deffn
+
+@deffn {Command} {riscv reserve_trigger} [index @option{on|off}]
+Manages the set of reserved triggers. Reserving a trigger results in OpenOCD
+not using it internally (e.g. skipping it when setting a watchpoint or a
+hardware breakpoint), so that the user or the application has unfettered
+control over the trigger. By default there are no reserved triggers.
+
+@enumerate
+@item @var{index} specifies the index of a trigger to reserve or free up.
+@item The second argument specifies whether the trigger should be reserved
+(@var{on}) or a prior reservation cancelled (@var{off}).
+@item If called without parameters, returns indices of reserved triggers.
+@end enumerate
+
 @end deffn
 
 @deffn {Command} {riscv itrigger clear}

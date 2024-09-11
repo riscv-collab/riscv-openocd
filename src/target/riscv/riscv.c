@@ -54,7 +54,8 @@ struct scan_field select_idcode = {
 };
 
 static bscan_tunnel_type_t bscan_tunnel_type;
-int bscan_tunnel_ir_width; /* if zero, then tunneling is not present/active */
+#define BSCAN_TUNNEL_IR_WIDTH_NBITS 7
+uint8_t bscan_tunnel_ir_width; /* if zero, then tunneling is not present/active */
 static int bscan_tunnel_ir_id; /* IR ID of the JTAG TAP to access the tunnel. Valid when not 0 */
 
 static const uint8_t bscan_zero[4] = {0};
@@ -67,7 +68,6 @@ static struct scan_field select_user4 = {
 };
 
 
-static uint8_t bscan_tunneled_ir_width[4] = {5};  /* overridden by assignment in riscv_init_target */
 static struct scan_field _bscan_tunnel_data_register_select_dmi[] = {
 		{
 			.num_bits = 3,
@@ -80,8 +80,8 @@ static struct scan_field _bscan_tunnel_data_register_select_dmi[] = {
 			.in_value = NULL,
 		},
 		{
-			.num_bits = 7,
-			.out_value = bscan_tunneled_ir_width,
+			.num_bits = BSCAN_TUNNEL_IR_WIDTH_NBITS,
+			.out_value = &bscan_tunnel_ir_width,
 			.in_value = NULL,
 		},
 		{
@@ -98,8 +98,8 @@ static struct scan_field _bscan_tunnel_nested_tap_select_dmi[] = {
 			.in_value = NULL,
 		},
 		{
-			.num_bits = 7,
-			.out_value = bscan_tunneled_ir_width,
+			.num_bits = BSCAN_TUNNEL_IR_WIDTH_NBITS,
+			.out_value = &bscan_tunnel_ir_width,
 			.in_value = NULL,
 		},
 		{
@@ -300,7 +300,6 @@ void select_dmi_via_bscan(struct target *target)
 int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_ptr)
 {
 	/* On BSCAN TAP: Select IR=USER4, issue tunneled IR scan via BSCAN TAP's DR */
-	uint8_t tunneled_ir_width[4] = {bscan_tunnel_ir_width};
 	uint8_t tunneled_dr_width[4] = {32};
 	uint8_t out_value[5] = {0};
 	uint8_t in_value[5] = {0};
@@ -316,8 +315,8 @@ int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_
 		tunneled_ir[1].num_bits = bscan_tunnel_ir_width;
 		tunneled_ir[1].out_value = ir_dtmcontrol;
 		tunneled_ir[1].in_value = NULL;
-		tunneled_ir[2].num_bits = 7;
-		tunneled_ir[2].out_value = tunneled_ir_width;
+		tunneled_ir[2].num_bits = BSCAN_TUNNEL_IR_WIDTH_NBITS;
+		tunneled_ir[2].out_value = &bscan_tunnel_ir_width;
 		tunneled_ir[2].in_value = NULL;
 		tunneled_ir[3].num_bits = 1;
 		tunneled_ir[3].out_value = bscan_zero;
@@ -329,7 +328,7 @@ int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_
 		tunneled_dr[1].num_bits = 32 + 1;
 		tunneled_dr[1].out_value = out_value;
 		tunneled_dr[1].in_value = in_value;
-		tunneled_dr[2].num_bits = 7;
+		tunneled_dr[2].num_bits = BSCAN_TUNNEL_IR_WIDTH_NBITS;
 		tunneled_dr[2].out_value = tunneled_dr_width;
 		tunneled_dr[2].in_value = NULL;
 		tunneled_dr[3].num_bits = 1;
@@ -343,8 +342,8 @@ int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_
 		tunneled_ir[2].num_bits = bscan_tunnel_ir_width;
 		tunneled_ir[2].out_value = ir_dtmcontrol;
 		tunneled_ir[1].in_value = NULL;
-		tunneled_ir[1].num_bits = 7;
-		tunneled_ir[1].out_value = tunneled_ir_width;
+		tunneled_ir[1].num_bits = BSCAN_TUNNEL_IR_WIDTH_NBITS;
+		tunneled_ir[1].out_value = &bscan_tunnel_ir_width;
 		tunneled_ir[2].in_value = NULL;
 		tunneled_ir[0].num_bits = 1;
 		tunneled_ir[0].out_value = bscan_zero;
@@ -477,7 +476,6 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 		}
 		h_u32_to_le(ir_user4, ir_user4_raw);
 		select_user4.num_bits = target->tap->ir_length;
-		bscan_tunneled_ir_width[0] = bscan_tunnel_ir_width;
 		if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER)
 			bscan_tunnel_data_register_select_dmi[1].num_bits = bscan_tunnel_ir_width;
 		else /* BSCAN_TUNNEL_NESTED_TAP */
@@ -530,6 +528,8 @@ static void riscv_deinit_target(struct target *target)
 
 	if (!info)
 		return;
+
+	free(info->reserved_triggers);
 
 	range_list_t *entry, *tmp;
 	list_for_each_entry_safe(entry, tmp, &info->hide_csr, list) {
@@ -624,6 +624,15 @@ static int find_first_trigger_by_id(struct target *target, int unique_id)
 static int set_trigger(struct target *target, unsigned int idx, riscv_reg_t tdata1, riscv_reg_t tdata2,
 	riscv_reg_t tdata1_ignore_mask)
 {
+	RISCV_INFO(r);
+	assert(r->reserved_triggers);
+	assert(idx < r->trigger_count);
+	if (r->reserved_triggers[idx]) {
+		LOG_TARGET_DEBUG(target,
+				"Trigger %u is reserved by 'reserve_trigger' command.", idx);
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+
 	riscv_reg_t tdata1_rb, tdata2_rb;
 	// Select which trigger to use
 	if (riscv_reg_set(target, GDB_REGNO_TSELECT, idx) != ERROR_OK)
@@ -2457,87 +2466,48 @@ static int riscv_deassert_reset(struct target *target)
 	return tt->deassert_reset(target);
 }
 
-/* state must be riscv_reg_t state[RISCV_MAX_HWBPS] = {0}; */
-static int disable_triggers(struct target *target, riscv_reg_t *state)
+/* "wp_is_set" array must have at least "r->trigger_count" items. */
+static int disable_watchpoints(struct target *target, bool *wp_is_set)
 {
 	RISCV_INFO(r);
-
 	LOG_TARGET_DEBUG(target, "Disabling triggers.");
 
-	if (riscv_enumerate_triggers(target) != ERROR_OK)
-		return ERROR_FAIL;
-
-	if (r->manual_hwbp_set) {
-		/* Look at every trigger that may have been set. */
-		riscv_reg_t tselect;
-		if (riscv_reg_get(target, &tselect, GDB_REGNO_TSELECT) != ERROR_OK)
-			return ERROR_FAIL;
-		for (unsigned int t = 0; t < r->trigger_count; t++) {
-			if (riscv_reg_set(target, GDB_REGNO_TSELECT, t) != ERROR_OK)
+	/* TODO: The algorithm is flawed and may result in a situation described in
+	 * https://github.com/riscv-collab/riscv-openocd/issues/1108
+	 */
+	memset(wp_is_set, false, r->trigger_count);
+	struct watchpoint *watchpoint = target->watchpoints;
+	int i = 0;
+	while (watchpoint) {
+		LOG_TARGET_DEBUG(target, "Watchpoint %" PRIu32 ": set=%s",
+				watchpoint->unique_id,
+				wp_is_set[i] ? "true" : "false");
+		wp_is_set[i] = watchpoint->is_set;
+		if (watchpoint->is_set) {
+			if (riscv_remove_watchpoint(target, watchpoint) != ERROR_OK)
 				return ERROR_FAIL;
-			riscv_reg_t tdata1;
-			if (riscv_reg_get(target, &tdata1, GDB_REGNO_TDATA1) != ERROR_OK)
-				return ERROR_FAIL;
-			if (tdata1 & CSR_TDATA1_DMODE(riscv_xlen(target))) {
-				state[t] = tdata1;
-				if (riscv_reg_set(target, GDB_REGNO_TDATA1, 0) != ERROR_OK)
-					return ERROR_FAIL;
-			}
 		}
-		if (riscv_reg_set(target, GDB_REGNO_TSELECT, tselect) != ERROR_OK)
-			return ERROR_FAIL;
-
-	} else {
-		/* Just go through the triggers we manage. */
-		struct watchpoint *watchpoint = target->watchpoints;
-		int i = 0;
-		while (watchpoint) {
-			LOG_TARGET_DEBUG(target, "Watchpoint %d: set=%d", i, watchpoint->is_set);
-			state[i] = watchpoint->is_set;
-			if (watchpoint->is_set) {
-				if (riscv_remove_watchpoint(target, watchpoint) != ERROR_OK)
-					return ERROR_FAIL;
-			}
-			watchpoint = watchpoint->next;
-			i++;
-		}
+		watchpoint = watchpoint->next;
+		i++;
 	}
 
 	return ERROR_OK;
 }
 
-static int enable_triggers(struct target *target, riscv_reg_t *state)
+static int enable_watchpoints(struct target *target, bool *wp_is_set)
 {
-	RISCV_INFO(r);
-
-	if (r->manual_hwbp_set) {
-		/* Look at every trigger that may have been set. */
-		riscv_reg_t tselect;
-		if (riscv_reg_get(target, &tselect, GDB_REGNO_TSELECT) != ERROR_OK)
-			return ERROR_FAIL;
-		for (unsigned int t = 0; t < r->trigger_count; t++) {
-			if (state[t] != 0) {
-				if (riscv_reg_set(target, GDB_REGNO_TSELECT, t) != ERROR_OK)
-					return ERROR_FAIL;
-				if (riscv_reg_set(target, GDB_REGNO_TDATA1, state[t]) != ERROR_OK)
-					return ERROR_FAIL;
-			}
+	struct watchpoint *watchpoint = target->watchpoints;
+	int i = 0;
+	while (watchpoint) {
+		LOG_TARGET_DEBUG(target, "Watchpoint %" PRIu32
+				": %s to be re-enabled.", watchpoint->unique_id,
+				wp_is_set[i] ? "needs " : "does not need");
+		if (wp_is_set[i]) {
+			if (riscv_add_watchpoint(target, watchpoint) != ERROR_OK)
+				return ERROR_FAIL;
 		}
-		if (riscv_reg_set(target, GDB_REGNO_TSELECT, tselect) != ERROR_OK)
-			return ERROR_FAIL;
-
-	} else {
-		struct watchpoint *watchpoint = target->watchpoints;
-		int i = 0;
-		while (watchpoint) {
-			LOG_TARGET_DEBUG(target, "Watchpoint %d: cleared=%" PRId64, i, state[i]);
-			if (state[i]) {
-				if (riscv_add_watchpoint(target, watchpoint) != ERROR_OK)
-					return ERROR_FAIL;
-			}
-			watchpoint = watchpoint->next;
-			i++;
-		}
+		watchpoint = watchpoint->next;
+		i++;
 	}
 
 	return ERROR_OK;
@@ -3785,9 +3755,16 @@ static int riscv_openocd_step_impl(struct target *target, int current,
 			return ERROR_FAIL;
 	}
 
-	riscv_reg_t trigger_state[RISCV_MAX_HWBPS] = {0};
-	if (disable_triggers(target, trigger_state) != ERROR_OK)
+	if (riscv_enumerate_triggers(target) != ERROR_OK)
 		return ERROR_FAIL;
+
+	RISCV_INFO(r);
+	bool *wps_to_enable = calloc(r->trigger_count, sizeof(*wps_to_enable));
+	if (disable_watchpoints(target, wps_to_enable) != ERROR_OK) {
+		LOG_TARGET_ERROR(target, "Failed to temporarily disable "
+				"watchpoints before single-step.");
+		return ERROR_FAIL;
+	}
 
 	bool success = true;
 	uint64_t current_mstatus;
@@ -3818,9 +3795,10 @@ static int riscv_openocd_step_impl(struct target *target, int current,
 		}
 
 _exit:
-	if (enable_triggers(target, trigger_state) != ERROR_OK) {
+	if (enable_watchpoints(target, wps_to_enable) != ERROR_OK) {
 		success = false;
-		LOG_TARGET_ERROR(target, "Unable to enable triggers.");
+		LOG_TARGET_ERROR(target, "Failed to re-enable watchpoints "
+				"after single-step.");
 	}
 
 	if (breakpoint && (riscv_add_breakpoint(target, breakpoint) != ERROR_OK)) {
@@ -4387,18 +4365,23 @@ COMMAND_HANDLER(riscv_resume_order)
 
 COMMAND_HANDLER(riscv_use_bscan_tunnel)
 {
-	int irwidth = 0;
+	uint8_t irwidth = 0;
 	int tunnel_type = BSCAN_TUNNEL_NESTED_TAP;
 
-	if (CMD_ARGC > 2) {
-		LOG_ERROR("Command takes at most two arguments");
+	if (CMD_ARGC < 1 || CMD_ARGC > 2)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	} else if (CMD_ARGC == 1) {
-		COMMAND_PARSE_NUMBER(int, CMD_ARGV[0], irwidth);
-	} else if (CMD_ARGC == 2) {
-		COMMAND_PARSE_NUMBER(int, CMD_ARGV[0], irwidth);
-		COMMAND_PARSE_NUMBER(int, CMD_ARGV[1], tunnel_type);
+
+	if (CMD_ARGC >= 1) {
+		COMMAND_PARSE_NUMBER(u8, CMD_ARGV[0], irwidth);
+		assert(BSCAN_TUNNEL_IR_WIDTH_NBITS < 8);
+		if (irwidth >= (uint8_t)1 << BSCAN_TUNNEL_IR_WIDTH_NBITS) {
+			command_print(CMD, "'value' does not fit into %d bits.",
+					BSCAN_TUNNEL_IR_WIDTH_NBITS);
+			return ERROR_COMMAND_ARGUMENT_OVERFLOW;
+		}
 	}
+	if (CMD_ARGC == 2)
+		COMMAND_PARSE_NUMBER(int, CMD_ARGV[1], tunnel_type);
 	if (tunnel_type == BSCAN_TUNNEL_NESTED_TAP)
 		LOG_INFO("Nested Tap based Bscan Tunnel Selected");
 	else if (tunnel_type == BSCAN_TUNNEL_DATA_REGISTER)
@@ -5049,6 +5032,57 @@ COMMAND_HANDLER(handle_re_examine_target)
 	return target_examine_one(target);
 }
 
+static COMMAND_HELPER(report_reserved_triggers, struct target *target)
+{
+	RISCV_INFO(r);
+	if (riscv_enumerate_triggers(target) != ERROR_OK)
+		return ERROR_FAIL;
+	const char *separator = "";
+	for (riscv_reg_t t = 0; t < r->trigger_count; ++t) {
+		if (r->reserved_triggers[t]) {
+			command_print_sameline(CMD, "%s%" PRIu64, separator, t);
+			separator = " ";
+		}
+	}
+	command_print_sameline(CMD, "\n");
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(handle_reserve_trigger)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	if (CMD_ARGC == 0)
+		return CALL_COMMAND_HANDLER(report_reserved_triggers, target);
+
+	if (CMD_ARGC != 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	riscv_reg_t t;
+	COMMAND_PARSE_NUMBER(u64, CMD_ARGV[0], t);
+
+	if (riscv_enumerate_triggers(target) != ERROR_OK)
+		return ERROR_FAIL;
+	RISCV_INFO(r);
+	if (r->trigger_count == 0) {
+		command_print(CMD, "Error: There are no triggers on the target.");
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+	if (t >= r->trigger_count) {
+		command_print(CMD, "Error: trigger with index %" PRIu64
+				" does not exist. There are only %u triggers"
+				" on the target (with indexes 0 .. %u).",
+				t, r->trigger_count, r->trigger_count - 1);
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+	if (r->trigger_unique_id[t] != -1) {
+		command_print(CMD, "Error: trigger with index %" PRIu64
+				" is already in use and can not be reserved.", t);
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+	COMMAND_PARSE_ON_OFF(CMD_ARGV[1], r->reserved_triggers[t]);
+	return ERROR_OK;
+}
+
 static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "dump_sample_buf",
@@ -5213,18 +5247,14 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "use_bscan_tunnel",
 		.handler = riscv_use_bscan_tunnel,
-		.mode = COMMAND_ANY,
+		.mode = COMMAND_CONFIG,
 		.usage = "value [type]",
-		.help = "Enable or disable use of a BSCAN tunnel to reach DM.  Supply "
-			"the width of the DM transport TAP's instruction register to "
-			"enable.  Supply a value of 0 to disable. Pass A second argument "
-			"(optional) to indicate Bscan Tunnel Type {0:(default) NESTED_TAP , "
-			"1: DATA_REGISTER}"
+		.help = "Enable or disable use of a BSCAN tunnel to reach DM."
 	},
 	{
 		.name = "set_bscan_tunnel_ir",
 		.handler = riscv_set_bscan_tunnel_ir,
-		.mode = COMMAND_ANY,
+		.mode = COMMAND_CONFIG,
 		.usage = "value",
 		.help = "Specify the JTAG TAP IR used to access the bscan tunnel. "
 			"By default it is 0x23 << (ir_length - 6), which map some "
@@ -5311,6 +5341,14 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.help = "Enforce (re)examination of target",
 		.usage = "",
+	},
+	{
+		.name = "reserve_trigger",
+		.handler = handle_reserve_trigger,
+		/* TODO: Move this to COMMAND_ANY */
+		.mode = COMMAND_EXEC,
+		.usage = "[index ('on'|'off')]",
+		.help = "Controls which RISC-V triggers shall not be touched by OpenOCD.",
 	},
 	COMMAND_REGISTRATION_DONE
 };
@@ -5590,7 +5628,7 @@ static enum riscv_halt_reason riscv_halt_reason(struct target *target)
 size_t riscv_progbuf_size(struct target *target)
 {
 	RISCV_INFO(r);
-	return r->progbuf_size;
+	return r->get_progbufsize(target);
 }
 
 int riscv_write_progbuf(struct target *target, int index, riscv_insn_t insn)
@@ -5736,6 +5774,8 @@ int riscv_enumerate_triggers(struct target *target)
 				"Assuming that triggers are not implemented.");
 		r->triggers_enumerated = true;
 		r->trigger_count = 0;
+		free(r->reserved_triggers);
+		r->reserved_triggers = NULL;
 		return ERROR_OK;
 	}
 
@@ -5770,6 +5810,8 @@ int riscv_enumerate_triggers(struct target *target)
 	r->triggers_enumerated = true;
 	r->trigger_count = t;
 	LOG_TARGET_INFO(target, "Found %d triggers", r->trigger_count);
+	free(r->reserved_triggers);
+	r->reserved_triggers = calloc(t, sizeof(*r->reserved_triggers));
 	create_wp_trigger_cache(target);
 	return ERROR_OK;
 }

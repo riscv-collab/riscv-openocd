@@ -167,12 +167,6 @@ struct riscv_info {
 	 * most recent halt was not caused by a trigger, then this is -1. */
 	int64_t trigger_hit;
 
-	/* The number of entries in the program buffer. */
-	int progbuf_size;
-
-	/* This hart contains an implicit ebreak at the end of the program buffer. */
-	bool impebreak;
-
 	bool triggers_enumerated;
 
 	/* Decremented every scan, and when it reaches 0 we clear the learned
@@ -236,6 +230,9 @@ struct riscv_info {
 	int (*dmi_read)(struct target *target, uint32_t *value, uint32_t address);
 	int (*dmi_write)(struct target *target, uint32_t address, uint32_t value);
 
+	bool (*get_impebreak)(const struct target *target);
+	unsigned int (*get_progbufsize)(const struct target *target);
+
 	/* Get the DMI address of target's DM's register.
 	 * The function should return the passed address
 	 * if the target is not assigned a DM yet.
@@ -272,9 +269,7 @@ struct riscv_info {
 	struct reg_data_type_union vector_union;
 	struct reg_data_type type_vector;
 
-	/* Set when trigger registers are changed by the user. This indicates we need
-	 * to beware that we may hit a trigger that we didn't realize had been set. */
-	bool manual_hwbp_set;
+	bool *reserved_triggers;
 
 	/* Memory access methods to use, ordered by priority, highest to lowest. */
 	int mem_access_methods[RISCV_NUM_MEM_ACCESS_METHODS];
@@ -367,7 +362,7 @@ int dtmcontrol_scan(struct target *target, uint32_t out, uint32_t *in_ptr);
 extern struct scan_field *bscan_tunneled_select_dmi;
 extern uint32_t bscan_tunneled_select_dmi_num_fields;
 typedef enum { BSCAN_TUNNEL_NESTED_TAP, BSCAN_TUNNEL_DATA_REGISTER } bscan_tunnel_type_t;
-extern int bscan_tunnel_ir_width;
+extern uint8_t bscan_tunnel_ir_width;
 
 void select_dmi_via_bscan(struct target *target);
 
