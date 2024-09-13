@@ -5,7 +5,7 @@ load_base_board_description "basic-sim"
 
 set_board_info env,scripting_timeout 10
 set_board_info env,preferred_timeout 10
-set_board_info env,long_op_timeout 30
+set_board_info env,long_op_timeout 300
 set_board_info env,resume_delay 0.10
 set_board_info env,exec_delay 0.10
 
