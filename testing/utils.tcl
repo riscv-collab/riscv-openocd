@@ -12,6 +12,8 @@ namespace eval jtag_dummy_testing {
 			jtag newtap "tap$i" tap -irlen 1
 		}
 		init
+		dummy update_context
+		dummy_set_default_handlers
 	}
 	namespace export setup
 
@@ -20,12 +22,32 @@ namespace eval jtag_dummy_testing {
 		shutdown error
 	}
 
+	proc dummy_set_default_handlers {} {
+		namespace eval ::dummy {
+			proc state_transition {state tdi} {}
+			proc get_tdo {} {return {tdo: 0}}
+		}
+	}
+
+	proc dummy_expect_no_operations {} {
+		namespace eval ::dummy {
+			proc state_transition {state tdi} {
+				error "Expecting no JTAG transitions."
+			}
+			proc get_tdo {} {
+				error "Expecting reads of TDO."
+			}
+		}
+	}
+
 	proc check_for_error {expected_code script} {
+		dummy_expect_no_operations
 		set code [catch {uplevel 1 $script} msg]
 		if {$code != $expected_code} {
 			test_failure \
 				"Expecting error code $expected_code, not $code for '$script'. Error message: '$msg'"
 		}
+		dummy_set_default_handlers
 	}
 
 	proc check_invalid_arg script {
