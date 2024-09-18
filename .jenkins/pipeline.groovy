@@ -250,6 +250,21 @@ workflow('openocd') {
         }
     }
 
+    job('tests-on-dummy') {
+        resources {
+            cpu('0.9', '4')
+            memory('0.1Gi', '0.7Gi')
+            fs('1.0Gi', '1.0Gi')
+        }
+        matrix {
+            [["image": ['cpp_ubuntu_20']]]
+        }
+        script { vars ->
+            def buildDir = "build/tests_on_dummy_Build"
+            sh("./make.py sh .makepy/support/utils/run_tests_on_dummy.sh 4 ${buildDir}")
+        }
+    }
+
     deploy {
         resources {
             cpu('0.8', '4')
