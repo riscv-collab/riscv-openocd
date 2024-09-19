@@ -372,14 +372,14 @@ proc sc_experimental_pmu_setup { pmu_selectors pmu_ctrs_max args } {
 
 proc sc_experimental_sync_resume args {
     if {[llength $args] != 0} {
-	set targets $args
+        set targets $args
     } else {
-	set targets [target names]
+        set targets [target names]
     }
 
     set taps {}
     foreach target $targets {
-	    lappend taps [$target cget -chain-position]
+        lappend taps [$target cget -chain-position]
     }
 
     if {[llength [lsort -unique $taps]] != [llength $taps]} {
@@ -391,18 +391,22 @@ proc sc_experimental_sync_resume args {
     set data_len 32
     # set "dmactive" and "resumereq"
     set dmcontrol_val [expr { 1 | 1 << 30 }]
+    set data_hex 0x[format %x $dmcontrol_val]
     set dmcontrol_addr 0x10
+    set addr_hex 0x[format %x $dmcontrol_addr]
 
     set ir_list {}
     set dr_list {}
     foreach tap $taps target $targets {
         array set rvi [$target riscv info]
         set addr_len [lindex [array get rvi dm.abits] 1]
-	lappend ir_list 0x11
-	lappend dr_list $op_len:$op_write,$data_len:0x[format %08x $dmcontrol_val],$addr_len:0x[format %x $dmcontrol_addr]
+        lappend ir_list 0x11
+        lappend dr_list \
+            ${op_len}:${op_write},${data_len}:${data_hex},$addr_len:${addr_hex}
     }
-    jtag execute scan $taps -ir $ir_list -dr $dr_list
-    poll
+    # FIXME: RISC-V targets update "ebreak*" by halting the hart on poll.
+    poll disable
+    jtag execute scan {*}$taps -ir {*}$ir_list -dr {*}$dr_list
 }
 
 echo "--- LOADED SC FPGA LIBRARY ---"
