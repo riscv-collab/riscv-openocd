@@ -17,21 +17,25 @@
 #define ILA_DELAY_US 10
 #define ILA_TIMEOUT 1000
 
+static int ila_version = 1;
+
 /* #define DEBUG_ILA_HW */
 /* #define VCD_DATA_SOURCE_LSCU */
 
 static int ila_tap_apb_access_read(struct jtag_tap *tap, uint8_t *data)
 {
 	uint8_t tap_addr = ILA_TAP__APB_ACCESS__ADDR;
+	int width = (ila_version == 1) ? ILA_TAP__APB_ACCESS__WIDTH_TO1 : ILA_TAP__APB_ACCESS__WIDTH_TO2;
 
-	return tap_reg_read(tap, &tap_addr, ILA_TAP__APB_ACCESS__WIDTH, data);
+	return tap_reg_read(tap, &tap_addr, width, data);
 }
 
 static int ila_tap_apb_access_write(struct jtag_tap *tap, uint8_t *data)
 {
 	uint8_t tap_addr = ILA_TAP__APB_ACCESS__ADDR;
+	int width = (ila_version == 1) ? ILA_TAP__APB_ACCESS__WIDTH_TO1 : ILA_TAP__APB_ACCESS__WIDTH_TO2;
 
-	return tap_reg_write(tap, &tap_addr, ILA_TAP__APB_ACCESS__WIDTH, data);
+	return tap_reg_write(tap, &tap_addr, width, data);
 }
 
 int ila_tap_vcd_reg_read(struct jtag_tap *tap, uint8_t *data, uint32_t count)
@@ -70,8 +74,13 @@ int ila_lscu_reg_read(struct jtag_tap *tap, uint8_t addr, uint32_t *value)
 	uint8_t *data;
 	int count = 0;
 
-	REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, OPERATION, ILA_TAP__APB_ACCESS__OPERATION__VALUE__READ);
-	REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, ADDRESS, addr);
+	if (ila_version == 1) {
+		REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, OPERATION_TO1, ILA_TAP__APB_ACCESS__OPERATION__VALUE__READ);
+		REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, ADDRESS_TO1, addr);
+	} else {
+		REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, OPERATION_TO2, ILA_TAP__APB_ACCESS__OPERATION__VALUE__READ);
+		REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, ADDRESS_TO2, addr);
+	}
 
 	reg_le = htole64(reg);
 	data = (uint8_t *)&reg_le;
@@ -122,8 +131,13 @@ int ila_lscu_reg_write(struct jtag_tap *tap, uint8_t addr, uint32_t value)
 	uint8_t *data;
 	int count = 0;
 
-	REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, OPERATION, ILA_TAP__APB_ACCESS__OPERATION__VALUE__WRITE);
-	REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, ADDRESS, addr);
+	if (ila_version == 1) {
+		REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, OPERATION_TO1, ILA_TAP__APB_ACCESS__OPERATION__VALUE__WRITE);
+		REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, ADDRESS_TO1, addr);
+	} else {
+		REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, OPERATION_TO2, ILA_TAP__APB_ACCESS__OPERATION__VALUE__WRITE);
+		REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, ADDRESS_TO2, addr);
+	}
 	REG64_SET_FIELD(&reg, ILA_TAP__APB_ACCESS, DATA, value);
 
 	reg_le = htole64(reg);
@@ -572,4 +586,14 @@ COMMAND_HELPER(ila_device_wait_for_data, struct ila_device *device, double secon
 	} while (1);
 
 	return CALL_COMMAND_HANDLER(ila_device_read_vcd_data, device);
+}
+
+int ila_get_version(void)
+{
+	return ila_version;
+}
+
+void ila_set_version(int version)
+{
+	ila_version = version;
 }

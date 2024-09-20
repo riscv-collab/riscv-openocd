@@ -678,6 +678,29 @@ COMMAND_HANDLER(handle_ila_wl_command)
 	return ret;
 }
 
+COMMAND_HANDLER(handle_ila_version_command)
+{
+	int version = 0;
+
+	if (CMD_ARGC > 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (CMD_ARGC == 0) {
+		command_print(CMD, "%d", ila_get_version());
+	} else {
+		COMMAND_PARSE_NUMBER(int, CMD_ARGV[0], version);
+
+		if (version != 1 && version != 2) {
+			command_print(CMD, "Error: Wrong ILA version - %d", version);
+			return ERROR_FAIL;
+		}
+
+		ila_set_version(version);
+	}
+
+	return ERROR_OK;
+}
+
 #define TRIG_CAP_MASK_DOC_STR \
 	"bit_mask must be the same length as bit range or signal size. Bit order in bit_mask is always MSB->LSB. " \
 	"signal_name must be present in currently selected probe. Bit masks: R - rising edge; F - falling edge; " \
@@ -832,6 +855,13 @@ static const struct command_registration ila_subcommand_handlers[] = {
 		.handler = handle_ila_wl_command,
 		.help = "Write JTAG2ILA LSCU register.",
 		.usage = "address data",
+	},
+	{
+		.name = "version",
+		.mode = COMMAND_EXEC,
+		.handler = handle_ila_version_command,
+		.help = "Display or set global ILA version.",
+		.usage = "[version]"
 	},
 	COMMAND_REGISTRATION_DONE,
 };
