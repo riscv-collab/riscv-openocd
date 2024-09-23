@@ -4,7 +4,7 @@ import tools.automation.TI
 
 def buildProject(vars, target = "openocd") {
   sh(""" ./make.py just-config --profile:host ${vars.profile} \
-          --options:host build_type=${vars.buildType} \
+          --settings:host "&:build_type=${vars.buildType}" \
           --build-path build/${vars.buildType} ${vars.extraOpts} """)
   sh("./make.py build --build-path build/${vars.buildType} --target ${target}")
 }

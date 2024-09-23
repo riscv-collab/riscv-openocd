@@ -22,17 +22,9 @@ _sys.path.append(str(_Path(__file__).parent / ".makepy"))
 
 class Package(_conan.ConanFile):
     name = "openocd"
-    settings = "os", "arch"
-    options = {
-        "test": [True, False],
-        "build_type": ["Release", "Debug"],
-        "elct_support": [True, False],
-    }
-    default_options = {
-        "test": False,
-        "build_type": "Release",
-        "elct_support": False,
-    }
+    settings = "os", "arch", "build_type"
+    options = {"test": [True, False], "elct_support": [True, False]}
+    default_options = {"test": False, "elct_support": False}
     revision_mode = "scm"
     cmake_find_mode = "both"
     package_type = "application"
@@ -129,7 +121,7 @@ class Package(_conan.ConanFile):
         self.test_requires(deps["dejagnu"])
 
     def layout(self) -> None:
-        build_folder = _Path("build") / str(self.options.build_type)
+        build_folder = _Path("build") / str(self.settings.build_type)
         self.folders.generators = build_folder
         self.folders.build = build_folder
 
@@ -166,7 +158,7 @@ class Package(_conan.ConanFile):
             toolchain.variables["RISCVTESTS_DIR"] = self._var(
                 "SC_EXTERNAL_OPENOCD_TESTS_PATH"
             )
-            toolchain.variables["CMAKE_BUILD_TYPE"] = self.options.build_type
+            toolchain.variables["CMAKE_BUILD_TYPE"] = self.settings.build_type
             toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
 
         if self.options.elct_support:

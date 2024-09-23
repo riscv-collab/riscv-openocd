@@ -9,7 +9,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 OPENOCD_SOURCES=$(dirname $(dirname $(dirname "${SCRIPT_DIR}")))
 OPENOCD_PATH="${INPUT}/install_openocd/openocd"
 DISTRIB_LOCATION="${OUTPUT}/${PACKAGE_NAME}"
-source "${INPUT}/conanrunenv-x86_64.sh"
+source "${INPUT}/conanrun.sh"
 
 echo "output: ${OUTPUT}"
 set -x
