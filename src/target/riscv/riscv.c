@@ -621,8 +621,9 @@ static int find_first_trigger_by_id(struct target *target, int unique_id)
 	return -1;
 }
 
-static int set_trigger(struct target *target, unsigned int idx, riscv_reg_t tdata1, riscv_reg_t tdata2,
-	riscv_reg_t tdata1_ignore_mask)
+static int stdtrig_set_tx_impl(struct target *target, unsigned int idx,
+		riscv_reg_t tdata1, riscv_reg_t tdata2, riscv_reg_t tdata1_ignore_mask,
+		bool update_tdata2)
 {
 	RISCV_INFO(r);
 	assert(r->reserved_triggers);
@@ -642,21 +643,23 @@ static int set_trigger(struct target *target, unsigned int idx, riscv_reg_t tdat
 	if (riscv_reg_set(target, GDB_REGNO_TDATA1, 0) != ERROR_OK)
 		return ERROR_FAIL;
 
-	// Set trigger data for tdata2 (and tdata3 if it was supported)
-	if (riscv_reg_set(target, GDB_REGNO_TDATA2, tdata2) != ERROR_OK)
+	// Set trigger data for tdata2 (tdata3 - not implemented) if it was supported
+	if (update_tdata2 &&
+			riscv_reg_set(target, GDB_REGNO_TDATA2, tdata2) != ERROR_OK)
 		return ERROR_FAIL;
 
 	// Set trigger data for tdata1
 	if (riscv_reg_set(target, GDB_REGNO_TDATA1, tdata1) != ERROR_OK)
 		return ERROR_FAIL;
 
-	// Read back tdata1, tdata2, (tdata3), and check if the configuration is supported
+	// Read back tdata1, tdata2, (tdata3 - not implemented), and check if the configuration is supported
 	if (riscv_reg_get(target, &tdata1_rb, GDB_REGNO_TDATA1) != ERROR_OK)
 		return ERROR_FAIL;
-	if (riscv_reg_get(target, &tdata2_rb, GDB_REGNO_TDATA2) != ERROR_OK)
+	if (update_tdata2 &&
+			riscv_reg_get(target, &tdata2_rb, GDB_REGNO_TDATA2) != ERROR_OK)
 		return ERROR_FAIL;
 	bool tdata1_config_denied = (tdata1 & ~tdata1_ignore_mask) != (tdata1_rb & ~tdata1_ignore_mask);
-	bool tdata2_config_denied = tdata2 != tdata2_rb;
+	bool tdata2_config_denied = update_tdata2 && tdata2 != tdata2_rb;
 	if (tdata1_config_denied || tdata2_config_denied) {
 		LOG_TARGET_DEBUG(target, "Trigger %u doesn't support what we need.", idx);
 
@@ -677,6 +680,33 @@ static int set_trigger(struct target *target, unsigned int idx, riscv_reg_t tdat
 	return ERROR_OK;
 }
 
+static int sdtrig_disable_trigger(struct target *target, unsigned int idx)
+{
+	// Select which trigger to use
+	if (riscv_reg_set(target, GDB_REGNO_TSELECT, idx) != ERROR_OK)
+		return ERROR_FAIL;
+
+	// Disable the trigger by writing 0 to it
+	if (riscv_reg_set(target, GDB_REGNO_TDATA1, 0) != ERROR_OK)
+		return ERROR_FAIL;
+
+	return ERROR_OK;
+}
+
+static int sdtrig_set_t1(struct target *target, unsigned int idx,
+		riscv_reg_t tdata1, riscv_reg_t tdata1_ignore_mask)
+{
+	return stdtrig_set_tx_impl(target, idx, tdata1, /* tdata2 */ 0,
+			tdata1_ignore_mask, /* update tdata2 */ false);
+}
+
+static int sdtrig_set_t1t2(struct target *target, unsigned int idx,
+		riscv_reg_t tdata1, riscv_reg_t tdata2, riscv_reg_t tdata1_ignore_mask)
+{
+	return stdtrig_set_tx_impl(target, idx, tdata1, tdata2, tdata1_ignore_mask,
+			/* update tdata2 */ true);
+}
+
 static int maybe_add_trigger_t1(struct target *target, struct trigger *trigger)
 {
 	int ret;
@@ -695,7 +725,7 @@ static int maybe_add_trigger_t1(struct target *target, struct trigger *trigger)
 	const uint32_t bpcontrol_bpaction = 0xff << 11;
 
 	unsigned int idx = 0;
-	ret = find_next_free_trigger(target, CSR_TDATA1_TYPE_LEGACY, false, &idx);
+	ret = find_next_free_trigger(target, CSR_TDATA1_TYPE_LEGACY, /* chained */ false, &idx);
 	if (ret != ERROR_OK)
 		return ret;
 
@@ -717,7 +747,8 @@ static int maybe_add_trigger_t1(struct target *target, struct trigger *trigger)
 	tdata1 = set_field(tdata1, bpcontrol_bpaction, 0); /* cause bp exception */
 	tdata1 = set_field(tdata1, bpcontrol_bpmatch, 0); /* exact match */
 	tdata2 = trigger->address;
-	ret = set_trigger(target, idx, tdata1, tdata2, 0);
+	ret = sdtrig_set_t1t2(target, idx, tdata1, tdata2,
+			/* tdata1 ignore mask */ 0);
 	if (ret != ERROR_OK)
 		return ret;
 	r->trigger_unique_id[idx] = trigger->unique_id;
@@ -821,7 +852,7 @@ static int try_use_trigger_and_cache_result(struct target *target, unsigned int 
 	if (wp_triggers_cache_search(target, idx, tdata1, tdata2))
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 
-	int ret = set_trigger(target, idx, tdata1, tdata2, tdata1_ignore_mask);
+	int ret = sdtrig_set_t1t2(target, idx, tdata1, tdata2, tdata1_ignore_mask);
 
 	/* Add these values to the cache to remember that they are not supported. */
 	if (ret == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
@@ -871,7 +902,7 @@ static int try_setup_chained_match_triggers(struct target *target,
 
 	/* Find the first 2 consecutive triggers, supporting required tdata1 values */
 	for (unsigned int idx = 0;
-			find_next_free_trigger(target, trigger_type, true, &idx) == ERROR_OK;
+			find_next_free_trigger(target, trigger_type, /* chained */ true, &idx) == ERROR_OK;
 			++idx) {
 		ret = try_use_trigger_and_cache_result(target, idx, t1.tdata1, t1.tdata2,
 			t1.tdata1_ignore_mask);
@@ -890,7 +921,7 @@ static int try_setup_chained_match_triggers(struct target *target,
 			return ERROR_OK;
 		}
 		/* Undo the setting of the previous trigger */
-		int ret_undo = set_trigger(target, idx, 0, 0, 0);
+		int ret_undo = sdtrig_disable_trigger(target, idx);
 		if (ret_undo != ERROR_OK)
 			return ret_undo;
 
@@ -1127,12 +1158,9 @@ static int maybe_add_trigger_t3(struct target *target, bool vs, bool vu,
 				bool m, bool s, bool u, bool pending, unsigned int count,
 				int unique_id)
 {
-	int ret;
-	riscv_reg_t tdata1;
-
 	RISCV_INFO(r);
 
-	tdata1 = 0;
+	riscv_reg_t tdata1 = 0;
 	tdata1 = set_field(tdata1, CSR_ICOUNT_TYPE(riscv_xlen(target)), CSR_TDATA1_TYPE_ICOUNT);
 	tdata1 = set_field(tdata1, CSR_ICOUNT_DMODE(riscv_xlen(target)), 1);
 	tdata1 = set_field(tdata1, CSR_ICOUNT_ACTION, CSR_ICOUNT_ACTION_DEBUG_MODE);
@@ -1144,27 +1172,30 @@ static int maybe_add_trigger_t3(struct target *target, bool vs, bool vu,
 	tdata1 = set_field(tdata1, CSR_ICOUNT_U, u);
 	tdata1 = set_field(tdata1, CSR_ICOUNT_COUNT, count);
 
-	unsigned int idx = 0;
-	ret = find_next_free_trigger(target, CSR_TDATA1_TYPE_ICOUNT, false, &idx);
-	if (ret != ERROR_OK)
-		return ret;
-	ret = set_trigger(target, idx, tdata1, 0, 0);
-	if (ret != ERROR_OK)
-		return ret;
-	r->trigger_unique_id[idx] = unique_id;
-	return ERROR_OK;
+	int ret = ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	for (unsigned int idx = 0;
+			find_next_free_trigger(target, CSR_TDATA1_TYPE_ICOUNT,
+					/* chained */ false, &idx) == ERROR_OK;
+			++idx) {
+		ret = sdtrig_set_t1(target, idx, tdata1, /* tdata1 ignore mask */ 0);
+		if (ret == ERROR_OK) {
+			r->trigger_unique_id[idx] = unique_id;
+			return ERROR_OK;
+		}
+		if (ret != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			break;
+	}
+	return ret;
+
 }
 
 static int maybe_add_trigger_t4(struct target *target, bool vs, bool vu,
 				bool nmi, bool m, bool s, bool u, riscv_reg_t interrupts,
 				int unique_id)
 {
-	int ret;
-	riscv_reg_t tdata1, tdata2;
-
 	RISCV_INFO(r);
 
-	tdata1 = 0;
+	riscv_reg_t tdata1 = 0;
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_TYPE(riscv_xlen(target)), CSR_TDATA1_TYPE_ITRIGGER);
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_DMODE(riscv_xlen(target)), 1);
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_ACTION, CSR_ITRIGGER_ACTION_DEBUG_MODE);
@@ -1175,29 +1206,31 @@ static int maybe_add_trigger_t4(struct target *target, bool vs, bool vu,
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_S, s);
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_U, u);
 
-	tdata2 = interrupts;
+	riscv_reg_t tdata2 = interrupts;
 
-	unsigned int idx = 0;
-	ret = find_next_free_trigger(target, CSR_TDATA1_TYPE_ITRIGGER, false, &idx);
-	if (ret != ERROR_OK)
-		return ret;
-	ret = set_trigger(target, idx, tdata1, tdata2, 0);
-	if (ret != ERROR_OK)
-		return ret;
-	r->trigger_unique_id[idx] = unique_id;
-	return ERROR_OK;
+	int ret = ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	for (unsigned int idx = 0;
+			find_next_free_trigger(target, CSR_TDATA1_TYPE_ITRIGGER,
+					/* chained */ false, &idx) == ERROR_OK;
+			++idx) {
+		ret = sdtrig_set_t1t2(target, idx, tdata1, tdata2, /* tdata1 ignore mask */ 0);
+		if (ret == ERROR_OK) {
+			r->trigger_unique_id[idx] = unique_id;
+			return ERROR_OK;
+		}
+		if (ret != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			break;
+	}
+	return ret;
 }
 
 static int maybe_add_trigger_t5(struct target *target, bool vs, bool vu,
 				bool m, bool s, bool u, riscv_reg_t exception_codes,
 				int unique_id)
 {
-	int ret;
-	riscv_reg_t tdata1, tdata2;
-
 	RISCV_INFO(r);
 
-	tdata1 = 0;
+	riscv_reg_t tdata1 = 0;
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_TYPE(riscv_xlen(target)), CSR_TDATA1_TYPE_ETRIGGER);
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_DMODE(riscv_xlen(target)), 1);
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_ACTION, CSR_ETRIGGER_ACTION_DEBUG_MODE);
@@ -1207,17 +1240,22 @@ static int maybe_add_trigger_t5(struct target *target, bool vs, bool vu,
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_S, s);
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_U, u);
 
-	tdata2 = exception_codes;
+	riscv_reg_t tdata2 = exception_codes;
 
-	unsigned int idx = 0;
-	ret = find_next_free_trigger(target, CSR_TDATA1_TYPE_ETRIGGER, false, &idx);
-	if (ret != ERROR_OK)
-		return ret;
-	ret = set_trigger(target, idx, tdata1, tdata2, 0);
-	if (ret != ERROR_OK)
-		return ret;
-	r->trigger_unique_id[idx] = unique_id;
-	return ERROR_OK;
+	int ret = ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	for (unsigned int idx = 0;
+			find_next_free_trigger(target, CSR_TDATA1_TYPE_ETRIGGER,
+					/* chained */ false, &idx) == ERROR_OK;
+			++idx) {
+		ret = sdtrig_set_t1t2(target, idx, tdata1, tdata2, /* tdata1 ignore mask */ 0);
+		if (ret == ERROR_OK) {
+			r->trigger_unique_id[idx] = unique_id;
+			return ERROR_OK;
+		}
+		if (ret != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+			break;
+	}
+	return ret;
 }
 
 static int add_trigger(struct target *target, struct trigger *trigger)
@@ -1431,30 +1469,46 @@ static int remove_trigger(struct target *target, int unique_id)
 		return ERROR_FAIL;
 
 	riscv_reg_t tselect;
-	int result = riscv_reg_get(target, &tselect, GDB_REGNO_TSELECT);
-	if (result != ERROR_OK)
-		return result;
+	int ret = riscv_reg_get(target, &tselect, GDB_REGNO_TSELECT);
+	if (ret != ERROR_OK)
+		return ret;
 
-	bool done = false;
-	for (unsigned int i = 0; i < r->trigger_count; i++) {
-		if (r->trigger_unique_id[i] == unique_id) {
-			riscv_reg_set(target, GDB_REGNO_TSELECT, i);
-			riscv_reg_set(target, GDB_REGNO_TDATA1, 0);
+	bool found = false;
+	for (unsigned int i = 0; i < r->trigger_count; ++i) {
+		if (r->trigger_unique_id[i] != unique_id)
+			continue;
+		found = true;
+		int op_status = sdtrig_disable_trigger(target, i);
+		if (op_status != ERROR_OK) {
+			ret = (ret == ERROR_OK) ? op_status : ERROR_FAIL;
+			LOG_TARGET_ERROR(target, "Could not disable trigger %d for bp/wp %d",
+					i, unique_id);
+		} else {
 			r->trigger_unique_id[i] = -1;
-			LOG_TARGET_DEBUG(target, "Stop using resource %d for bp %d",
-				i, unique_id);
-			done = true;
+			LOG_TARGET_DEBUG(target, "Stop using resource %d for bp/wp %d",
+					i, unique_id);
 		}
 	}
-	if (!done) {
+
+	if (ret != ERROR_OK)
 		LOG_TARGET_ERROR(target,
-			"Couldn't find the hardware resources used by hardware trigger.");
-		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+				"Target may behave in an unexpected manner since not all triggers "
+				"corresponding to bp/wp with id %d were disabled", unique_id);
+
+	if (!found) {
+		LOG_TARGET_ERROR(target,
+				"BUG: could not find the hardware resources used by bp/wp %d",
+				unique_id);
+		ret = ERROR_FAIL;
 	}
 
-	riscv_reg_set(target, GDB_REGNO_TSELECT, tselect);
+	if (riscv_reg_set(target, GDB_REGNO_TSELECT, tselect) != ERROR_OK) {
+		LOG_TARGET_ERROR(target, "Coudld not restore tselect after bp/wp %d "
+				"removal attempt", unique_id);
+		ret = ERROR_FAIL;
+	}
 
-	return ERROR_OK;
+	return ret;
 }
 
 static int riscv_remove_breakpoint(struct target *target,
