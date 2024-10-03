@@ -5023,9 +5023,9 @@ static COMMAND_HELPER(report_reserved_triggers, struct target *target)
 	if (riscv_enumerate_triggers(target) != ERROR_OK)
 		return ERROR_FAIL;
 	const char *separator = "";
-	for (riscv_reg_t t = 0; t < r->trigger_count; ++t) {
+	for (unsigned int t = 0; t < r->trigger_count; ++t) {
 		if (r->reserved_triggers[t]) {
-			command_print_sameline(CMD, "%s%" PRIu64, separator, t);
+			command_print_sameline(CMD, "%s%u", separator, t);
 			separator = " ";
 		}
 	}
@@ -5042,8 +5042,8 @@ COMMAND_HANDLER(handle_reserve_trigger)
 	if (CMD_ARGC != 2)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	riscv_reg_t t;
-	COMMAND_PARSE_NUMBER(u64, CMD_ARGV[0], t);
+	unsigned int t;
+	COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], t);
 
 	if (riscv_enumerate_triggers(target) != ERROR_OK)
 		return ERROR_FAIL;
@@ -5053,15 +5053,15 @@ COMMAND_HANDLER(handle_reserve_trigger)
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 	if (t >= r->trigger_count) {
-		command_print(CMD, "Error: trigger with index %" PRIu64
+		command_print(CMD, "Error: trigger with index %u"
 				" does not exist. There are only %u triggers"
 				" on the target (with indexes 0 .. %u).",
 				t, r->trigger_count, r->trigger_count - 1);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 	if (r->trigger_unique_id[t] != -1) {
-		command_print(CMD, "Error: trigger with index %" PRIu64
-				" is already in use and can not be reserved.", t);
+		command_print(CMD, "Error: trigger with index %u"
+				" is already in use and cannot be reserved.", t);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 	COMMAND_PARSE_ON_OFF(CMD_ARGV[1], r->reserved_triggers[t]);
