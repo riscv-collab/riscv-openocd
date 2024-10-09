@@ -152,6 +152,9 @@ struct riscv_info {
 	/* record the tinfo of each trigger */
 	unsigned int trigger_tinfo[RISCV_MAX_TRIGGERS];
 
+	/* record the dpc that triggered it is retired. */
+	bool need_single_step;
+
 	/* For each physical trigger contains:
 	 * -1: the hwbp is available
 	 * -4: The trigger is used by the itrigger command
