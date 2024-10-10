@@ -35,16 +35,14 @@ set_board_info cpu,mtvec_balign 4
 set_board_info cpu,stvec_balign 4
 
 set_board_info cpu,sv32 0
-# TODO: See https://j.yadro.com/browse/YCAT-40286
-set_board_info cpu,sv39 0
-set_board_info cpu,sv48 0
-set_board_info cpu,sv57 0
+set_board_info cpu,sv39 1
+set_board_info cpu,sv48 1
+set_board_info cpu,sv57 1
 
 set_board_info cpu,sv32x4 0
-# TODO: See https://j.yadro.com/browse/YCAT-40286
-set_board_info cpu,sv39x4 0
-set_board_info cpu,sv48x4 0
-set_board_info cpu,sv57x4 0
+set_board_info cpu,sv39x4 1
+set_board_info cpu,sv48x4 1
+set_board_info cpu,sv57x4 1
 
 set_board_info cpu,misaligned_access_support 0
 
