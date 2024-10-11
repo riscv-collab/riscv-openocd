@@ -4270,6 +4270,35 @@ read_memory_progbuf(struct target *target, target_addr_t address,
 		read_memory_progbuf_inner_one(target, access, mprven) :
 		read_memory_progbuf_inner(target, access, count, mprven);
 
+	if (result != ERROR_OK) {
+		/* The full read did not succeed, so we will try to read each word individually. */
+		/* This will not be fast, but reading outside actual memory is a special case anyway. */
+		/* It will make the toolchain happier, especially Eclipse Memory View as it reads ahead. */
+		target_addr_t address_i = access.target_address;
+		uint8_t *buffer_i = access.buffer_address;
+
+		for (uint32_t i = 0; i < count; i++, address_i += access.increment, buffer_i += access.element_size) {
+			/* TODO: This is much slower than it needs to be because we end up
+			 * writing the address to read for every word we read. */
+			const struct memory_access_info access_single = {
+			.target_address = address_i,
+			.increment = increment,
+			.buffer_address = buffer_i,
+			.element_size = size,
+			};
+			result = read_memory_progbuf_inner_one(target, access_single, mprven);
+
+			/* The read of a single word failed, so we will just return 0 for that instead */
+			if (result != ERROR_OK) {
+				LOG_DEBUG("error reading single word of %d bytes from 0x%" TARGET_PRIxADDR,
+						access_single.element_size, access_single.target_address);
+
+				buf_set_u32(access_single.buffer_address, 0, 8 * access_single.element_size, 0);
+			}
+		}
+		result = ERROR_OK;
+	}
+
 	if (mstatus != mstatus_old &&
 			register_write_direct(target, GDB_REGNO_MSTATUS, mstatus_old) != ERROR_OK)
 		return MEM_ACCESS_FAILED;
