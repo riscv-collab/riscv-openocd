@@ -20,7 +20,8 @@ proc run_test {} {
     ocd_connect
 
     ocdtlb_run_expect "reset halt"
-    ocdtlb_run_expect "mwd $table_addr 0x0"
+    # zero-out first several entries at the place wherer MMU table is expected
+    ocdtlb_run_expect "write_memory $table_addr 64 { 0 0 0 0 0 0 0 0 0 0 0 0 }"
 
     set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
     source $lib_translate_support
