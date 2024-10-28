@@ -3,36 +3,30 @@ proc run_test {} {
         return [ocd_test_unsupported]
     }
 
-    set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
-    source $lib_translate_support
-
-    set default_bin_prefix [tool_state_get default_bin_prefix]
-    ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe"
-
-    set ENTRY_ADDR [tool_state_get_program_symbol _entry]
-
-    compile_page_table_generator
-
     set available_modes [list sv39 sv48 sv57]
     set modes [list]
-
     foreach mode $available_modes {
         if {[target_info "cpu,$mode"]} {
             lappend modes $mode
         }
     }
-
     if {[llength $modes] == 0} {
         return [ocd_test_unsupported]
     }
 
-    set table_addr $ENTRY_ADDR
+    set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
+    source $lib_translate_support
+    compile_page_table_generator
 
-    set va_offset 0xa0000
-    set virtual_address 0x[format %x [expr {$table_addr + $va_offset}]]
+    set VA_OFFSET 0xa0000
+    set PA_OFFSET 0x10000
 
-    set pa_offset 0x10000
-    set physical_address 0x[format %x [expr {$table_addr + $pa_offset}]]
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe" \
+
+    set table_addr [tool_state_get_program_symbol _entry]
+    set virtual_address 0x[format %x [expr {$table_addr + ${VA_OFFSET} }]]
+    set physical_address 0x[format %x [expr {$table_addr + ${PA_OFFSET} }]]
 
     set va_list [list $virtual_address]
     set pa_list [list $physical_address]
@@ -43,7 +37,7 @@ proc run_test {} {
         verbose "testing $mode translation mode" 1
         ocdtlb_run_expect "reset halt"
 
-        init_with_config $mode $ENTRY_ADDR $va_list $pa_list
+        init_with_config $mode $table_addr $va_list $pa_list
         turn_on_translation $mode $table_addr
 
         set received_physical_address [dict get [ocdtlb_run_expect "virt2phys $virtual_address"] value]

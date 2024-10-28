@@ -3,16 +3,6 @@ proc run_test {} {
         return [ocd_test_unsupported]
     }
 
-    set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
-    source $lib_translate_support
-
-    set default_bin_prefix [tool_state_get default_bin_prefix]
-    ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe"
-
-    set ENTRY_ADDR [tool_state_get_program_symbol _entry]
-
-    compile_page_table_generator
-
     set available_modes [list sv39 sv48 sv57]
     set available_modes_x4 [list sv39x4 sv48x4 sv57x4]
     set modes [list]
@@ -29,18 +19,26 @@ proc run_test {} {
         return [ocd_test_unsupported]
     }
 
-    set table_addr $ENTRY_ADDR
-    set table_offset 0x8000
-    set table_addr_x4 0x[format %x [expr {$table_addr + $table_offset}]]
 
-    set va_offset 0xa0000
-    set virtual_address 0x[format %x [expr {$table_addr + $va_offset}]]
+    set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
+    source $lib_translate_support
+    compile_page_table_generator
 
-    set ga_offset 0xb0000
-    set guest_address 0x[format %x [expr {$table_addr + $ga_offset}]]
+    set VA_OFFSET 0xa0000
+    set PA_OFFSET 0xc0000
+    set X4_TABLE_OFFSET 0x8000
+    set GA_OFFSET 0xb0000
 
-    set pa_offset 0xc0000
-    set physical_address 0x[format %x [expr {$table_addr + $pa_offset}]]
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "lib/memory.S" "$default_bin_prefix.exe"
+
+    set expected_data 0xdeadbeef
+
+    set table_addr [tool_state_get_program_symbol _entry]
+    set table_addr_x4 0x[format %x [expr {$table_addr + ${X4_TABLE_OFFSET} }]]
+    set virtual_address 0x[format %x [expr {$table_addr + ${VA_OFFSET} }]]
+    set guest_address 0x[format %x [expr {$table_addr + ${GA_OFFSET}} ]]
+    set physical_address 0x[format %x [expr {$table_addr + ${PA_OFFSET} }]]
 
     set va_list [list $virtual_address]
     set ga_list [list $guest_address]
@@ -59,7 +57,6 @@ proc run_test {} {
     foreach mode $modes {
         foreach mode_x4 $modes_x4 {
             ocdtlb_run_expect "reset halt"
-            verbose "modes: $mode:$mode_x4" 1
 
             init_with_config $mode $table_addr $va_list $ga_list
             init_with_config $mode_x4 $table_addr_x4 $extended_ga_list $pa_list
@@ -67,8 +64,15 @@ proc run_test {} {
             turn_on_translation $mode $table_addr 1
             turn_on_translation $mode_x4 $table_addr_x4
 
-            set received_physical_address [dict get [ocdtlb_run_expect "virt2phys $virtual_address"] value]
-            ocdtlb_expect_equal $physical_address $received_physical_address
+            ocdtlb_run_expect "mdw $virtual_address"
+
+            ocdtlb_run_expect "mww phys $physical_address $expected_data"
+            set data [dict get [ocdtlb_run_expect "mdw $virtual_address"] data]
+            ocdtlb_expect_equal $data $expected_data
+
+            ocdtlb_run_expect "mww $virtual_address $expected_data"
+            set data [dict get [ocdtlb_run_expect "mdw phys $physical_address"] data]
+            ocdtlb_expect_equal $data $expected_data
         }
     }
 
