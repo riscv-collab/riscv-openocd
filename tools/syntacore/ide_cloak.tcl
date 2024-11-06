@@ -17,7 +17,11 @@ proc csrAddressFromName { csr_name } {
 proc generateAllCsrAddresses {} {
   set csr_addresses {}
   for {set i 1} {$i < 4096} {incr i} {
-    lappend csr_addresses $i
+    set hex_addr [format "0x%x" $i]
+    set pattern "^#define CSR_\\S* ${hex_addr}\$"
+    if {![catch {exec grep "$pattern" [getRISCVEncodingPath]}]} {
+      lappend csr_addresses $i
+    }
   }
   return $csr_addresses
 }
@@ -30,18 +34,25 @@ proc generateListOfCloakedAddresses {VISIBLE_CSRS} {
   }
   return $CSRS_TO_HIDE
 }
+
+proc cloakedRecord { RANGE_START RANGE_END } {
+  if { ${RANGE_START} == ${RANGE_END} } {
+    return ${RANGE_START}
+  }
+  return "${RANGE_START}-${RANGE_END}"
+}
 proc calculateCloak { CSRS_TO_HIDE } {
   set CLOAK {}
   set PREV [lindex $CSRS_TO_HIDE 0]
   set RANGE_START $PREV
   foreach ITEM [lreplace $CSRS_TO_HIDE 0 0] {
     if { [expr {$ITEM - $PREV}] != 1 } {
-      lappend CLOAK "$RANGE_START-$PREV"
+      lappend CLOAK [cloakedRecord ${RANGE_START} ${PREV}]
       set RANGE_START $ITEM
     }
     set PREV $ITEM
   }
-  lappend CLOAK "$RANGE_START-$PREV"
+  lappend CLOAK [cloakedRecord ${RANGE_START} ${PREV}]
   return $CLOAK
 }
 
