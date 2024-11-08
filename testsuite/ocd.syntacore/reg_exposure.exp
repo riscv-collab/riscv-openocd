@@ -34,6 +34,8 @@ proc run_test {} {
     invalid_rename EXPECT_ABSENT ACCESS_FAIL \
     csr2048 $EXTRA_CSR_PRESENT ACCESS_FAIL \
     csr_some_register $EXTRA_CSR_PRESENT ACCESS_FAIL \
+    csr2050 $EXTRA_CSR_PRESENT ACCESS_FAIL \
+    csr_some_register_hex $EXTRA_CSR_PRESENT ACCESS_FAIL \
   ]
 
   foreach {reg_name is_present expected_access} $EXPOSED_CSR {
