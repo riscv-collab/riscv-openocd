@@ -21,7 +21,7 @@ def deploy(graph, output_folder: str, **kwargs):  # type: ignore
 
     build_info = [
         str(openocd_dep.settings.arch),
-        str(openocd_dep.options.build_type),
+        str(openocd_dep.settings.build_type),
         str(openocd_dep.settings.os.value),
     ]
 
