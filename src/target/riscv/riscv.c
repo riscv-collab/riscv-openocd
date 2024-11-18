@@ -139,6 +139,35 @@ struct tdata1_cache {
 	struct list_head elem_tdata1;
 };
 
+bool riscv_virt2phys_mode_is_hw(const struct target *target)
+{
+	assert(target);
+	RISCV_INFO(r);
+	return r->virt2phys_mode == RISCV_VIRT2PHYS_MODE_HW;
+}
+
+bool riscv_virt2phys_mode_is_sw(const struct target *target)
+{
+	assert(target);
+	RISCV_INFO(r);
+	return r->virt2phys_mode == RISCV_VIRT2PHYS_MODE_SW;
+}
+
+const char *riscv_virt2phys_mode_to_str(riscv_virt2phys_mode_t mode)
+{
+	assert(mode == RISCV_VIRT2PHYS_MODE_OFF
+			|| mode == RISCV_VIRT2PHYS_MODE_SW
+			|| mode == RISCV_VIRT2PHYS_MODE_HW);
+
+	static const char *const names[] = {
+		[RISCV_VIRT2PHYS_MODE_HW] = "hw",
+		[RISCV_VIRT2PHYS_MODE_SW] = "sw",
+		[RISCV_VIRT2PHYS_MODE_OFF] = "off",
+	};
+
+	return names[mode];
+}
+
 /* Wall-clock timeout for a command/access. Settable via RISC-V Target commands.*/
 static int riscv_command_timeout_sec_value = DEFAULT_COMMAND_TIMEOUT_SEC;
 
@@ -149,10 +178,6 @@ int riscv_get_command_timeout_sec(void)
 {
 	return MAX(riscv_command_timeout_sec_value, riscv_reset_timeout_sec);
 }
-
-static bool riscv_enable_virt2phys = true;
-
-bool riscv_enable_virtual;
 
 static enum {
 	RO_NORMAL,
@@ -2714,7 +2739,7 @@ static int riscv_mmu(struct target *target, int *enabled)
 {
 	*enabled = 0;
 
-	if (!riscv_enable_virt2phys)
+	if (!riscv_virt2phys_mode_is_sw(target))
 		return ERROR_OK;
 
 	/* Don't use MMU in explicit or effective M (machine) mode */
@@ -3061,30 +3086,26 @@ static int riscv_virt2phys(struct target *target, target_addr_t virtual, target_
 			virtual, physical);
 }
 
+static int check_virt_memory_access(struct target *target, target_addr_t address,
+			uint32_t size, uint32_t count, bool is_write)
+{
+	const bool is_misaligned = address % size != 0;
+	// TODO: This assumes that size of each page is 4 KiB, which is not necessarily the case.
+	const bool crosses_page_boundary = RISCV_PGBASE(address + size * count - 1) != RISCV_PGBASE(address);
+	if (is_misaligned && crosses_page_boundary) {
+		LOG_TARGET_ERROR(target, "Mis-aligned memory %s (address=0x%" TARGET_PRIxADDR ", size=%d, count=%d)"
+			" would access an element across page boundary. This is not supported.",
+			is_write ? "write" : "read", address, size, count);
+		return ERROR_FAIL;
+	}
+	return ERROR_OK;
+}
+
 static int riscv_read_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	RISCV_INFO(r);
 	return r->read_memory(target, phys_address, size, count, buffer, size);
-}
-
-static int riscv_read_memory(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
-{
-	if (count == 0) {
-		LOG_TARGET_WARNING(target, "0-length read from 0x%" TARGET_PRIxADDR, address);
-		return ERROR_OK;
-	}
-
-	target_addr_t physical_addr;
-	int result = target->type->virt2phys(target, address, &physical_addr);
-	if (result != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Address translation failed.");
-		return result;
-	}
-
-	RISCV_INFO(r);
-	return r->read_memory(target, physical_addr, size, count, buffer, size);
 }
 
 static int riscv_write_phys_memory(struct target *target, target_addr_t phys_address,
@@ -3096,25 +3117,76 @@ static int riscv_write_phys_memory(struct target *target, target_addr_t phys_add
 	return tt->write_memory(target, phys_address, size, count, buffer);
 }
 
-static int riscv_write_memory(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, const uint8_t *buffer)
+static int riscv_rw_memory(struct target *target, target_addr_t address, uint32_t size,
+		uint32_t count, uint8_t *read_buffer, const uint8_t *write_buffer)
 {
+	/* Exactly one of the buffers must be set, the other must be NULL */
+	assert(!!read_buffer != !!write_buffer);
+
+	const bool is_write = write_buffer ? true : false;
 	if (count == 0) {
-		LOG_TARGET_WARNING(target, "0-length write to 0x%" TARGET_PRIxADDR, address);
+		LOG_TARGET_WARNING(target, "0-length %s 0x%" TARGET_PRIxADDR,
+				is_write ? "write to" : "read from", address);
 		return ERROR_OK;
 	}
 
-	target_addr_t physical_addr;
-	int result = target->type->virt2phys(target, address, &physical_addr);
-	if (result != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Address translation failed.");
+	int mmu_enabled;
+	int result = riscv_mmu(target, &mmu_enabled);
+	if (result != ERROR_OK)
 		return result;
-	}
 
+	RISCV_INFO(r);
 	struct target_type *tt = get_target_type(target);
 	if (!tt)
 		return ERROR_FAIL;
-	return tt->write_memory(target, physical_addr, size, count, buffer);
+
+	if (!mmu_enabled) {
+		if (is_write)
+			return tt->write_memory(target, address, size, count, write_buffer);
+		else
+			return r->read_memory(target, address, size, count, read_buffer, size);
+	}
+
+	result = check_virt_memory_access(target, address, size, count, is_write);
+	if (result != ERROR_OK)
+		return result;
+
+	uint32_t current_count = 0;
+	while (current_count < count) {
+		target_addr_t physical_addr;
+		result = target->type->virt2phys(target, address, &physical_addr);
+		if (result != ERROR_OK) {
+			LOG_TARGET_ERROR(target, "Address translation failed.");
+			return result;
+		}
+
+		/* TODO: For simplicity, this algorithm assumes the worst case - the smallest possible page size,
+		 * which is  4 KiB. The algorithm can be improved to detect the real page size, and allow to use larger
+		 * memory transfers and avoid extra unnecessary virt2phys address translations. */
+		uint32_t chunk_count = MIN(count - current_count, (RISCV_PGSIZE - RISCV_PGOFFSET(address)) / size);
+		if (is_write)
+			result = tt->write_memory(target, physical_addr, size, chunk_count, write_buffer + current_count * size);
+		else
+			result = r->read_memory(target, physical_addr, size, chunk_count, read_buffer + current_count * size, size);
+		if (result != ERROR_OK)
+			return result;
+
+		current_count += chunk_count;
+		address += chunk_count * size;
+	}
+	return ERROR_OK;
+}
+
+static int riscv_read_memory(struct target *target, target_addr_t address,
+		uint32_t size, uint32_t count, uint8_t *buffer)
+{
+	return riscv_rw_memory(target, address, size, count, buffer, NULL);
+}
+
+static int riscv_write_memory(struct target *target, target_addr_t address,
+		uint32_t size, uint32_t count, const uint8_t *buffer)
+{
+	return riscv_rw_memory(target, address, size, count, NULL, buffer);
 }
 
 static const char *riscv_get_gdb_arch(const struct target *target)
@@ -3298,7 +3370,7 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 				GDB_REGNO_PC,
 				GDB_REGNO_MSTATUS, GDB_REGNO_MEPC, GDB_REGNO_MCAUSE,
 			};
-			for (unsigned i = 0; i < ARRAY_SIZE(regnums); i++) {
+			for (unsigned int i = 0; i < ARRAY_SIZE(regnums); i++) {
 				enum gdb_regno regno = regnums[i];
 				riscv_reg_t reg_value;
 				if (riscv_reg_get(target, &reg_value, regno) != ERROR_OK)
@@ -3393,8 +3465,8 @@ static int riscv_checksum_memory(struct target *target,
 
 	static const uint8_t *crc_code;
 
-	unsigned xlen = riscv_xlen(target);
-	unsigned crc_code_size;
+	unsigned int xlen = riscv_xlen(target);
+	unsigned int crc_code_size;
 	if (xlen == 32) {
 		crc_code = riscv32_crc_code;
 		crc_code_size = sizeof(riscv32_crc_code);
@@ -3856,10 +3928,9 @@ int riscv_openocd_step(struct target *target, int current,
 /* Command Handlers */
 COMMAND_HANDLER(riscv_set_command_timeout_sec)
 {
-	if (CMD_ARGC != 1) {
-		LOG_ERROR("Command takes exactly 1 parameter.");
+	if (CMD_ARGC != 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
+
 	int timeout = atoi(CMD_ARGV[0]);
 	if (timeout <= 0) {
 		LOG_ERROR("%s is not a valid integer argument for command.", CMD_ARGV[0]);
@@ -3874,10 +3945,9 @@ COMMAND_HANDLER(riscv_set_command_timeout_sec)
 COMMAND_HANDLER(riscv_set_reset_timeout_sec)
 {
 	LOG_WARNING("The command 'riscv set_reset_timeout_sec' is deprecated! Please, use 'riscv set_command_timeout_sec'.");
-	if (CMD_ARGC != 1) {
-		LOG_ERROR("Command takes exactly 1 parameter.");
+	if (CMD_ARGC != 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
+
 	int timeout = atoi(CMD_ARGV[0]);
 	if (timeout <= 0) {
 		LOG_ERROR("%s is not a valid integer argument for command.", CMD_ARGV[0]);
@@ -3939,16 +4009,6 @@ COMMAND_HANDLER(riscv_set_mem_access)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(riscv_set_enable_virtual)
-{
-	if (CMD_ARGC != 1) {
-		LOG_ERROR("Command takes exactly 1 parameter");
-		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
-	COMMAND_PARSE_ON_OFF(CMD_ARGV[0], riscv_enable_virtual);
-	return ERROR_OK;
-}
-
 static int parse_ranges(struct list_head *ranges, const char *tcl_arg, const char *reg_type, unsigned int max_val)
 {
 	char *args = strdup(tcl_arg);
@@ -3958,8 +4018,8 @@ static int parse_ranges(struct list_head *ranges, const char *tcl_arg, const cha
 	/* For backward compatibility, allow multiple parameters within one TCL argument, separated by ',' */
 	char *arg = strtok(args, ",");
 	while (arg) {
-		unsigned low = 0;
-		unsigned high = 0;
+		unsigned int low = 0;
+		unsigned int high = 0;
 		char *name = NULL;
 
 		char *dash = strchr(arg, '-');
@@ -4025,7 +4085,7 @@ static int parse_ranges(struct list_head *ranges, const char *tcl_arg, const cha
 			return ERROR_COMMAND_SYNTAX_ERROR;
 		}
 
-		high = high > low ? high : low;
+		high = MAX(high, low);
 
 		if (high > max_val) {
 			LOG_ERROR("Cannot expose %s register number %u, maximum allowed value is %u.", reg_type, high, max_val);
@@ -4076,10 +4136,8 @@ static int parse_ranges(struct list_head *ranges, const char *tcl_arg, const cha
 
 COMMAND_HANDLER(riscv_set_expose_csrs)
 {
-	if (CMD_ARGC == 0) {
-		LOG_ERROR("Command expects parameters.");
+	if (CMD_ARGC == 0)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	struct target *target = get_current_target(CMD_CTX);
 	RISCV_INFO(info);
@@ -4096,10 +4154,8 @@ COMMAND_HANDLER(riscv_set_expose_csrs)
 
 COMMAND_HANDLER(riscv_set_expose_custom)
 {
-	if (CMD_ARGC == 0) {
-		LOG_ERROR("Command expects parameters.");
+	if (CMD_ARGC == 0)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	struct target *target = get_current_target(CMD_CTX);
 	RISCV_INFO(info);
@@ -4116,10 +4172,8 @@ COMMAND_HANDLER(riscv_set_expose_custom)
 
 COMMAND_HANDLER(riscv_hide_csrs)
 {
-	if (CMD_ARGC == 0) {
-		LOG_ERROR("Command expects parameters");
+	if (CMD_ARGC == 0)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	struct target *target = get_current_target(CMD_CTX);
 	RISCV_INFO(info);
@@ -4137,14 +4191,10 @@ COMMAND_HANDLER(riscv_hide_csrs)
 COMMAND_HANDLER(riscv_authdata_read)
 {
 	unsigned int index = 0;
-	if (CMD_ARGC == 0) {
-		/* nop */
-	} else if (CMD_ARGC == 1) {
+	if (CMD_ARGC == 1)
 		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], index);
-	} else {
-		LOG_ERROR("Command takes at most one parameter.");
+	else if (CMD_ARGC != 0)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	struct target *target = get_current_target(CMD_CTX);
 	if (!target) {
@@ -4348,10 +4398,8 @@ COMMAND_HANDLER(riscv_reset_delays)
 
 COMMAND_HANDLER(riscv_set_ir)
 {
-	if (CMD_ARGC != 2) {
-		LOG_ERROR("Command takes exactly 2 arguments");
+	if (CMD_ARGC != 2)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	uint32_t value;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], value);
@@ -4370,10 +4418,8 @@ COMMAND_HANDLER(riscv_set_ir)
 
 COMMAND_HANDLER(riscv_resume_order)
 {
-	if (CMD_ARGC > 1) {
-		LOG_ERROR("Command takes at most one argument");
+	if (CMD_ARGC > 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	if (!strcmp(CMD_ARGV[0], "normal")) {
 		resume_order = RO_NORMAL;
@@ -4422,12 +4468,11 @@ COMMAND_HANDLER(riscv_set_bscan_tunnel_ir)
 {
 	int ir_id = 0;
 
-	if (CMD_ARGC > 1) {
-		LOG_ERROR("Command takes at most one arguments");
+	if (CMD_ARGC > 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	} else if (CMD_ARGC == 1) {
+
+	if (CMD_ARGC == 1)
 		COMMAND_PARSE_NUMBER(int, CMD_ARGV[0], ir_id);
-	}
 
 	LOG_INFO("Bscan tunnel IR 0x%x selected", ir_id);
 
@@ -4460,14 +4505,20 @@ COMMAND_HANDLER(riscv_set_maskisr)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(riscv_set_enable_virt2phys)
+COMMAND_HANDLER(riscv_set_autofence)
 {
-	if (CMD_ARGC != 1) {
-		LOG_ERROR("Command takes exactly 1 parameter");
-		return ERROR_COMMAND_SYNTAX_ERROR;
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (CMD_ARGC == 0) {
+		command_print(CMD, "autofence: %s", r->autofence ? "on" : "off");
+		return ERROR_OK;
+	} else if (CMD_ARGC == 1) {
+		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->autofence);
+		return ERROR_OK;
 	}
-	COMMAND_PARSE_ON_OFF(CMD_ARGV[0], riscv_enable_virt2phys);
-	return ERROR_OK;
+
+	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
 COMMAND_HANDLER(riscv_set_ebreakm)
@@ -4483,7 +4534,6 @@ COMMAND_HANDLER(riscv_set_ebreakm)
 		return ERROR_OK;
 	}
 
-	LOG_ERROR("Command takes 0 or 1 parameters");
 	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
@@ -4500,7 +4550,6 @@ COMMAND_HANDLER(riscv_set_ebreaks)
 		return ERROR_OK;
 	}
 
-	LOG_ERROR("Command takes 0 or 1 parameters");
 	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
@@ -4517,17 +4566,15 @@ COMMAND_HANDLER(riscv_set_ebreaku)
 		return ERROR_OK;
 	}
 
-	LOG_ERROR("Command takes 0 or 1 parameters");
 	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
 COMMAND_HELPER(riscv_clear_trigger, int trigger_id, const char *name)
 {
 	struct target *target = get_current_target(CMD_CTX);
-	if (CMD_ARGC != 1) {
-		LOG_ERROR("clear command takes no extra arguments.");
+	if (CMD_ARGC != 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
+
 	if (find_first_trigger_by_id(target, trigger_id) < 0) {
 		LOG_TARGET_ERROR(target, "No %s is set. Nothing to clear.", name);
 		return ERROR_FAIL;
@@ -4537,10 +4584,8 @@ COMMAND_HELPER(riscv_clear_trigger, int trigger_id, const char *name)
 
 COMMAND_HANDLER(riscv_itrigger)
 {
-	if (CMD_ARGC < 1) {
-		LOG_ERROR("Command takes at least 1 parameter");
+	if (CMD_ARGC < 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	struct target *target = get_current_target(CMD_CTX);
 	const int ITRIGGER_UNIQUE_ID = -CSR_TDATA1_TYPE_ITRIGGER;
@@ -4604,10 +4649,8 @@ COMMAND_HANDLER(riscv_itrigger)
 
 COMMAND_HANDLER(riscv_icount)
 {
-	if (CMD_ARGC < 1) {
-		LOG_ERROR("Command takes at least 1 parameter");
+	if (CMD_ARGC < 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	struct target *target = get_current_target(CMD_CTX);
 	const int ICOUNT_UNIQUE_ID = -CSR_TDATA1_TYPE_ICOUNT;
@@ -4671,10 +4714,8 @@ COMMAND_HANDLER(riscv_icount)
 
 COMMAND_HANDLER(riscv_etrigger)
 {
-	if (CMD_ARGC < 1) {
-		LOG_ERROR("Command takes at least 1 parameter");
+	if (CMD_ARGC < 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	struct target *target = get_current_target(CMD_CTX);
 	const int ETRIGGER_UNIQUE_ID = -CSR_TDATA1_TYPE_ETRIGGER;
@@ -4738,14 +4779,8 @@ COMMAND_HANDLER(handle_repeat_read)
 	struct target *target = get_current_target(CMD_CTX);
 	RISCV_INFO(r);
 
-	if (CMD_ARGC < 2) {
-		LOG_ERROR("Command requires at least count and address arguments.");
+	if (CMD_ARGC < 2 || CMD_ARGC > 3)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
-	if (CMD_ARGC > 3) {
-		LOG_ERROR("Command takes at most 3 arguments.");
-		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	uint32_t count;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], count);
@@ -4791,10 +4826,8 @@ COMMAND_HANDLER(handle_memory_sample_command)
 		return ERROR_OK;
 	}
 
-	if (CMD_ARGC < 2) {
-		LOG_ERROR("Command requires at least bucket and address arguments.");
+	if (CMD_ARGC < 2)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	uint32_t bucket;
 	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], bucket);
@@ -4840,10 +4873,9 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 	struct target *target = get_current_target(CMD_CTX);
 	RISCV_INFO(r);
 
-	if (CMD_ARGC > 1) {
-		LOG_ERROR("Command takes at most 1 arguments.");
+	if (CMD_ARGC > 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
+
 	bool base64 = false;
 	if (CMD_ARGC > 0) {
 		if (!strcmp(CMD_ARGV[0], "base64")) {
@@ -4949,10 +4981,8 @@ COMMAND_HANDLER(handle_info)
 
 COMMAND_HANDLER(riscv_exec_progbuf)
 {
-	if (CMD_ARGC < 1 || CMD_ARGC > 16) {
-		LOG_ERROR("Command 'exec_progbuf' takes 1 to 16 arguments.");
+	if (CMD_ARGC < 1 || CMD_ARGC > 16)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
 
 	struct target *target = get_current_target(CMD_CTX);
 
@@ -5107,6 +5137,36 @@ COMMAND_HANDLER(handle_reserve_trigger)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(handle_riscv_virt2phys_mode)
+{
+	struct riscv_info *info = riscv_info(get_current_target(CMD_CTX));
+	if (CMD_ARGC == 0) {
+		riscv_virt2phys_mode_t mode = info->virt2phys_mode;
+		command_print(CMD, "%s", riscv_virt2phys_mode_to_str(mode));
+		return ERROR_OK;
+	}
+
+	if (CMD_ARGC != 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	// TODO: add auto mode to allow OpenOCD choose translation mode
+	if (!strcmp(CMD_ARGV[0],
+			riscv_virt2phys_mode_to_str(RISCV_VIRT2PHYS_MODE_SW))) {
+		info->virt2phys_mode = RISCV_VIRT2PHYS_MODE_SW;
+	} else if (!strcmp(CMD_ARGV[0],
+			riscv_virt2phys_mode_to_str(RISCV_VIRT2PHYS_MODE_HW))) {
+		info->virt2phys_mode = RISCV_VIRT2PHYS_MODE_HW;
+	} else if (!strcmp(CMD_ARGV[0],
+			riscv_virt2phys_mode_to_str(RISCV_VIRT2PHYS_MODE_OFF))) {
+		info->virt2phys_mode = RISCV_VIRT2PHYS_MODE_OFF;
+	} else {
+		command_print(CMD, "Unsupported address translation mode: %s", CMD_ARGV[0]);
+		return ERROR_COMMAND_ARGUMENT_INVALID;
+	}
+
+	return ERROR_OK;
+}
+
 static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "dump_sample_buf",
@@ -5140,14 +5200,14 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "set_command_timeout_sec",
 		.handler = riscv_set_command_timeout_sec,
 		.mode = COMMAND_ANY,
-		.usage = "[sec]",
+		.usage = "sec",
 		.help = "Set the wall-clock timeout (in seconds) for individual commands"
 	},
 	{
 		.name = "set_reset_timeout_sec",
 		.handler = riscv_set_reset_timeout_sec,
 		.mode = COMMAND_ANY,
-		.usage = "[sec]",
+		.usage = "sec",
 		.help = "DEPRECATED. Use 'riscv set_command_timeout_sec' instead."
 	},
 	{
@@ -5159,19 +5219,10 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 			"of priority. Method can be one of: 'progbuf', 'sysbus' or 'abstract'."
 	},
 	{
-		.name = "set_enable_virtual",
-		.handler = riscv_set_enable_virtual,
-		.mode = COMMAND_ANY,
-		.usage = "on|off",
-		.help = "When on, memory accesses are performed on physical or virtual "
-				"memory depending on the current system configuration. "
-				"When off (default), all memory accessses are performed on physical memory."
-	},
-	{
 		.name = "expose_csrs",
 		.handler = riscv_set_expose_csrs,
 		.mode = COMMAND_CONFIG,
-		.usage = "n0[-m0|=name0][,n1[-m1|=name1]]...",
+		.usage = "n0[-m0|=name0][,n1[-m1|=name1]]...[,n15[-m15|=name15]]",
 		.help = "Configure a list of inclusive ranges for CSRs to expose in "
 				"addition to the standard ones. This must be executed before "
 				"`init`."
@@ -5180,7 +5231,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "expose_custom",
 		.handler = riscv_set_expose_custom,
 		.mode = COMMAND_CONFIG,
-		.usage = "n0[-m0|=name0][,n1[-m1|=name1]]...",
+		.usage = "n0[-m0|=name0][,n1[-m1|=name1]]...[,n15[-m15|=name15]]",
 		.help = "Configure a list of inclusive ranges for custom registers to "
 			"expose. custom0 is accessed as abstract register number 0xc000, "
 			"etc. This must be executed before `init`."
@@ -5265,7 +5316,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "set_ir",
 		.handler = riscv_set_ir,
 		.mode = COMMAND_ANY,
-		.usage = "[idcode|dtmcs|dmi] value",
+		.usage = "idcode|dtmcs|dmi value",
 		.help = "Set IR value for specified JTAG register."
 	},
 	{
@@ -5279,7 +5330,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "set_bscan_tunnel_ir",
 		.handler = riscv_set_bscan_tunnel_ir,
 		.mode = COMMAND_CONFIG,
-		.usage = "value",
+		.usage = "[value]",
 		.help = "Specify the JTAG TAP IR used to access the bscan tunnel. "
 			"By default it is 0x23 << (ir_length - 6), which map some "
 			"Xilinx FPGA (IR USER4)"
@@ -5290,14 +5341,6 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.help = "mask riscv interrupts",
 		.usage = "['off'|'steponly']",
-	},
-	{
-		.name = "set_enable_virt2phys",
-		.handler = riscv_set_enable_virt2phys,
-		.mode = COMMAND_ANY,
-		.usage = "on|off",
-		.help = "When on (default), enable translation from virtual address to "
-			"physical address."
 	},
 	{
 		.name = "set_ebreakm",
@@ -5373,6 +5416,25 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.usage = "[index ('on'|'off')]",
 		.help = "Controls which RISC-V triggers shall not be touched by OpenOCD.",
+	},
+	{
+		.name = "virt2phys_mode",
+		.handler = handle_riscv_virt2phys_mode,
+		.mode = COMMAND_ANY,
+		.usage = "['sw'|'hw'|'off']",
+		.help = "Configure the virtual address translation mode: "
+				"sw - translate vaddr to paddr by manually traversing page tables, "
+				"hw - translate vaddr to paddr by hardware, "
+				"off - no address translation."
+	},
+	{
+		.name = "autofence",
+		.handler = riscv_set_autofence,
+		.mode = COMMAND_ANY,
+		.usage = "[on|off]",
+		.help = "When on (default), OpenOCD will automatically execute fence instructions in some situations. "
+			"When off, users need to take care of memory coherency themselves, for example by using "
+			"`riscv exec_progbuf` to execute fence or CMO instructions."
 	},
 	COMMAND_REGISTRATION_DONE
 };
@@ -5490,6 +5552,8 @@ static void riscv_info_init(struct target *target, struct riscv_info *r)
 
 	r->xlen = -1;
 
+	r->virt2phys_mode = RISCV_VIRT2PHYS_MODE_SW;
+
 	r->isrmask_mode = RISCV_ISRMASK_OFF;
 
 	r->mem_access_methods[0] = RISCV_MEM_ACCESS_PROGBUF;
@@ -5513,6 +5577,8 @@ static void riscv_info_init(struct target *target, struct riscv_info *r)
 	r->wp_allow_equality_match_trigger = true;
 	r->wp_allow_ge_lt_trigger = true;
 	r->wp_allow_napot_trigger = true;
+
+	r->autofence = true;
 }
 
 static int riscv_resume_go_all_harts(struct target *target)
@@ -5599,7 +5665,7 @@ static int riscv_step_rtos_hart(struct target *target)
 bool riscv_supports_extension(const struct target *target, char letter)
 {
 	RISCV_INFO(r);
-	unsigned num;
+	unsigned int num;
 	if (letter >= 'a' && letter <= 'z')
 		num = letter - 'a';
 	else if (letter >= 'A' && letter <= 'Z')
@@ -5609,7 +5675,7 @@ bool riscv_supports_extension(const struct target *target, char letter)
 	return r->misa & BIT(num);
 }
 
-unsigned riscv_xlen(const struct target *target)
+unsigned int riscv_xlen(const struct target *target)
 {
 	RISCV_INFO(r);
 	return r->xlen;

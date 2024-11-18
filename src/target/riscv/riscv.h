@@ -29,6 +29,9 @@ struct riscv_program;
 #define RISCV_HGATP_MODE(xlen)  ((xlen) == 32 ? HGATP32_MODE : HGATP64_MODE)
 #define RISCV_HGATP_PPN(xlen)  ((xlen) == 32 ? HGATP32_PPN : HGATP64_PPN)
 #define RISCV_PGSHIFT 12
+#define RISCV_PGSIZE BIT(RISCV_PGSHIFT)
+#define RISCV_PGBASE(addr) ((addr) & ~(RISCV_PGSIZE - 1))
+#define RISCV_PGOFFSET(addr) ((addr) & (RISCV_PGSIZE - 1))
 
 #define PG_MAX_LEVEL 5
 
@@ -56,6 +59,14 @@ typedef enum riscv_mem_access_method {
 	RISCV_MEM_ACCESS_ABSTRACT,
 	RISCV_MEM_ACCESS_MAX_METHODS_NUM
 } riscv_mem_access_method_t;
+
+typedef enum riscv_virt2phys_mode {
+	RISCV_VIRT2PHYS_MODE_HW,
+	RISCV_VIRT2PHYS_MODE_SW,
+	RISCV_VIRT2PHYS_MODE_OFF
+} riscv_virt2phys_mode_t;
+
+const char *riscv_virt2phys_mode_to_str(riscv_virt2phys_mode_t mode);
 
 enum riscv_halt_reason {
 	RISCV_HALT_INTERRUPT,
@@ -165,6 +176,9 @@ struct riscv_info {
 	 * most recent halt was not caused by a trigger, then this is -1. */
 	int64_t trigger_hit;
 
+	/* The configured approach to translate virtual addresses to physical */
+	riscv_virt2phys_mode_t virt2phys_mode;
+
 	bool triggers_enumerated;
 
 	/* Decremented every scan, and when it reaches 0 we clear the learned
@@ -245,7 +259,7 @@ struct riscv_info {
 	int (*read_memory)(struct target *target, target_addr_t address,
 			uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment);
 
-	unsigned (*data_bits)(struct target *target);
+	unsigned int (*data_bits)(struct target *target);
 
 	COMMAND_HELPER((*print_info), struct target *target);
 
@@ -307,6 +321,8 @@ struct riscv_info {
 	bool wp_allow_equality_match_trigger;
 	bool wp_allow_napot_trigger;
 	bool wp_allow_ge_lt_trigger;
+
+	bool autofence;
 };
 
 COMMAND_HELPER(riscv_print_info_line, const char *section, const char *key,
@@ -320,21 +336,22 @@ typedef struct {
 typedef struct {
 	const char *name;
 	int level;
-	unsigned va_bits;
+	unsigned int va_bits;
 	/* log2(PTESIZE) */
-	unsigned pte_shift;
-	unsigned vpn_shift[PG_MAX_LEVEL];
-	unsigned vpn_mask[PG_MAX_LEVEL];
-	unsigned pte_ppn_shift[PG_MAX_LEVEL];
-	unsigned pte_ppn_mask[PG_MAX_LEVEL];
-	unsigned pa_ppn_shift[PG_MAX_LEVEL];
-	unsigned pa_ppn_mask[PG_MAX_LEVEL];
+	unsigned int pte_shift;
+	unsigned int vpn_shift[PG_MAX_LEVEL];
+	unsigned int vpn_mask[PG_MAX_LEVEL];
+	unsigned int pte_ppn_shift[PG_MAX_LEVEL];
+	unsigned int pte_ppn_mask[PG_MAX_LEVEL];
+	unsigned int pa_ppn_shift[PG_MAX_LEVEL];
+	unsigned int pa_ppn_mask[PG_MAX_LEVEL];
 } virt2phys_info_t;
+
+bool riscv_virt2phys_mode_is_hw(const struct target *target);
+bool riscv_virt2phys_mode_is_sw(const struct target *target);
 
 /* Wall-clock timeout for a command/access. Settable via RISC-V Target commands.*/
 int riscv_get_command_timeout_sec(void);
-
-extern bool riscv_enable_virtual;
 
 /* Everything needs the RISC-V specific info structure, so here's a nice macro
  * that provides that. */
@@ -381,7 +398,7 @@ int riscv_openocd_step(
 bool riscv_supports_extension(const struct target *target, char letter);
 
 /* Returns XLEN for the given (or current) hart. */
-unsigned riscv_xlen(const struct target *target);
+unsigned int riscv_xlen(const struct target *target);
 
 /* Returns VLENB for the given (or current) hart. */
 unsigned int riscv_vlenb(const struct target *target);

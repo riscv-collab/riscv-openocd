@@ -27,3 +27,5 @@ noinst_LTLIBRARIES += %D%/libriscv.la
        %D%/riscv_semihosting.c \
        %D%/debug_defines.c \
        %D%/debug_reg_printer.c
+
+STARTUP_TCL_SRCS += %D%/startup.tcl
