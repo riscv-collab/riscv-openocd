@@ -1,0 +1,14 @@
+proc run_test {} {
+    ocd_connect
+
+    foreach v2p_mode {sw hw off} {
+        ocdtlb_run_expect "riscv virt2phys_mode $v2p_mode"
+        set response [ocdtlb_run_expect "riscv virt2phys_mode"]
+        set driver [ocdtlb_rsp_get $response]
+        ocdtlb_expect_equal $driver $v2p_mode
+    }
+
+    return [ocd_test_pass]
+}
+
+return [run_test]

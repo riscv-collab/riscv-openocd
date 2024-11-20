@@ -1,0 +1,8 @@
+proc run_test {} {
+    set lib_translation_v2p_mode [ocdtlb_test_resource_path lib_translation_v2p_mode.tcl]
+    source $lib_translation_v2p_mode
+
+    return [translation_v2p_mode_test sw]
+}
+
+return [run_test]

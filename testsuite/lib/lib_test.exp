@@ -311,6 +311,7 @@ proc ocdtlb_run_expect {command {expect_op_fail 0}  {extra_timeout ""} } {
     {^riscv +set_ebreak[m,s,u] +[^ ]+} { set parser parse_set_ebreak }
     {^riscv +set_ebreak[m,s,u]$}       { set parser parse_show_ebreak }
     {^riscv +set_enable_virt2phys +[^ ]+} { set parser parse_set_enable_virt2phys }
+    {^riscv +virt2phys_mode( +[^ ]+)?} { set parser parse_virt2phys_mode }
     {^riscv +re_examine$}   { set parser parse_re_examine }
     {^[^ ]+ +debug_reason$} { set parser parse_debug_reason }
     {^target +current$}     { set parser parse_target_current }

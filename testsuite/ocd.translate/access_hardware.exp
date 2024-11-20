@@ -1,0 +1,11 @@
+proc run_test {} {
+    # unsupported yet YCAT-42232
+    return [ocd_test_unsupported]
+
+    set lib_translation_v2p_mode [ocdtlb_test_resource_path lib_translation_v2p_mode.tcl]
+    source $lib_translation_v2p_mode
+
+    return [translation_v2p_mode_test hw]
+}
+
+return [run_test]
