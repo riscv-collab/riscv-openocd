@@ -44,6 +44,7 @@ static bb_value_t dummy_read(void)
 		command_set_output_handler(read_ctxt, dummy_read_output_handler, &tdo);
 		if (command_run_line(read_ctxt, "dummy::get_tdo") != ERROR_OK)
 			tdo = BB_ERROR;
+		command_done(read_ctxt);
 		return tdo;
 	}
 	int data = 1 & dummy_data;
