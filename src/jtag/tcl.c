@@ -35,6 +35,7 @@
 #include <helper/nvp.h>
 #include <helper/time_support.h>
 #include "transport/transport.h"
+#include "drivers/minidriver_imp.h"
 
 /**
  * @file
@@ -112,43 +113,63 @@ static int cmp_scan_fields_on_tap(const void *lhs, const void *rhs)
 		- ((const struct scan_fields_on_tap *)rhs)->tap->abs_chain_position;
 }
 
-static void print_ir_tap_scan(struct command_invocation *cmd,
+static const char *buf_to_hex_str_err_fmt = "Unable to allocate memory for a "
+	"hexadecimal string represantation of %u-bit long buffer.";
+
+static int print_ir_tap_scan(struct command_invocation *cmd,
 		const struct scan_fields_on_tap *tap_field, const char *separator)
 {
 	assert(tap_field->num_fields == 1);
-	command_print_sameline(cmd, "%s %s%s",
-			jtag_tap_name(tap_field->tap),
-			buf_to_hex_str(tap_field->fields->in_value,
-				tap_field->fields->num_bits),
-			separator);
+	const unsigned int num_bits = tap_field->fields->num_bits;
+	char * const in_str = buf_to_hex_str(tap_field->fields->in_value, num_bits);
+	if (!in_str) {
+		command_print(cmd, buf_to_hex_str_err_fmt, num_bits);
+		return ERROR_FAIL;
+	}
+	command_print_sameline(cmd, "%s %s%s", jtag_tap_name(tap_field->tap),
+			in_str, separator);
+	free(in_str);
+	return ERROR_OK;
 }
 
-static void print_dr_tap_scan(struct command_invocation *cmd,
+static int print_dr_tap_scan(struct command_invocation *cmd,
 		const struct scan_fields_on_tap *tap_field, const char *separator)
 {
 	command_print_sameline(cmd, "%s ",
 			jtag_tap_name(tap_field->tap));
 	const char *field_separator = "";
 	for (size_t i = 0; i < tap_field->num_fields; ++i) {
-		command_print_sameline(cmd, "%s%s",
-				field_separator,
-				buf_to_hex_str(tap_field->fields[i].in_value,
-					tap_field->fields[i].num_bits));
+		const unsigned int num_bits = tap_field->fields[i].num_bits;
+		char * const in_str = buf_to_hex_str(tap_field->fields[i].in_value,
+				num_bits);
+		if (!in_str) {
+			command_print(cmd, buf_to_hex_str_err_fmt, num_bits);
+			return ERROR_FAIL;
+		}
+		command_print_sameline(cmd, "%s%s", field_separator, in_str);
+		free(in_str);
 		field_separator = " ";
 	}
 	command_print_sameline(cmd, "%s", separator);
+	return ERROR_OK;
 }
 
-static void print_scans(jtag_callback_data_t arg_info)
+static int print_scans(jtag_callback_data_t arg_info, jtag_callback_data_t arg2,
+		jtag_callback_data_t arg3, jtag_callback_data_t arg4)
 {
 	const struct scan_print_info * const info =
 		(const struct scan_print_info *)arg_info;
 	command_print_sameline(info->cmd, "%s ", info->ir_scan ? "IR" : "DR");
 	assert(info->n_active_taps > 0);
 	const unsigned int last_i = info->n_active_taps - 1;
-	for (unsigned int i = 0; i < last_i; ++i)
-		(info->ir_scan ? print_ir_tap_scan : print_dr_tap_scan)(info->cmd, &info->tap_scans[i], " ");
-	(info->ir_scan ? print_ir_tap_scan : print_dr_tap_scan)(info->cmd, &info->tap_scans[last_i], "\n");
+	for (unsigned int i = 0; i < last_i; ++i) {
+		int res = (info->ir_scan ? print_ir_tap_scan : print_dr_tap_scan)
+			(info->cmd, &info->tap_scans[i], " ");
+		if (res != ERROR_OK)
+			return res;
+	}
+	return (info->ir_scan ? print_ir_tap_scan : print_dr_tap_scan)(info->cmd,
+			&info->tap_scans[last_i], "\n");
 }
 
 static COMMAND_HELPER(parse_ir_scan_fields_on_tap, unsigned int *cur_arg_p,
@@ -341,7 +362,7 @@ exit:
 	print_info->ir_scan = ir_scan,
 	print_info->n_active_taps = n_active_taps,
 	print_info->tap_scans = tap_fields,
-	jtag_add_callback(print_scans, (jtag_callback_data_t)print_info);
+	jtag_add_callback4(print_scans, (jtag_callback_data_t)print_info, 0, 0, 0);
 
 	*cur_arg_p = cur_arg;
 	return ERROR_OK;
