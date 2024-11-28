@@ -4,7 +4,7 @@
   "riscv-isa-sim": "riscv-isa-sim/[*, include_prerelease=True]@sc/main",
   "external_openocd_tests": "external_openocd_tests/[*, include_prerelease=True]@sc/main",
   "dejagnu": "dejagnu/[*, include_prerelease=True]@sc/main",
-  "openocd_source_deps": "openocd_source_deps/0.0.1-rc.0.297+sc.sc-dt.2024.10@sc/main",
+  "openocd_source_deps": "openocd_source_deps/0.0.1-rc.0.302+sc.sc-dt.2024.11@sc/main",
   "jansson": "jansson/2.14#42fc601d5b8e236e050e48f2321ef851",
   "libudev": "libudev/system#86e335f85cbb299d6c9fc6260b3f1b0b",
   "libusb": "libusb/1.0.26#c0c00750b383839aa140a0be628d552c",
