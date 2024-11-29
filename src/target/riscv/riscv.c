@@ -648,12 +648,12 @@ static int find_first_trigger_by_id(struct target *target, int unique_id)
 
 static unsigned int count_trailing_ones(riscv_reg_t reg)
 {
-	assert(sizeof(riscv_reg_t) * 8 == 64);
-	for (unsigned int i = 0; i < 64; i++) {
+	const unsigned int riscv_reg_bits = sizeof(riscv_reg_t) * CHAR_BIT;
+	for (unsigned int i = 0; i < riscv_reg_bits; i++) {
 		if ((1 & (reg >> i)) == 0)
 			return i;
 	}
-	return 64;
+	return riscv_reg_bits;
 }
 
 static int set_trigger(struct target *target, unsigned int idx, riscv_reg_t tdata1, riscv_reg_t tdata2)
@@ -1586,21 +1586,75 @@ int riscv_remove_watchpoint(struct target *target,
 	return ERROR_OK;
 }
 
+typedef enum {
+	M6_HIT_ERROR,
+	M6_HIT_NOT_SUPPORTED,
+	M6_NOT_HIT,
+	M6_HIT_BEFORE,
+	M6_HIT_AFTER,
+	M6_HIT_IMM_AFTER
+} mctrl6hitstatus;
+
+static mctrl6hitstatus check_mcontrol6_hit_status(struct target *target,
+		riscv_reg_t tdata1, uint64_t hit_mask)
+{
+	const uint32_t hit0 = get_field(tdata1, CSR_MCONTROL6_HIT0);
+	const uint32_t hit1 = get_field(tdata1, CSR_MCONTROL6_HIT1);
+	const uint32_t hit_info = (hit1 << 1) | hit0;
+	if (hit_info == CSR_MCONTROL6_HIT0_BEFORE)
+		return M6_HIT_BEFORE;
+
+	if (hit_info == CSR_MCONTROL6_HIT0_AFTER)
+		return M6_HIT_AFTER;
+
+	if (hit_info == CSR_MCONTROL6_HIT0_IMMEDIATELY_AFTER)
+		return M6_HIT_IMM_AFTER;
+
+	if (hit_info == CSR_MCONTROL6_HIT0_FALSE) {
+		/* hit[1..0] equals 0, which can mean one of the following:
+		 * - "hit" bits are supported and this trigger has not fired
+		 * - "hit" bits are not supported on this trigger
+		 * To distinguish these two cases, try writing all non-zero bit
+		 * patterns to hit[1..0] to determine if the "hit" bits are supported:
+		 */
+		riscv_reg_t tdata1_tests[] = {
+			set_field(tdata1, CSR_MCONTROL6_HIT0, 1),
+			set_field(tdata1, CSR_MCONTROL6_HIT1, 1),
+			set_field(tdata1, CSR_MCONTROL6_HIT0, 1) | field_value(CSR_MCONTROL6_HIT1, 1)
+		};
+		riscv_reg_t tdata1_test_rb;
+		for (uint64_t i = 0; i < ARRAY_SIZE(tdata1_tests); ++i) {
+			if (riscv_reg_set(target, GDB_REGNO_TDATA1, tdata1_tests[i]) != ERROR_OK)
+				return M6_HIT_ERROR;
+			if (riscv_reg_get(target, &tdata1_test_rb, GDB_REGNO_TDATA1) != ERROR_OK)
+				return M6_HIT_ERROR;
+			if (tdata1_test_rb == tdata1_tests[i]) {
+				if (riscv_reg_set(target, GDB_REGNO_TDATA1, tdata1_test_rb & ~hit_mask) != ERROR_OK)
+					return M6_HIT_ERROR;
+				return M6_NOT_HIT;
+			}
+		}
+	}
+	return M6_HIT_NOT_SUPPORTED;
+}
+
 /**
  * Look at the trigger hit bits to find out which trigger is the reason we're
  * halted.  Sets *unique_id to the unique ID of that trigger. If *unique_id is
  * RISCV_TRIGGER_HIT_NOT_FOUND, no match was found.
  */
 
-static int riscv_trigger_detect_hit_bits(struct target *target, int64_t *unique_id)
+static int riscv_trigger_detect_hit_bits(struct target *target, int64_t *unique_id,
+		bool *need_single_step)
 {
 	/* FIXME: this function assumes that we have only one trigger that can
 	 * have hit bit set. Debug spec allows hit bit to bit set if a trigger has
 	 * matched but did not fire. Such targets will receive erroneous results.
 	 */
 
-	// FIXME: Add hit bits support detection and caching
 	RISCV_INFO(r);
+	assert(need_single_step);
+	*need_single_step = false;
 
 	riscv_reg_t tselect;
 	if (riscv_reg_get(target, &tselect, GDB_REGNO_TSELECT) != ERROR_OK)
@@ -1626,9 +1680,21 @@ static int riscv_trigger_detect_hit_bits(struct target *target, int64_t *unique_
 				break;
 			case CSR_TDATA1_TYPE_MCONTROL:
 				hit_mask = CSR_MCONTROL_HIT;
+				*need_single_step = true;
 				break;
 			case CSR_TDATA1_TYPE_MCONTROL6:
 				hit_mask = CSR_MCONTROL6_HIT0 | CSR_MCONTROL6_HIT1;
+				if (r->tinfo_version == CSR_TINFO_VERSION_0) {
+					*need_single_step = true;
+				} else if (r->tinfo_version == RISCV_TINFO_VERSION_UNKNOWN
+					|| r->tinfo_version == CSR_TINFO_VERSION_1) {
+					mctrl6hitstatus hits_status = check_mcontrol6_hit_status(target,
+								tdata1, hit_mask);
+					if (hits_status == M6_HIT_ERROR)
+						return ERROR_FAIL;
+					if (hits_status == M6_HIT_BEFORE || hits_status == M6_HIT_NOT_SUPPORTED)
+						*need_single_step = true;
+				}
 				break;
 			case CSR_TDATA1_TYPE_ICOUNT:
 				hit_mask = CSR_ICOUNT_HIT;
@@ -1647,8 +1713,9 @@ static int riscv_trigger_detect_hit_bits(struct target *target, int64_t *unique_
 		/* FIXME: this logic needs to be changed to ignore triggers that are not
 		 * the last one in the chain. */
 		if (tdata1 & hit_mask) {
-			LOG_TARGET_DEBUG(target, "Trigger %u (unique_id=%" PRIi64 ") has hit bit set.",
-				i, r->trigger_unique_id[i]);
+			LOG_TARGET_DEBUG(target, "Trigger %u (unique_id=%" PRIi64
+			") has hit bit set. (need_single_step=%s)",
+				i, r->trigger_unique_id[i], (*need_single_step) ? "yes" : "no");
 			if (riscv_reg_set(target, GDB_REGNO_TDATA1, tdata1 & ~hit_mask) != ERROR_OK)
 				return ERROR_FAIL;
 
@@ -2310,13 +2377,15 @@ static int set_debug_reason(struct target *target, enum riscv_halt_reason halt_r
 {
 	RISCV_INFO(r);
 	r->trigger_hit = -1;
+	r->need_single_step = false;
 	switch (halt_reason) {
 		case RISCV_HALT_EBREAK:
 			target->debug_reason = DBG_REASON_BREAKPOINT;
 			break;
 		case RISCV_HALT_TRIGGER:
 			target->debug_reason = DBG_REASON_UNDEFINED;
-			if (riscv_trigger_detect_hit_bits(target, &r->trigger_hit) != ERROR_OK)
+			if (riscv_trigger_detect_hit_bits(target, &r->trigger_hit,
+					&r->need_single_step) != ERROR_OK)
 				return ERROR_FAIL;
 			// FIXME: handle multiple hit bits
 			if (r->trigger_hit != RISCV_TRIGGER_HIT_NOT_FOUND) {
@@ -2578,10 +2647,19 @@ static int resume_prep(struct target *target, int current,
 	if (handle_breakpoints) {
 		/* To be able to run off a trigger, we perform a step operation and then
 		 * resume. If handle_breakpoints is true then step temporarily disables
-		 * pending breakpoints so we can safely perform the step. */
-		if (old_or_new_riscv_step_impl(target, current, address, handle_breakpoints,
-				false /* callbacks are not called */) != ERROR_OK)
-			return ERROR_FAIL;
+		 * pending breakpoints so we can safely perform the step.
+		 *
+		 * Two cases where single step is needed before resuming:
+		 * 1. ebreak used in software breakpoint;
+		 * 2. a trigger that is taken just before the instruction that triggered it is retired.
+		 */
+		if (target->debug_reason == DBG_REASON_BREAKPOINT
+		    || (target->debug_reason == DBG_REASON_WATCHPOINT
+			&& r->need_single_step)) {
+			if (old_or_new_riscv_step_impl(target, current, address, handle_breakpoints,
+					false /* callbacks are not called */) != ERROR_OK)
+				return ERROR_FAIL;
+		}
 	}
 
 	if (r->get_hart_state) {
@@ -4009,74 +4087,100 @@ COMMAND_HANDLER(riscv_set_mem_access)
 	return ERROR_OK;
 }
 
-static int parse_ranges(struct list_head *ranges, const char *tcl_arg, const char *reg_type, unsigned int max_val)
-{
-	char *args = strdup(tcl_arg);
-	if (!args)
-		return ERROR_FAIL;
 
-	/* For backward compatibility, allow multiple parameters within one TCL argument, separated by ',' */
-	char *arg = strtok(args, ",");
-	while (arg) {
+static bool parse_csr_address(const char *reg_address_str, unsigned int *reg_addr)
+{
+	*reg_addr = -1;
+	/* skip initial spaces */
+	while (isspace(reg_address_str[0]))
+		++reg_address_str;
+	/* try to detect if string starts with 0x or 0X */
+	bool is_hex_address = strncmp(reg_address_str, "0x", 2) == 0 ||
+		strncmp(reg_address_str, "0X", 2) == 0;
+
+	unsigned int scanned_chars;
+	if (is_hex_address) {
+		reg_address_str += 2;
+		if (sscanf(reg_address_str, "%x%n", reg_addr, &scanned_chars) != 1)
+			return false;
+	} else {
+		/* If we are here and register address string starts with zero, this is
+		 * an indication that most likely user has an incorrect input because:
+		 * - decimal numbers typically do not start with "0"
+		 * - octals are not supported by our interface
+		 * - hexadecimal numbers should have "0x" prefix
+		 * Thus such input is rejected. */
+		if (reg_address_str[0] == '0' && strlen(reg_address_str) > 1)
+			return false;
+		if (sscanf(reg_address_str, "%u%n", reg_addr, &scanned_chars) != 1)
+			return false;
+	}
+	return scanned_chars == strlen(reg_address_str);
+}
+
+static int parse_reg_ranges_impl(struct list_head *ranges, char *args,
+		const char *reg_type, unsigned int max_val, char ** const name_buffer)
+{
+	/* For backward compatibility, allow multiple parameters within one TCL
+	 * argument, separated by ',' */
+	for (char *arg = strtok(args, ","); arg; arg = strtok(NULL, ",")) {
 		unsigned int low = 0;
 		unsigned int high = 0;
 		char *name = NULL;
 
 		char *dash = strchr(arg, '-');
 		char *equals = strchr(arg, '=');
-		unsigned int pos;
 
 		if (!dash && !equals) {
 			/* Expecting single register number. */
-			if (sscanf(arg, "%u%n", &low, &pos) != 1 || pos != strlen(arg)) {
+			if (!parse_csr_address(arg, &low)) {
 				LOG_ERROR("Failed to parse single register number from '%s'.", arg);
-				free(args);
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
 		} else if (dash && !equals) {
 			/* Expecting register range - two numbers separated by a dash: ##-## */
-			*dash = 0;
-			dash++;
-			if (sscanf(arg, "%u%n", &low, &pos) != 1 || pos != strlen(arg)) {
-				LOG_ERROR("Failed to parse single register number from '%s'.", arg);
-				free(args);
+			*dash = '\0';
+			if (!parse_csr_address(arg, &low)) {
+				LOG_ERROR("Failed to parse '%s' - not a valid decimal or hexadecimal number.",
+					arg);
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
-			if (sscanf(dash, "%u%n", &high, &pos) != 1 || pos != strlen(dash)) {
-				LOG_ERROR("Failed to parse single register number from '%s'.", dash);
-				free(args);
+			const char *high_num_in = dash + 1;
+			if (!parse_csr_address(high_num_in, &high)) {
+				LOG_ERROR("Failed to parse '%s' - not a valid decimal or hexadecimal number.",
+					high_num_in);
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
 			if (high < low) {
 				LOG_ERROR("Incorrect range encountered [%u, %u].", low, high);
-				free(args);
 				return ERROR_FAIL;
 			}
 		} else if (!dash && equals) {
 			/* Expecting single register number with textual name specified: ##=name */
-			*equals = 0;
-			equals++;
-			if (sscanf(arg, "%u%n", &low, &pos) != 1 || pos != strlen(arg)) {
-				LOG_ERROR("Failed to parse single register number from '%s'.", arg);
-				free(args);
+			*equals = '\0';
+			if (!parse_csr_address(arg, &low)) {
+				LOG_ERROR("Failed to parse '%s' - not a valid decimal or hexadecimal number.",
+					arg);
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
 
-			name = calloc(1, strlen(equals) + strlen(reg_type) + 2);
+			const char * const reg_name_in = equals + 1;
+			const size_t reg_type_len = strlen(reg_type);
+			/* format is: <reg_type>_<reg_name_in>\0 */
+			*name_buffer = calloc(1, strlen(reg_name_in) + reg_type_len + 2);
+			name = *name_buffer;
 			if (!name) {
-				LOG_ERROR("Failed to allocate register name.");
-				free(args);
+				LOG_ERROR("Out of memory");
 				return ERROR_FAIL;
 			}
-
-			/* Register prefix: "csr_" or "custom_" */
 			strcpy(name, reg_type);
-			name[strlen(reg_type)] = '_';
+			name[reg_type_len] = '_';
 
-			if (sscanf(equals, "%[_a-zA-Z0-9]%n", name + strlen(reg_type) + 1, &pos) != 1 || pos != strlen(equals)) {
-				LOG_ERROR("Failed to parse register name from '%s'.", equals);
-				free(args);
-				free(name);
+			unsigned int scanned_chars;
+			char *scan_dst = name + strlen(reg_type) + 1;
+			if (sscanf(reg_name_in, "%[_a-zA-Z0-9]%n", scan_dst, &scanned_chars) != 1 ||
+				scanned_chars != strlen(reg_name_in)) {
+				LOG_ERROR("Invalid characters in register name '%s'.", reg_name_in);
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
 		} else {
@@ -4088,9 +4192,8 @@ static int parse_ranges(struct list_head *ranges, const char *tcl_arg, const cha
 		high = MAX(high, low);
 
 		if (high > max_val) {
-			LOG_ERROR("Cannot expose %s register number %u, maximum allowed value is %u.", reg_type, high, max_val);
-			free(name);
-			free(args);
+			LOG_ERROR("Cannot expose %s register number 0x%x, maximum allowed value is 0x%x.",
+				reg_type, high, max_val);
 			return ERROR_FAIL;
 		}
 
@@ -4108,30 +4211,40 @@ static int parse_ranges(struct list_head *ranges, const char *tcl_arg, const cha
 
 			if (entry->name && name && (strcasecmp(entry->name, name) == 0)) {
 				LOG_ERROR("Duplicate register name \"%s\" found.", name);
-				free(name);
-				free(args);
 				return ERROR_FAIL;
 			}
 		}
 
 		range_list_t *range = calloc(1, sizeof(range_list_t));
 		if (!range) {
-			LOG_ERROR("Failed to allocate range list.");
-			free(name);
-			free(args);
+			LOG_ERROR("Out of memory");
 			return ERROR_FAIL;
 		}
 
 		range->low = low;
 		range->high = high;
 		range->name = name;
+		/* ownership over name_buffer contents is transferred to list item here */
+		*name_buffer = NULL;
 		list_add(&range->list, ranges);
-
-		arg = strtok(NULL, ",");
 	}
 
-	free(args);
 	return ERROR_OK;
+}
+
+static int parse_reg_ranges(struct list_head *ranges, const char *tcl_arg,
+		const char *reg_type, unsigned int max_val)
+{
+	char *args = strdup(tcl_arg);
+	if (!args) {
+		LOG_ERROR("Out of memory");
+		return ERROR_FAIL;
+	}
+	char *name_buffer = NULL;
+	int result = parse_reg_ranges_impl(ranges, args, reg_type, max_val, &name_buffer);
+	free(name_buffer);
+	free(args);
+	return result;
 }
 
 COMMAND_HANDLER(riscv_set_expose_csrs)
@@ -4144,7 +4257,7 @@ COMMAND_HANDLER(riscv_set_expose_csrs)
 	int ret = ERROR_OK;
 
 	for (unsigned int i = 0; i < CMD_ARGC; i++) {
-		ret = parse_ranges(&info->expose_csr, CMD_ARGV[i], "csr", 0xfff);
+		ret = parse_reg_ranges(&info->expose_csr, CMD_ARGV[i], "csr", 0xfff);
 		if (ret != ERROR_OK)
 			break;
 	}
@@ -4162,7 +4275,7 @@ COMMAND_HANDLER(riscv_set_expose_custom)
 	int ret = ERROR_OK;
 
 	for (unsigned int i = 0; i < CMD_ARGC; i++) {
-		ret = parse_ranges(&info->expose_custom, CMD_ARGV[i], "custom", 0x3fff);
+		ret = parse_reg_ranges(&info->expose_custom, CMD_ARGV[i], "custom", 0x3fff);
 		if (ret != ERROR_OK)
 			break;
 	}
@@ -4180,7 +4293,7 @@ COMMAND_HANDLER(riscv_hide_csrs)
 	int ret = ERROR_OK;
 
 	for (unsigned int i = 0; i < CMD_ARGC; i++) {
-		ret = parse_ranges(&info->hide_csr, CMD_ARGV[i], "csr", 0xfff);
+		ret = parse_reg_ranges(&info->hide_csr, CMD_ARGV[i], "csr", 0xfff);
 		if (ret != ERROR_OK)
 			break;
 	}
@@ -5867,6 +5980,19 @@ int riscv_enumerate_triggers(struct target *target)
 		free(r->reserved_triggers);
 		r->reserved_triggers = NULL;
 		return ERROR_OK;
+	}
+
+	/* Obtaining tinfo.version value once.
+	 * No need to enumerate per-trigger.
+	 * See https://github.com/riscv/riscv-debug-spec/pull/1081.
+	 */
+	riscv_reg_t tinfo;
+	if (riscv_reg_get(target, &tinfo, GDB_REGNO_TINFO) == ERROR_OK) {
+		r->tinfo_version = get_field(tinfo, CSR_TINFO_VERSION);
+		LOG_TARGET_DEBUG(target, "Trigger tinfo.version = %d.", r->tinfo_version);
+	} else {
+		r->tinfo_version = RISCV_TINFO_VERSION_UNKNOWN;
+		LOG_TARGET_DEBUG(target, "Trigger tinfo.version is unknown.");
 	}
 
 	unsigned int t = 0;
