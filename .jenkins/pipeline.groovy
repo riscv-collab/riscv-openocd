@@ -257,11 +257,12 @@ workflow('openocd') {
             fs('1.0Gi', '1.0Gi')
         }
         matrix {
-            [["image": ['cpp_ubuntu_20']]]
+            [[image          : ['cpp_ubuntu_20'],
+              env            : ['', 'CC=clang CFLAGS=-fsanitize=address,undefined LDFLAGS=-Wl,-ldl']]]
         }
         script { vars ->
             def buildDir = "build/tests_on_dummy_Build"
-            sh("./make.py sh .makepy/support/utils/run_tests_on_dummy.sh 4 ${buildDir}")
+            sh("./make.py sh env ${vars.env} .makepy/support/utils/run_tests_on_dummy.sh 4 ${buildDir}")
         }
     }
 
