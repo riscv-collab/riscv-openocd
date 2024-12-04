@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #ifdef HAVE_CONFIG_H
@@ -27,6 +28,8 @@
 #include "debug_defines.h"
 #include <helper/bits.h>
 #include "field_helpers.h"
+#include "jtag/drivers/riscv_dtm/dtm.h"
+#include "jtag/riscv_socket_dmi.h"
 
 /*** JTAG registers. ***/
 
@@ -413,8 +416,18 @@ static int dtmcs_scan_via_bscan(struct jtag_tap *tap, uint32_t out, uint32_t *in
 }
 
 /* TODO: rename "dtmcontrol"-> "dtmcs" */
-int dtmcs_scan(struct jtag_tap *tap, uint32_t out, uint32_t *in_ptr)
+int dtmcs_scan(struct jtag_tap *tap, uint32_t out, uint32_t *in_ptr, bool is_jtag)
 {
+	if (!is_jtag){
+		dtm_driver_t *driver = get_active_dtm_driver();
+		// uint32_t dtmcontrol_dmi_address = riscv_get_dmi_address(target, DTMCONTROL);
+		if (socket_dtmcontrol_read_dmi(driver, in_ptr) != ERROR_OK) {
+			LOG_ERROR("Could not read dtmcontrol");
+			return ERROR_FAIL;
+		}
+		return ERROR_OK;
+	}
+
 	uint8_t value[4];
 
 	if (bscan_tunnel_ir_width != 0)
@@ -452,6 +465,33 @@ int dtmcs_scan(struct jtag_tap *tap, uint32_t out, uint32_t *in_ptr)
 	}
 	return ERROR_OK;
 }
+
+
+int dtmcontrol_write(struct target *target, uint32_t out, uint32_t *in_ptr)
+{
+	dtm_driver_t *driver = get_active_dtm_driver();
+    if (!driver) {
+        LOG_ERROR("No active DTM driver.");
+        return ERROR_FAIL;
+    }
+
+    uint32_t dtmcontrol_dmi_address = riscv_get_dmi_address(target, DTMCONTROL);
+
+    if (socket_dmi_write_dmi(driver, dtmcontrol_dmi_address, out) != ERROR_OK) {
+        LOG_ERROR("Failed to write to DTMCONTROL through socket.");
+        return ERROR_FAIL;
+    }
+
+    if (in_ptr) {
+		if (socket_dmi_read_dmi(driver, in_ptr, dtmcontrol_dmi_address) != ERROR_OK) {
+			LOG_ERROR("Failed to read back DTMCONTROL through socket.");
+			return ERROR_FAIL;
+		}
+    }
+
+    return ERROR_OK;
+}
+
 
 static struct target_type *get_target_type(struct target *target)
 {
@@ -668,29 +708,30 @@ static int riscv_init_target(struct command_context *cmd_ctx,
 	info->cmd_ctx = cmd_ctx;
 	info->reset_delays_wait = -1;
 
-	select_dtmcontrol.num_bits = target->tap->ir_length;
-	select_dbus.num_bits = target->tap->ir_length;
-	select_idcode.num_bits = target->tap->ir_length;
+	if (IS_TARGET_JTAG(target->type->name)) {
+		select_dtmcontrol.num_bits = target->tap->ir_length;
+		select_dbus.num_bits = target->tap->ir_length;
+		select_idcode.num_bits = target->tap->ir_length;
 
-	if (bscan_tunnel_ir_width != 0) {
-		uint32_t ir_user4_raw = bscan_tunnel_ir_id;
-		/* Provide a default value which target some Xilinx FPGA USER4 IR */
-		if (ir_user4_raw == 0) {
-			assert(target->tap->ir_length >= 6);
-			ir_user4_raw = 0x23 << (target->tap->ir_length - 6);
+		if (bscan_tunnel_ir_width != 0) {
+			uint32_t ir_user4_raw = bscan_tunnel_ir_id;
+			/* Provide a default value which target some Xilinx FPGA USER4 IR */
+			if (ir_user4_raw == 0) {
+				assert(target->tap->ir_length >= 6);
+				ir_user4_raw = 0x23 << (target->tap->ir_length - 6);
+			}
+			h_u32_to_le(ir_user4, ir_user4_raw);
+			select_user4.num_bits = target->tap->ir_length;
+			if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER)
+				bscan_tunnel_data_register_select_dmi[1].num_bits = bscan_tunnel_ir_width;
+			else /* BSCAN_TUNNEL_NESTED_TAP */
+				bscan_tunnel_nested_tap_select_dmi[2].num_bits = bscan_tunnel_ir_width;
 		}
-		h_u32_to_le(ir_user4, ir_user4_raw);
-		select_user4.num_bits = target->tap->ir_length;
-		if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER)
-			bscan_tunnel_data_register_select_dmi[1].num_bits = bscan_tunnel_ir_width;
-		else /* BSCAN_TUNNEL_NESTED_TAP */
-			bscan_tunnel_nested_tap_select_dmi[2].num_bits = bscan_tunnel_ir_width;
 	}
 
 	riscv_semihosting_init(target);
 
 	target->debug_reason = DBG_REASON_DBGRQ;
-
 	return ERROR_OK;
 }
 
@@ -2481,7 +2522,8 @@ static int riscv_examine(struct target *target)
 
 	RISCV_INFO(info);
 	uint32_t dtmcontrol;
-	if (dtmcs_scan(target->tap, 0, &dtmcontrol) != ERROR_OK || dtmcontrol == 0) {
+	bool is_jtag = 	IS_TARGET_JTAG(target->type->name);
+	if (dtmcs_scan(target->tap, 0, &dtmcontrol, is_jtag) != ERROR_OK || dtmcontrol == 0) {
 		LOG_TARGET_ERROR(target, "Could not read dtmcontrol. Check JTAG connectivity/board power.");
 		return ERROR_FAIL;
 	}

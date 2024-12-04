@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <stdint.h>
+#include <string.h>
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -9,6 +11,8 @@
 #include "debug_reg_printer.h"
 #include "riscv.h"
 #include "field_helpers.h"
+#include "target/target_type.h"
+#include "jtag/core_communicator_wrapper.h"
 
 // TODO: DTM_DMI_MAX_ADDRESS_LENGTH should be reduced to 32 (per the debug spec)
 #define DTM_DMI_MAX_ADDRESS_LENGTH	((1<<DTM_DTMCS_ABITS_LENGTH)-1)
@@ -138,7 +142,9 @@ static void add_idle_before_batch(const struct riscv_batch *batch, size_t start_
 	const unsigned int idle_change = new_delay - batch->last_scan_delay;
 	LOG_TARGET_DEBUG(batch->target, "Adding %u idle cycles before the batch.",
 			idle_change);
-	jtag_add_runtest(idle_change, TAP_IDLE);
+	assert(idle_change <= INT_MAX);
+	// TODO: get rid of the JTAG dependency here
+	wrapper_add_runtest(idle_change, TAP_IDLE);
 }
 
 static unsigned int get_delay(const struct riscv_batch *batch, size_t scan_idx,
@@ -297,19 +303,21 @@ int riscv_batch_run_from(struct riscv_batch *batch, size_t start_idx,
 			riscv_add_bscan_tunneled_scan(batch->target->tap, batch->fields + i,
 							batch->bscan_ctxt + i);
 		else
-			jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
+			wrapper_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
 
 		delay = get_delay(batch, i, delays, resets_delays,
 				reset_delays_after);
 		if (delay > 0)
-			jtag_add_runtest(delay, TAP_IDLE);
+			wrapper_add_runtest(delay, TAP_IDLE);
 	}
 
 	keep_alive();
 
-	if (jtag_execute_queue() != ERROR_OK) {
-		LOG_TARGET_ERROR(batch->target, "Unable to execute JTAG queue");
-		return ERROR_FAIL;
+	if (strcmp(batch->target->type->name, "riscv") != 0) {	
+		if (wrapper_execute_queue() != ERROR_OK) {
+			LOG_TARGET_ERROR(batch->target, "Unable to execute JTAG queue");
+			return ERROR_FAIL;
+		}
 	}
 
 	keep_alive();
@@ -322,7 +330,9 @@ int riscv_batch_run_from(struct riscv_batch *batch, size_t start_idx,
 		}
 	}
 
-	log_batch(batch, start_idx, delays, resets_delays, reset_delays_after);
+	if (strcmp(batch->target->type->name, "riscv") != 0) {	
+		log_batch(batch, start_idx, delays, resets_delays, reset_delays_after);
+	}
 	batch->was_run = true;
 	batch->last_scan_delay = delay;
 	return ERROR_OK;

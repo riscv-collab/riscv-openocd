@@ -122,7 +122,7 @@ static inline int riscv_scan_increase_delay(struct riscv_scan_delays *delays,
 
 /* A batch of multiple JTAG scans, which are grouped together to avoid the
  * overhead of some JTAG adapters when sending single commands.  This is
- * designed to support block copies, as that's what we actually need to go
+ * designed to support block copies, as that's what we actually need to do
  * fast. */
 struct riscv_batch {
 	struct target *target;

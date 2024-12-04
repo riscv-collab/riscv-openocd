@@ -17,6 +17,8 @@ include %D%/drivers/Makefile.am
 	%D%/adapter.h \
 	%D%/commands.c \
 	%D%/core.c \
+	%D%/riscv_socket_dmi.c \
+	%D%/core_communicator_wrapper.c \
 	%D%/interface.c \
 	%D%/interfaces.c \
 	%D%/tcl.c \
@@ -26,6 +28,8 @@ include %D%/drivers/Makefile.am
 	%D%/interfaces.h \
 	%D%/minidriver.h \
 	%D%/jtag.h \
+	%D%/riscv_socket_dmi.h \
+	%D%/core_communicator_wrapper.h \
 	%D%/swd.h \
 	%D%/swim.h \
 	%D%/tcl.h

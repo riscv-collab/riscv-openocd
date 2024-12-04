@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -335,7 +336,8 @@ static void increase_dbus_busy_delay(struct target *target)
 			info->dtmcontrol_idle, info->dbus_busy_delay,
 			info->interrupt_high_delay);
 
-	dtmcs_scan(target->tap, DTMCONTROL_DBUS_RESET, NULL /* discard value */);
+	bool is_jtag = strcmp(target->type->name, "riscv") == 0;
+	dtmcs_scan(target->tap, DTMCONTROL_DBUS_RESET, NULL /* discard value */, is_jtag);
 }
 
 static void increase_interrupt_high_delay(struct target *target)
@@ -1488,7 +1490,8 @@ static int examine(struct target *target)
 {
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 	uint32_t dtmcontrol;
-	if (dtmcs_scan(target->tap, 0, &dtmcontrol) != ERROR_OK || dtmcontrol == 0) {
+	bool is_jtag = (strcmp(target->type->name, "riscv") == 0);
+	if (dtmcs_scan(target->tap, 0, &dtmcontrol, is_jtag) != ERROR_OK || dtmcontrol == 0) {
 		LOG_ERROR("Could not scan dtmcontrol. Check JTAG connectivity/board power.");
 		return ERROR_FAIL;
 	}

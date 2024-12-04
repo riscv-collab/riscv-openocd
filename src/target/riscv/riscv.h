@@ -32,6 +32,8 @@ struct riscv_program;
 #define RISCV_PGSIZE BIT(RISCV_PGSHIFT)
 #define RISCV_PGBASE(addr) ((addr) & ~(RISCV_PGSIZE - 1))
 #define RISCV_PGOFFSET(addr) ((addr) & (RISCV_PGSIZE - 1))
+#define IS_TARGET_JTAG(name) \
+	(strcmp(name, "riscv") != 0)
 
 #define PG_MAX_LEVEL 5
 
@@ -434,7 +436,7 @@ extern struct scan_field select_dtmcontrol;
 extern struct scan_field select_dbus;
 extern struct scan_field select_idcode;
 
-int dtmcs_scan(struct jtag_tap *tap, uint32_t out, uint32_t *in_ptr);
+int dtmcs_scan(struct jtag_tap *tap, uint32_t out, uint32_t *in_ptr, bool is_jtag);
 
 extern struct scan_field *bscan_tunneled_select_dmi;
 extern uint32_t bscan_tunneled_select_dmi_num_fields;
@@ -502,5 +504,7 @@ void riscv_add_bscan_tunneled_scan(struct jtag_tap *tap, const struct scan_field
 
 int riscv_read_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer);
 int riscv_write_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer);
+
+int dtmcontrol_write(struct target *target, uint32_t out, uint32_t *in_ptr);
 
 #endif /* OPENOCD_TARGET_RISCV_RISCV_H */

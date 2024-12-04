@@ -17,6 +17,7 @@
  *   Copyright (C) 2020, Ampere Computing LLC                              *
  ***************************************************************************/
 
+#include "interface.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -156,5 +157,6 @@ struct adapter_driver *adapter_drivers[] = {
 #if BUILD_AM335XGPIO == 1
 		&am335xgpio_adapter_driver,
 #endif
+	&riscv_dtm_adapter_driver,
 		NULL,
 	};

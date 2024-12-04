@@ -281,6 +281,11 @@ AC_ARG_ENABLE([rshim],
   AS_HELP_STRING([--enable-rshim], [Enable building the rshim driver]),
   [build_rshim=$enableval], [build_rshim=no])
 
+AC_ARG_ENABLE([riscv],
+  AS_HELP_STRING([--enable-riscv], [Enable RISC-V support]),
+  [build_riscv=$enableval],[build_riscv=no])
+AM_CONDITIONAL([RISCV], [test "x$enable_riscv" = "xyes"])
+
 AC_ARG_ENABLE([dmem],
   AS_HELP_STRING([--enable-dmem], [Enable building the dmem driver]),
   [build_dmem=$enableval], [build_dmem=no])

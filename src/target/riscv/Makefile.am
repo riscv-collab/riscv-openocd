@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 noinst_LTLIBRARIES += %D%/libriscv.la
+
 %C%_libriscv_la_SOURCES = \
        %D%/batch.h \
        %D%/debug_defines.h \

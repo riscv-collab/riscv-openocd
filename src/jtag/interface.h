@@ -393,6 +393,7 @@ extern struct adapter_driver osbdm_adapter_driver;
 extern struct adapter_driver parport_adapter_driver;
 extern struct adapter_driver presto_adapter_driver;
 extern struct adapter_driver remote_bitbang_adapter_driver;
+extern struct adapter_driver riscv_dtm_adapter_driver;
 extern struct adapter_driver rlink_adapter_driver;
 extern struct adapter_driver rshim_dap_adapter_driver;
 extern struct adapter_driver stlink_dap_adapter_driver;

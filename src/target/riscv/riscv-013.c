@@ -5,6 +5,7 @@
  * latest draft.
  */
 
+#include "jtag/riscv_socket_dmi.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -20,6 +21,7 @@
 #include <helper/align.h>
 #include <helper/log.h>
 #include "jtag/jtag.h"
+#include "jtag/core_communicator_wrapper.h"
 #include "target/register.h"
 #include "target/breakpoints.h"
 #include "helper/time_support.h"
@@ -280,15 +282,27 @@ static dm013_info_t *get_dm(struct target *target)
 	if (info->dm)
 		return info->dm;
 
-	unsigned int abs_chain_position = target->tap->abs_chain_position;
-
 	dm013_info_t *entry;
 	dm013_info_t *dm = NULL;
-	list_for_each_entry(entry, &dm_list, list) {
-		if (entry->abs_chain_position == abs_chain_position
-				&& entry->base == target->dbgbase) {
-			dm = entry;
-			break;
+	unsigned int abs_chain_position = 0;
+
+	// For now we could let it be initialized to 0, as the comment suggests (default value), but if we 
+	// bypass it in the future or ignore its state, we might send commands that are not appropriate for the
+	// current state of the debug session, leading to errors or inconsistencies.
+	// The DM provides error codes and status information that help us understand whether a DMI command 
+	// was successful or if there was an issue (e.g., invalid address, unsupported command).
+    // Ignoring the DM means we lose access to this important feedback, making it harder to diagnose and fix problems.
+	// If we don't initialize the DM correctly, our DMI commands may not work as expected, 
+	// or they may cause the debug session to become unstable.
+
+	if (strcmp(target->type->name, "riscv") != 0){
+		abs_chain_position = target->tap->abs_chain_position;
+		list_for_each_entry(entry, &dm_list, list) {
+			if (entry->abs_chain_position == abs_chain_position
+					&& entry->base == target->dbgbase) {
+				dm = entry;
+				break;
+			}
 		}
 	}
 
@@ -298,7 +312,6 @@ static dm013_info_t *get_dm(struct target *target)
 		if (!dm)
 			return NULL;
 		dm->abs_chain_position = abs_chain_position;
-
 		/* Safety check for dbgbase */
 		assert(target->dbgbase_set || target->dbgbase == 0);
 
@@ -406,15 +419,18 @@ static uint32_t set_dmcontrol_hartsel(uint32_t initial, int hart_index)
 
 /*** Utility functions. ***/
 
-static void select_dmi(struct jtag_tap *tap)
+static void select_dmi(struct jtag_tap *tap, const char* name)
 {
 	if (bscan_tunnel_ir_width != 0) {
 		select_dmi_via_bscan(tap);
 		return;
 	}
-	if (!tap->enabled)
-		LOG_ERROR("BUG: Target's TAP '%s' is disabled!", jtag_tap_name(tap));
-
+	if (strcmp(name, "riscv") != 0) {
+		if (!tap->enabled){
+			return;
+		}
+	}
+		
 	bool need_ir_scan = false;
 	/* FIXME: make "tap" a const pointer. */
 	for (struct jtag_tap *other_tap = jtag_tap_next_enabled(NULL);
@@ -442,8 +458,10 @@ static int increase_dmi_busy_delay(struct target *target)
 {
 	RISCV013_INFO(info);
 
-	int res = dtmcs_scan(target->tap, DTM_DTMCS_DMIRESET,
-			NULL /* discard result */);
+	int res = -1;
+	bool is_jtag = 	IS_TARGET_JTAG(target->type->name);
+	res = dtmcs_scan(target->tap, DTM_DTMCS_DMIRESET,NULL /* discard result */, is_jtag);
+	
 	if (res != ERROR_OK)
 		return res;
 
@@ -490,13 +508,17 @@ static int batch_run_timeout(struct target *target, struct riscv_batch *batch);
 
 static int dmi_read(struct target *target, uint32_t *value, uint32_t address)
 {
-	struct riscv_batch *batch = riscv_batch_alloc(target, 1);
-	riscv_batch_add_dmi_read(batch, address, RISCV_DELAY_BASE);
-	int res = batch_run_timeout(target, batch);
-	if (res == ERROR_OK && value)
-		*value = riscv_batch_get_dmi_read_data(batch, 0);
-	riscv_batch_free(batch);
-	return res;
+	if (IS_TARGET_JTAG(target->type->name))
+	{
+			struct riscv_batch *batch = riscv_batch_alloc(target, 1);
+			riscv_batch_add_dmi_read(batch, address, RISCV_DELAY_BASE);
+			int res = batch_run_timeout(target, batch);
+			if (res == ERROR_OK && value)
+					*value = riscv_batch_get_dmi_read_data(batch, 0);
+			riscv_batch_free(batch);
+			return res;
+	}
+	return socket_dmi_read(target, value, address);
 }
 
 static int dm_read(struct target *target, uint32_t *value, uint32_t address)
@@ -521,12 +543,15 @@ static int dm_read_exec(struct target *target, uint32_t *value, uint32_t address
 
 static int dmi_write(struct target *target, uint32_t address, uint32_t value)
 {
-	struct riscv_batch *batch = riscv_batch_alloc(target, 1);
-	riscv_batch_add_dmi_write(batch, address, value, /*read_back*/ true,
-			RISCV_DELAY_BASE);
-	int res = batch_run_timeout(target, batch);
-	riscv_batch_free(batch);
-	return res;
+	if (IS_TARGET_JTAG(target->type->name)){
+		struct riscv_batch *batch = riscv_batch_alloc(target, 1);
+		riscv_batch_add_dmi_write(batch, address, value, /*read_back*/ true,
+				RISCV_DELAY_BASE);
+		int res = batch_run_timeout(target, batch);
+		riscv_batch_free(batch);
+		return res;
+	}
+	return socket_dmi_write(target, address, value);
 }
 
 static int dm_write(struct target *target, uint32_t address, uint32_t value)
@@ -656,14 +681,36 @@ static int dm013_select_target(struct target *target)
 
 #define ABSTRACT_COMMAND_BATCH_SIZE 2
 
+static uint8_t* get_buffer_values_from_uint32(uint32_t val){
+    uint8_t *out_buffer = (uint8_t *)malloc(4 * sizeof(uint8_t));
+    for (size_t i = 0; i < sizeof(uint32_t); i++){
+        out_buffer[i] = (val >> i*8) & 0xFF;
+    }
+    return out_buffer;
+}
+
 static size_t abstract_cmd_fill_batch(struct riscv_batch *batch,
 		uint32_t command)
 {
-	assert(riscv_batch_available_scans(batch)
-			>= ABSTRACT_COMMAND_BATCH_SIZE);
-	riscv_batch_add_dm_write(batch, DM_COMMAND, command, /* read_back */ true,
-			RISCV_DELAY_ABSTRACT_COMMAND);
-	return riscv_batch_add_dm_read(batch, DM_ABSTRACTCS, RISCV_DELAY_BASE);
+	if (IS_TARGET_JTAG(batch->target->type->name)){
+		assert(riscv_batch_available_scans(batch)
+				>= ABSTRACT_COMMAND_BATCH_SIZE);
+		riscv_batch_add_dm_write(batch, DM_COMMAND, command, /* read_back */ true,
+				RISCV_DELAY_ABSTRACT_COMMAND);
+		return riscv_batch_add_dm_read(batch, DM_ABSTRACTCS, RISCV_DELAY_BASE);
+	}
+	int res_write = dm_write(batch->target, DM_COMMAND, command);
+	if (res_write != ERROR_OK) {
+		return ERROR_FAIL;
+	}
+	int ret_status = riscv_batch_add_dm_read(batch, DM_ABSTRACTCS, RISCV_DELAY_BASE);
+	uint32_t value_read;
+	ret_status |= dm_read(batch->target, &value_read, DM_ABSTRACTCS);
+	if (ret_status != ERROR_OK){
+		return ret_status;
+	}
+	batch->data_out = get_buffer_values_from_uint32(value_read);
+	return ERROR_OK;
 }
 
 static int abstract_cmd_batch_check_and_clear_cmderr(struct target *target,
@@ -753,22 +800,21 @@ int riscv013_execute_abstract_command(struct target *target, uint32_t command,
 	struct riscv_batch *batch = riscv_batch_alloc(target,
 			ABSTRACT_COMMAND_BATCH_SIZE);
 	const size_t abstractcs_read_key = abstract_cmd_fill_batch(batch, command);
+	(void)abstractcs_read_key;
+	return abstractcs_read_key;
 
 	/* Abstract commands are executed while running the batch. */
-	dm->abstract_cmd_maybe_busy = true;
+	// dm->abstract_cmd_maybe_busy = true;
 
-	int res = batch_run_timeout(target, batch);
-	if (res != ERROR_OK)
-		goto cleanup;
+// 	int res = batch_run_timeout(target, batch);
+// 	if (res != ERROR_OK)
+// 		goto cleanup;
 
-	res = abstract_cmd_batch_check_and_clear_cmderr(target, batch,
-			abstractcs_read_key, cmderr);
-	if (res != ERROR_OK && *cmderr == CMDERR_NOT_SUPPORTED)
-		mark_command_as_unsupported(target, command);
-
-cleanup:
-	riscv_batch_free(batch);
-	return res;
+// 	res = abstract_cmd_batch_check_and_clear_cmderr(target, batch,
+// 			abstractcs_read_key, cmderr);
+// cleanup:
+// 	riscv_batch_free(batch);
+// 	return res;
 }
 
 /**
@@ -815,6 +861,28 @@ static int read_abstract_arg(struct target *target, riscv_reg_t *value,
 	assert(size_bits % 32 == 0);
 	const unsigned char size_in_words = size_bits / 32;
 	struct riscv_batch * const batch = riscv_batch_alloc(target, size_in_words);
+	if (strcmp(batch->target->type->name, "riscv") == 0){
+		dtm_driver_t* driver = get_active_dtm_driver();
+		uint64_t temp_value_64 = 0;
+		uint32_t dmi_data0_address = 0x04; // one more (0x05) for dmi_data1
+
+		for (size_t i = 0; i < sizeof(uint64_t) / sizeof(uint32_t); ++i){
+			uint32_t address = dmi_data0_address + i;
+			uint32_t value_32;
+			if (socket_dmi_read_dmi(driver, &value_32, address) != ERROR_OK){
+				LOG_TARGET_ERROR(batch->target, "Failed to read DMI data0");
+                return ERROR_FAIL;
+			} 
+			if (i == 0){
+				// First iteration: assign the first 32-bit value to the lower 32 bits
+				temp_value_64 = value_32;
+			} else {
+				temp_value_64 |= ((uint64_t)value_32) << 32;
+			}
+		}
+		*value = temp_value_64;
+		return ERROR_OK;
+	}
 	abstract_data_read_fill_batch(batch, index, size_bits);
 	int result = batch_run_timeout(target, batch);
 	if (result == ERROR_OK)
@@ -955,13 +1023,119 @@ static int register_read_abstract(struct target *target, riscv_reg_t *value,
 	return register_read_abstract_with_size(target, value, number, size);
 }
 
+static int register_write_abstract_direct(struct target *target, enum gdb_regno number,
+	riscv_reg_t value, dm013_info_t *dm)
+{
+	dtm_driver_t *driver = get_active_dtm_driver();
+	if (!driver) {
+		LOG_ERROR("Socket DMI driver not found for target %s", target_name(target));
+		return ERROR_FAIL;
+	}
+
+	const unsigned int size_bits = register_size(target, number);
+	const uint32_t command = riscv013_access_register_command(target, number, size_bits,
+			AC_ACCESS_REGISTER_TRANSFER |
+			AC_ACCESS_REGISTER_WRITE);
+	if (is_command_unsupported(target, command))
+		return ERROR_FAIL;
+
+	LOG_DEBUG_REG(target, AC_ACCESS_REGISTER, command);
+	assert(size_bits % 32 == 0);
+	const unsigned int size_in_words = size_bits / 32;
+
+	int res = ERROR_OK;
+
+	// Write data to abstract data registers (data0, data1, ...) directly
+	for (unsigned int i = 0; i < size_in_words; ++i) {
+		uint32_t word_val;
+		// Extract the correct 32-bit word from the 64-bit value
+		if (sizeof(riscv_reg_t) == 8) { // 64-bit host/register
+			word_val = (uint32_t)((value >> (i * 32)) & 0xFFFFFFFF);
+		} else { // 32-bit host/register
+			word_val = (uint32_t)value; // Only one word if size_bits is 32
+		}
+
+		uint32_t data_addr = DM_DATA0 + i;
+		LOG_DEBUG("Socket DMI Write: addr=0x%x, data=0x%08" PRIx32, data_addr, word_val);
+		res = socket_dmi_write_dmi(driver, data_addr, word_val);
+		if (res != ERROR_OK) {
+			LOG_ERROR("Failed to write abstract data%d via socket DMI", i);
+			return res;
+		}
+	}
+
+	// Write the command to the command register directly
+	LOG_DEBUG("Socket DMI Write: addr=0x%x, data=0x%08" PRIx32, DM_COMMAND, command);
+	res = socket_dmi_write_dmi(driver, DM_COMMAND, command);
+	if (res != ERROR_OK) {
+		LOG_ERROR("Failed to write abstract command via socket DMI");
+		return res;
+	}
+
+	// The target DM should process the command after the write to COMMAND completes.
+	// We now need to check the status.
+
+	// Read the abstractcs register directly to check status
+	uint32_t abstractcs_val;
+	LOG_DEBUG("Socket DMI Read: addr=0x%x", DM_ABSTRACTCS);
+	res = socket_dmi_read_dmi(driver, &abstractcs_val, DM_ABSTRACTCS);
+	if (res != ERROR_OK) {
+		LOG_ERROR("Failed to read abstractcs via socket DMI");
+		return res;
+	}
+	LOG_DEBUG("Read abstractcs value: 0x%08" PRIx32, abstractcs_val);
+
+
+	// Check cmderr field in abstractcs
+	// (Using standard RISC-V Debug Spec 0.13 definitions)
+	uint32_t cmderr = (abstractcs_val >> DM_ABSTRACTCS_CMDERR_OFFSET) & DM_ABSTRACTCS_CMDERR;
+
+	if (cmderr != CMDERR_NONE) {
+		LOG_ERROR("Abstract command failed, cmderr = %" PRIu32, cmderr);
+		res = ERROR_FAIL;
+
+		if (cmderr == CMDERR_BUSY) {
+			LOG_ERROR("  Command failed: Debug Module Busy");
+			// Here what might be added is a specific handling or retry logic
+		} else if (cmderr == CMDERR_NOT_SUPPORTED) {
+			LOG_ERROR("  Command failed: Not Supported");
+			mark_command_as_unsupported(target, command);
+		} else if (cmderr == CMDERR_EXCEPTION) {
+			LOG_ERROR("  Command failed: Exception during execution");
+		} else if (cmderr == CMDERR_HALT_RESUME) {
+			LOG_ERROR("  Command failed: Halt/resume issue");
+		} else if (cmderr == CMDERR_OTHER) {
+			LOG_ERROR("  Command failed: Other reason");
+		}
+
+		// Attempt to clear the error bit by writing cmderr back to abstractcs
+		// This is required by the spec to allow future commands.
+		uint32_t clear_cmd = cmderr << DM_ABSTRACTCS_CMDERR_OFFSET;
+		LOG_DEBUG("Attempting to clear cmderr by writing 0x%08" PRIx32 " to abstractcs", clear_cmd);
+		int clear_res = socket_dmi_write_dmi(driver, DM_ABSTRACTCS, clear_cmd);
+		if (clear_res != ERROR_OK) {
+			LOG_ERROR("Failed to clear cmderr in abstractcs via socket DMI");
+			// The original command still failed, so we keep res = ERROR_FAIL
+		}
+		return res;
+	}
+
+	return ERROR_OK;
+}
+
+
 static int register_write_abstract(struct target *target, enum gdb_regno number,
 		riscv_reg_t value)
 {
+	
 	dm013_info_t *dm = get_dm(target);
 	if (!dm)
 		return ERROR_FAIL;
 
+	if (!IS_TARGET_JTAG(target->type->name)){
+		// Covering the non-JTAG case
+		return register_write_abstract_direct(target, number, value, dm);
+	}
 	const unsigned int size_bits = register_size(target, number);
 	const uint32_t command = riscv013_access_register_command(target, number, size_bits,
 			AC_ACCESS_REGISTER_TRANSFER |
@@ -1839,7 +2013,10 @@ static int reset_dm(struct target *target)
 	 * prohibited.
 	 */
 	uint32_t dmcontrol;
-	int result = dm_read(target, &dmcontrol, DM_DMCONTROL);
+	
+	int result = 0;
+	result = dm_read(target, &dmcontrol, DM_DMCONTROL);
+
 	if (result != ERROR_OK)
 		return result;
 
@@ -1855,6 +2032,8 @@ static int reset_dm(struct target *target)
 		const time_t start = time(NULL);
 		LOG_TARGET_DEBUG(target, "Waiting for the DM to acknowledge reset.");
 		do {
+			uint32_t result_field = get_field(dmcontrol, DM_DMCONTROL_DMACTIVE);
+			LOG_TARGET_DEBUG(target, "******* result_field: %d", result_field);
 			result = dm_read(target, &dmcontrol, DM_DMCONTROL);
 			if (result != ERROR_OK)
 				return result;
@@ -1931,30 +2110,35 @@ static int examine_dm(struct target *target)
 
 	dm->hasel_supported = get_field(dmcontrol, DM_DMCONTROL_HASEL);
 
-	uint32_t hartsel =
-		(get_field(dmcontrol, DM_DMCONTROL_HARTSELHI) <<
-		 DM_DMCONTROL_HARTSELLO_LENGTH) |
-		get_field(dmcontrol, DM_DMCONTROL_HARTSELLO);
+	// uint32_t hartsel =
+	// 	(get_field(dmcontrol, DM_DMCONTROL_HARTSELHI) <<
+	// 	 DM_DMCONTROL_HARTSELLO_LENGTH) |
+	// 	get_field(dmcontrol, DM_DMCONTROL_HARTSELLO);
 
 	/* Before doing anything else we must first enumerate the harts. */
-	const int max_hart_count = MIN(RISCV_MAX_HARTS, hartsel + 1);
+	// const int max_hart_count = MIN(RISCV_MAX_HARTS, hartsel + 1);
+	const int max_hart_count = 1;
 	if (dm->hart_count < 0) {
 		for (int i = 0; i < max_hart_count; ++i) {
 			/* TODO: This is extremely similar to
 			 * riscv013_get_hart_state().
 			 * It would be best to reuse the code.
 			 */
+			LOG_TARGET_DEBUG(target, "####### About to enter dm013_select_hart, for the %d id of the loop", i); // TODO: delete this
 			result = dm013_select_hart(target, i);
-			if (result != ERROR_OK)
+			if (result != ERROR_OK) {
 				return result;
+			}
 
 			uint32_t s;
 			result = dmstatus_read(target, &s, /*authenticated*/ true);
-			if (result != ERROR_OK)
+			if (result != ERROR_OK){
 				return result;
+			}
 
-			if (get_field(s, DM_DMSTATUS_ANYNONEXISTENT))
+			if (get_field(s, DM_DMSTATUS_ANYNONEXISTENT)){
 				break;
+			}
 
 			dm->hart_count = i + 1;
 
@@ -1964,12 +2148,14 @@ static int examine_dm(struct target *target)
 				 * change `hartsel`.
 				 */
 				result = wait_for_idle_if_needed(target);
-				if (result != ERROR_OK)
+				if (result != ERROR_OK){
 					return result;
+				}
 				dmcontrol = set_dmcontrol_hartsel(dmcontrol, i);
 				result = dm_write(target, DM_DMCONTROL, dmcontrol);
-				if (result != ERROR_OK)
+				if (result != ERROR_OK){
 					return result;
+				}
 			}
 		}
 		LOG_TARGET_DEBUG(target, "Detected %d harts.", dm->hart_count);
@@ -1986,6 +2172,7 @@ static int examine_dm(struct target *target)
 
 static int examine(struct target *target)
 {
+	LOG_TARGET_ERROR(target, "*************** examine called!!! **********");
 	/* We reset target state in case if something goes wrong during examine:
 	 * DTM/DM scans could fail or hart may fail to halt. */
 	target->state = TARGET_UNKNOWN;
@@ -1995,10 +2182,27 @@ static int examine(struct target *target)
 	LOG_TARGET_DEBUG(target, "dbgbase=0x%x", target->dbgbase);
 
 	uint32_t dtmcontrol;
-	if (dtmcs_scan(target->tap, 0, &dtmcontrol) != ERROR_OK || dtmcontrol == 0) {
-		LOG_TARGET_ERROR(target, "Could not scan dtmcontrol. Check JTAG connectivity/board power.");
-		return ERROR_FAIL;
+	
+	bool is_jtag = 	IS_TARGET_JTAG(target->type->name);
+	if (is_jtag){
+		if (dtmcs_scan(target->tap, 0, &dtmcontrol, is_jtag) != ERROR_OK || dtmcontrol == 0) {
+			LOG_TARGET_ERROR(target, "Could not scan dtmcontrol. Check JTAG connectivity/board power.");
+			return ERROR_FAIL;
+		}
+	} else {
+		dtm_driver_t *driver = get_active_dtm_driver();
+		if (socket_dtmcontrol_read_dmi(driver, &dtmcontrol) != ERROR_OK) {
+			LOG_ERROR("Could not read dtmcontrol");
+			return ERROR_FAIL;
+		}
+		// dtm_driver_t *driver = get_active_dtm_driver();
+		// if (socket_dmi_read_dmi(driver, &dtmcontrol, 0x10) != ERROR_OK ||
+		// 	(dtmcontrol & DM_DMCONTROL_DMACTIVE) == 0) { 
+		// 	LOG_TARGET_ERROR(target, "Could not read dtmcontrol. Check socket connection/board power.");
+		// 	return ERROR_FAIL;
+		// }
 	}
+	
 
 	LOG_TARGET_DEBUG(target, "dtmcontrol=0x%x", dtmcontrol);
 	LOG_DEBUG_REG(target, DTM_DTMCS, dtmcontrol);
@@ -2508,7 +2712,7 @@ static int batch_run(struct target *target, struct riscv_batch *batch)
 {
 	RISCV_INFO(r);
 	RISCV013_INFO(info);
-	select_dmi(target->tap);
+	select_dmi(target->tap, target->type->name);
 	riscv_batch_add_nop(batch);
 	const int result = riscv_batch_run_from(batch, 0, &info->learned_delays,
 			/*resets_delays*/  r->reset_delays_wait >= 0,
@@ -2531,7 +2735,7 @@ static int batch_run(struct target *target, struct riscv_batch *batch)
 static int batch_run_timeout(struct target *target, struct riscv_batch *batch)
 {
 	RISCV013_INFO(info);
-	select_dmi(target->tap);
+	select_dmi(target->tap, target->type->name);
 	riscv_batch_add_nop(batch);
 
 	size_t finished_scans = 0;
@@ -2902,7 +3106,7 @@ static int assert_reset(struct target *target)
 	RISCV013_INFO(info);
 	int result;
 
-	select_dmi(target->tap);
+	select_dmi(target->tap, target->type->name);
 
 	if (target_has_event_action(target, TARGET_EVENT_RESET_ASSERT)) {
 		/* Run the user-supplied script if there is one. */
@@ -2956,7 +3160,7 @@ static int deassert_reset(struct target *target)
 		return ERROR_FAIL;
 	int result;
 
-	select_dmi(target->tap);
+	select_dmi(target->tap, target->type->name);
 	/* Clear the reset, but make sure haltreq is still set */
 	uint32_t control = 0;
 	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
@@ -4450,7 +4654,7 @@ read_memory_progbuf(struct target *target, const riscv_mem_access_args_t args)
 {
 	assert(riscv_mem_access_is_read(args));
 
-	select_dmi(target->tap);
+	select_dmi(target->tap, target->type->name);
 	memset(args.read_buffer, 0, args.count * args.size);
 
 	if (execute_autofence(target) != ERROR_OK)

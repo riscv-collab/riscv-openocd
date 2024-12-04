@@ -88,7 +88,8 @@ static int init_cache_entry(struct target *target, uint32_t regno)
 	if (riscv_reg_impl_is_initialized(reg))
 		return ERROR_OK;
 	return riscv_reg_impl_init_cache_entry(target, regno,
-			riscv_reg_impl_gdb_regno_exist(target, regno),
+		// riscv_reg_impl_gdb_regno_exist(target, regno),
+			true,
 			riscv013_gdb_regno_reg_type(regno));
 }
 
@@ -316,6 +317,8 @@ int riscv013_reg_examine_all(struct target *target)
 	if (res != ERROR_OK)
 		return res;
 
+	// Analyzes the MISA (Machine ISA) CSR to detect supported RISC-V extensions. 
+	// This determines fundamental CPU capabilities like floating-point support, 32/64 bit arch. etc.
 	res = examine_misa(target);
 	if (res != ERROR_OK)
 		return res;
