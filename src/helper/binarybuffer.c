@@ -74,7 +74,7 @@ bool buf_eq(const void *_buf1, const void *_buf2, unsigned int size)
 
 	unsigned int last = size / 8;
 	if (memcmp(_buf1, _buf2, last) != 0)
-		return true;
+		return false;
 
 	unsigned int trailing = size % 8;
 	if (!trailing)
