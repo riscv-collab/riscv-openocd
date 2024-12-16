@@ -59,7 +59,7 @@ if (SC_OPENOCD_ENABLE_SANITIZERS)
   endif()
 endif()
 
-set(OPENOCD_CFLAGS "$<$<CONFIG:Debug>:-O0 -g> $<$<BOOL:${CMAKE_SYSROOT}>:--sysroot=${CMAKE_SYSROOT}> ${OPENOCD_EXTRA_CFLAGS}")
+set(OPENOCD_CFLAGS "$<$<CONFIG:Release>:-O2> $<$<CONFIG:Debug>:-O0 -g> $<$<BOOL:${CMAKE_SYSROOT}>:--sysroot=${CMAKE_SYSROOT}> ${OPENOCD_EXTRA_CFLAGS}")
 ExternalProject_Add(
   openocd
   PREFIX OpenOCDBuild

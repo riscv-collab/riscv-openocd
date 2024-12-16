@@ -149,6 +149,7 @@ class Package(_conan.ConanFile):
         toolchain.variables["OPENOCD_SOURCE_DEPS_DIR"] = self._var(
             "SC_OPENOCD_SOURCE_DEPS_PATH"
         )
+        toolchain.variables["CMAKE_BUILD_TYPE"] = self.settings.build_type
 
         if self.settings.os == "Linux" and self.options.test:
             toolchain.variables["RISCVSpike_DIR"] = self._var("SC_SPIKE_PATH")
@@ -158,7 +159,6 @@ class Package(_conan.ConanFile):
             toolchain.variables["RISCVTESTS_DIR"] = self._var(
                 "SC_EXTERNAL_OPENOCD_TESTS_PATH"
             )
-            toolchain.variables["CMAKE_BUILD_TYPE"] = self.settings.build_type
             toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
 
         if self.options.elct_support:
