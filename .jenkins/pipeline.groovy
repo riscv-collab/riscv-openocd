@@ -272,6 +272,21 @@ workflow('openocd') {
         }
     }
 
+    job('build-the-docs') {
+        resources {
+            cpu('1', '1')
+            memory('0.5Gi', '0.5Gi')
+            fs('1.0Gi', '1.0Gi')
+        }
+        matrix {
+            [[image          : ['cpp_ubuntu_20']]]
+        }
+        script { vars ->
+            def buildDir = "build/docs_Build"
+            sh("./make.py sh .makepy/support/utils/build_the_docs.sh ${buildDir}")
+        }
+    }
+
     deploy {
         resources {
             cpu('0.8', '4')
