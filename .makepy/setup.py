@@ -12,6 +12,7 @@ from hwrs import HWRSSuite as _HWRSSuite
 from makepy import ArgsHook as _ArgsHook
 from makepy import Command as _Command
 from makepy import Conductor as _Conductor
+from makepy.conan import BinaryPackage, Conan, RevisionedRef
 from makepy.generic import GenericSuite as _GenericSuite
 from makepy.generic import ParallelHook as _ParallelHook
 from makepy.generic import PrivilegedContainerHook as _PrivilegedContainerHook
@@ -20,6 +21,7 @@ from makepy.lint import LintCommand as _LintCommand
 from makepy.syntacore import ConanConfigs as _ConanConfigs
 from makepy.syntacore import ConanSuite as _ConanSuite
 from makepy.syntacore import SyntacoreSuite as _SyntacoreSuite
+from makepy.utils import git
 from makepy.utils import main as _main_decorator
 from makepy.utils import run_shell as _run_shell
 
@@ -310,12 +312,75 @@ class _BuildCommand(_Command):
         _run_shell(cmd)
 
 
+class _PrintPackageURLs(_Command):
+    """
+    WARNING: NEVER CALL THIS FROM THE CONAN RECIPE
+    """
+
+    def name(self) -> str:
+        return "print-package-urls"
+
+    def help(self) -> str:
+        return "Search for package URLs in the Conan registry."
+
+    def amend_parser(self, parser: _ArgumentParser) -> None:
+        parser.add_argument(
+            "--assume-release",
+            action="store_true",
+            help="Check for release packages instead of experimental ones.",
+        )
+
+    def _format_info(self, binary: BinaryPackage) -> str:
+        os_str = f"{binary.settings.build_type} {binary.settings.arch}"
+        if binary.settings.os and binary.settings.os.name == "Linux":
+            os_or_distro = binary.settings.os.distro or binary.settings.os.name
+            os_str = f"{os_str} {os_or_distro} {binary.settings.os.version}"
+        elif binary.settings.os:
+            os_str = f"{os_str} {binary.settings.os.name}"
+        for key, value in binary.options.items():
+            key = key.strip()
+            value = value.strip()
+            if key == "test":
+                continue
+            os_str = f"{os_str} {key}={value}"
+        return os_str
+
+    def command(self, args: _Namespace) -> None:
+        # Weird way to acquire current version
+        package_cmd: list[_Path | str] = [
+            _repo_path / ".makepy" / "setup.py",
+            "--no-history-dump",
+            "--logging-level",
+            "error",
+            "conan-info",
+            "package",
+            "--name",
+            "openocd",
+        ]
+        if args.assume_release:
+            package_cmd.append("--assume-release")
+        versioned_spec = _run_shell(
+            package_cmd, capture_output=True, loglevel=_logging.DEBUG
+        ).stdout.strip()
+        revision = str(git.detect_repo(_repo_path).head.commit.hexsha).strip()
+        ref = RevisionedRef.parse(f"{versioned_spec}#{revision}")
+
+        conan = Conan(mp_conf=self.mp_conf)
+        binaries = conan.search_binaries(ref)
+
+        _logger.info(f"Found {len(binaries)} binary configurations:")
+        for binary in binaries:
+            url = conan.web_url(next(iter(binary.package_revisions)))
+            _logger.info(self._format_info(binary))
+            _logger.info(url)
+            _logger.info("")
+
+
 def _build_formatter_and_linter() -> tuple[_FormatCommand, _LintCommand]:
     python_files = [
         _repo_path / "make.py",
         _repo_path / ".makepy" / "_ocd_test_suite.py",
         _repo_path / ".makepy" / "setup.py",
-        _repo_path / ".makepy" / "support" / "utils" / "conan_the_deployer.py",
         _repo_path / "conanfile.py",
     ]
 
@@ -371,6 +436,8 @@ def _main() -> None:
     conductor.add(_PrivilegedContainerHook())
     conductor.add(_BuildArgsHook())
     conductor.add(_ParallelHook(commands=["build"]))
+
+    conductor.add(_PrintPackageURLs())
 
     conductor.add(_HWRSSuite())
 

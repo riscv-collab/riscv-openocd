@@ -306,41 +306,24 @@ workflow('openocd') {
         }
     }
 
-    job('deploy_artifactory') {
+    job('print_urls') {
         resources {
             cpu('0.2', '4')
             memory('0.1Gi', '8Gi')
             fs('1.0Gi', '1.0Gi')
         }
         dependsOn 'deploy'
-        matrix {
-            [[image          : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
-              profile        : ['default']],
-             [image          : ['cpp_ubuntu_22'],
-              profile        : ['makepy_sc_mingw', 'mp_armhf']]]
-        }
         rules { vars ->
             include(vars.name in vars.deploy)
         }
         shellScript {
             '''
                 OPTS=""
-                if [[ "${VARS_assumeRelease}" ]]
-                then
+                if [[ "${VARS_assumeRelease}" ]]; then
                     OPTS="${OPTS} --assume-release"
                 fi
 
-                PACKAGE_REF="$(sc-jenkins-lib get-conan-var \"${VARS_name}\" package ${OPTS})"
-                mpy conan install \
-                    --profile:host "${VARS_profile}" \
-                    --remote syntacore \
-                    --requires "${PACKAGE_REF}" \
-                    --lockfile-partial --output-folder build/deploy \
-                    --deployer .makepy/support/utils/conan_the_deployer.py
-
-                BUNDLE_FILE="$(find build/deploy -maxdepth 1 -name \"*bundle*\")"
-                mpy sh .makepy/support/utils/upload_development_build.sh \
-                    "${BUNDLE_FILE}" "${ART_API_KEY}"
+                mpy print-package-urls ${OPTS}
             '''
         }
     }
