@@ -1,4 +1,4 @@
-@Library("jenkins-lib@v3-volatile") _
+@Library('jenkins-lib@v4.2.x') _
 
 import tools.automation.TI
 
@@ -37,7 +37,11 @@ workflow('openocd') {
         matrix {
             [["image": ['cpp_ubuntu_20']]]
         }
-        script { vars -> makepy.lint() }
+        shellScript {
+            '''
+                sc-jenkins-lib lint
+            '''
+        }
     }
 
     job('main-build') {
@@ -260,9 +264,11 @@ workflow('openocd') {
             [[image          : ['cpp_ubuntu_20'],
               env            : ['', 'CC=clang CFLAGS=-fsanitize=address,undefined LDFLAGS=-Wl,-ldl']]]
         }
-        script { vars ->
-            def buildDir = "build/tests_on_dummy_Build"
-            sh("./make.py sh env ${vars.env} .makepy/support/utils/run_tests_on_dummy.sh 4 ${buildDir}")
+        script {
+            sh('''
+                BUILD_DIR="build/tests_on_dummy_Build"
+                mpy sh env ${VARS_env} .makepy/support/utils/run_tests_on_dummy.sh 4 ${BUILD_DIR}
+            ''')
         }
     }
 
@@ -301,15 +307,12 @@ workflow('openocd') {
         rules { vars ->
             include(vars.name in vars.deploy)
         }
-        script { vars ->
-            String packageRef = makepy.getConanVars(vars.name, vars.assumeRelease as Boolean).packageRef
-            sh(""" ./make.py conan install \
-                    --profile:host ${vars.profile} --remote syntacore --requires "${packageRef}" --lockfile-partial \
-                    --output-folder build/deploy --deployer .makepy/support/utils/conan_the_deployer.py """)
-            withCredentials([string(credentialsId: 'artifactory_cicdsc_api_key', variable: 'ART_API_KEY')]) {
-                sh(""" ./make.py sh .makepy/support/utils/upload_development_build.sh \
-                    \$(find build/deploy -maxdepth 1 -name '*bundle*') $ART_API_KEY """)
-            }
+        shellScript {
+            '''
+                PACKAGE_REF=$(OPTS=; [[ "${VARS_assumeRelease}" ]] && OPTS="${OPTS} --assume-release"; sc-jenkins-lib get-conan-var  "${VARS_name}" package ${OPTS})
+                 mpy conan install --profile:host ${VARS_profile} --remote syntacore --requires "${PACKAGE_REF}" --lockfile-partial --output-folder build/deploy --deployer .makepy/support/utils/conan_the_deployer.py 
+                 mpy sh .makepy/support/utils/upload_development_build.sh $(find build/deploy -maxdepth 1 -name "*bundle*") ${ART_API_KEY}
+            '''
         }
     }
 }
