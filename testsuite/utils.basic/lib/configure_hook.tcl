@@ -2,7 +2,7 @@ echo "----------------------------------"
 echo "CONFIGURE-HOOK: pre-init printing"
 echo "----------------------------------"
 # Just some command which is legal only during CONFIG stage
-gdb_report_data_abort enable
+gdb report_data_abort enable
 
 proc sc_pre_tap_hook {} {
   echo "----------------------------------"
