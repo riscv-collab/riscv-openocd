@@ -1,0 +1,105 @@
+if {![target_info cpu,has_s_mode]} { return [ocd_test_unsupported] }
+if {![target_info cpu,has_pmp]} { return [ocd_test_unsupported] }
+if {![target_info cpu,has_pmp_top]} { return [ocd_test_unsupported] }
+if {[target_info cpu,xlen] != 64} { return [ocd_test_unsupported] }
+
+proc run_test {} {
+    set available_modes [list sv39 sv48 sv57]
+    set modes [list]
+
+    foreach mode $available_modes {
+        if {[target_info "cpu,$mode"]} {
+            lappend modes $mode
+        }
+    }
+
+    if {[llength $modes] == 0} {
+        return [ocd_test_unsupported]
+    }
+
+    set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
+    source $lib_translate_support
+    compile_page_table_generator
+
+    set VA_OFFSET 0xa0000
+    set PA_OFFSET 0xc0000
+
+    set default_bin_prefix [tool_state_get default_bin_prefix]
+    ocd_compile_executable "lib/reference_mmu.S" "$default_bin_prefix.exe"
+
+    set expected_data 0xdeadbeef
+
+    set ENTRY [tool_state_get_program_symbol _entry]
+    set addr_va_addr [tool_state_get_program_symbol _data_va_address]
+    set addr_pa_addr [tool_state_get_program_symbol _data_pa_address]
+    set addr_mmu_addr [tool_state_get_program_symbol _mmu_table_address]
+    set addr_data_end [tool_state_get_program_symbol _data_end]
+
+    set MMU_TABLE_ADDR 0x[format %x [expr {(${addr_data_end} + 0x1000) / 0x1000 * 0x1000}]]
+    set VA_ADDRESS 0x[format %x [expr {${MMU_TABLE_ADDR} + ${VA_OFFSET} }]]
+    set PA_ADDRESS 0x[format %x [expr {${MMU_TABLE_ADDR} + ${PA_OFFSET} }]]
+
+    set va_list [list ${VA_ADDRESS}]
+    set pa_list [list ${PA_ADDRESS}]
+
+    ocd_connect
+
+    set LOAD_INSTR_ADDR  [tool_state_get_program_symbol _load_instr]
+    foreach mode $modes {
+        verbose "testing $mode translation mode" 1
+
+        set satp_mode 0
+        if { $mode eq "sv39" } {
+            set satp_mode 8
+        } elseif { $mode eq "sv48" } {
+            set satp_mode 9
+        } elseif { $mode eq "sv57" } {
+            set satp_mode 10
+        }
+
+        ocdtlb_run_expect "reset halt"
+
+        init_with_config $mode ${MMU_TABLE_ADDR} ${va_list} ${pa_list}
+        turn_on_translation $mode ${MMU_TABLE_ADDR}
+
+        set data [dict get [ocdtlb_run_expect "mdw ${VA_ADDRESS}"] data]
+
+        verbose "DATA-READ: ${data}" 1
+
+        ocdtlb_run_expect "reset halt"
+
+        ocdtlb_run_expect "load_image $default_bin_prefix.exe"
+        ocdtlb_run_expect "mwd phys ${addr_va_addr} ${VA_ADDRESS}"
+        ocdtlb_run_expect "mwd phys ${addr_pa_addr} ${PA_ADDRESS}"
+        ocdtlb_run_expect "mwd phys ${addr_mmu_addr} ${MMU_TABLE_ADDR}"
+        ocdtlb_run_expect "mwd phys ${VA_ADDRESS} 777"
+        ocdtlb_run_expect "mwd phys ${PA_ADDRESS} ${expected_data}"
+        ocdtlb_run_expect "reg pc ${ENTRY}"
+        ocdtlb_run_expect "step"
+        ocdtlb_run_expect "reg ra ${satp_mode}"
+
+        ocdtlb_run_expect "bp ${LOAD_INSTR_ADDR} 4 hw"
+        ocdtlb_run_expect "resume"
+        ocdtlb_wait_resume wait_halt
+
+        ocdtlb_run_expect "step"
+        set VA      [ocdtlb_rsp_get [ocdtlb_run_expect "reg s1"]]
+        set RA      [ocdtlb_rsp_get [ocdtlb_run_expect "reg ra"]]
+        set MSTATUS [ocdtlb_rsp_get [ocdtlb_run_expect "reg mstatus"]]
+        set SATP    [ocdtlb_rsp_get [ocdtlb_run_expect "reg satp"]]
+        set PC      [ocdtlb_rsp_get [ocdtlb_run_expect "reg pc"]]
+        verbose "addr:    ${VA_ADDRESS}" 1
+        verbose "VA:      ${VA}" 1
+        verbose "RA:      ${RA}" 1
+        verbose "MSTATUS: ${MSTATUS}" 1
+        verbose "SATP:    ${SATP}" 1
+        verbose "pc:      ${PC}" 1
+        ocdtlb_run_expect "rbp all"
+
+        ocdtlb_expect_equal ${RA} 0xffffffffdeadbeef
+    }
+
+    return [ocd_test_pass]
+}
+
+return [run_test]
