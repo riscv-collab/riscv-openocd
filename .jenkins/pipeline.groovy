@@ -264,11 +264,11 @@ workflow('openocd') {
             [[image          : ['cpp_ubuntu_20'],
               env            : ['', 'CC=clang CFLAGS=-fsanitize=address,undefined LDFLAGS=-Wl,-ldl']]]
         }
-        script {
-            sh('''
+        shellScript {
+            '''
                 BUILD_DIR="build/tests_on_dummy_Build"
-                mpy sh env ${VARS_env} .makepy/support/utils/run_tests_on_dummy.sh 4 ${BUILD_DIR}
-            ''')
+                mpy sh .makepy/support/utils/run_tests_on_dummy.sh 4 ${BUILD_DIR}
+            '''
         }
     }
 
@@ -324,9 +324,23 @@ workflow('openocd') {
         }
         shellScript {
             '''
-                PACKAGE_REF=$(OPTS=; [[ "${VARS_assumeRelease}" ]] && OPTS="${OPTS} --assume-release"; sc-jenkins-lib get-conan-var  "${VARS_name}" package ${OPTS})
-                 mpy conan install --profile:host ${VARS_profile} --remote syntacore --requires "${PACKAGE_REF}" --lockfile-partial --output-folder build/deploy --deployer .makepy/support/utils/conan_the_deployer.py 
-                 mpy sh .makepy/support/utils/upload_development_build.sh $(find build/deploy -maxdepth 1 -name "*bundle*") ${ART_API_KEY}
+                OPTS=""
+                if [[ "${VARS_assumeRelease}" ]]
+                then
+                    OPTS="${OPTS} --assume-release"
+                fi
+
+                PACKAGE_REF="$(sc-jenkins-lib get-conan-var \"${VARS_name}\" package ${OPTS})"
+                mpy conan install \
+                    --profile:host "${VARS_profile}" \
+                    --remote syntacore \
+                    --requires "${PACKAGE_REF}" \
+                    --lockfile-partial --output-folder build/deploy \
+                    --deployer .makepy/support/utils/conan_the_deployer.py
+
+                BUNDLE_FILE="$(find build/deploy -maxdepth 1 -name \"*bundle*\")"
+                mpy sh .makepy/support/utils/upload_development_build.sh \
+                    "${BUNDLE_FILE}" "${ART_API_KEY}"
             '''
         }
     }
