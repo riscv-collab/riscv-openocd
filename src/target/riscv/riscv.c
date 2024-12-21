@@ -290,7 +290,6 @@ static const virt2phys_info_t sv57x4 = {
 
 static enum riscv_halt_reason riscv_halt_reason(struct target *target);
 static void riscv_info_init(struct target *target, struct riscv_info *r);
-static void riscv_invalidate_register_cache(struct target *target);
 static int riscv_step_rtos_hart(struct target *target);
 
 static void riscv_sample_buf_maybe_add_timestamp(struct target *target, bool before)
@@ -2485,10 +2484,15 @@ static int riscv_halt_go_all_harts(struct target *target)
 				return ERROR_FAIL;
 		}
 	} else {
+		// Safety check:
+		if (riscv_reg_cache_any_dirty(target, LOG_LVL_ERROR))
+			LOG_TARGET_INFO(target, "BUG: Registers should not be dirty while "
+					"the target is not halted!");
+
+		riscv_reg_cache_invalidate_all(target);
+
 		if (r->halt_go(target) != ERROR_OK)
 			return ERROR_FAIL;
-
-		riscv_invalidate_register_cache(target);
 	}
 
 	return ERROR_OK;
@@ -2572,7 +2576,11 @@ static int riscv_assert_reset(struct target *target)
 	struct target_type *tt = get_target_type(target);
 	if (!tt)
 		return ERROR_FAIL;
-	riscv_invalidate_register_cache(target);
+
+	if (riscv_reg_cache_any_dirty(target, LOG_LVL_INFO))
+		LOG_TARGET_INFO(target, "Discarding values of dirty registers.");
+
+	riscv_reg_cache_invalidate_all(target);
 	return tt->assert_reset(target);
 }
 
@@ -2699,7 +2707,15 @@ static int resume_go(struct target *target, int current,
 static int resume_finish(struct target *target, int debug_execution)
 {
 	assert(target->state == TARGET_HALTED);
-	register_cache_invalidate(target->reg_cache);
+	if (riscv_reg_cache_any_dirty(target, LOG_LVL_ERROR)) {
+		/* If this happens, it means there is a bug in the previous
+		 * register-flushing algorithm: not all registers were flushed
+		 * back to the target in preparation for the resume.*/
+		LOG_TARGET_ERROR(target,
+				"BUG: registers should have been flushed by this point.");
+	}
+
+	riscv_reg_cache_invalidate_all(target);
 
 	target->state = debug_execution ? TARGET_DEBUG_RUNNING : TARGET_RUNNING;
 	target->debug_reason = DBG_REASON_NOTHALTED;
@@ -2945,8 +2961,14 @@ static int riscv_address_translate(struct target *target,
 
 		uint8_t buffer[8];
 		assert(info->pte_shift <= 3);
-		int retval = r->read_memory(target, pte_address,
-				4, (1 << info->pte_shift) / 4, buffer, 4);
+		const riscv_mem_access_args_t args = {
+			.address = pte_address,
+			.read_buffer = buffer,
+			.size = 4,
+			.increment = 4,
+			.count = (1 << info->pte_shift) / 4,
+		};
+		int retval = r->read_memory(target, args);
 		if (retval != ERROR_OK)
 			return ERROR_FAIL;
 
@@ -3182,29 +3204,40 @@ static int check_virt_memory_access(struct target *target, target_addr_t address
 static int riscv_read_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, uint8_t *buffer)
 {
+	const riscv_mem_access_args_t args = {
+		.address = phys_address,
+		.read_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = size,
+	};
 	RISCV_INFO(r);
-	return r->read_memory(target, phys_address, size, count, buffer, size);
+	return r->read_memory(target, args);
 }
 
 static int riscv_write_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, const uint8_t *buffer)
 {
-	struct target_type *tt = get_target_type(target);
-	if (!tt)
-		return ERROR_FAIL;
-	return tt->write_memory(target, phys_address, size, count, buffer);
+	const riscv_mem_access_args_t args = {
+		.address = phys_address,
+		.write_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = size,
+	};
+
+	RISCV_INFO(r);
+	return r->write_memory(target, args);
 }
 
-static int riscv_rw_memory(struct target *target, target_addr_t address, uint32_t size,
-		uint32_t count, uint8_t *read_buffer, const uint8_t *write_buffer)
+static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t args)
 {
-	/* Exactly one of the buffers must be set, the other must be NULL */
-	assert(!!read_buffer != !!write_buffer);
+	assert(riscv_mem_access_is_valid(args));
 
-	const bool is_write = write_buffer ? true : false;
-	if (count == 0) {
+	const bool is_write = riscv_mem_access_is_write(args);
+	if (args.count == 0) {
 		LOG_TARGET_WARNING(target, "0-length %s 0x%" TARGET_PRIxADDR,
-				is_write ? "write to" : "read from", address);
+				is_write ? "write to" : "read from", args.address);
 		return ERROR_OK;
 	}
 
@@ -3214,25 +3247,23 @@ static int riscv_rw_memory(struct target *target, target_addr_t address, uint32_
 		return result;
 
 	RISCV_INFO(r);
-	struct target_type *tt = get_target_type(target);
-	if (!tt)
-		return ERROR_FAIL;
-
 	if (!mmu_enabled) {
 		if (is_write)
-			return tt->write_memory(target, address, size, count, write_buffer);
+			return r->write_memory(target, args);
 		else
-			return r->read_memory(target, address, size, count, read_buffer, size);
+			return r->read_memory(target, args);
 	}
 
-	result = check_virt_memory_access(target, address, size, count, is_write);
+	result = check_virt_memory_access(target, args.address,
+			args.size, args.count, is_write);
 	if (result != ERROR_OK)
 		return result;
 
 	uint32_t current_count = 0;
-	while (current_count < count) {
+	target_addr_t current_address = args.address;
+	while (current_count < args.count) {
 		target_addr_t physical_addr;
-		result = target->type->virt2phys(target, address, &physical_addr);
+		result = target->type->virt2phys(target, current_address, &physical_addr);
 		if (result != ERROR_OK) {
 			LOG_TARGET_ERROR(target, "Address translation failed.");
 			return result;
@@ -3241,16 +3272,25 @@ static int riscv_rw_memory(struct target *target, target_addr_t address, uint32_
 		/* TODO: For simplicity, this algorithm assumes the worst case - the smallest possible page size,
 		 * which is  4 KiB. The algorithm can be improved to detect the real page size, and allow to use larger
 		 * memory transfers and avoid extra unnecessary virt2phys address translations. */
-		uint32_t chunk_count = MIN(count - current_count, (RISCV_PGSIZE - RISCV_PGOFFSET(address)) / size);
-		if (is_write)
-			result = tt->write_memory(target, physical_addr, size, chunk_count, write_buffer + current_count * size);
-		else
-			result = r->read_memory(target, physical_addr, size, chunk_count, read_buffer + current_count * size, size);
+		uint32_t chunk_count = MIN(args.count - current_count,
+				(RISCV_PGSIZE - RISCV_PGOFFSET(current_address))
+				/ args.size);
+
+		riscv_mem_access_args_t current_access = args;
+		current_access.address = physical_addr;
+		current_access.count = chunk_count;
+		if (is_write) {
+			current_access.write_buffer += current_count * args.size;
+			result = r->write_memory(target, current_access);
+		} else {
+			current_access.read_buffer += current_count * args.size;
+			result = r->read_memory(target, current_access);
+		}
 		if (result != ERROR_OK)
 			return result;
 
 		current_count += chunk_count;
-		address += chunk_count * size;
+		current_address += chunk_count * args.size;
 	}
 	return ERROR_OK;
 }
@@ -3258,13 +3298,29 @@ static int riscv_rw_memory(struct target *target, target_addr_t address, uint32_
 static int riscv_read_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
-	return riscv_rw_memory(target, address, size, count, buffer, NULL);
+	const riscv_mem_access_args_t args = {
+		.address = address,
+		.read_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = size,
+	};
+
+	return riscv_rw_memory(target, args);
 }
 
 static int riscv_write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
-	return riscv_rw_memory(target, address, size, count, NULL, buffer);
+	const riscv_mem_access_args_t args = {
+		.address = address,
+		.write_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = size,
+	};
+
+	return riscv_rw_memory(target, args);
 }
 
 static const char *riscv_get_gdb_arch(const struct target *target)
@@ -3961,7 +4017,15 @@ static int riscv_openocd_step_impl(struct target *target, int current,
 		LOG_TARGET_ERROR(target, "Unable to step rtos hart.");
 	}
 
-	register_cache_invalidate(target->reg_cache);
+	if (riscv_reg_cache_any_dirty(target, LOG_LVL_ERROR)) {
+		/* If this happens, it means there is a bug in the previous
+		 * register-flushing algorithm: not all registers were flushed
+		 * back to the target prior to single-step. */
+		LOG_TARGET_ERROR(target,
+				"BUG: registers should have been flushed by this point.");
+	}
+
+	riscv_reg_cache_invalidate_all(target);
 
 	if (info->isrmask_mode == RISCV_ISRMASK_STEPONLY)
 		if (riscv_interrupts_restore(target, current_mstatus) != ERROR_OK) {
@@ -4911,7 +4975,14 @@ COMMAND_HANDLER(handle_repeat_read)
 		LOG_ERROR("malloc failed");
 		return ERROR_FAIL;
 	}
-	int result = r->read_memory(target, address, size, count, buffer, 0);
+	const riscv_mem_access_args_t args = {
+		.address = address,
+		.read_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = 0,
+	};
+	int result = r->read_memory(target, args);
 	if (result == ERROR_OK) {
 		target_handle_md_output(cmd, target, address, size, count, buffer,
 			false);
@@ -5131,7 +5202,7 @@ COMMAND_HANDLER(riscv_exec_progbuf)
 	if (riscv_reg_flush_all(target) != ERROR_OK)
 		return ERROR_FAIL;
 	int error = riscv_program_exec(&prog, target);
-	riscv_invalidate_register_cache(target);
+	riscv_reg_cache_invalidate_all(target);
 
 	if (error != ERROR_OK) {
 		LOG_TARGET_ERROR(target, "exec_progbuf: Program buffer execution failed.");
@@ -5705,8 +5776,6 @@ static int riscv_resume_go_all_harts(struct target *target)
 	} else {
 		LOG_TARGET_DEBUG(target, "Hart requested resume, but was already resumed.");
 	}
-
-	riscv_invalidate_register_cache(target);
 	return ERROR_OK;
 }
 
@@ -5798,17 +5867,6 @@ unsigned int riscv_vlenb(const struct target *target)
 {
 	RISCV_INFO(r);
 	return r->vlenb;
-}
-
-static void riscv_invalidate_register_cache(struct target *target)
-{
-	/* Do not invalidate the register cache if it is not yet set up
-	 * (e.g. when the target failed to get examined). */
-	if (!target->reg_cache)
-		return;
-
-	LOG_TARGET_DEBUG(target, "Invalidating register cache.");
-	register_cache_invalidate(target->reg_cache);
 }
 
 int riscv_get_hart_state(struct target *target, enum riscv_hart_state *state)

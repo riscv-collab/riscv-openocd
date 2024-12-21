@@ -41,6 +41,7 @@ DIST_SUBDIRS += testing
 
 # common flags used in openocd build
 AM_CFLAGS = $(GCC_WARNINGS)
+AM_LDFLAGS =
 
 AM_CPPFLAGS = $(HOST_CPPFLAGS)\
 			  -I$(top_srcdir)/src \
@@ -54,6 +55,12 @@ AM_CPPFLAGS += -I$(top_srcdir)/jimtcl \
 else
 AM_CPPFLAGS += $(JIMTCL_CFLAGS)
 endif
+
+if USE_GCOV
+AM_CFLAGS += --coverage
+AM_LDFLAGS += --coverage
+endif
+
 EXTRA_DIST += \
 	BUGS \
 	HACKING \
@@ -119,7 +126,14 @@ TCL_PATH = tcl
 TCL_FILES = find $(srcdir)/$(TCL_PATH) -name '*.cfg' -o -name '*.tcl' -o -name '*.txt' | \
 		sed -e 's,^$(srcdir)/$(TCL_PATH),,'
 
+# The git log command below generates many empty text lines with only some space characters
+# for indentation purposes, so use sed to trim all trailing whitespace.
 dist-hook:
+	if test -d $(srcdir)/.git -a \( ! -e $(distdir)/ChangeLog -o -w $(distdir)/ChangeLog \) ; then \
+		git --git-dir $(srcdir)/.git log --date=short --pretty="format:%ad  %aN <%aE>%n%n%w(0,4,6)* %B" \
+		| sed 's/[[:space:]]*$$//' > $(distdir)/ChangeLog.tmp && \
+		mv $(distdir)/ChangeLog.tmp $(distdir)/ChangeLog; \
+	fi
 	for i in $$($(TCL_FILES)); do \
 		j="$(distdir)/$(TCL_PATH)/$$i" && \
 		mkdir -p "$$(dirname $$j)" && \
