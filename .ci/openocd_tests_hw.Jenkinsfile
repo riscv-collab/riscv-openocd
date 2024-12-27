@@ -6,14 +6,16 @@ def runTestsHwrs(List boards, String fpgaName, String workspaceId) {
   def maxDurationMinutesPerBoard = 9
   def maxDurationMinutes = maxDurationMinutesPerBoard * boards.size()
   stage("lock ${fpgaName}") {
-    sh "${MAKE_PY} --image ${DOCKER_IMAGE} dev lock --name ${fpgaName} --duration ${maxDurationMinutes}m --override-workspace-id ${workspaceId} --blocking"
+    dir("${SOURCE_DIR}") {
+      sh "${MAKE_PY} --image ${DOCKER_IMAGE} dev lock --name ${fpgaName} --duration ${maxDurationMinutes}m --override-workspace-id ${workspaceId} --blocking"
+    }
   }
   for (board in boards) {
     stage("${board}") {
       // we need to run tests for all boards, so should continue on failure
       catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
         timeout(maxDurationMinutesPerBoard) {
-          dir("$WD") {
+          dir("${SOURCE_DIR}") {
             sh """
             #!/bin/bash
             set +x
@@ -42,7 +44,7 @@ def runTestsClassic(boards){
     tests["${board}"] = {
       stage("${board}") {
          lock (resource: "${fpga_lock}") {
-            dir ("$WD") {
+            dir ("${SOURCE_DIR}") {
               if (params.containsKey('nightly_run')) {
                 def ENSURE_RUN_BEFORE = params.nightly_run
                 sh "${SOURCE_DIR}/.ci/utils/ensure_nigthly_timeframe.sh ${ENSURE_RUN_BEFORE}"
@@ -102,7 +104,7 @@ pipeline {
     stage('CleanWorkspaceAndCheckout') {
       steps {
         cleanWs()
-        dir ("$SOURCE_DIR") {
+        dir ("${SOURCE_DIR}") {
           checkout scm
         }
       }
@@ -126,7 +128,7 @@ pipeline {
     stage('PrepareCredentials') {
       steps {
         echo "Generating credential file"
-        dir ("$WD") {
+        dir ("${SOURCE_DIR}") {
           script {
             withCredentials([file(credentialsId: 'makepy_creds_pro', variable: 'MAKEPY_CREDS')]) {
             withCredentials([sshUserPrivateKey(credentialsId: 'cicd-sc_gitlab_ssh_key', keyFileVariable: 'MAKEPY_SSH')]) {
@@ -137,6 +139,8 @@ pipeline {
               cp "$MAKEPY_SSH" the_key
               cat "$MAKEPY_CREDS"  | ./jq ".gitlab.ssh_path = \\\"$WD/the_key\\\"" | tee credentials.json.tmp
               cat credentials.json.tmp  | ./jq ".stands.ssh_path = \\\"$WD/the_key\\\"" | tee credentials.json
+              cp credentials.json ..
+              cp the_key ..
               export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -i '$MAKEPY_SSH'"
               ${MAKE_PY} pass
               """
@@ -149,12 +153,12 @@ pipeline {
     stage('Build') {
       steps {
         echo "Building project"
-        dir ("$BUILD_MOUNT") {
+        dir ("${SOURCE_DIR}") {
           // This file contains information about debug adapter used to
           // interact with fpga. We copy it so we don't need to mount the
           // storage
           sh 'cp ~/.config/stand.info/tests.stand.info.json ${SOURCE_DIR}/.tests.stand.info.json'
-          sh '${MAKE_PY} --image $DOCKER_IMAGE container run -p -m . --credentials ${WD}/credentials.json'
+          sh '${MAKE_PY} --image $DOCKER_IMAGE container run -p -m ${WD} --credentials ${WD}/credentials.json'
           sh '${MAKE_PY} --image $DOCKER_IMAGE pass'
           sh '${MAKE_PY} --image $DOCKER_IMAGE sh --container-user root usermod -g plugdev $(whoami)'
           sh '${MAKE_PY} --image $DOCKER_IMAGE conan-config --credentials ${WD}/credentials.json'
@@ -169,7 +173,7 @@ pipeline {
     }
     stage('PrepareBoards') {
       steps {
-        dir ("$WD") {
+        dir ("${SOURCE_DIR}") {
           // fpga_configuration_registry creates **fpga_info** directory
           sh "${MAKE_PY} sh make fpga_configuration_registry -f ${SOURCE_DIR}/testing/syntacore/fpga_support/makefile"
           script {
@@ -227,14 +231,16 @@ pipeline {
   }
   post {
     always {
-      script {
-        if (workspaceId) {
-          sh "${MAKE_PY} --image ${DOCKER_IMAGE} dev unlock --override-workspace-id ${workspaceId}"
+      dir ("${SOURCE_DIR}") {
+        script {
+          if (workspaceId) {
+            sh "${MAKE_PY} --image ${DOCKER_IMAGE} dev unlock --override-workspace-id ${workspaceId}"
+          }
         }
+        sh "${MAKE_PY} history"
+        sh "${MAKE_PY} container clean"
+        sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/testing ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
       }
-      sh "${MAKE_PY} history"
-      sh "${MAKE_PY} container clean"
-      sh "${SOURCE_DIR}/.ci/utils/upload_testing_results.sh ${BUILD_DIR}/testing ${BUILD_ID} ${ARTIFACTORY_API_KEY}"
     }
     success {
       sh "${SOURCE_DIR}/.ci/utils/report_test_success.sh ${UploadResults} ${STAND_ID} ${ARTIFACTORY_API_KEY}"
