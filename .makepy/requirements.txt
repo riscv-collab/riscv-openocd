@@ -3,7 +3,7 @@ cmakelang==0.6.13
 hwrs==0.2.0
 isort==5.13.2
 lgrw==0.3.10
-makepy==1.100.5
+makepy==1.100.11
 mypy==1.8.0
 pexpect==4.9.0
 pylint==3.0.3
