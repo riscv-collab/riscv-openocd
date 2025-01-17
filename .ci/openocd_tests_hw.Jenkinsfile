@@ -98,7 +98,7 @@ pipeline {
     DOCKER_IMAGE = "cpp_ubuntu_20"
 
     SUDO_PSW = "${NAS_PSW}"
-    ARTIFACTORY_API_KEY = credentials('OpenOCDTestReportKey')
+    ARTIFACTORY_API_KEY = credentials('cicd-tools-sc-artifactorty-api-key')
   }
   stages {
     stage('CleanWorkspaceAndCheckout') {
