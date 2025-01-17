@@ -601,3 +601,13 @@ proc parse_reserve_trigger { report } {
 
   return [internal_parse_success $TYPE $report [list value $report]]
 }
+
+proc parse_configure_ebreak { report } {
+  set TYPE configure_ebreak
+  return [internal_parse_empty_on_success $TYPE $report]
+}
+
+proc parse_cget_ebreak { report } {
+  set TYPE cget_ebreak
+  return [internal_parse_success $TYPE $report [list value $report]]
+}

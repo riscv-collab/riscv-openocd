@@ -20,11 +20,11 @@ proc run_test {} {
   ocdtlb_run_expect "resume $ENTRY_ADDR"
   ocdtlb_run_expect "halt"
 
-  set AfterHalt [ocdtlb_target_command current debug_reason]
+  set AfterHalt [ocdtlb_target_command_rsp current debug_reason]
   ocdtlb_expect_equal "debug-request" $AfterHalt
 
   ocdtlb_run_expect "step"
-  set AfterStep [ocdtlb_target_command current debug_reason]
+  set AfterStep [ocdtlb_target_command_rsp current debug_reason]
   ocdtlb_expect_equal "single-step" $AfterStep
 
   set ResumeCapture [ocdtlb_run_catch_and_capture "resume"]
@@ -36,7 +36,7 @@ proc run_test {} {
   ocdtlb_run_expect "bp $MAIN_ADDR 4"
   ocdtlb_run_expect "resume $ENTRY_ADDR"
   ocdtlb_wait_resume wait_halt
-  set AfterSwBp [ocdtlb_target_command current debug_reason]
+  set AfterSwBp [ocdtlb_target_command_rsp current debug_reason]
   ocdtlb_expect_equal "breakpoint" $AfterSwBp
   ocdtlb_run_expect "rbp $MAIN_ADDR"
 
@@ -45,7 +45,7 @@ proc run_test {} {
     ocdtlb_run_expect "bp $SIMPLE_INSTR_ADDR 4 hw"
     ocdtlb_run_expect "resume $ENTRY_ADDR"
     ocdtlb_wait_resume wait_halt
-    set OnBpHalt_Single [ocdtlb_target_command current debug_reason]
+    set OnBpHalt_Single [ocdtlb_target_command_rsp current debug_reason]
 
     ocdtlb_expect_equal "breakpoint" $OnBpHalt_Single
     ocdtlb_run_expect "rbp $SIMPLE_INSTR_ADDR"
@@ -56,7 +56,7 @@ proc run_test {} {
     ocdtlb_run_expect "wp $LOAD_ADDR 4"
     ocdtlb_run_expect "resume $ENTRY_ADDR"
     ocdtlb_wait_resume wait_halt
-    set OnWpHalt_Single [ocdtlb_target_command current debug_reason]
+    set OnWpHalt_Single [ocdtlb_target_command_rsp current debug_reason]
 
     ocdtlb_expect_equal "watchpoint" $OnWpHalt_Single
     ocdtlb_run_expect "rwp $LOAD_ADDR"
@@ -69,15 +69,15 @@ proc run_test {} {
 
     ocdtlb_run_expect "resume $ENTRY_ADDR"
     ocdtlb_wait_resume wait_halt
-    set OnWpHalt [ocdtlb_target_command current debug_reason]
+    set OnWpHalt [ocdtlb_target_command_rsp current debug_reason]
 
     ocdtlb_run_expect "resume"
     ocdtlb_wait_resume wait_halt
-    set OnBpHalt [ocdtlb_target_command current debug_reason]
+    set OnBpHalt [ocdtlb_target_command_rsp current debug_reason]
 
     ocdtlb_run_expect "resume"
     ocdtlb_wait_resume wait_halt
-    set OnWpAgain [ocdtlb_target_command current debug_reason]
+    set OnWpAgain [ocdtlb_target_command_rsp current debug_reason]
 
     ocdtlb_expect_equal "watchpoint" $OnWpHalt
     ocdtlb_expect_equal "watchpoint" $OnWpAgain

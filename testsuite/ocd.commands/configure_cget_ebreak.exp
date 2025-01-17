@@ -1,0 +1,38 @@
+proc check_actions {mode modes actions} {
+  foreach action $actions {
+    set actions_before [ocdtlb_rsp_get [ocdtlb_target_command current "cget -ebreak"]]
+    ocdtlb_target_command current "configure -ebreak $mode $action"
+    set actions_after [ocdtlb_rsp_get [ocdtlb_target_command current "cget -ebreak"]]
+    set mode_idx [lsearch $modes $mode]
+    set other_modes [lreplace $modes $mode_idx $mode_idx]
+    foreach other_mode $other_modes {
+      set after [dict get $actions_after $other_mode]
+      set before [dict get $actions_before $other_mode]
+      ocdtlb_expect_equal $before $after
+    }
+  }
+}
+
+proc run_test {} {
+  ocd_connect
+
+  set modes {m s u vs vu}
+  set ebreak_actions {exception halt}
+  foreach action $ebreak_actions {
+    ocdtlb_target_command current "configure -ebreak $action"
+    set actions [ocdtlb_rsp_get [ocdtlb_target_command current "cget -ebreak"]]
+    foreach mode $modes {
+      ocdtlb_expect_equal [dict get $actions $mode] $action
+    }
+  }
+
+  foreach action $ebreak_actions {
+    ocdtlb_target_command current "configure -ebreak $action"
+    foreach mode $modes {
+      check_actions $mode $modes $ebreak_actions
+    }
+  }
+  return [ocd_test_pass]
+}
+
+return [run_test]
