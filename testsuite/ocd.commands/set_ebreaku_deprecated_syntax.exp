@@ -19,8 +19,9 @@ proc run_test {} {
 
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
-  ocdtlb_target_command current "configure -ebreak exception"
-  ocdtlb_target_command current "configure -ebreak u halt"
+  ocdtlb_run_expect "riscv set_ebreakm off"
+  ocdtlb_run_expect "riscv set_ebreaks off"
+  ocdtlb_run_expect "riscv set_ebreaku on"
   ocdtlb_run_expect "resume"
 
   ocdtlb_wait_resume wait_halt
@@ -51,7 +52,9 @@ proc run_test {} {
   #ebreaku off
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
-  ocdtlb_target_command current "configure -ebreak exception"
+  ocdtlb_run_expect "riscv set_ebreakm off"
+  ocdtlb_run_expect "riscv set_ebreaks off"
+  ocdtlb_run_expect "riscv set_ebreaku off"
   ocdtlb_run_expect "resume"
 
   ocdtlb_wait_resume

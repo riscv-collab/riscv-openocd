@@ -1,26 +1,27 @@
-if {![target_info cpu,has_u_mode]} { return [ocd_test_unsupported] }
+if {![target_info cpu,has_s_mode]} { return [ocd_test_unsupported] }
 if {![target_info cpu,has_pmp]} { return [ocd_test_unsupported] }
 if {![target_info cpu,has_pmp_top]} { return [ocd_test_unsupported] }
 
 proc run_test {} {
   set default_bin_prefix [tool_state_get default_bin_prefix]
-  ocd_compile_executable "U-mode.S" "$default_bin_prefix.exe" \
+  ocd_compile_executable "S-mode.S" "$default_bin_prefix.exe" \
     [list "-DDMTVEC_BALIGN=[target_info cpu,mtvec_balign]" "-DDSTVEC_BALIGN=[target_info cpu,stvec_balign]"]
 
   # created by compile executable
   set ENTRY_ADDR [tool_state_get_program_symbol _entry]
-  set END_ADDR [tool_state_get_program_symbol check_u_mode]
+  set END_ADDR [tool_state_get_program_symbol end]
 
   ocd_connect
 
-  #ebreaku on
+  #ebreaks on
   ocdtlb_run_expect "targets 0"
   ocdtlb_run_expect "reset halt"
 
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
-  ocdtlb_target_command current "configure -ebreak exception"
-  ocdtlb_target_command current "configure -ebreak u halt"
+  ocdtlb_run_expect "riscv set_ebreakm off"
+  ocdtlb_run_expect "riscv set_ebreaks on"
+  ocdtlb_run_expect "riscv set_ebreaku off"
   ocdtlb_run_expect "resume"
 
   ocdtlb_wait_resume wait_halt
@@ -48,10 +49,12 @@ proc run_test {} {
 
   set END_ADDR [tool_state_get_program_symbol loop]
 
-  #ebreaku off
+  #ebreaks off
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
   ocdtlb_run_expect "reg pc $ENTRY_ADDR"
-  ocdtlb_target_command current "configure -ebreak exception"
+  ocdtlb_run_expect "riscv set_ebreakm off"
+  ocdtlb_run_expect "riscv set_ebreaks off"
+  ocdtlb_run_expect "riscv set_ebreaku off"
   ocdtlb_run_expect "resume"
 
   ocdtlb_wait_resume
