@@ -53,6 +53,7 @@ set_board_info cpu,dm_abstract_fpr 1
 set_board_info cpu,dm_is_slow 0
 
 set_board_info cpu,dm_sba_access_enable 0
+set_board_info cpu,dcsr_ebreakx_warl 0
 
 add_board_info cflags   -march=rv64gc
 add_board_info cflags   -mabi=lp64d

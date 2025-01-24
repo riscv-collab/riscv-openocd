@@ -53,6 +53,7 @@ set_board_info cpu,dm_abstract_fpr 1
 set_board_info cpu,dm_is_slow 0
 
 set_board_info cpu,dm_sba_access_enable 1
+set_board_info cpu,dcsr_ebreakx_warl 1
 
 add_board_info cflags   -march=rv32gc
 add_board_info cflags   -mabi=ilp32d

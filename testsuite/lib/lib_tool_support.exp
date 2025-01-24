@@ -80,6 +80,7 @@ proc tsuplib_target_info_check {} {
     cpu,dm_abstract_fpr \
     cpu,dm_is_slow \
     cpu,dm_sba_access_enable \
+    cpu,dcsr_ebreakx_warl \
     memory,reset_vector \
     memory,has_high_pa \
     memory,ocd_work_area \

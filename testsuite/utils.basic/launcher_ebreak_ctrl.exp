@@ -9,6 +9,11 @@ proc run_test {} {
     ebreak_disabled \
     expect_success]
 
+  set termination_policy expect_success
+  if {![target_info cpu,dcsr_ebreakx_warl]} {
+    set termination_policy expect_failure
+  }
+
   set has_u_mode [target_info cpu,has_u_mode]
   set has_s_mode [target_info cpu,has_s_mode]
 
@@ -18,7 +23,7 @@ proc run_test {} {
       --run-command "check_ebreak_enabled $has_u_mode $has_s_mode" \
     ] \
     ebreak_enabled \
-    expect_success]
+    $termination_policy]
 
   return [ocd_test_pass]
 }
