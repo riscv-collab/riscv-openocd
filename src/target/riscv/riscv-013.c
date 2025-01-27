@@ -2924,22 +2924,50 @@ static int deassert_reset(struct target *target)
 	riscv_scan_set_delay(&info->learned_delays, RISCV_DELAY_BASE,
 			orig_base_delay);
 
-	/* Ack reset and clear DM_DMCONTROL_HALTREQ if previously set */
+	/* Ack reset with DM_DMCONTROL_HALTREQ for those MCUs which need a
+	 * period of time to be halted after reset is released */
 	control = 0;
 	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
 	control = set_field(control, DM_DMCONTROL_ACKHAVERESET, 1);
+	control = set_field(control, DM_DMCONTROL_HALTREQ, target->reset_halt ? 1 : 0);
 	control = set_dmcontrol_hartsel(control, info->index);
 	result = dm_write(target, DM_DMCONTROL, control);
 	if (result != ERROR_OK)
 		return result;
 
 	if (target->reset_halt) {
+		/* Wait for all harts to halt for those MCUs mentioned above */
+		time_t halt_start = time(NULL);
+		do {
+			result = dmstatus_read(target, &dmstatus, true);
+			if (result != ERROR_OK)
+				return result;
+
+			if (time(NULL) - halt_start > riscv_get_command_timeout_sec()) {
+				LOG_TARGET_ERROR(target, "Hart didn't halt after reset in %ds; "
+						"dmstatus=0x%x (anyhalted=%s, allhalted=%s); "
+						"Increase the timeout with riscv set_command_timeout_sec.",
+						riscv_get_command_timeout_sec(), dmstatus,
+						get_field(dmstatus, DM_DMSTATUS_ANYHALTED) ? "true" : "false",
+						get_field(dmstatus, DM_DMSTATUS_ALLHALTED) ? "true" : "false");
+				return ERROR_TIMEOUT_REACHED;
+			}
+		} while (!get_field(dmstatus, DM_DMSTATUS_ALLHALTED));
 		target->state = TARGET_HALTED;
 		target->debug_reason = DBG_REASON_DBGRQ;
 	} else {
 		target->state = TARGET_RUNNING;
 		target->debug_reason = DBG_REASON_NOTHALTED;
 	}
+
+	/* clear DM_DMCONTROL_HALTREQ */
+	control = 0;
+	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
+	control = set_dmcontrol_hartsel(control, info->index);
+	result = dm_write(target, DM_DMCONTROL, control);
+	if (result != ERROR_OK)
+		return result;
+
 	info->dcsr_ebreak_is_set = dcsr_ebreak_config_equals_reset_value(target);
 	return ERROR_OK;
 }
