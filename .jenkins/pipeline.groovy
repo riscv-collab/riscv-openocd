@@ -267,7 +267,7 @@ workflow('openocd') {
         shellScript {
             '''
                 BUILD_DIR="build/tests_on_dummy_Build"
-                mpy sh .makepy/support/utils/run_tests_on_dummy.sh 4 ${BUILD_DIR}
+                mpy sh env ${VARS_env} .makepy/support/utils/run_tests_on_dummy.sh 4 ${BUILD_DIR}
             '''
         }
     }
