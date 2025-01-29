@@ -56,7 +56,6 @@ static const char * const default_reg_names[GDB_REGNO_COUNT] = {
 	[GDB_REGNO_T5] = "t5",
 	[GDB_REGNO_T6] = "t6",
 	[GDB_REGNO_PC] = "pc",
-	[GDB_REGNO_CSR0] = "csr0",
 	[GDB_REGNO_PRIV] = "priv",
 	[GDB_REGNO_FT0] = "ft0",
 	[GDB_REGNO_FT1] = "ft1",
@@ -92,7 +91,7 @@ static const char * const default_reg_names[GDB_REGNO_COUNT] = {
 	[GDB_REGNO_FT11] = "ft11",
 
 	#define DECLARE_CSR(csr_name, number)[(number) + GDB_REGNO_CSR0] = #csr_name,
-	#include "encoding.h"
+	#include "riscv_encoding.h"
 	#undef DECLARE_CSR
 };
 
@@ -368,7 +367,7 @@ static bool is_known_standard_csr(unsigned int csr_num)
 {
 	static const bool is_csr_in_buf[GDB_REGNO_CSR4095 - GDB_REGNO_CSR0 + 1] = {
 		#define DECLARE_CSR(csr_name, number)[number] = true,
-		#include "encoding.h"
+		#include "riscv_encoding.h"
 		#undef DECLARE_CSR
 	};
 	assert(csr_num < ARRAY_SIZE(is_csr_in_buf));
@@ -433,6 +432,15 @@ bool riscv_reg_impl_gdb_regno_exist(const struct target *target, uint32_t regno)
 			 * mideleg registers should not exist." */
 			return riscv_supports_extension(target, 'S') ||
 				riscv_supports_extension(target, 'N');
+		case CSR_USTATUS:
+		case CSR_UIE:
+		case CSR_UTVEC:
+		case CSR_USCRATCH:
+		case CSR_UEPC:
+		case CSR_UCAUSE:
+		case CSR_UTVAL:
+		case CSR_UIP:
+			return riscv_supports_extension(target, 'N');
 
 		case CSR_PMPCFG1:
 		case CSR_PMPCFG3:
