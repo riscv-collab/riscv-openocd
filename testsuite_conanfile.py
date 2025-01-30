@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from conan import ConanFile
+from conan.tools.cmake import CMakeToolchain
 from conan.tools.files import copy
 
 
@@ -17,6 +18,10 @@ class Package(ConanFile):
         self.requires("riscv-gdb")
         self.requires("riscv-isa-sim")
         self.requires("dejagnu")
+
+    def generate(self):
+        tc = CMakeToolchain(self)
+        tc.generate()
 
     def package(self):
         copy(

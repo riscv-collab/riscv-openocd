@@ -2,13 +2,6 @@
 
 import tools.automation.TI
 
-def buildProject(vars, target = "openocd") {
-  sh(""" ./make.py just-config --profile:host ${vars.profile} \
-          --settings:host "&:build_type=${vars.buildType}" \
-          --build-path build/${vars.buildType} ${vars.extraOpts} """)
-  sh("./make.py build --build-path build/${vars.buildType} --target ${target}")
-}
-
 workflow('openocd') {
 
     parameters {
@@ -35,7 +28,11 @@ workflow('openocd') {
             fs('1.0Gi', '1.0Gi')
         }
         matrix {
-            [["image": ['cpp_ubuntu_20']]]
+            [
+                [
+                    "image": ['cpp_ubuntu_22']
+                ]
+            ]
         }
         shellScript {
             '''
@@ -51,17 +48,24 @@ workflow('openocd') {
             fs('1.0Gi', '1.2Gi')
         }
         matrix {
-            [[image          : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
-              extraOpts      : ['', '--options:host elct_support=True'],
-              buildType      : ['Release'],
-              profile        : ['default']],
-             [image          : ['cpp_ubuntu_22'],
-              extraOpts      : [''],
-              buildType      : ['Release'],
-              extraOpts      : ['', '--options:host elct_support=True'],
-              profile        : ['makepy_sc_mingw', 'mp_armhf']]]
+            [
+                [
+                    image    : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                    profile  : ['default'],
+                    o_source : ['internal', 'syntacore']
+                ], [
+                    image    : ['cpp_ubuntu_22'],
+                    profile  : ['makepy_sc_mingw', 'mp_armhf'],
+                    o_source : ['internal', 'syntacore']
+                ]
+            ]
         }
-        script { vars -> buildProject(vars) }
+        shellScript {
+            '''
+                source .jenkins/common.sh
+                mpy conan create ${VARS_as_conan_args[@]}
+            '''
+        }
     }
 
     job('tests-sanitized') {
@@ -71,33 +75,75 @@ workflow('openocd') {
             fs('12.5Gi', '22.6Gi')
         }
         dependsOn 'lint' // workaround for better stage scheduling
+            matrix {
+                [
+                    [
+                        image        : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                        profile      : ['default'],
+                        target       : ['riscv_tests', 'OpenOCDTestsOn_spike'],
+                        o_source     : ['internal', 'syntacore'],
+                        s_build_type : ['Debug', 'Release'],
+                        // TODO: Enable 'strict' sanitize level YCAT-43092
+                        o_sanitize   : ['enable'],
+                    ]
+                ]
+            }
+        rules { vars ->
+            include(vars.ti >= TI.POSTCOMMIT)
+        }
+        shellScript {
+            '''
+                source .jenkins/common.sh
+                workdir=build/testsuite
+
+                runTests $workdir
+                EXIT_CODE=$?
+
+                sc-jenkins-lib artifacts push \
+                    "artifacts-${VARS_job}-${VARS_image}-${VARS_profile}-${VARS_target}-${VARS_o_source}-${VARS_s_build_type}-${VARS_o_sanitize}" \
+                    "${workdir}/testing" \
+                    1w
+                exit $EXIT_CODE
+            '''
+        }
+    }
+
+    job('tests-valgrind') {
+        resources {
+            cpu('10.0', '10')
+            memory('0.6Gi', '23.5Gi')
+            fs('13.0Gi', '30.1Gi')
+        }
+        dependsOn 'lint' // workaround for better stage scheduling
         matrix {
-             [[image          : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
-               profile        : ['default'],
-               testingType    : ['spike'],
-               // unfortunatly, we can't enable Strict sanitization, since jimtcl has bugs like this:
-               // https://github.com/msteveb/jimtcl/issues/300
-               // https://github.com/msteveb/jimtcl/issues/301
-               extraOpts      : ['--options:host test=True --sanitize-level=Enabled',
-                                 '--options:host test=True --sanitize-level=Enabled --options:host elct_support=True',
-                                 '--options:host test=True --tests-options tests-valgrid-path=valgrind',
-                                 '--options:host test=True --tests-options tests-valgrid-path=valgrind --options:host elct_support=True'],
-               buildType      : ['Debug', 'Release']]]
+            [
+                [
+                    image        : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                    profile      : ['default'],
+                    target       : ['riscv_tests', 'OpenOCDTestsOn_spike'],
+                    o_source     : ['internal', 'syntacore'],
+                    s_build_type : ['Debug', 'Release'],
+                ]
+            ]
         }
         rules { vars ->
             include(vars.ti >= TI.POSTCOMMIT)
         }
-        script { vars ->
-            buildProject(vars)
-            try {
-              sh("./make.py build --build-path build/${vars.buildType} --target OpenOCDTestsOn_spike --parallel 8")
-              sh("./make.py sh ./.makepy/support/utils/check_sanitizer_logs.sh build/${vars.buildType}/testing/dejagnu")
-            } catch (Exception ex) {
-              artifacts.push("build/${vars.buildType}/testing",
-                             "artifacts-${vars.testingType}-${vars.image}-${vars.profile}-${vars.buildType}",
-                             retention: '1w')
-              error "wasted!"
-            }
+        shellScript {
+            '''
+                source .jenkins/common.sh
+                workdir=build/testsuite
+
+                VARS_tests_valgrind_path=$(which valgrind)
+                runTests $workdir
+                EXIT_CODE=$?
+
+                sc-jenkins-lib artifacts push \
+                    "artifacts-${VARS_job}-${VARS_image}-${VARS_profile}-${VARS_target}-${VARS_o_source}" \
+                    "${workdir}/testing" \
+                    1w
+                exit $EXIT_CODE
+            '''
         }
     }
 
@@ -109,27 +155,29 @@ workflow('openocd') {
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
-            [[image          : ['cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
-              profile        : ['default'],
-              testingType    : ['spike', 'external'],
-              extraOpts      : ['--options:host test=True',
-                                '--options:host elct_support=True --options:host test=True'],
-              buildType      : ['Release']]]
+            [
+                [
+                    image    : ['cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                    profile  : ['default'],
+                    target   : ['riscv_tests', 'OpenOCDTestsOn_spike'],
+                    o_source : ['internal', 'syntacore'],
+                ]
+            ]
         }
-        script { vars ->
-          buildProject(vars)
-          try {
-            if (vars.testingType == 'spike') {
-              sh("./make.py build --build-path build/${vars.buildType} --target OpenOCDTestsOn_spike --parallel 8")
-            } else {
-              sh("./make.py build --build-path build/${vars.buildType} --target RISCVTestsDebug --parallel 8")
-            }
-          } catch (Exception ex) {
-            artifacts.push("build/${vars.buildType}/testing",
-                           "artifacts-${vars.testingType}-${vars.image}-${vars.profile}-${vars.buildType}",
-                           retention: '1w')
-            error "wasted!"
-          }
+        shellScript {
+            '''
+                source .jenkins/common.sh
+                workdir=build/testsuite
+
+                runTests $workdir
+                EXIT_CODE=$?
+
+                sc-jenkins-lib artifacts push \
+                    "artifacts-${VARS_job}-${VARS_image}-${VARS_profile}-${VARS_target}-${VARS_o_source}" \
+                    "${workdir}/testing" \
+                    1w
+                exit $EXIT_CODE
+            '''
         }
     }
 
@@ -141,23 +189,29 @@ workflow('openocd') {
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
-            [[image          : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
-              profile        : ['default'],
-              extraOpts      : ['--options:host test=True',
-                                '--options:host elct_support=True --options:host test=True'],
-              buildType      : ['Release']]]
+            [
+                [
+                    image    : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                    profile  : ['default'],
+                    target   : ['riscv_tests', 'OpenOCDTestsOn_spike'],
+                    o_source : ['internal', 'syntacore'],
+                ]
+            ]
         }
-        script { vars ->
-            buildProject(vars)
-            try {
-                sh("./make.py build --build-path build/${vars.buildType} --target transferable_testsuite")
-                sh("./make.py build --build-path build/${vars.buildType} --target Transferable_OpenOCDTestsOn_spike --parallel 8")
-            } catch (Exception ex) {
-                artifacts.push("build/${vars.buildType}/testing",
-                    "artifacts-transferable--${vars.image}-${vars.profile}-${vars.buildType}",
-                    retention: '1w')
-                error "wasted!"
-            }
+        shellScript {
+            '''
+                source .jenkins/common.sh
+                workdir=build/testsuite
+
+                runTransferableTests $workdir
+                EXIT_CODE=$?
+
+                sc-jenkins-lib artifacts push \
+                    "artifacts-${VARS_job}-${VARS_image}-${VARS_profile}-${VARS_target}-${VARS_o_source}" \
+                    "${workdir}/testing" \
+                    1w
+                exit $EXIT_CODE
+            '''
         }
     }
 
@@ -168,20 +222,32 @@ workflow('openocd') {
             fs('5.8Gi', '13.5Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_20'],
-              profile        : ['default'],
-              extraOpts      : ['--options:host elct_support=True --options:host test=True'],
-              buildType      : ['Release']]]
+            [
+                [
+                    image    : ['cpp_ubuntu_22'],
+                    profile  : ['default'],
+                    o_source : ['internal'],
+                ]
+            ]
         }
         rules { vars ->
             include(vars.ti >= TI.POSTCOMMIT)
         }
-        script { vars ->
-            buildProject(vars, "transferable_testsuite")
-            artifacts.push("build/${vars.buildType}/install_testsuite", "${vars.profile}/${vars.image}/testsuite'")
+        shellScript {
+            '''
+                source .jenkins/common.sh
+                workdir=build/testsuite
 
-            sh("./make.py sh make fpga_configuration_registry -f testing/syntacore/fpga_support/makefile")
-            artifacts.push("fpga_info", "${vars.profile}/${vars.image}/fpga_info'")
+                buildTransferableTestsuite $workdir
+                sc-jenkins-lib artifacts push \
+                    "${VARS_profile}/${VARS_image}/testsuite" \
+                    "${workdir}/install_testsuite"
+
+                mpy sh make fpga_configuration_registry -f testing/syntacore/fpga_support/makefile
+                sc-jenkins-lib artifacts push \
+                    "${VARS_profile}/${VARS_image}/testsuite" \
+                    fpga_info
+            '''
         }
     }
 
@@ -194,10 +260,13 @@ workflow('openocd') {
         }
         dependsOn 'tests-fpga-build'
         matrix {
-            [[image          : ['cpp_ubuntu_20'],
-              profile        : ['default'],
-              buildType      : ['Release'],
-              stand          : ['twin']]]
+            [
+                [
+                    image   : ['cpp_ubuntu_22'],
+                    profile : ['default'],
+                    stand   : ['twin']
+                ]
+            ]
         }
         rules { vars ->
             include(vars.ti >= TI.POSTCOMMIT)
@@ -261,8 +330,12 @@ workflow('openocd') {
             fs('1.0Gi', '1.0Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
-              env            : ['', 'CC=clang CFLAGS=-fsanitize=address,undefined LDFLAGS=-Wl,-ldl']]]
+            [
+                [
+                    image : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                    env   : ['', 'CC=clang CFLAGS=-fsanitize=address,undefined LDFLAGS=-Wl,-ldl'],
+                ]
+            ]
         }
         shellScript {
             '''
@@ -283,7 +356,11 @@ workflow('openocd') {
             fs('1.0Gi', '1.0Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_22']]]
+            [
+                [
+                    image          : ['cpp_ubuntu_22'],
+                ]
+            ]
         }
         shellScript {
             '''
@@ -304,15 +381,17 @@ workflow('openocd') {
         }
         vars { [name: "openocd"] }
         matrix {
-            [[image          : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
-              profile        : ['default'],
-              extraArgs      : ['', '--options:host elct_support=True']],
-             [image          : ['cpp_ubuntu_22'],
-              profile        : ['makepy_sc_mingw'],
-              extraArgs      : ['', '--options:host elct_support=True']],
-             [image          : ['cpp_ubuntu_22'],
-              profile        : ['mp_armhf'],
-              extraArgs      : ['--options:host elct_support=True']]]
+            [
+                [
+                    image    : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                    profile  : ['default'],
+                    o_source : ['internal', 'syntacore']
+                ], [
+                    image    : ['cpp_ubuntu_22'],
+                    profile  : ['makepy_sc_mingw', 'mp_armhf'],
+                    o_source : ['internal', 'syntacore']
+                ]
+            ]
         }
     }
 

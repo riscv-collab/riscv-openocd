@@ -1,3 +1,4 @@
+// Needs update to the new interface
 def boards = []
 def UploadResults = 0
 def workspaceId

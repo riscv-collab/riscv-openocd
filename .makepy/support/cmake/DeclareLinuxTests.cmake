@@ -185,8 +185,7 @@ function(addNextToolToTestForBoard tool_name board_config_name)
         ${target_board_cmdline}
         --tool=${tool_name}
         --outdir=${tool_summary_dir}
-        --local_init ${CMAKE_BINARY_DIR}/local_init.exp
-    DEPENDS openocd)
+        --local_init ${CMAKE_BINARY_DIR}/local_init.exp)
   addBoardTestsDependency(
     ${board_tests_target} ${board_tool_target} ${SpikeTestsTarget})
 
@@ -200,8 +199,7 @@ function(addNextToolToTestForBoard tool_name board_config_name)
         --src_dir=${TRANSFERABLE_TESTSUITE_ROOT}/acceptance_tests/testsuite
         ${target_board_cmdline}
         --tool=${tool_name}
-        --outdir=${transferable_tool_summary_dir}
-    DEPENDS openocd)
+        --outdir=${transferable_tool_summary_dir})
   addBoardTestsDependency(
     ${transferable_board_tests_target} ${transferable_board_tool_target}
     ${TransferableSpikeTestsTarget})
@@ -283,8 +281,7 @@ function(add_riscv_test_debug_run_for_target target)
         ROOT=${RISCV_TESTS_SOURCE_DIR}/debug
         SIM=${RISCV_SPIKE_SIM_BINARY}
         TGT=${target}
-      ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/run-riscv-debug-tests.sh
-    DEPENDS openocd ${wd_target_name})
+      ${CMAKE_CURRENT_SOURCE_DIR}/dependencies_support/run-riscv-debug-tests.sh)
   # cmake-format: on
   add_dependencies(RISCVTestsDebug ${target_name})
 endfunction()

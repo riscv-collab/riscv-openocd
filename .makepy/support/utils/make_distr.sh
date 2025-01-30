@@ -3,11 +3,11 @@
 INPUT="$1"
 OUTPUT="$2"
 PACKAGE_NAME="$3"
+OPENOCD_PATH="$4"
 
 # ${SRC_DIR}/.makepy/support/utils/make_distr.sh
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 OPENOCD_SOURCES=$(dirname $(dirname $(dirname "${SCRIPT_DIR}")))
-OPENOCD_PATH="${INPUT}/install_openocd/openocd"
 DISTRIB_LOCATION="${OUTPUT}/${PACKAGE_NAME}"
 source "${INPUT}/conanrun.sh"
 

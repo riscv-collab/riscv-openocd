@@ -1,48 +1,27 @@
 {
     "version": "0.5",
     "requires": [
-        "testgen-model-interface/0.1.0-rc.0.42+sc.sc-dt.2025.02@sc/main#246dacbec26504892c53fa2b0dcd13a231c4a5ca%1738592592.187",
-        "sc-zstd/1.5.6-rc.0.319+sc.sc-dt.2025.02@sc/main#a669503bb50043265d267f215475fde58d709c8a%1738614622.363",
-        "sc-lzma/5.6.1-rc.0.320+sc.sc-dt.2025.02@sc/main#676d3c102716785b1073d2fc9c466b278afb5d21%1738626287.78",
-        "riscv-isa-sim/0.1.0-rc.0.300+sc.sc-dt.2025.02@sc/main#7dd2940be111e6722f56504334ed4169c307d7e7%1738593233.38",
-        "riscv-gdb/15.1.0-rc.1.65+sc.sc-dt.2025.02@sc/main#d7e99650c5a3a210d73ed47a3cbda70563047682%1738627491.699",
-        "riscv-gcc/14.2.0-rc.0.154+sc.sc-dt.2025.02@sc/main#cbd00f34c6931fcd63f2d2665ceb479012bc79b7%1738620915.761",
-        "riscv-binutils/2.43.1-rc.0.60+sc.sc-dt.2025.02@sc/main#662523d41b10c053888f94a437fa274ce93e2893%1738615516.339",
-        "rapidyaml/0.5.0#c6f48c5eb99c1d0bad5c4ac8e6960375%1699016203.526",
-        "python-gcc-12/3.10.7-rc.0.320+sc.sc-dt.2025.02@sc/main#8a7b75faac3ffdc9ceaf258a3aaf18b259a92f12%1738615952.521",
         "libusb/1.0.26#c0c00750b383839aa140a0be628d552c%1699027750.602",
         "libudev/system#86e335f85cbb299d6c9fc6260b3f1b0b%1699027725.148",
         "libjaylink/0.3.1-343+sc.main-experimental@sc/main#53a119886bdf4c0afcbbe19c6d282b7027da3732%1739449698.321",
         "libftdi/1.5#55ee16fbd5bbe4eab9d6f1f03fe0bf85%1718294061.052",
         "jimtcl/0.83.0-343+sc.main-experimental@sc/main#53a119886bdf4c0afcbbe19c6d282b7027da3732%1739449698.568",
         "jansson/2.14#42fc601d5b8e236e050e48f2321ef851%1712843826.616",
-        "hidapi/0.13.1#20fbe2186ac901286e0f5e7181cf1db7%1718294130.61",
-        "gdb_source_deps/0.0.1-rc.0.319+sc.sc-dt.2025.02@sc/main#6a33f19313b1bb927430618eb5dcac1296ff1186%1738592635.763",
-        "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
-        "external_openocd_tests/0.0.3-rc.0.319+sc.sc-dt.2025.02@sc/main#cf8210018d8216e1ecc852f7b360c81eee902765%1738592709.881",
-        "dejagnu/1.6.3-rc.0.319+sc.sc-dt.2025.02@sc/main#324d889a884249d40de0995483d1c76b9e2e4d0a%1738592700.798",
-        "c4core/0.1.11#5c6caad554b14584140f7e66c47eefb5%1699016213.432"
+        "hidapi/0.13.1#20fbe2186ac901286e0f5e7181cf1db7%1718294130.61"
     ],
     "build_requires": [
-        "riscv-newlib/4.4.0-rc.0.52+sc.sc-dt.2025.02@sc/main#3302ca6068329ec44f74ed59f15599b8974ef2ed%1738601792.854",
-        "riscv-glibc/2.38.0-rc.0.74+sc.sc-dt.2025.02@sc/main#2316eb7b0664b67f20439623b1534e58c7880a53%1738602665.594",
-        "riscv-gcc-raw/14.2.0-rc.0.154+sc.sc-dt.2025.02@sc/main#e060ea49b50730fcd3d1c0d14cf71252517fff27%1738601225.268",
-        "riscv-binutils-raw/2.43.1-rc.0.62+sc.sc-dt.2025.02@sc/main#d3039107c79bfaa49242a42241cffcf3abbf7397%1738594104.704",
+        "pkgconf/2.2.0#6462942a22803086372db44689ba825f%1732111592.538",
         "pkgconf/1.9.3#3e658ebc066dc868a1f8a472c1065368%1718360168.164",
         "ninja/1.11.1#77587f8c8318662ac8e5a7867eb4be21%1718364966.072",
-        "multilib-desc/1.0.0-rc.0.319+sc.sc-dt.2025.02@sc/main#9941751987aaf050663f1853c649478a03f9d2ae%1738592575.718",
         "meson/1.2.2#04bdfb85d665c82b08a3510aee3ffd19%1718360185.92",
         "m4/1.4.19#b38ced39a01e31fef5435bc634461fd2%1717689741.889",
         "libtool/2.4.7#08316dad5c72c541ed21e039e4cf217b%1718296814.154",
-        "hwbp_qemu_files/1.0.0-rc.0.319+sc.sc-dt.2025.02@sc/main#60f1287e9d2fcae882ddacbbf145ed326417430e%1738592666.797",
         "gnu-config/cci.20210814#dc430d754f465e8c74463019672fb97b%1718363816.46",
-        "glibc-linux-headers/6.6.3-rc.0.319+sc.sc-dt.2025.02@sc/main#3aa51c6dfbbfa8247650d14d78bca78e114496ef%1738594638.672",
         "automake/1.16.5#058bda3e21c36c9aa8425daf3c1faf50%1718359402.592",
         "autoconf/2.71#f9307992909d7fb3df459340f1932809%1718360141.211"
     ],
     "python_requires": [
         "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main#e057286806bd371381f6c54288e9de0e6c9c5ed8%1738665671.841",
-        "makepy_hints/1.14.0-rc.0.5+sc.main@sc/main#cbd7a66a3ba35ef50ddf80eddfc46c58ce41166c%1733745329.621",
-        "makepy_hints/1.0.0-rc.0.316+sc.main@sc/main#aa0106d519ec11492ae1ac9a5c2c300b3d44b918%1718273456.505"
+        "makepy_hints/1.14.0-rc.0.5+sc.main@sc/main#cbd7a66a3ba35ef50ddf80eddfc46c58ce41166c%1733745329.621"
     ]
 }

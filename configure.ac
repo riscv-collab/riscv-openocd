@@ -94,24 +94,6 @@ AC_CHECK_FUNCS([gettimeofday])
 AC_CHECK_FUNCS([usleep])
 AC_CHECK_FUNCS([realpath])
 
-# guess-rev.sh only exists in the repository, not in the released archives
-AC_MSG_CHECKING([whether to build a release])
-AS_IF([test -x "$srcdir/guess-rev.sh"], [
-  build_release=no
-], [
-  build_release=yes
-])
-AC_MSG_RESULT([$build_release])
-
-# Syntacore has it's own rules for release processing
-AC_MSG_CHECKING([whether to build a release for Syntacore])
-AS_IF([test -r "$srcdir/__sc_version.txt"], [
-  build_syntacore_release=yes
-], [
-  build_syntacore_release=no
-])
-AC_MSG_RESULT([$build_syntacore_release])
-
 # Adapter drivers
 # 1st column -- Basename for the configure option generated with AC_ARG_ENABLE.
 #               For example, "buspirate" generates options "--enable-buspirate[=yes/no]"

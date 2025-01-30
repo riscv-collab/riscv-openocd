@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-import itertools
 import logging
-import shutil
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
@@ -19,175 +17,6 @@ from makepy.utils import run_shell
 
 _logger = logging.getLogger()
 _repo_path = Path(__file__).parent.parent
-
-
-class _JustConfigCommand(Command):
-    def name(self) -> str:
-        return "just-config"
-
-    def help(self) -> str:
-        return "Just config the project!"
-
-    def amend_parser(self, parser: ArgumentParser) -> None:
-        conan_help = "See './make.py conan install --help'."
-        parser.add_argument(
-            "--build", type=str, default="never", help=conan_help
-        )
-        parser.add_argument(
-            "-b",
-            "--build-path",
-            required=True,
-            type=Path,
-            help="Build directory.",
-        )
-        parser.add_argument(
-            "-pr",
-            "--profile",
-            "-pr:h",
-            "--profile:host",
-            dest="host_profile",
-            type=str,
-            default="default",
-            help=conan_help,
-        )
-        parser.add_argument(
-            "-pr:b",
-            "--profile:build",
-            dest="build_profile",
-            type=str,
-            default="default",
-            help=conan_help,
-        )
-        parser.add_argument(
-            "-o",
-            "--options",
-            "-o:h",
-            "--options:host",
-            dest="host_options",
-            type=str,
-            default=[],
-            action="append",
-            help=conan_help,
-        )
-        parser.add_argument(
-            "-o:b",
-            "--options:build",
-            dest="build_options",
-            type=str,
-            default=[],
-            action="append",
-            help=conan_help,
-        )
-        parser.add_argument(
-            "-s",
-            "--settings",
-            "-s:h",
-            "--settings:host",
-            dest="host_settings",
-            type=str,
-            default=[],
-            action="append",
-            help=conan_help,
-        )
-        parser.add_argument(
-            "-s:b",
-            "--settings:build",
-            dest="build_settings",
-            type=str,
-            default=[],
-            action="append",
-            help=conan_help,
-        )
-
-        parser.add_argument(
-            "--tests-options",
-            dest="tests_options",
-            type=str,
-            default=[],
-            action="append",
-            help="additional parameters relevant for testing",
-        )
-        parser.add_argument(
-            "--sanitize-level",
-            dest="sanitize_level",
-            type=str,
-            default=None,
-            help="ASan/UBSan sanitizaion flags",
-        )
-
-    def _get_output_folder(self, build_path: Path) -> Path:
-        msg = (
-            "Conan will always generate files into build/(Debug|Release), "
-            "so your build path should be in the format <any_mangle>/build/(Debug|Release). "
-            "You can change this behavior in conanfile.py."
-        )
-        if build_path.name not in ["Debug", "Release"]:
-            raise ValueError(msg)
-        if build_path.parent.name != "build":
-            raise ValueError(msg)
-        return build_path.parent.parent
-
-    def command(self, args: Namespace) -> None:
-        shutil.rmtree(_repo_path / "external_sources", ignore_errors=True)
-        makepy = [
-            _repo_path / "make.py",
-            "--no-history-dump",
-            "--logging-level",
-            args.logging_level.lower(),
-        ]
-        output_folder = self._get_output_folder(args.build_path)
-        install_cmd = [
-            *makepy,
-            "conan",
-            "install",
-            "--profile:host",
-            args.host_profile,
-            "--profile:build",
-            args.build_profile,
-            "--build",
-            args.build,
-            "--output-folder",
-            output_folder,
-        ]
-        install_cmd.extend(
-            itertools.chain.from_iterable(
-                ["--settings:host", setting] for setting in args.host_settings
-            )
-        )
-        install_cmd.extend(
-            itertools.chain.from_iterable(
-                ["--settings:build", setting] for setting in args.build_settings
-            )
-        )
-        install_cmd.extend(
-            itertools.chain.from_iterable(
-                ["--options:host", setting] for setting in args.host_options
-            )
-        )
-        install_cmd.extend(
-            itertools.chain.from_iterable(
-                ["--options:build", setting] for setting in args.build_options
-            )
-        )
-
-        # TODO: should we remove all these "cwd" statements?
-        run_shell(install_cmd, cwd=_repo_path)
-        config_cmd = [
-            *makepy,
-            "config",
-            "--build-path",
-            args.build_path,
-        ]
-
-        config_cmd.extend(
-            itertools.chain.from_iterable(
-                [f"--{option}"] for option in args.tests_options
-            )
-        )
-        if args.sanitize_level is not None:
-            config_cmd.extend([f"--sanitize-level={args.sanitize_level}"])
-
-        run_shell(config_cmd, cwd=_repo_path)
 
 
 class _ConfigCommand(Command):
@@ -213,17 +42,14 @@ class _ConfigCommand(Command):
             help="run OpenOCD under valgrid when running tests",
         )
         parser.add_argument(
-            "--sanitize-level",
-            dest="sanitize_level",
-            choices=[None, "Enabled", "Strict"],
+            "--openocd-install",
+            dest="openocd_install",
             type=str,
-            default=None,
-            help="controls ASan/UBSan behavior if enabled",
+            required=True,
+            help="path to OpenOCD install",
         )
 
     def command(self, args: Namespace) -> None:
-        shutil.rmtree(_repo_path / "build-aux", ignore_errors=True)
-        run_shell(["./bootstrap", "nosubmodule"], cwd=_repo_path)
         cmd = [
             "cmake",
             "-S",
@@ -246,17 +72,16 @@ class _ConfigCommand(Command):
                 [f"-DOPENOCD_TESTS_VALGRIND_PATH={args.tests_valgrind_path}"]
             )
 
-        if args.sanitize_level is None:
-            pass
-        elif args.sanitize_level == "Enabled":
-            cmd.extend(["-DSC_OPENOCD_ENABLE_SANITIZERS=ON"])
-        elif args.sanitize_level == "Strict":
-            cmd.extend(["-DSC_OPENOCD_ENABLE_SANITIZERS=ON"])
-            cmd.extend(["-DSC_OPENOCD_STRICT_SANITIZERS=ON"])
-        else:
-            raise ValueError(
-                f"unknown sanitization level {args.sanitize_level}"
-            )
+        cmd.extend(
+            [
+                f"-DRISCVSpike_DIR={args.hints.host['riscv-isa-sim'].vars['SC_SPIKE_PATH']}",
+                f"-DRISCVGCC_DIR={args.hints.host['riscv-gcc'].vars['SC_GCC_PATH']}",
+                f"-DRISCVGDB_DIR={args.hints.host['riscv-gdb'].vars['SC_RISCV_GDB_PATH']}",
+                f"-DDEJAGNU_DIR={args.hints.host['dejagnu'].vars['SC_DEJAGNU_PATH']}",
+                f"-DRISCVTESTS_DIR={args.hints.host['external_openocd_tests'].vars['SC_EXTERNAL_OPENOCD_TESTS_PATH']}",
+                f"-DOPENOCD_INSTALL_PATH={args.openocd_install}",
+            ]
+        )
         run_shell(cmd)
 
 
@@ -273,7 +98,7 @@ class _BuildCommand(Command):
             "--target",
             dest="cmake_target",
             type=str,
-            default="openocd",
+            required=True,
             help="Build target for CMake.",
         )
 
@@ -387,18 +212,30 @@ def main() -> None:
     conductor.add(GenericSuite())
     conductor.add(SyntacoreSuite())
     configs = ConanConfigs()
-    configs.add(profile="mp_armhf", options={"elct_support": True})
-    configs.add_windows(options={"elct_support": [False, True]})
-    configs.add_ubuntu18(options={"elct_support": [False, True]})
-    configs.add_centos7(options={"elct_support": [False, True]})
-    configs.add_ubuntu20(
-        options={"elct_support": [False, True], "test": [False, True]}
+    configs.add(
+        profile="mp_armhf", options={"source": ["internal", "syntacore"]}
     )
-    configs.add_ubuntu22(
-        options={"elct_support": [False, True], "test": [False, True]}
+    configs.add_windows(options={"source": ["internal", "syntacore"]})
+    configs.add_ubuntu18(options={"source": ["internal", "syntacore"]})
+    configs.add_centos7(options={"source": ["internal", "syntacore"]})
+    configs.add_ubuntu20(options={"source": ["internal", "syntacore"]})
+    configs.add_ubuntu22(options={"source": ["internal", "syntacore"]})
+    configs.add_rocky8(options={"source": ["internal", "syntacore"]})
+
+    conan = ConanSuite(
+        name="openocd",
+        start_version="2d580e9457771c9fe6bfd7b241a73ab65270d44e",
+        start_semver="0.12.2",
+        configs=configs,
+        release_branch="sc/stable",
+        recipe=_repo_path / "conanfile.py",
     )
-    configs.add_rocky8(
-        options={"elct_support": [False, True], "test": [False, True]}
+    conan.add_package(
+        name="openocd_testsuite",
+        start_version="e5b87c3864349cb6e9ab0df471c628ea93ae7d86",
+        start_semver="0.0.0",
+        recipe=_repo_path / "testsuite" / "conanfile.py",
+        configs=ConanConfigs().add_ubuntu20(),
     )
 
     conan = ConanSuite(
@@ -415,7 +252,6 @@ def main() -> None:
         configs=ConanConfigs().add_ubuntu22(),
     )
     conductor.add(conan)
-    conductor.add(_JustConfigCommand())
     conductor.add(_ConfigCommand())
     conductor.add(_BuildCommand())
 

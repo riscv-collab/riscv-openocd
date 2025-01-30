@@ -1,55 +1,110 @@
 # type: ignore
 # pylint: disable=no-member,pointless-statement,invalid-name,not-callable,cyclic-import
-import re
 from pathlib import Path
 
-import conan
-from conan.tools.cmake import CMakeToolchain
-from conan.tools.gnu import PkgConfigDeps
+from conan import ConanFile
+from conan.tools.gnu import Autotools, AutotoolsToolchain, PkgConfigDeps
 from conan.tools.scm import Git
 
+_shared_configure_args = [
+    "--enable-amtjtagaccel",
+    "--enable-armjtagew",
+    "--enable-aice",
+    "--enable-cmsis-dap",
+    "--enable-ftdi",
+    "--enable-jlink",
+    "--enable-jtag_vpi",
+    "--enable-gw16012",
+    "--enable-opendous",
+    "--enable-parport",
+    "--enable-usb-blaster-2",
+    "--enable-ulink",
+    "--enable-osbdm",
+    "--enable-stlink",
+    "--enable-ti-icdi",
+    "--enable-rlink",
+    "--enable-remote-bitbang",
+    "--enable-usbprog",
+    "--enable-vsllink",
+    "--disable-parport-ppdev",
+    "--disable-internal-libjaylink",
+    "--disable-internal-jimtcl",  # won't be neccessary soon
+]
 
-class Package(conan.ConanFile):
+
+_linux_configure_args = _shared_configure_args + [
+    "--enable-verbose",
+    "--enable-verbose-usb-io",
+    "--enable-verbose-usb-comms",
+    "--enable-rshim",
+    "--enable-ftdi-cjtag",
+    "--enable-ft232r",
+    "--enable-xds110",
+    "--enable-cmsis-dap-v2",
+    "--enable-esp-usb-jtag",
+    "--enable-nulink",
+    "--enable-kitprog",
+    "--enable-usb-blaster",
+    "--enable-presto",
+    "--enable-openjtag",
+    "--enable-buspirate",
+    "--enable-vdebug",
+    "--enable-jtag_dpi",
+    "--enable-bcm2835gpio",
+    "--enable-imx_gpio",
+    "--enable-am335xgpio",
+    "--enable-ep93xx",
+    "--enable-at91rm9200",
+    "--enable-sysfsgpio",
+    "--enable-xlnx-pcie-xvc",
+]
+
+
+_windows_configure_args = _shared_configure_args + [
+    "--disable-werror",
+    "--enable-riscv",
+    "--enable-openjtag_ftdi",
+    "--enable-legacy-ft2232_libftdi",
+    "--enable-parport-giveio",
+    "--enable-presto_libftdi",
+    "--enable-usb_blaster_libftdi",
+    "--enable-target64",
+]
+
+
+class Package(ConanFile):
     name = "openocd"
-    settings = "os", "arch", "build_type"
-    options = {"test": [True, False], "elct_support": [True, False]}
-    default_options = {"test": False, "elct_support": False}
+    settings = "os", "arch", "build_type", "compiler"
+    options = {
+        "source": ["internal", "syntacore"],  # TODO: "riscv", "mainline"
+        "sanitize": ["disable", "enable", "strict"],
+        "elct_support": [None, True, False],
+    }
+    default_options = {
+        "source": "internal",
+        "sanitize": "disable",
+        "elct_support": None,
+    }
     package_type = "application"
     url = "<default_remote_git_service>/tools/toolchain/openocd"
 
     python_requires = "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main"
     python_requires_extend = "makepy_hints.MakepyConanFile"
 
-    def set_name(self) -> None:
-        source_folder = Path(__file__).parent
+    mp_git_clone_depth = 2000  # We need some history to find the merge base
 
-        git = Git(self)
+    def configure(self):
+        if self.options.get_safe("elct_support"):  # Legacy option
+            self.options.rm("elct_support")
+            self.options["source"] = "internal"
 
-        dirty_marker = "-dirty" if git.is_dirty() else ""
-
-        split_version = str(self.version).split("+", maxsplit=1)
-        version_string = split_version[1] if len(split_version) > 1 else ""
-        version_string = re.sub(r"[\W_]+", "_", version_string).strip()
-        if version_string == "":
-            version_string = "development_build"
-
-        commit_hash = git.get_commit()[:8]
-        release_string = f"{version_string}-g{commit_hash}{dirty_marker}"
-
-        riscv_url = "https://github.com/riscv-collab/riscv-openocd.git"
-        git.run(f"fetch {riscv_url}")
-        riscv_merge_base = git.run("merge-base FETCH_HEAD HEAD").strip()[:8]
-
-        version_info = (
-            f"riscv-upstream-{riscv_merge_base}-cs-{commit_hash}{dirty_marker}"
-        )
-
-        with open(
-            source_folder / "__sc_version.txt", "w", encoding="utf-8"
-        ) as version_file:
-            version_file.write(f"{release_string}\n{version_info}")
+    def package_id(self) -> None:
+        self.info.settings.rm_safe("compiler")
 
     def requirements(self) -> None:
+        self.tool_requires("libtool")
+        self.tool_requires("pkgconf")
+
         self.requires("libusb", options={"shared": False})
         #'libftdi' depends on 'libusb'
         self.requires(
@@ -81,20 +136,8 @@ class Package(conan.ConanFile):
             },
         )
 
-        if self.settings.os != "Linux":
-            return
-
-        if self.options.elct_support:
+        if self.options.source == "internal" and self.settings.os == "Linux":
             self.requires("jansson", options={"shared": False})
-
-        if self.options.test != "True":
-            return
-
-        self.test_requires("external_openocd_tests")
-        self.test_requires("riscv-gcc")
-        self.test_requires("riscv-gdb")
-        self.test_requires("riscv-isa-sim")
-        self.test_requires("dejagnu")
 
     def layout(self) -> None:
         build_folder = Path("build") / str(self.settings.build_type)
@@ -102,33 +145,12 @@ class Package(conan.ConanFile):
         self.folders.build = build_folder
 
     def generate(self) -> None:
-        toolchain = CMakeToolchain(self)
-
-        def set_toolchain_var_from_host_hint(tc_var, dep, hint_var) -> None:
-            toolchain.variables[tc_var] = self.mp_hints.host[dep].vars[hint_var]
-
-        toolchain.variables["CMAKE_BUILD_TYPE"] = self.settings.build_type
-
-        if self.settings.os == "Linux" and self.options.test:
-            for tc_var, dep, hint_var in [
-                ("RISCVSpike_DIR", "riscv-isa-sim", "SC_SPIKE_PATH"),
-                ("RISCVGCC_DIR", "riscv-gcc", "SC_GCC_PATH"),
-                ("RISCVGDB_DIR", "riscv-gdb", "SC_RISCV_GDB_PATH"),
-                ("DEJAGNU_DIR", "dejagnu", "SC_DEJAGNU_PATH"),
-                (
-                    "RISCVTESTS_DIR",
-                    "external_openocd_tests",
-                    "SC_EXTERNAL_OPENOCD_TESTS_PATH",
-                ),
-            ]:
-                set_toolchain_var_from_host_hint(tc_var, dep, hint_var)
-            toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
-
-        if self.options.elct_support:
-            toolchain.variables["ENABLE_ELCT_SUPPORT"] = "ON"
-
-        toolchain.generate()
-
+        riscv_url = "https://github.com/riscv-collab/riscv-openocd.git"
+        git = Git(self)
+        git.run(f"fetch {riscv_url}")
+        self.mp_hints.custom["riscv_rev"] = git.run(
+            "rev-parse FETCH_HEAD"
+        ).strip()
         pc = PkgConfigDeps(self)
         pc.generate()
         # hidapi is included using "hidapi.h", not "hidapi/hidapi.h".
@@ -139,21 +161,52 @@ class Package(conan.ConanFile):
         )
         hidapi_pc_path.write_text(hidapi_pc_data, encoding="utf-8")
 
+        ac = AutotoolsToolchain(self)
+        match self.settings.os:
+            case "Linux":
+                extra_configure_args = _linux_configure_args
+            case "Windows":
+                extra_configure_args = _windows_configure_args
+            case _:
+                self.output.error(f"Unexpected host OS '{self.settings.os}'")
+
+        for configure_arg in extra_configure_args:
+            ac.configure_args.append(configure_arg)
+
+        if (
+            self.options.source == "internal" and self.settings.os == "Linux"
+        ):  # TODO: just build form other repo
+            ac.configure_args.append("--enable-syntacore-extensions")
+
+        if self.options.sanitize != "disable":
+            ac.extra_cflags.extend(["-fsanitize=undefined", "-Wl,-ldl"])
+            if self.options.sanitize == "strict":
+                ac.extra_cflags.append("-fno-sanitize-recover")
+
+        match self.settings.build_type:
+            case "Release":
+                ac.extra_cflags.append("-O2")
+                # FIXME: YCAT-43010
+                ac.ndebug = False
+            case "Debug":
+                ac.extra_cflags.extend(["-O0", "-g"])
+            case _:
+                self.output.error(
+                    f"Unexpected build_type '{self.settings.build_type}'"
+                )
+
+        ac.generate()
+
     def build(self) -> None:
-        self.run(
-            f"{self.source_folder}/make.py --no-history-dump config --build-path {self.build_folder}"
-        )
-        self.run(
-            f"{self.source_folder}/make.py --no-history-dump build --build-path {self.build_folder} --target openocd"
-        )
+        self.run("./bootstrap nosubmodule", cwd=self.source_folder)
+        autotools = Autotools(self)
+        autotools.autoreconf()
+        autotools.configure()
+        autotools.make()
 
     def package(self) -> None:
-        conan.tools.files.copy(
-            self,
-            "*",
-            f"{self.build_folder}/install_openocd/openocd",
-            self.package_folder,
-        )
+        autotools = Autotools(self)
+        autotools.install()
 
     def package_info(self) -> None:
         # TODO: regarding this **RISCV_OPENOCD_DIR** name.

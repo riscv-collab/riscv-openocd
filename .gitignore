@@ -122,7 +122,6 @@ fpga_info/
 
 conaninfo.txt
 conanmanifest.txt
-__sc_version.txt
 .tests.stand.info.json
 
 *.pyc
