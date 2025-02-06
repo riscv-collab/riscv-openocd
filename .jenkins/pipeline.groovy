@@ -72,7 +72,7 @@ workflow('openocd') {
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
-             [[image          : ['cpp_ubuntu_20'],
+             [[image          : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
                profile        : ['default'],
                testingType    : ['spike'],
                // unfortunatly, we can't enable Strict sanitization, since jimtcl has bugs like this:
@@ -109,7 +109,7 @@ workflow('openocd') {
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
-            [[image          : ['cpp_rocky_8', 'cpp_ubuntu_20'],
+            [[image          : ['cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default'],
               testingType    : ['spike', 'external'],
               extraOpts      : ['--options:host test=True',
@@ -141,7 +141,7 @@ workflow('openocd') {
         }
         dependsOn 'lint' // workaround for better stage scheduling
         matrix {
-            [[image          : ['cpp_ubuntu_20'],
+            [[image          : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default'],
               extraOpts      : ['--options:host test=True',
                                 '--options:host elct_support=True --options:host test=True'],
@@ -261,7 +261,7 @@ workflow('openocd') {
             fs('1.0Gi', '1.0Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_20'],
+            [[image          : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
               env            : ['', 'CC=clang CFLAGS=-fsanitize=address,undefined LDFLAGS=-Wl,-ldl']]]
         }
         shellScript {
@@ -279,7 +279,7 @@ workflow('openocd') {
             fs('1.0Gi', '1.0Gi')
         }
         matrix {
-            [[image          : ['cpp_ubuntu_20']]]
+            [[image          : ['cpp_ubuntu_22']]]
         }
         script { vars ->
             def buildDir = "build/docs_Build"

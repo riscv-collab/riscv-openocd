@@ -1,5 +1,10 @@
 [
   {
+    "display_name": "cpp_ubuntu_22",
+    "nametag": "<default_image_registry>/sc/cpp_ubuntu:22.1.28",
+    "os": "posix"
+  },
+  {
     "display_name": "cpp_ubuntu_20",
     "nametag": "<default_image_registry>/sc/cpp_ubuntu:20.1.6",
     "os": "posix"
@@ -7,11 +12,6 @@
   {
     "display_name": "cpp_ubuntu_18",
     "nametag": "<default_image_registry>/sc/cpp_ubuntu:18.1.30",
-    "os": "posix"
-  },
-  {
-    "display_name": "cpp_ubuntu_22",
-    "nametag": "<default_image_registry>/sc/cpp_ubuntu:22.1.28",
     "os": "posix"
   },
   {
