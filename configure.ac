@@ -882,8 +882,10 @@ AC_SUBST(EXTRA_DIST_NEWS, ["$(echo $srcdir/NEWS-*)"])
 
 AC_CONFIG_FILES([
   Makefile \
-  testing/Makefile
+  testing/Makefile \
+  tools/syntacore/Makefile
 ])
+AM_CONDITIONAL([BUILD_USB_RESET], [test ${host_os} = Linux])
 AC_OUTPUT
 
 AS_IF([test "x$enable_jlink" != "xno"], [

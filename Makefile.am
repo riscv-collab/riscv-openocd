@@ -39,6 +39,9 @@ endif
 SUBDIRS += testing
 DIST_SUBDIRS += testing
 
+SUBDIRS += tools/syntacore
+DIST_SUBDIRS += tools/syntacore
+
 # common flags used in openocd build
 AM_CFLAGS = $(GCC_WARNINGS)
 AM_LDFLAGS =

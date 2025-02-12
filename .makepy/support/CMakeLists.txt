@@ -38,14 +38,6 @@ get_filename_component(OPENOCD_SOURCES ${CMAKE_SOURCE_DIR}/../.. ABSOLUTE)
 # cmake-format: off
 set(OCD_PKG_CONFIG_LIB ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig)
 
-set(OPENOCD_SCRIPTS_INSTALL_DIR
-  ${OPENOCD_INSTALL_PATH}/share/openocd/scripts/syntacore)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  add_executable(usb_reset ${OPENOCD_SOURCES}/tools/syntacore/debug_adapter_reset.c)
-  add_dependencies(openocd_deps usb_reset)
-endif()
-
 set(OPENOCD_EXTRA_CFLAGS "")
 
 option(SC_OPENOCD_ENABLE_SANITIZERS "Enable sanitizers")
@@ -81,15 +73,6 @@ ExternalProject_Add(
       --host=$<$<BOOL:${CMAKE_CROSSCOMPILING}>:${CONFIGURE_HOST}>
       ${OPENOCD_CONFIGURE_OPTIONS}
   BUILD_COMMAND make $<IF:$<CONFIG:DEBUG>,install,install-strip> -j${CPU_COUNT}
-  INSTALL_COMMAND
-    ${CMAKE_CURRENT_SOURCE_DIR}/utils/copy_optional_file.sh
-      "$<IF:$<TARGET_EXISTS:usb_reset>,${CMAKE_CURRENT_BINARY_DIR}/usb_reset,>"
-      "${OPENOCD_INSTALL_PATH}/bin" &&
-    mkdir -p -- ${OPENOCD_SCRIPTS_INSTALL_DIR} &&
-    cp ${OPENOCD_SOURCES}/tools/syntacore/openocd_run.exp
-       ${OPENOCD_INSTALL_PATH}/bin &&
-    ${OPENOCD_SOURCES}/tools/syntacore/ide_cloak.tcl
-      ${OPENOCD_SCRIPTS_INSTALL_DIR}/syntacore_ide_csr_cloak.cfg
   DEPENDS openocd_deps)
 # cmake-format: on
 
