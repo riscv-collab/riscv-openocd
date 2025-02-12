@@ -1,10 +1,10 @@
 import io
 
-from conan import ConanFile as _ConanFile  # type: ignore
-from conan.tools.build import can_run as _can_run  # type: ignore
+from conan import ConanFile  # type: ignore
+from conan.tools.build import can_run  # type: ignore
 
 
-class TestPackage(_ConanFile):  # type: ignore
+class TestPackage(ConanFile):  # type: ignore
     settings = "os", "compiler", "build_type"
     generators = "VirtualRunEnv"
 
@@ -19,7 +19,7 @@ class TestPackage(_ConanFile):  # type: ignore
         pass
 
     def test(self) -> None:
-        if _can_run(self):
+        if can_run(self):
             with io.StringIO() as out_stream:
                 self.run(
                     "$RISCV_OPENOCD_DIR/bin/openocd --version 2>&1",

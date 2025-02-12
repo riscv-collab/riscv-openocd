@@ -2,54 +2,48 @@
 from __future__ import annotations
 
 import json
-import logging as _logging
-from argparse import ArgumentParser as _ArgumentParser
-from argparse import Namespace as _Namespace
-from pathlib import Path as _Path
-from typing import TYPE_CHECKING as _TYPE_CHECKING
+import logging
+from argparse import ArgumentParser, Namespace
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-from hwrs import HWRSHook as _HWRSHook
-from lgrw import ConanHelper as _ConanHelper
-from lgrw import FpgaBoard as _FpgaBoard
-from makepy import Command as _Command
-from makepy import Hook as _Hook
-from makepy import Suite as _Suite
-from makepy.syntacore import (
-    SyntacoreCredentialsHook as _SyntacoreCredentialsHook,
-)
+from hwrs import HWRSHook
+from lgrw import ConanHelper, FpgaBoard
+from makepy import Command, Hook, Suite
+from makepy.syntacore import SyntacoreCredentialsHook
 
-if _TYPE_CHECKING:
+if TYPE_CHECKING:
     # pylint: disable=ungrouped-imports
-    from lgrw._lgrunner import LabgridRunner as _LabgridRunner
+    from lgrw._lgrunner import LabgridRunner
 
-_logger = _logging.getLogger()
+_logger = logging.getLogger()
 
 
-class _OcdTestSuite(_Suite):
+class _OcdTestSuite(Suite):
     def __init__(self) -> None:
         commands = [
             "test-suite",
         ]
 
         self._handlers = [
-            _SyntacoreCredentialsHook(commands),
-            _HWRSHook(commands),
+            SyntacoreCredentialsHook(commands),
+            HWRSHook(commands),
             _OcdTestSuiteCommand(),
         ]
 
-    def handlers(self) -> list[_Hook]:
+    def handlers(self) -> list[Hook]:
         return self._handlers
 
 
-class _OcdTestSuiteCommand(_Command):
+class _OcdTestSuiteCommand(Command):
     def name(self) -> str:
         return "test-suite"
 
     def help(self) -> str:
         return "Install and run ocd_transferable_testsuite on FPGA host"
 
-    def amend_parser(self, parser: _ArgumentParser) -> None:
-        parser.add_argument("-b", "--build-path", required=True, type=_Path)
+    def amend_parser(self, parser: ArgumentParser) -> None:
+        parser.add_argument("-b", "--build-path", required=True, type=Path)
 
         parser.add_argument(
             "--host",
@@ -103,7 +97,7 @@ class _OcdTestSuiteCommand(_Command):
             help="Path to json file with platforms",
         )
 
-    def command(self, args: _Namespace) -> None:
+    def command(self, args: Namespace) -> None:
         # workspace_id will be used as directory, so lets cleanup it
         workspace_id = _safe_file_name(str(args.hwrs_id.id()))
 
@@ -123,9 +117,9 @@ class _OcdTestSuiteCommand(_Command):
         local_dir = local_build_path / "testing" / "lgrw"
         local_dir.mkdir(parents=True, exist_ok=True)
 
-        remote_install = _Path("/home/stand/.ci") / workspace_id
+        remote_install = Path("/home/stand/.ci") / workspace_id
 
-        board = _FpgaBoard(
+        board = FpgaBoard(
             host,
             credentials,
             openocd,
@@ -138,7 +132,7 @@ class _OcdTestSuiteCommand(_Command):
             platform_desc = _get_platform_desc(
                 args.platforms, args.run_platform
             )
-            bitstream_path = _Path(platform_desc["bitstream"])
+            bitstream_path = Path(platform_desc["bitstream"])
             openocd_board = platform_desc["openocd_board"]
 
         with board.labgrid() as runner:
@@ -176,9 +170,9 @@ def _safe_file_name(unsafe_name: str) -> str:
 
 
 def _install_testsuite(
-    runner: _LabgridRunner,
-    local_install: _Path,
-    remote_install: _Path,
+    runner: LabgridRunner,
+    local_install: Path,
+    remote_install: Path,
     force: bool,
 ) -> None:
     testsuite_gz = "ocd_transferable_testsuite.tar.gz"
@@ -228,8 +222,8 @@ def _install_testsuite(
     )
 
 
-def _flash_board(board: _FpgaBoard, bitstream_path: _Path) -> None:
-    conan = _ConanHelper({})
+def _flash_board(board: FpgaBoard, bitstream_path: Path) -> None:
+    conan = ConanHelper({})
 
     # Here the "cores" and "memory" used for normal LGRW usage (to run bare-metal programs and linux).
     # They are not used in our runs, but required in LGRW api, so can't be omitted.
@@ -243,9 +237,9 @@ def _flash_board(board: _FpgaBoard, bitstream_path: _Path) -> None:
     board.flash(bitstream)
 
 
-def _get_stand_info(runner: _LabgridRunner, local_dir: _Path) -> dict[str, str]:
+def _get_stand_info(runner: LabgridRunner, local_dir: Path) -> dict[str, str]:
     local_stand_info = local_dir / "tests.stand.info.json"
-    remote_stand_info = _Path(
+    remote_stand_info = Path(
         "/home/stand/.config/stand.info/tests.stand.info.json"
     )
     runner.receive(remote_stand_info, local_stand_info)
@@ -255,7 +249,7 @@ def _get_stand_info(runner: _LabgridRunner, local_dir: _Path) -> dict[str, str]:
     return stand_info
 
 
-def _get_platform_desc(platforms: _Path, platform_name: str) -> dict[str, str]:
+def _get_platform_desc(platforms: Path, platform_name: str) -> dict[str, str]:
     with open(platforms, encoding="utf-8") as json_file:
         platform_descriptions: dict[str, dict[str, str]] = json.load(json_file)
 
@@ -269,9 +263,9 @@ def _get_platform_desc(platforms: _Path, platform_name: str) -> dict[str, str]:
 
 
 def _run_testsuite(
-    runner: _LabgridRunner,
-    local_dir: _Path,
-    remote_dir: _Path,
+    runner: LabgridRunner,
+    local_dir: Path,
+    remote_dir: Path,
     platform_name: str,
     openocd_board: str,
     tools: list[str],
@@ -311,8 +305,8 @@ def _run_testsuite(
 
 
 def _run_tool_tests(
-    runner: _LabgridRunner,
-    remote_dir: _Path,
+    runner: LabgridRunner,
+    remote_dir: Path,
     stand_info: dict[str, str],
     platform_name: str,
     openocd_board: str,
@@ -322,7 +316,7 @@ def _run_tool_tests(
     work_dir = run_base_dir / "runs"
     summary_dir = run_base_dir / "SUMMARY"
     remote_testsuite = remote_dir / "ocd_transferable_testsuite"
-    command: list[str | _Path] = []
+    command: list[str | Path] = []
     command += ["mkdir -p", work_dir, "&&"]
     command += ["mkdir -p", summary_dir, "&&"]
     command += ["cd", work_dir, "&&"]

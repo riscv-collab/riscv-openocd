@@ -1,59 +1,51 @@
 #!/usr/bin/env python3
 
-import itertools as _itertools
-import logging as _logging
-import shutil as _shutil
-from argparse import ArgumentParser as _ArgumentParser
-from argparse import Namespace as _Namespace
-from pathlib import Path as _Path
+import itertools
+import logging
+import shutil
+from argparse import ArgumentParser, Namespace
+from pathlib import Path
 
 from _ocd_test_suite import _OcdTestSuite
-from hwrs import HWRSSuite as _HWRSSuite
-from makepy import ArgsHook as _ArgsHook
-from makepy import Command as _Command
-from makepy import Conductor as _Conductor
+from hwrs import HWRSSuite
+from makepy import ArgsHook, Command, Conductor
 from makepy.conan import BinaryPackage, Conan, RevisionedRef
-from makepy.generic import GenericSuite as _GenericSuite
-from makepy.generic import ParallelHook as _ParallelHook
-from makepy.generic import PrivilegedContainerHook as _PrivilegedContainerHook
-from makepy.lint import FormatCommand as _FormatCommand
-from makepy.lint import LintCommand as _LintCommand
-from makepy.syntacore import ConanConfigs as _ConanConfigs
-from makepy.syntacore import ConanSuite as _ConanSuite
-from makepy.syntacore import SyntacoreSuite as _SyntacoreSuite
+from makepy.generic import GenericSuite, ParallelHook, PrivilegedContainerHook
+from makepy.lint import FormatCommand, LintCommand
+from makepy.syntacore import ConanConfigs, ConanSuite, SyntacoreSuite
 from makepy.utils import git
 from makepy.utils import main as _main_decorator
-from makepy.utils import run_shell as _run_shell
+from makepy.utils import run_shell
 
-_logger = _logging.getLogger()
-_repo_path = _Path(__file__).parent.parent
+_logger = logging.getLogger()
+_repo_path = Path(__file__).parent.parent
 
 
-class _BuildArgsHook(_ArgsHook):
+class _BuildArgsHook(ArgsHook):
     def amend_commands(self) -> list[str]:
         return ["config", "build", "just-config"]
 
-    def amend_parser(self, parser: _ArgumentParser) -> None:
+    def amend_parser(self, parser: ArgumentParser) -> None:
         parser.add_argument(
             "-b",
             "--build-path",
             required=True,
-            type=_Path,
+            type=Path,
             help="Build directory.",
         )
 
-    def hook(self, args: _Namespace) -> None:
+    def hook(self, args: Namespace) -> None:
         args.install_path = (args.build_path / "install").absolute()
 
 
-class _JustConfigCommand(_Command):
+class _JustConfigCommand(Command):
     def name(self) -> str:
         return "just-config"
 
     def help(self) -> str:
         return "Just config the project!"
 
-    def amend_parser(self, parser: _ArgumentParser) -> None:
+    def amend_parser(self, parser: ArgumentParser) -> None:
         conan_help = "See './make.py conan install --help'."
         parser.add_argument(
             "--build", type=str, default="never", help=conan_help
@@ -133,7 +125,7 @@ class _JustConfigCommand(_Command):
             help="ASan/UBSan sanitizaion flags",
         )
 
-    def _get_output_folder(self, build_path: _Path) -> _Path:
+    def _get_output_folder(self, build_path: Path) -> Path:
         msg = (
             "Conan will always generate files into build/(Debug|Release), "
             "so your build path should be in the format <any_mangle>/build/(Debug|Release). "
@@ -145,8 +137,8 @@ class _JustConfigCommand(_Command):
             raise ValueError(msg)
         return build_path.parent.parent
 
-    def command(self, args: _Namespace) -> None:
-        _shutil.rmtree(_repo_path / "external_sources", ignore_errors=True)
+    def command(self, args: Namespace) -> None:
+        shutil.rmtree(_repo_path / "external_sources", ignore_errors=True)
         makepy = [
             _repo_path / "make.py",
             "--no-history-dump",
@@ -168,29 +160,29 @@ class _JustConfigCommand(_Command):
             output_folder,
         ]
         install_cmd.extend(
-            _itertools.chain.from_iterable(
+            itertools.chain.from_iterable(
                 ["--settings:host", setting] for setting in args.host_settings
             )
         )
         install_cmd.extend(
-            _itertools.chain.from_iterable(
+            itertools.chain.from_iterable(
                 ["--settings:build", setting] for setting in args.build_settings
             )
         )
         install_cmd.extend(
-            _itertools.chain.from_iterable(
+            itertools.chain.from_iterable(
                 ["--options:host", setting] for setting in args.host_options
             )
         )
         install_cmd.extend(
-            _itertools.chain.from_iterable(
+            itertools.chain.from_iterable(
                 ["--options:build", setting] for setting in args.build_options
             )
         )
 
         # TODO: should we remove all these "cwd" statements?
-        _run_shell([*makepy, "conan", "source"], cwd=_repo_path)
-        _run_shell(install_cmd, cwd=_repo_path)
+        run_shell([*makepy, "conan", "source"], cwd=_repo_path)
+        run_shell(install_cmd, cwd=_repo_path)
         config_cmd = [
             *makepy,
             "config",
@@ -199,24 +191,24 @@ class _JustConfigCommand(_Command):
         ]
 
         config_cmd.extend(
-            _itertools.chain.from_iterable(
+            itertools.chain.from_iterable(
                 [f"--{option}"] for option in args.tests_options
             )
         )
         if args.sanitize_level is not None:
             config_cmd.extend([f"--sanitize-level={args.sanitize_level}"])
 
-        _run_shell(config_cmd, cwd=_repo_path)
+        run_shell(config_cmd, cwd=_repo_path)
 
 
-class _ConfigCommand(_Command):
+class _ConfigCommand(Command):
     def name(self) -> str:
         return "config"
 
     def help(self) -> str:
         return "CMake config."
 
-    def amend_parser(self, parser: _ArgumentParser) -> None:
+    def amend_parser(self, parser: ArgumentParser) -> None:
         parser.add_argument(
             "--tests-adapter-info",
             dest="tests_adapter_info",
@@ -240,10 +232,10 @@ class _ConfigCommand(_Command):
             help="controls ASan/UBSan behavior if enabled",
         )
 
-    def command(self, args: _Namespace) -> None:
-        _shutil.rmtree(_repo_path / "build-aux", ignore_errors=True)
+    def command(self, args: Namespace) -> None:
+        shutil.rmtree(_repo_path / "build-aux", ignore_errors=True)
         # NOTE: we expect OpenOCD submodules to be initialized at this point
-        _run_shell(["./bootstrap", "nosubmodule"], cwd=_repo_path)
+        run_shell(["./bootstrap", "nosubmodule"], cwd=_repo_path)
         cmd = [
             "cmake",
             "-S",
@@ -277,17 +269,17 @@ class _ConfigCommand(_Command):
             raise ValueError(
                 f"unknown sanitization level {args.sanitize_level}"
             )
-        _run_shell(cmd)
+        run_shell(cmd)
 
 
-class _BuildCommand(_Command):
+class _BuildCommand(Command):
     def name(self) -> str:
         return "build"
 
     def help(self) -> str:
         return "CMake build."
 
-    def amend_parser(self, parser: _ArgumentParser) -> None:
+    def amend_parser(self, parser: ArgumentParser) -> None:
         parser.add_argument(
             "-t",
             "--target",
@@ -297,7 +289,7 @@ class _BuildCommand(_Command):
             help="Build target for CMake.",
         )
 
-    def command(self, args: _Namespace) -> None:
+    def command(self, args: Namespace) -> None:
         cmd = [
             "cmake",
             "--build",
@@ -309,10 +301,10 @@ class _BuildCommand(_Command):
         ]
         if args.logging_level == "DEBUG":
             cmd.append("--verbose")
-        _run_shell(cmd)
+        run_shell(cmd)
 
 
-class _PrintPackageURLs(_Command):
+class _PrintPackageURLs(Command):
     """
     WARNING: NEVER CALL THIS FROM THE CONAN RECIPE
     """
@@ -323,7 +315,7 @@ class _PrintPackageURLs(_Command):
     def help(self) -> str:
         return "Search for package URLs in the Conan registry."
 
-    def amend_parser(self, parser: _ArgumentParser) -> None:
+    def amend_parser(self, parser: ArgumentParser) -> None:
         parser.add_argument(
             "--assume-release",
             action="store_true",
@@ -345,9 +337,9 @@ class _PrintPackageURLs(_Command):
             os_str = f"{os_str} {key}={value}"
         return os_str
 
-    def command(self, args: _Namespace) -> None:
+    def command(self, args: Namespace) -> None:
         # Weird way to acquire current version
-        package_cmd: list[_Path | str] = [
+        package_cmd: list[Path | str] = [
             _repo_path / ".makepy" / "setup.py",
             "--no-history-dump",
             "--logging-level",
@@ -359,8 +351,8 @@ class _PrintPackageURLs(_Command):
         ]
         if args.assume_release:
             package_cmd.append("--assume-release")
-        versioned_spec = _run_shell(
-            package_cmd, capture_output=True, loglevel=_logging.DEBUG
+        versioned_spec = run_shell(
+            package_cmd, capture_output=True, loglevel=logging.DEBUG
         ).stdout.strip()
         revision = str(git.detect_repo(_repo_path).head.commit.hexsha).strip()
         ref = RevisionedRef.parse(f"{versioned_spec}#{revision}")
@@ -376,7 +368,7 @@ class _PrintPackageURLs(_Command):
             _logger.info("")
 
 
-def _build_formatter_and_linter() -> tuple[_FormatCommand, _LintCommand]:
+def _build_formatter_and_linter() -> tuple[FormatCommand, LintCommand]:
     python_files = [
         _repo_path / "make.py",
         _repo_path / ".makepy" / "_ocd_test_suite.py",
@@ -384,12 +376,12 @@ def _build_formatter_and_linter() -> tuple[_FormatCommand, _LintCommand]:
         _repo_path / "conanfile.py",
     ]
 
-    format_cmd = _FormatCommand(default_revision="origin/sc/main")
+    format_cmd = FormatCommand(default_revision="origin/sc/main")
     # format_cmd.add_cmake_format() # Do not forget to add .cmake-format.py
     format_cmd.add_black([*python_files])
     format_cmd.add_isort([*python_files])
 
-    lint_cmd = _LintCommand(default_revision="origin/sc/main")
+    lint_cmd = LintCommand(default_revision="origin/sc/main")
     lint_cmd.add_pylint([*python_files])
     lint_cmd.add_mypy([*python_files])
 
@@ -397,12 +389,12 @@ def _build_formatter_and_linter() -> tuple[_FormatCommand, _LintCommand]:
 
 
 @_main_decorator()
-def _main() -> None:
-    conductor = _Conductor()
+def main() -> None:
+    conductor = Conductor()
 
-    conductor.add(_GenericSuite())
-    conductor.add(_SyntacoreSuite())
-    configs = _ConanConfigs()
+    conductor.add(GenericSuite())
+    conductor.add(SyntacoreSuite())
+    configs = ConanConfigs()
     configs.add(profile="mp_armhf", options={"elct_support": True})
     configs.add_windows(options={"elct_support": [False, True]})
     configs.add_ubuntu18(options={"elct_support": [False, True]})
@@ -418,7 +410,7 @@ def _main() -> None:
     )
 
     conductor.add(
-        _ConanSuite(
+        ConanSuite(
             name="openocd",
             start_version="cd481a97e9ae604880b8239679bf83534e83b381",
             start_semver="0.11.0",
@@ -433,13 +425,13 @@ def _main() -> None:
 
     conductor.add(_OcdTestSuite())
 
-    conductor.add(_PrivilegedContainerHook())
+    conductor.add(PrivilegedContainerHook())
     conductor.add(_BuildArgsHook())
-    conductor.add(_ParallelHook(commands=["build"]))
+    conductor.add(ParallelHook(commands=["build"]))
 
     conductor.add(_PrintPackageURLs())
 
-    conductor.add(_HWRSSuite())
+    conductor.add(HWRSSuite())
 
     format_cmd, lint_cmd = _build_formatter_and_linter()
     conductor.add(format_cmd)
@@ -449,4 +441,4 @@ def _main() -> None:
 
 
 if __name__ == "__main__":
-    _main()
+    main()

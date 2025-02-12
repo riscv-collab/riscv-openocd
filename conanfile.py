@@ -1,26 +1,20 @@
 # type: ignore
-import io as _io
-import json as _json
-import multiprocessing as _multiprocessing
-import os as _os
-import re as _re
-import sys as _sys
-from pathlib import Path as _Path
-from urllib.parse import urlparse as _urlparse
+import io
+import json
+import os
+import re
+import sys
+from pathlib import Path
 
-import conan as _conan
-from conan.tools.cmake import CMakeToolchain as _CMakeToolchain
-from conan.tools.gnu import PkgConfigDeps as _PkgConfigDeps
-from conan.tools.scm import Git as _Git
+import conan
+from conan.tools.cmake import CMakeToolchain
+from conan.tools.gnu import PkgConfigDeps
+from conan.tools.scm import Git
 
-# isort: off
-# pylint: disable=import-error
-# pylint: disable=wrong-import-position
-# pylint: disable=no-member
-_sys.path.append(str(_Path(__file__).parent / ".makepy"))
+sys.path.append(str(Path(__file__).parent / ".makepy"))
 
 
-class Package(_conan.ConanFile):
+class Package(conan.ConanFile):
     name = "openocd"
     settings = "os", "arch", "build_type"
     options = {"test": [True, False], "elct_support": [True, False]}
@@ -47,9 +41,9 @@ class Package(_conan.ConanFile):
     def set_name(self) -> None:
         self.name = self.name or "openocd"  # type: ignore
 
-        source_folder = _Path(__file__).parent
+        source_folder = Path(__file__).parent
 
-        merge_base_io_string = _io.StringIO()
+        merge_base_io_string = io.StringIO()
         self.run(
             "git merge-base origin/riscv HEAD",
             cwd=source_folder,
@@ -57,7 +51,7 @@ class Package(_conan.ConanFile):
         )
         riscv_merge_base = merge_base_io_string.getvalue().strip()[:8]
 
-        is_clean_io_string = _io.StringIO()
+        is_clean_io_string = io.StringIO()
         self.run(
             "git status --porcelain",
             cwd=source_folder,
@@ -67,11 +61,11 @@ class Package(_conan.ConanFile):
 
         split_version = str(self.version).split("+", maxsplit=1)
         version_string = split_version[1] if len(split_version) > 1 else ""
-        version_string = _re.sub(r"[\W_]+", "_", version_string).strip()
+        version_string = re.sub(r"[\W_]+", "_", version_string).strip()
         if version_string == "":
             version_string = "development_build"
 
-        commit_hash = _Git(self).get_commit()[:8]
+        commit_hash = Git(self).get_commit()[:8]
         release_string = f"{version_string}-g{commit_hash}{dirty_marker}"
         version_info = (
             f"riscv-upstream-{riscv_merge_base}-cs-{commit_hash}{dirty_marker}"
@@ -84,11 +78,11 @@ class Package(_conan.ConanFile):
 
     # pylint: disable=not-callable
     def requirements(self) -> None:
-        conanfile_json = _Path(__file__).parent / "conandeps.json"
+        conanfile_json = Path(__file__).parent / "conandeps.json"
         with open(conanfile_json, "r", encoding="UTF-8") as file:
-            deps = _json.loads(file.read())
+            deps = json.loads(file.read())
 
-        if self.settings.os == "Linux":
+        if self.settings.os == "Linux":  # pylint: disable=no-member
             self.requires(deps["libudev"])
         #'libusb' may depend on 'libudev'
         self.requires(deps["libusb"], options={"shared": False})
@@ -105,7 +99,7 @@ class Package(_conan.ConanFile):
         self.requires(deps["hidapi"], options={"shared": False})
         self.requires(deps["openocd_source_deps"])
 
-        if self.settings.os != "Linux":
+        if self.settings.os != "Linux":  # pylint: disable=no-member
             return
 
         if self.options.elct_support:
@@ -121,7 +115,9 @@ class Package(_conan.ConanFile):
         self.test_requires(deps["dejagnu"])
 
     def layout(self) -> None:
-        build_folder = _Path("build") / str(self.settings.build_type)
+        build_folder = Path("build") / str(
+            self.settings.build_type  # pylint: disable=no-member
+        )
         self.folders.generators = build_folder
         self.folders.build = build_folder
 
@@ -131,7 +127,7 @@ class Package(_conan.ConanFile):
         # source code. Currently, our conan/make.py build system initializes
         # submoudules separately and expect make.py-initiated bootstrap to be
         # launched as `./bootstrap nosubmodule`
-        if _os.path.isdir(_Path(self.source_folder) / ".git"):
+        if os.path.isdir(Path(self.source_folder) / ".git"):
             self.run("git submodule init")
             self.run("git submodule update")
 
@@ -144,14 +140,19 @@ class Package(_conan.ConanFile):
         assert False
 
     def generate(self) -> None:
-        toolchain = _CMakeToolchain(self)
+        toolchain = CMakeToolchain(self)
 
         toolchain.variables["OPENOCD_SOURCE_DEPS_DIR"] = self._var(
             "SC_OPENOCD_SOURCE_DEPS_PATH"
         )
-        toolchain.variables["CMAKE_BUILD_TYPE"] = self.settings.build_type
+        toolchain.variables["CMAKE_BUILD_TYPE"] = (
+            self.settings.build_type  # pylint: disable=no-member
+        )
 
-        if self.settings.os == "Linux" and self.options.test:
+        if (
+            self.settings.os == "Linux"  # pylint: disable=no-member
+            and self.options.test  # pylint: disable=no-member
+        ):
             toolchain.variables["RISCVSpike_DIR"] = self._var("SC_SPIKE_PATH")
             toolchain.variables["RISCVGCC_DIR"] = self._var("SC_GCC_PATH")
             toolchain.variables["RISCVGDB_DIR"] = self._var("SC_RISCV_GDB_PATH")
@@ -166,10 +167,10 @@ class Package(_conan.ConanFile):
 
         toolchain.generate()
 
-        pc = _PkgConfigDeps(self)
+        pc = PkgConfigDeps(self)
         pc.generate()
         # hidapi is included using "hidapi.h", not "hidapi/hidapi.h".
-        hidapi_pc_path = _Path(self.build_folder) / "hidapi.pc"
+        hidapi_pc_path = Path(self.build_folder) / "hidapi.pc"
         hidapi_pc_data = hidapi_pc_path.read_text(encoding="utf-8")
         hidapi_pc_data = hidapi_pc_data.replace(
             "${includedir}", "${includedir}/hidapi"
@@ -185,7 +186,7 @@ class Package(_conan.ConanFile):
         )
 
     def package(self) -> None:
-        _conan.tools.files.copy(
+        conan.tools.files.copy(
             self,
             "*",
             f"{self.build_folder}/install_openocd/openocd",
