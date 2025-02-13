@@ -266,8 +266,12 @@ workflow('openocd') {
         }
         shellScript {
             '''
-                BUILD_DIR="build/tests_on_dummy_Build"
-                mpy sh env ${VARS_env} .makepy/support/utils/run_tests_on_dummy.sh 4 ${BUILD_DIR}
+                mpy conan install
+                mpy sh ./bootstrap nosubmodule
+                mpy sh env PKG_CONFIG_LIBDIR=build/Release \
+                    ./configure --enable-dummy --disable-internal-jimtcl
+                mpy sh make -j 4
+                mpy sh make check
             '''
         }
     }
@@ -281,9 +285,14 @@ workflow('openocd') {
         matrix {
             [[image          : ['cpp_ubuntu_22']]]
         }
-        script { vars ->
-            def buildDir = "build/docs_Build"
-            sh("./make.py sh .makepy/support/utils/build_the_docs.sh ${buildDir}")
+        shellScript {
+            '''
+                mpy conan install
+                mpy sh ./bootstrap nosubmodule
+                mpy sh env PKG_CONFIG_LIBDIR=build/Release \
+                    ./configure --disable-internal-jimtcl
+                mpy sh make html
+            '''
         }
     }
 

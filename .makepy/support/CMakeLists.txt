@@ -14,15 +14,6 @@ execute_process(
   OUTPUT_VARIABLE CONFIGURE_HOST
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-if (NOT DEFINED OPENOCD_SOURCE_DEPS_DIR)
-  message(FATAL_ERROR "OPENOCD_SOURCE_DEPS_DIR is not defined")
-endif()
-
-set(DEPENDENCIES_LOCATION ${OPENOCD_SOURCE_DEPS_DIR})
-set(DEPENDENCIES_INSTALL_PATH ${CMAKE_BINARY_DIR}/dependencies_install)
-include(cmake/DeclareDepsBuild.cmake)
-declare_build_dependencies(openocd_deps)
-
 set(OPENOCD_TESTSUITE_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_testsuite)
 set(OPENOCD_INSTALL_PATH ${CMAKE_BINARY_DIR}/install_openocd/openocd)
 
@@ -36,8 +27,6 @@ endif()
 get_filename_component(OPENOCD_SOURCES ${CMAKE_SOURCE_DIR}/../.. ABSOLUTE)
 
 # cmake-format: off
-set(OCD_PKG_CONFIG_LIB ${DEPENDENCIES_INSTALL_PATH}/lib/pkgconfig)
-
 set(OPENOCD_EXTRA_CFLAGS "")
 
 option(SC_OPENOCD_ENABLE_SANITIZERS "Enable sanitizers")
@@ -65,15 +54,14 @@ ExternalProject_Add(
     # is an overkill. So we link with udev dynamically using the library found
     # in the build environment.
     env
-      PKG_CONFIG_PATH=${OCD_PKG_CONFIG_LIB}:$ENV{PKG_CONFIG_PATH}
+      PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}
       CC=${CMAKE_C_COMPILER}
       CFLAGS=${OPENOCD_CFLAGS}
     ${OPENOCD_SOURCES}/configure
       --prefix=${OPENOCD_INSTALL_PATH}
       --host=$<$<BOOL:${CMAKE_CROSSCOMPILING}>:${CONFIGURE_HOST}>
       ${OPENOCD_CONFIGURE_OPTIONS}
-  BUILD_COMMAND make $<IF:$<CONFIG:DEBUG>,install,install-strip> -j${CPU_COUNT}
-  DEPENDS openocd_deps)
+  BUILD_COMMAND make $<IF:$<CONFIG:DEBUG>,install,install-strip> -j${CPU_COUNT})
 # cmake-format: on
 
 set(TESTSUITE_NAME ocd_transferable_testsuite)

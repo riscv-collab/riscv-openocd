@@ -43,6 +43,7 @@ set(OPENOCD_CONFIGURE_OPTIONS
     --enable-sysfsgpio
     --enable-xlnx-pcie-xvc
     --enable-remote-bitbang
+    --disable-internal-jimtcl
     # --with-capstone # Capstone is disabled, since 0.11 has the support only
     # for arm and aarch64
 )

@@ -1,6 +1,5 @@
 # type: ignore
 # pylint: disable=no-member,pointless-statement,invalid-name,not-callable,cyclic-import
-import os
 import re
 from pathlib import Path
 
@@ -63,7 +62,24 @@ class Package(conan.ConanFile):
         )
         #'hidapi' depends on 'libusb'
         self.requires("hidapi", options={"shared": False})
-        self.requires("openocd_source_deps")
+        self.requires(
+            "libjaylink",
+            options={
+                "shared": False,
+                "subproject-build": "disable",
+                "libusb": "with",
+                "extra_cflags": "-O2",
+            },
+        )
+        self.requires(
+            "jimtcl",
+            options={
+                "with-ext": "json",
+                "minimal": "",
+                "ssl": False,
+                "extra_cflags": "-O2",
+            },
+        )
 
         if self.settings.os != "Linux":
             return
@@ -85,27 +101,11 @@ class Package(conan.ConanFile):
         self.folders.generators = build_folder
         self.folders.build = build_folder
 
-    def source(self) -> None:
-        # NOTE: OpenOCD requires a dedicated "bootstrap" process. Usually this
-        # involves calling of ./bootstrap script which is part of OpenOCD
-        # source code. Currently, our conan/make.py build system initializes
-        # submoudules separately and expect make.py-initiated bootstrap to be
-        # launched as `./bootstrap nosubmodule`
-        if os.path.isdir(Path(self.source_folder) / ".git"):
-            self.run("git submodule init")
-            self.run("git submodule update")
-
     def generate(self) -> None:
         toolchain = CMakeToolchain(self)
 
         def set_toolchain_var_from_host_hint(tc_var, dep, hint_var) -> None:
             toolchain.variables[tc_var] = self.mp_hints.host[dep].vars[hint_var]
-
-        set_toolchain_var_from_host_hint(
-            "OPENOCD_SOURCE_DEPS_DIR",
-            "openocd_source_deps",
-            "SC_OPENOCD_SOURCE_DEPS_PATH",
-        )
 
         toolchain.variables["CMAKE_BUILD_TYPE"] = self.settings.build_type
 

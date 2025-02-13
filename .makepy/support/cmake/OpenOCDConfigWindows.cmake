@@ -26,4 +26,6 @@ set(OPENOCD_CONFIGURE_OPTIONS
     --enable-usb_blaster_libftdi
     --enable-usbprog
     --enable-vsllink
-    --enable-target64)
+    --enable-target64
+    --disable-internal-jimtcl
+)

@@ -13,6 +13,8 @@
     "hidapi": "0.13.1#20fbe2186ac901286e0f5e7181cf1db7",
     "openocd_source_deps": "0.0.1-rc.0.319+sc.sc-dt.2025.02@sc/main#ad6641cbe10b064bf32899cf87410bb56589bfeb",
     "jansson": "2.14#42fc601d5b8e236e050e48f2321ef851",
+    "libjaylink": "0.3.1-343+sc.main-experimental@sc/main#53a119886bdf4c0afcbbe19c6d282b7027da3732",
+    "jimtcl": "0.83.0-343+sc.main-experimental@sc/main#53a119886bdf4c0afcbbe19c6d282b7027da3732",
     "external_openocd_tests": {
       "test_only": true,
       "version": "0.0.3-rc.0.319+sc.sc-dt.2025.02@sc/main#cf8210018d8216e1ecc852f7b360c81eee902765"

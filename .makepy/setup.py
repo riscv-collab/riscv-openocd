@@ -172,7 +172,6 @@ class _JustConfigCommand(Command):
 
         # TODO: should we remove all these "cwd" statements?
         run_shell(install_cmd, cwd=_repo_path)
-        run_shell([*makepy, "conan", "source"], cwd=_repo_path)
         config_cmd = [
             *makepy,
             "config",
@@ -224,7 +223,6 @@ class _ConfigCommand(Command):
 
     def command(self, args: Namespace) -> None:
         shutil.rmtree(_repo_path / "build-aux", ignore_errors=True)
-        # NOTE: we expect OpenOCD submodules to be initialized at this point
         run_shell(["./bootstrap", "nosubmodule"], cwd=_repo_path)
         cmd = [
             "cmake",

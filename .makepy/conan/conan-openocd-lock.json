@@ -10,10 +10,11 @@
         "riscv-binutils/2.43.1-rc.0.60+sc.sc-dt.2025.02@sc/main#662523d41b10c053888f94a437fa274ce93e2893%1738615516.339",
         "rapidyaml/0.5.0#c6f48c5eb99c1d0bad5c4ac8e6960375%1699016203.526",
         "python-gcc-12/3.10.7-rc.0.320+sc.sc-dt.2025.02@sc/main#8a7b75faac3ffdc9ceaf258a3aaf18b259a92f12%1738615952.521",
-        "openocd_source_deps/0.0.1-rc.0.319+sc.sc-dt.2025.02@sc/main#ad6641cbe10b064bf32899cf87410bb56589bfeb%1738592641.386",
         "libusb/1.0.26#c0c00750b383839aa140a0be628d552c%1699027750.602",
         "libudev/system#86e335f85cbb299d6c9fc6260b3f1b0b%1699027725.148",
+        "libjaylink/0.3.1-343+sc.main-experimental@sc/main#53a119886bdf4c0afcbbe19c6d282b7027da3732%1739449698.321",
         "libftdi/1.5#55ee16fbd5bbe4eab9d6f1f03fe0bf85%1718294061.052",
+        "jimtcl/0.83.0-343+sc.main-experimental@sc/main#53a119886bdf4c0afcbbe19c6d282b7027da3732%1739449698.568",
         "jansson/2.14#42fc601d5b8e236e050e48f2321ef851%1712843826.616",
         "hidapi/0.13.1#20fbe2186ac901286e0f5e7181cf1db7%1718294130.61",
         "gdb_source_deps/0.0.1-rc.0.319+sc.sc-dt.2025.02@sc/main#6a33f19313b1bb927430618eb5dcac1296ff1186%1738592635.763",
@@ -41,6 +42,7 @@
     ],
     "python_requires": [
         "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main#e057286806bd371381f6c54288e9de0e6c9c5ed8%1738665671.841",
+        "makepy_hints/1.14.0-rc.0.5+sc.main@sc/main#cbd7a66a3ba35ef50ddf80eddfc46c58ce41166c%1733745329.621",
         "makepy_hints/1.0.0-rc.0.316+sc.main@sc/main#aa0106d519ec11492ae1ac9a5c2c300b3d44b918%1718273456.505"
     ]
 }
