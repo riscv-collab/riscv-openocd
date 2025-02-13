@@ -126,3 +126,4 @@ __sc_version.txt
 .tests.stand.info.json
 
 *.pyc
+conan-dynamic-info.json

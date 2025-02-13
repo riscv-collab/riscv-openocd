@@ -1,9 +1,7 @@
 # type: ignore
-import io
-import json
+# pylint: disable=no-member,pointless-statement,invalid-name,not-callable,cyclic-import
 import os
 import re
-import sys
 from pathlib import Path
 
 import conan
@@ -11,53 +9,24 @@ from conan.tools.cmake import CMakeToolchain
 from conan.tools.gnu import PkgConfigDeps
 from conan.tools.scm import Git
 
-sys.path.append(str(Path(__file__).parent / ".makepy"))
-
 
 class Package(conan.ConanFile):
     name = "openocd"
     settings = "os", "arch", "build_type"
     options = {"test": [True, False], "elct_support": [True, False]}
     default_options = {"test": False, "elct_support": False}
-    revision_mode = "scm"
-    cmake_find_mode = "both"
     package_type = "application"
-    url = "https://gitlab.dev.syntacore.com/tools/toolchain/openocd"
+    url = "<default_remote_git_service>/tools/toolchain/openocd"
 
-    exports = [
-        "conandeps.json",
-    ]
-
-    exports_sources = [
-        "*",
-        "!.git/*",
-        "!.makepy/artifacts/*",
-        "!.mypy_cache/*",
-        "!build/*",
-        "!build-aux/*",
-        "!external_sources/*",
-    ]
+    python_requires = "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main"
+    python_requires_extend = "makepy_hints.MakepyConanFile"
 
     def set_name(self) -> None:
-        self.name = self.name or "openocd"  # type: ignore
-
         source_folder = Path(__file__).parent
 
-        merge_base_io_string = io.StringIO()
-        self.run(
-            "git merge-base origin/riscv HEAD",
-            cwd=source_folder,
-            stdout=merge_base_io_string,
-        )
-        riscv_merge_base = merge_base_io_string.getvalue().strip()[:8]
+        git = Git(self)
 
-        is_clean_io_string = io.StringIO()
-        self.run(
-            "git status --porcelain",
-            cwd=source_folder,
-            stdout=is_clean_io_string,
-        )
-        dirty_marker = "" if is_clean_io_string.getvalue() == "" else "-dirty"
+        dirty_marker = "-dirty" if git.is_dirty() else ""
 
         split_version = str(self.version).split("+", maxsplit=1)
         version_string = split_version[1] if len(split_version) > 1 else ""
@@ -65,8 +34,13 @@ class Package(conan.ConanFile):
         if version_string == "":
             version_string = "development_build"
 
-        commit_hash = Git(self).get_commit()[:8]
+        commit_hash = git.get_commit()[:8]
         release_string = f"{version_string}-g{commit_hash}{dirty_marker}"
+
+        riscv_url = "https://github.com/riscv-collab/riscv-openocd.git"
+        git.run(f"fetch {riscv_url}")
+        riscv_merge_base = git.run("merge-base FETCH_HEAD HEAD").strip()[:8]
+
         version_info = (
             f"riscv-upstream-{riscv_merge_base}-cs-{commit_hash}{dirty_marker}"
         )
@@ -76,48 +50,38 @@ class Package(conan.ConanFile):
         ) as version_file:
             version_file.write(f"{release_string}\n{version_info}")
 
-    # pylint: disable=not-callable
     def requirements(self) -> None:
-        conanfile_json = Path(__file__).parent / "conandeps.json"
-        with open(conanfile_json, "r", encoding="UTF-8") as file:
-            deps = json.loads(file.read())
-
-        if self.settings.os == "Linux":  # pylint: disable=no-member
-            self.requires(deps["libudev"])
-        #'libusb' may depend on 'libudev'
-        self.requires(deps["libusb"], options={"shared": False})
+        self.requires("libusb", options={"shared": False})
         #'libftdi' depends on 'libusb'
         self.requires(
-            deps["libftdi"],
+            "libftdi",
             options={
                 "shared": False,
                 "enable_cpp_wrapper": False,
                 "use_streaming": False,
             },
         )
-        #'hidapi' may depend on 'libudev' and 'libusb'
-        self.requires(deps["hidapi"], options={"shared": False})
-        self.requires(deps["openocd_source_deps"])
+        #'hidapi' depends on 'libusb'
+        self.requires("hidapi", options={"shared": False})
+        self.requires("openocd_source_deps")
 
-        if self.settings.os != "Linux":  # pylint: disable=no-member
+        if self.settings.os != "Linux":
             return
 
         if self.options.elct_support:
-            self.requires(deps["jansson"], options={"shared": False})
+            self.requires("jansson", options={"shared": False})
 
         if self.options.test != "True":
             return
 
-        self.test_requires(deps["external_openocd_tests"])
-        self.test_requires(deps["riscv-gcc"])
-        self.test_requires(deps["riscv-gdb"])
-        self.test_requires(deps["riscv-isa-sim"])
-        self.test_requires(deps["dejagnu"])
+        self.test_requires("external_openocd_tests")
+        self.test_requires("riscv-gcc")
+        self.test_requires("riscv-gdb")
+        self.test_requires("riscv-isa-sim")
+        self.test_requires("dejagnu")
 
     def layout(self) -> None:
-        build_folder = Path("build") / str(
-            self.settings.build_type  # pylint: disable=no-member
-        )
+        build_folder = Path("build") / str(self.settings.build_type)
         self.folders.generators = build_folder
         self.folders.build = build_folder
 
@@ -131,35 +95,33 @@ class Package(conan.ConanFile):
             self.run("git submodule init")
             self.run("git submodule update")
 
-    def _var(self, name: str) -> str:
-        for _, info in self.dependencies.items():
-            run_vars = info.runenv_info.vars(self)
-            for var, val in run_vars.items():
-                if var == name:
-                    return str(val)
-        assert False
-
     def generate(self) -> None:
         toolchain = CMakeToolchain(self)
 
-        toolchain.variables["OPENOCD_SOURCE_DEPS_DIR"] = self._var(
-            "SC_OPENOCD_SOURCE_DEPS_PATH"
-        )
-        toolchain.variables["CMAKE_BUILD_TYPE"] = (
-            self.settings.build_type  # pylint: disable=no-member
+        def set_toolchain_var_from_host_hint(tc_var, dep, hint_var) -> None:
+            toolchain.variables[tc_var] = self.mp_hints.host[dep].vars[hint_var]
+
+        set_toolchain_var_from_host_hint(
+            "OPENOCD_SOURCE_DEPS_DIR",
+            "openocd_source_deps",
+            "SC_OPENOCD_SOURCE_DEPS_PATH",
         )
 
-        if (
-            self.settings.os == "Linux"  # pylint: disable=no-member
-            and self.options.test  # pylint: disable=no-member
-        ):
-            toolchain.variables["RISCVSpike_DIR"] = self._var("SC_SPIKE_PATH")
-            toolchain.variables["RISCVGCC_DIR"] = self._var("SC_GCC_PATH")
-            toolchain.variables["RISCVGDB_DIR"] = self._var("SC_RISCV_GDB_PATH")
-            toolchain.variables["DEJAGNU_DIR"] = self._var("SC_DEJAGNU_PATH")
-            toolchain.variables["RISCVTESTS_DIR"] = self._var(
-                "SC_EXTERNAL_OPENOCD_TESTS_PATH"
-            )
+        toolchain.variables["CMAKE_BUILD_TYPE"] = self.settings.build_type
+
+        if self.settings.os == "Linux" and self.options.test:
+            for tc_var, dep, hint_var in [
+                ("RISCVSpike_DIR", "riscv-isa-sim", "SC_SPIKE_PATH"),
+                ("RISCVGCC_DIR", "riscv-gcc", "SC_GCC_PATH"),
+                ("RISCVGDB_DIR", "riscv-gdb", "SC_RISCV_GDB_PATH"),
+                ("DEJAGNU_DIR", "dejagnu", "SC_DEJAGNU_PATH"),
+                (
+                    "RISCVTESTS_DIR",
+                    "external_openocd_tests",
+                    "SC_EXTERNAL_OPENOCD_TESTS_PATH",
+                ),
+            ]:
+                set_toolchain_var_from_host_hint(tc_var, dep, hint_var)
             toolchain.variables["SC_OPENOCD_ENABLE_TESTS"] = "ON"
 
         if self.options.elct_support:

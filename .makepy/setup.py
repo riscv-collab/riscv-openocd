@@ -8,8 +8,8 @@ from pathlib import Path
 
 from _ocd_test_suite import _OcdTestSuite
 from hwrs import HWRSSuite
-from makepy import ArgsHook, Command, Conductor
-from makepy.conan import BinaryPackage, Conan, RevisionedRef
+from makepy import Command, Conductor
+from makepy.conan import BinaryPackage, Conan, MakepyHintsHook, RevisionedRef
 from makepy.generic import GenericSuite, ParallelHook, PrivilegedContainerHook
 from makepy.lint import FormatCommand, LintCommand
 from makepy.syntacore import ConanConfigs, ConanSuite, SyntacoreSuite
@@ -19,23 +19,6 @@ from makepy.utils import run_shell
 
 _logger = logging.getLogger()
 _repo_path = Path(__file__).parent.parent
-
-
-class _BuildArgsHook(ArgsHook):
-    def amend_commands(self) -> list[str]:
-        return ["config", "build", "just-config"]
-
-    def amend_parser(self, parser: ArgumentParser) -> None:
-        parser.add_argument(
-            "-b",
-            "--build-path",
-            required=True,
-            type=Path,
-            help="Build directory.",
-        )
-
-    def hook(self, args: Namespace) -> None:
-        args.install_path = (args.build_path / "install").absolute()
 
 
 class _JustConfigCommand(Command):
@@ -49,6 +32,13 @@ class _JustConfigCommand(Command):
         conan_help = "See './make.py conan install --help'."
         parser.add_argument(
             "--build", type=str, default="never", help=conan_help
+        )
+        parser.add_argument(
+            "-b",
+            "--build-path",
+            required=True,
+            type=Path,
+            help="Build directory.",
         )
         parser.add_argument(
             "-pr",
@@ -181,8 +171,8 @@ class _JustConfigCommand(Command):
         )
 
         # TODO: should we remove all these "cwd" statements?
-        run_shell([*makepy, "conan", "source"], cwd=_repo_path)
         run_shell(install_cmd, cwd=_repo_path)
+        run_shell([*makepy, "conan", "source"], cwd=_repo_path)
         config_cmd = [
             *makepy,
             "config",
@@ -426,7 +416,7 @@ def main() -> None:
     conductor.add(_OcdTestSuite())
 
     conductor.add(PrivilegedContainerHook())
-    conductor.add(_BuildArgsHook())
+    conductor.add(MakepyHintsHook(commands=["config", "build"]))
     conductor.add(ParallelHook(commands=["build"]))
 
     conductor.add(_PrintPackageURLs())

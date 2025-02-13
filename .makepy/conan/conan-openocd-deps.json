@@ -1,0 +1,37 @@
+{
+  "build": {},
+  "host": {
+    "libusb": {
+      "args": {
+        "options": {
+          "enable_udev": true
+        }
+      },
+      "version": "1.0.26#c0c00750b383839aa140a0be628d552c"
+    },
+    "libftdi": "1.5#55ee16fbd5bbe4eab9d6f1f03fe0bf85",
+    "hidapi": "0.13.1#20fbe2186ac901286e0f5e7181cf1db7",
+    "openocd_source_deps": "0.0.1-rc.0.319+sc.sc-dt.2025.02@sc/main#ad6641cbe10b064bf32899cf87410bb56589bfeb",
+    "jansson": "2.14#42fc601d5b8e236e050e48f2321ef851",
+    "external_openocd_tests": {
+      "test_only": true,
+      "version": "0.0.3-rc.0.319+sc.sc-dt.2025.02@sc/main#cf8210018d8216e1ecc852f7b360c81eee902765"
+    },
+    "riscv-gcc": {
+      "test_only": true,
+      "version": "14.2.0-rc.0.154+sc.sc-dt.2025.02@sc/main#cbd00f34c6931fcd63f2d2665ceb479012bc79b7"
+    },
+    "riscv-gdb": {
+      "test_only": true,
+      "version": "15.1.0-rc.1.65+sc.sc-dt.2025.02@sc/main#d7e99650c5a3a210d73ed47a3cbda70563047682"
+    },
+    "riscv-isa-sim": {
+      "test_only": true,
+      "version": "0.1.0-rc.0.300+sc.sc-dt.2025.02@sc/main#7dd2940be111e6722f56504334ed4169c307d7e7"
+    },
+    "dejagnu": {
+      "test_only": true,
+      "version": "1.6.3-rc.0.319+sc.sc-dt.2025.02@sc/main#324d889a884249d40de0995483d1c76b9e2e4d0a"
+    }
+  }
+}
