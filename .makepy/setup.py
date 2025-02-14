@@ -412,8 +412,8 @@ def main() -> None:
     conductor.add(
         ConanSuite(
             name="openocd",
-            start_version="cd481a97e9ae604880b8239679bf83534e83b381",
-            start_semver="0.11.0",
+            start_version="2d580e9457771c9fe6bfd7b241a73ab65270d44e",
+            start_semver="0.12.2",
             configs=configs,
             release_branch="sc/stable",
         )
