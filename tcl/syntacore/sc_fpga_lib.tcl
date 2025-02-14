@@ -21,13 +21,16 @@
 #   users don't need to worry about that.
 
 namespace eval _SC_INTERNALS {
+    variable FPGA_LIB_VERBOSE_MODE 1
     proc sc_fpga_fname {} {
         return [lindex [info level -2] 0]
     }
 
     proc sc_lib_print { msg } {
-        # TODO: we could provide an option to silence these messages
-        echo "[sc_fpga_fname]: $msg"
+        variable FPGA_LIB_VERBOSE_MODE
+        if {${FPGA_LIB_VERBOSE_MODE}} {
+          echo "[sc_fpga_fname]: $msg"
+        }
     }
 
     proc fill_gprs_with_zero {} {
@@ -171,6 +174,15 @@ namespace eval _SC_INTERNALS {
         }
         sc_lib_print "[sc_lib_write_reg mcountinhibit [format "0x%08x" $inhibit_value]]"
     }
+}
+
+proc sc_fpga_ctrl_silence {} {
+    set ::_SC_INTERNALS::FPGA_LIB_VERBOSE_MODE 0
+    echo "sc_fpga_lib silent mode activated"
+}
+proc sc_fpga_ctrl_verbose {} {
+    set ::_SC_INTERNALS::FPGA_LIB_VERBOSE_MODE 1
+    echo "sc_fpga_lib verbose mode activated"
 }
 
 proc sc_fpga_read_reg {reg_name} {

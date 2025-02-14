@@ -1,5 +1,7 @@
 proc check_fpga_lib_availability { expect_available } {
   set fpga_lib_functions [list \
+    sc_fpga_ctrl_silence \
+    sc_fpga_ctrl_verbose \
     sc_fpga_read_reg \
     sc_fpga_write_reg \
     sc_fpga_halt_all \
