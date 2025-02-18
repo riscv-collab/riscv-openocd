@@ -9,4 +9,4 @@ cfgdir = $(pkgdatadir)/scripts/syntacore
 cfg_DATA = syntacore_ide_csr_cloak.cfg
 
 syntacore_ide_csr_cloak.cfg: ide_cloak.tcl
-	$< $@
+	$(abspath $<) $@
