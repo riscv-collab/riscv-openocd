@@ -11,9 +11,6 @@ class Package(ConanFile):
     python_requires = "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main"
     python_requires_extend = "makepy_hints.MakepyConanFile"
 
-    def layout(self) -> None:
-        self.folders.root = ".."
-
     def requirements(self) -> None:
         self.requires("external_openocd_tests")
         self.requires("riscv-gcc")
@@ -26,5 +23,12 @@ class Package(ConanFile):
             self,
             "*",
             Path(self.source_folder) / "testsuite",
-            self.package_folder,
+            Path(self.package_folder) / "testsuite",
+            excludes="conanfile.py",
+        )
+        copy(
+            self,
+            "*",
+            Path(self.source_folder) / "testing" / "dejagnu",
+            Path(self.package_folder) / "syntacore",
         )

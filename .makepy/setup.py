@@ -361,10 +361,9 @@ def _build_formatter_and_linter() -> tuple[FormatCommand, LintCommand]:
         _repo_path / "make.py",
         _repo_path / ".makepy" / "_ocd_test_suite.py",
         _repo_path / ".makepy" / "setup.py",
-        _repo_path / "conanfile.py",
     ]
     ocd_conanfile = _repo_path / "conanfile.py"
-    ocd_testsuite_conanfile = _repo_path / "testsuite" / "conanfile.py"
+    ocd_testsuite_conanfile = _repo_path / "testsuite_conanfile.py"
     python_files = [*makepy_files, ocd_conanfile, ocd_testsuite_conanfile]
 
     format_cmd = FormatCommand(default_revision="origin/sc/main")
@@ -412,7 +411,7 @@ def main() -> None:
     conan.add_package(
         name="openocd_testsuite",
         start_semver="0.0.1",
-        recipe=_repo_path / "testsuite" / "conanfile.py",
+        recipe=_repo_path / "testsuite_conanfile.py",
         configs=ConanConfigs().add_ubuntu22(),
     )
     conductor.add(conan)
