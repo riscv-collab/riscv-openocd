@@ -411,8 +411,7 @@ def main() -> None:
     )
     conan.add_package(
         name="openocd_testsuite",
-        start_version="a45b1d294073e860ee79fb3845160a6263137232",
-        start_semver="0.0.0",
+        start_semver="0.0.1",
         recipe=_repo_path / "testsuite" / "conanfile.py",
         configs=ConanConfigs().add_ubuntu22(),
     )
