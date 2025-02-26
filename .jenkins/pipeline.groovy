@@ -302,6 +302,7 @@ workflow('openocd') {
             memory('0.4Gi', '16Gi')
             fs('1.0Gi', '1.5Gi')
         }
+        vars { [name: "openocd"] }
         matrix {
             [[image          : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
               profile        : ['default'],
@@ -321,6 +322,7 @@ workflow('openocd') {
                 memory('0.4Gi', '16Gi')
                 fs('1.0Gi', '1.5Gi')
         }
+        vars { [name: "openocd_testsuite"] }
         matrix {
             [
                 [
