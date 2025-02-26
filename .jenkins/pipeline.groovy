@@ -296,7 +296,7 @@ workflow('openocd') {
         }
     }
 
-    deploy {
+    deploy('openocd') {
         resources {
             cpu('0.8', '4')
             memory('0.4Gi', '16Gi')
@@ -312,6 +312,21 @@ workflow('openocd') {
              [image          : ['cpp_ubuntu_22'],
               profile        : ['mp_armhf'],
               extraArgs      : ['--options:host elct_support=True']]]
+        }
+    }
+
+    deploy('openocd_testsuite') {
+        resources {
+            cpu('0.8', '4')
+                memory('0.4Gi', '16Gi')
+                fs('1.0Gi', '1.5Gi')
+        }
+        matrix {
+            [
+                [
+                    image : ['cpp_ubuntu_22'],
+                ]
+            ]
         }
     }
 

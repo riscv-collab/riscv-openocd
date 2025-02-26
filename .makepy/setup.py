@@ -357,21 +357,26 @@ class _PrintPackageURLs(Command):
 
 
 def _build_formatter_and_linter() -> tuple[FormatCommand, LintCommand]:
-    python_files = [
+    makepy_files = [
         _repo_path / "make.py",
         _repo_path / ".makepy" / "_ocd_test_suite.py",
         _repo_path / ".makepy" / "setup.py",
         _repo_path / "conanfile.py",
     ]
+    ocd_conanfile = _repo_path / "conanfile.py"
+    ocd_testsuite_conanfile = _repo_path / "testsuite" / "conanfile.py"
+    python_files = [*makepy_files, ocd_conanfile, ocd_testsuite_conanfile]
 
     format_cmd = FormatCommand(default_revision="origin/sc/main")
     # format_cmd.add_cmake_format() # Do not forget to add .cmake-format.py
-    format_cmd.add_black([*python_files])
-    format_cmd.add_isort([*python_files])
+    format_cmd.add_black(python_files)
+    format_cmd.add_isort(python_files)
 
     lint_cmd = LintCommand(default_revision="origin/sc/main")
-    lint_cmd.add_pylint([*python_files])
-    lint_cmd.add_mypy([*python_files])
+    lint_cmd.add_pylint(python_files)
+    lint_cmd.add_mypy(makepy_files)
+    lint_cmd.add_mypy([ocd_conanfile])
+    lint_cmd.add_mypy([ocd_testsuite_conanfile])
 
     return format_cmd, lint_cmd
 
@@ -397,16 +402,21 @@ def main() -> None:
         options={"elct_support": [False, True], "test": [False, True]}
     )
 
-    conductor.add(
-        ConanSuite(
-            name="openocd",
-            start_version="2d580e9457771c9fe6bfd7b241a73ab65270d44e",
-            start_semver="0.12.2",
-            configs=configs,
-            release_branch="sc/stable",
-        )
+    conan = ConanSuite(
+        name="openocd",
+        start_version="2d580e9457771c9fe6bfd7b241a73ab65270d44e",
+        start_semver="0.12.2",
+        configs=configs,
+        release_branch="sc/stable",
     )
-
+    conan.add_package(
+        name="openocd_testsuite",
+        start_version="a45b1d294073e860ee79fb3845160a6263137232",
+        start_semver="0.0.0",
+        recipe=_repo_path / "testsuite" / "conanfile.py",
+        configs=ConanConfigs().add_ubuntu22(),
+    )
+    conductor.add(conan)
     conductor.add(_JustConfigCommand())
     conductor.add(_ConfigCommand())
     conductor.add(_BuildCommand())
