@@ -1370,14 +1370,31 @@ static int register_read_progbuf(struct target *target, uint64_t *value,
 {
 	assert(target->state == TARGET_HALTED);
 
-	if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31)
-		return fpr_read_progbuf(target, value, number);
-	else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095)
-		return csr_read_progbuf(target, value, number);
+	int res;
+	if (number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31) {
+		res = fpr_read_progbuf(target, value, number);
+	} else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095) {
+		res = csr_read_progbuf(target, value, number);
+	} else {
+		LOG_TARGET_ERROR(target, "Unexpected read of %s via program buffer.",
+				riscv_reg_gdb_regno_name(target, number));
+		return ERROR_FAIL;
+	}
+	if (res != ERROR_OK)
+		return res;
 
-	LOG_TARGET_ERROR(target, "Unexpected read of %s via program buffer.",
-			riscv_reg_gdb_regno_name(target, number));
-	return ERROR_FAIL;
+	unsigned int size_bits = register_size(target, number);
+	unsigned int value_bits = sizeof(*value) * CHAR_BIT;
+	assert(size_bits <= value_bits);
+	if (size_bits == value_bits || *value >> size_bits == 0)
+		return ERROR_OK;
+
+	LOG_TARGET_WARNING(target, "Value read for register %s of %" PRIx64
+			" does not fit into the size of the register (%u bits)."
+			" This is a HW bug. Truncating the value to fit into the register.",
+			riscv_reg_gdb_regno_name(target, number), *value, size_bits);
+	*value &= GENMASK_ULL(size_bits - 1U, 0U);
+	return ERROR_OK;
 }
 
 /**
