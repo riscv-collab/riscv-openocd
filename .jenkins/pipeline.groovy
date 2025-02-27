@@ -318,9 +318,9 @@ workflow('openocd') {
 
     deploy('openocd_testsuite') {
         resources {
-            cpu('0.8', '4')
-                memory('0.4Gi', '16Gi')
-                fs('1.0Gi', '1.5Gi')
+            cpu('6.1', '10')
+            memory('1.1Gi', '17.1Gi')
+            fs('12.5Gi', '22.6Gi')
         }
         vars { [name: "openocd_testsuite"] }
         matrix {
