@@ -74,7 +74,7 @@ workflow('openocd') {
             memory('1.1Gi', '17.1Gi')
             fs('12.5Gi', '22.6Gi')
         }
-        dependsOn 'lint' // workaround for better stage scheduling
+        dependsOn 'build-the-docs' // workaround for better stage scheduling
             matrix {
                 [
                     [
@@ -114,7 +114,7 @@ workflow('openocd') {
             memory('0.6Gi', '23.5Gi')
             fs('13.0Gi', '30.1Gi')
         }
-        dependsOn 'lint' // workaround for better stage scheduling
+        dependsOn 'build-the-docs' // workaround for better stage scheduling
         matrix {
             [
                 [
@@ -153,7 +153,7 @@ workflow('openocd') {
             memory('0.6Gi', '23.5Gi')
             fs('13.0Gi', '30.1Gi')
         }
-        dependsOn 'lint' // workaround for better stage scheduling
+        dependsOn 'build-the-docs' // workaround for better stage scheduling
         matrix {
             [
                 [
@@ -187,7 +187,7 @@ workflow('openocd') {
             memory('0.8Gi', '22.8Gi')
             fs('15.0Gi', '33.3Gi')
         }
-        dependsOn 'lint' // workaround for better stage scheduling
+        dependsOn 'build-the-docs' // workaround for better stage scheduling
         matrix {
             [
                 [
