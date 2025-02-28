@@ -134,7 +134,7 @@ workflow('openocd') {
                 source .jenkins/common.sh
                 workdir=build/testsuite
 
-                VARS_tests_valgrind_path=$(which valgrind)
+                VARS_tests_valgrind_path=valgrind
                 runTests $workdir
                 EXIT_CODE=$?
 

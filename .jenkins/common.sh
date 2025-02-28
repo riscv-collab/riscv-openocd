@@ -12,11 +12,11 @@ VARS_as_conan_args=(
 installOpenOCDto() {
   ocd_install_path=$1
   mpy conan build ${VARS_as_conan_args[@]}
-  mkdir -p $ocd_install_path
-  mpy sh make \
+  mpy sh env DESTDIR="${ocd_install_path}" \
+    .jenkins/destdir_wrap.sh \
+    make \
     -C build/$VARS_s_build_type \
-    install -j \
-    DESTDIR=$(realpath $ocd_install_path)
+    install -j
 }
 
 configureTestsuite() {
@@ -29,18 +29,17 @@ configureTestsuite() {
     --name openocd_testsuite \
     --output-folder $workdir
 
-  #TODO make openocd-install absolute in makepy
-  mpy config --build-path ${workdir} \
-    --openocd-install $(realpath $ocd_install)
+  mpy config \
+    ${VARS_tests_adapter_info:+--tests-adapter-info ${VARS_tests_adapter_info}} \
+    ${VARS_tests_valgrind_path:+--tests-valgrind-path ${VARS_tests_valgrind_path}} \
+    --build-path "${workdir}" \
+    --openocd-install "${ocd_install}"
 }
 
 testsBuild() {
   workdir=$1
 
-  mpy build --build-path ${workdir} \
-    ${VARS_tests_adapter_info:+--tests-adapter-info ${VARS_tests_adapter_info}} \
-    ${VARS_tests_valgrind_path:+--tests-valgrind-path ${VARS_tests_valgrind_path}} \
-    --target=$VARS_target
+  mpy build --build-path ${workdir} --target=$VARS_target
 }
 
 runTests() {

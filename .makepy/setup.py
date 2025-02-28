@@ -35,7 +35,7 @@ class _ConfigCommand(Command):
             help="json file with debug adapter properties",
         )
         parser.add_argument(
-            "--tests-valgrid-path",
+            "--tests-valgrind-path",
             dest="tests_valgrind_path",
             type=str,
             default=None,
@@ -68,9 +68,14 @@ class _ConfigCommand(Command):
             )
 
         if args.tests_valgrind_path:
-            cmd.extend(
-                [f"-DOPENOCD_TESTS_VALGRIND_PATH={args.tests_valgrind_path}"]
-            )
+            valgrind_abs_path = args.tests_valgrind_path
+            if not Path(args.tests_valgrind_path).is_absolute():
+                valgrind_abs_path = run_shell(
+                    ["which", args.tests_valgrind_path],
+                    capture_output=True,
+                    loglevel=logging.DEBUG,
+                ).stdout.strip()
+            cmd.extend([f"-DOPENOCD_TESTS_VALGRIND_PATH={valgrind_abs_path}"])
 
         cmd.extend(
             [
@@ -79,7 +84,7 @@ class _ConfigCommand(Command):
                 f"-DRISCVGDB_DIR={args.hints.host['riscv-gdb'].vars['SC_RISCV_GDB_PATH']}",
                 f"-DDEJAGNU_DIR={args.hints.host['dejagnu'].vars['SC_DEJAGNU_PATH']}",
                 f"-DRISCVTESTS_DIR={args.hints.host['external_openocd_tests'].vars['SC_EXTERNAL_OPENOCD_TESTS_PATH']}",
-                f"-DOPENOCD_INSTALL_PATH={args.openocd_install}",
+                f"-DOPENOCD_INSTALL_PATH={Path(args.openocd_install).resolve()}",
             ]
         )
         run_shell(cmd)
