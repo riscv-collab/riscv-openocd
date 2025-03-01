@@ -234,7 +234,7 @@ workflow('openocd') {
                 mpy conan install
                 mpy sh ./bootstrap nosubmodule
                 mpy sh env PKG_CONFIG_LIBDIR=build/Release \
-                    ./configure --enable-dummy --disable-internal-jimtcl
+                    ./configure --enable-dummy
                 mpy sh make -j 4
                 mpy sh make check
             '''
@@ -258,8 +258,7 @@ workflow('openocd') {
             '''
                 mpy conan install
                 mpy sh ./bootstrap nosubmodule
-                mpy sh env PKG_CONFIG_LIBDIR=build/Release \
-                    ./configure --disable-internal-jimtcl
+                mpy sh env PKG_CONFIG_LIBDIR=build/Release ./configure
                 mpy sh make html
             '''
         }

@@ -9,7 +9,7 @@ from conan.tools.scm import Git
 _shared_configure_args = [
     "--enable-amtjtagaccel",
     "--enable-armjtagew",
-    "--enable-aice",
+    "--enable-angie",
     "--enable-cmsis-dap",
     "--enable-ftdi",
     "--enable-jlink",
@@ -27,8 +27,6 @@ _shared_configure_args = [
     "--enable-usbprog",
     "--enable-vsllink",
     "--disable-parport-ppdev",
-    "--disable-internal-libjaylink",
-    "--disable-internal-jimtcl",  # won't be neccessary soon
 ]
 
 
