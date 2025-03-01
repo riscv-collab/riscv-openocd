@@ -193,7 +193,7 @@ workflow('openocd') {
                 [
                     image    : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
                     profile  : ['default'],
-                    target   : ['RISCVTestsDebug', 'OpenOCDTestsOn_spike'],
+                    target   : ['Transferable_OpenOCDTestsOn_spike'],
                     o_source : ['internal', 'syntacore'],
                 ]
             ]
