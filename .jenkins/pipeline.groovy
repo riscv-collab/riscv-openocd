@@ -75,19 +75,19 @@ workflow('openocd') {
             fs('12.5Gi', '22.6Gi')
         }
         dependsOn 'build-the-docs' // workaround for better stage scheduling
-            matrix {
+        matrix {
+            [
                 [
-                    [
-                        image        : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
-                        profile      : ['default'],
-                        target       : ['RISCVTestsDebug', 'OpenOCDTestsOn_spike'],
-                        o_source     : ['internal', 'syntacore'],
-                        s_build_type : ['Debug', 'Release'],
-                        // TODO: Enable 'strict' sanitize level YCAT-43092
-                        o_sanitize   : ['enable'],
-                    ]
+                    image        : ['cpp_ubuntu_22'],
+                    profile      : ['default'],
+                    target       : ['RISCVTestsDebug', 'OpenOCDTestsOn_spike'],
+                    o_source     : ['internal', 'syntacore'],
+                    s_build_type : ['Debug', 'Release'],
+                    // TODO: Enable 'strict' sanitize level YCAT-43092
+                    o_sanitize   : ['enable'],
                 ]
-            }
+            ]
+        }
         rules { vars ->
             include(vars.ti >= TI.POSTCOMMIT)
         }
@@ -118,9 +118,9 @@ workflow('openocd') {
         matrix {
             [
                 [
-                    image        : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                    image        : ['cpp_ubuntu_22'],
                     profile      : ['default'],
-                    target       : ['RISCVTestsDebug', 'OpenOCDTestsOn_spike'],
+                    target       : ['OpenOCDTestsOn_spike'],
                     o_source     : ['internal', 'syntacore'],
                     s_build_type : ['Debug', 'Release'],
                 ]
@@ -157,7 +157,7 @@ workflow('openocd') {
         matrix {
             [
                 [
-                    image    : ['cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                    image    : ['cpp_rocky_8', 'cpp_ubuntu_22'],
                     profile  : ['default'],
                     target   : ['RISCVTestsDebug', 'OpenOCDTestsOn_spike'],
                     o_source : ['internal', 'syntacore'],
