@@ -80,7 +80,7 @@ workflow('openocd') {
                     [
                         image        : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
                         profile      : ['default'],
-                        target       : ['riscv_tests', 'OpenOCDTestsOn_spike'],
+                        target       : ['RISCVTestsDebug', 'OpenOCDTestsOn_spike'],
                         o_source     : ['internal', 'syntacore'],
                         s_build_type : ['Debug', 'Release'],
                         // TODO: Enable 'strict' sanitize level YCAT-43092
@@ -120,7 +120,7 @@ workflow('openocd') {
                 [
                     image        : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
                     profile      : ['default'],
-                    target       : ['riscv_tests', 'OpenOCDTestsOn_spike'],
+                    target       : ['RISCVTestsDebug', 'OpenOCDTestsOn_spike'],
                     o_source     : ['internal', 'syntacore'],
                     s_build_type : ['Debug', 'Release'],
                 ]
@@ -159,7 +159,7 @@ workflow('openocd') {
                 [
                     image    : ['cpp_rocky_8', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
                     profile  : ['default'],
-                    target   : ['riscv_tests', 'OpenOCDTestsOn_spike'],
+                    target   : ['RISCVTestsDebug', 'OpenOCDTestsOn_spike'],
                     o_source : ['internal', 'syntacore'],
                 ]
             ]
@@ -193,7 +193,7 @@ workflow('openocd') {
                 [
                     image    : ['cpp_ubuntu_20', 'cpp_ubuntu_22'],
                     profile  : ['default'],
-                    target   : ['riscv_tests', 'OpenOCDTestsOn_spike'],
+                    target   : ['RISCVTestsDebug', 'OpenOCDTestsOn_spike'],
                     o_source : ['internal', 'syntacore'],
                 ]
             ]

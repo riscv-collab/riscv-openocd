@@ -271,7 +271,9 @@ function(add_riscv_test_debug_run_for_target target)
   # cmake-format: off
   add_custom_target(
     ${target_name}
+    ALL
     WORKING_DIRECTORY ${wd_relative_path}
+    DEPENDS ${wd_target_name}
     COMMAND
       env
         GCC=${RISCV_GCC_BINARY}
