@@ -28,7 +28,9 @@ if RELEASE
 %C%_libopenocd_la_CPPFLAGS += -DRELSTR=\"\"
 %C%_libopenocd_la_CPPFLAGS += -DGITVERSION=\"\"
 else
-branch = $$(git -C $(top_srcdir) branch --show-current | tr -c '[:alnum:]\n' _)
+mpy_hints_path = $(top_builddir)/makepy_hints.json
+get_version = "import json; print(json.load(open('$(mpy_hints_path)'))['version'])"
+branch = $$(python -c $(get_version) | cut -d'+' -f2- | tr -c '[:alnum:]\n' _)
 revision = $$(git -C $(top_srcdir) rev-parse HEAD | head -c 8)
 maybe_dirty = $$([ -z "$$(git status --untracked-files=no --porcelain)" ] || echo -dirty)
 %C%_libopenocd_la_CPPFLAGS += -DRELSTR=\"-$(branch)-g$(revision)$(maybe_dirty)\"
