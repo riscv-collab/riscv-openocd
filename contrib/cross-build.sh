@@ -172,6 +172,7 @@ if [ -d $LIBJAYLINK_SRC ] ; then
     $LIBJAYLINK_CONFIG
   make -j $MAKE_JOBS
   make install DESTDIR=$SYSROOT
+fi
 # ftd2xx copy to sysroot
 if [ -d $FTD2XX_SRC ] ; then
     FTD2XX_LIB_SRC=${FTD2XX_SRC}/amd64
