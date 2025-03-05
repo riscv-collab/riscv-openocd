@@ -45,7 +45,22 @@ static void jtag_callback_queue_reset(void)
 }
 
 static int
-check_fields_on_taps(const struct scan_fields_on_tap *tap_fields,
+check_ir_scan_fields_on_tap(struct scan_fields_on_tap tap_fields)
+{
+	unsigned int ir_length = 0;
+	for (size_t i = 0; i < tap_fields.num_fields; ++i)
+		ir_length += tap_fields.fields[i].num_bits;
+	if (ir_length == tap_fields.tap->ir_length)
+		return ERROR_OK;
+
+	LOG_ERROR("BUG: %u bits are to be scanned into the IR of TAP %s with IR "
+			"length of %u.", ir_length, jtag_tap_name(tap_fields.tap),
+			tap_fields.tap->ir_length);
+	return ERROR_FAIL;
+}
+
+static int
+check_fields_on_taps(bool ir_scan, const struct scan_fields_on_tap *tap_fields,
 		size_t count)
 {
 	for (size_t i = 0; i < count; ++i) {
@@ -54,6 +69,8 @@ check_fields_on_taps(const struct scan_fields_on_tap *tap_fields,
 					jtag_tap_name(tap_fields[i].tap));
 			return ERROR_FAIL;
 		}
+		if (ir_scan && check_ir_scan_fields_on_tap(tap_fields[i]) != ERROR_OK)
+			return ERROR_FAIL;
 	}
 	for (size_t i = 1; i < count; ++i) {
 		if (tap_fields[i - 1].tap->abs_chain_position
@@ -95,18 +112,19 @@ static void fill_bypass_scan_field(struct scan_field *field, bool ir_scan,
 	field->out_value = out_value;
 }
 
-static void set_tap_cur_instr(struct jtag_tap *tap, struct scan_field *fields,
-		size_t n_fields)
+/* The total length of "fields" should be equal to "tap->ir_length".
+ * This is achived by definiton for TAPs in bypass (see
+ * "fill_bypass_scan_field()") and pre-validated in "check_fields_on_taps()"
+ * for active TAPs.*/
+static void set_tap_cur_instr(struct jtag_tap *tap, struct scan_field *fields)
 {
 	size_t i = 0;
 	for (unsigned int dst_offset = 0; dst_offset < tap->ir_length;
 			dst_offset += fields[i].num_bits, ++i) {
-		assert(i < n_fields);
 		assert(fields[i].num_bits <= tap->ir_length - dst_offset);
 		buf_set_buf(fields[i].out_value, 0, tap->cur_instr, dst_offset,
 				fields[i].num_bits);
 	}
-	assert(i == n_fields);
 }
 
 static int fill_scan_fields(struct scan_field *out_fields, bool ir_scan,
@@ -116,7 +134,7 @@ static int fill_scan_fields(struct scan_field *out_fields, bool ir_scan,
 	struct scan_field *out = out_fields;
 	for (struct jtag_tap *tap = jtag_tap_next_enabled(NULL); tap;
 			tap = jtag_tap_next_enabled(tap)) {
-		const bool bypass = tap != in->tap;
+		bool bypass = tap != in->tap;
 
 		if (ir_scan) {
 			tap->bypass = bypass;
@@ -139,7 +157,7 @@ static int fill_scan_fields(struct scan_field *out_fields, bool ir_scan,
 
 		/* update device information */
 		if (ir_scan)
-			set_tap_cur_instr(tap, out, n_fields);
+			set_tap_cur_instr(tap, out);
 
 		out += n_fields;
 	}
@@ -153,12 +171,12 @@ static int fill_scan_fields(struct scan_field *out_fields, bool ir_scan,
 int interface_jtag_add_scan(bool ir_scan, const struct scan_fields_on_tap *tap_fields,
 		size_t n_active_taps, enum tap_state state)
 {
-	int res = check_fields_on_taps(tap_fields, n_active_taps);
+	int res = check_fields_on_taps(ir_scan, tap_fields, n_active_taps);
 	if (res != ERROR_OK)
 		return ERROR_FAIL;
 
-	const size_t bypass_taps = jtag_tap_count_enabled() - n_active_taps;
-	const size_t num_fields = bypass_taps + get_num_fields(tap_fields, n_active_taps);
+	size_t bypass_taps = jtag_tap_count_enabled() - n_active_taps;
+	size_t num_fields = bypass_taps + get_num_fields(tap_fields, n_active_taps);
 
 	struct scan_field *out_fields = cmd_queue_alloc(num_fields * sizeof(struct scan_field));
 	struct jtag_command *cmd = cmd_queue_alloc(sizeof(struct jtag_command));

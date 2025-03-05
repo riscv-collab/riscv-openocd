@@ -86,8 +86,8 @@ static COMMAND_HELPER(parse_tap_names, unsigned int *cur_arg_p,
 				*end_arg_p; ++end_arg_p)
 			if (strcmp(CMD_ARGV[cur_arg], *end_arg_p) == 0)
 				goto exit;
-		const char * const tap_name = CMD_ARGV[cur_arg++];
-		struct jtag_tap * const tap = jtag_tap_by_string(tap_name);
+		const char *tap_name = CMD_ARGV[cur_arg++];
+		struct jtag_tap *tap = jtag_tap_by_string(tap_name);
 		if (!tap)
 			return ERROR_COMMAND_ARGUMENT_INVALID;
 		taps[n_active_taps] = tap;
@@ -120,8 +120,8 @@ static int print_ir_tap_scan(struct command_invocation *cmd,
 		const struct scan_fields_on_tap *tap_field, const char *separator)
 {
 	assert(tap_field->num_fields == 1);
-	const unsigned int num_bits = tap_field->fields->num_bits;
-	char * const in_str = buf_to_hex_str(tap_field->fields->in_value, num_bits);
+	unsigned int num_bits = tap_field->fields->num_bits;
+	char *in_str = buf_to_hex_str(tap_field->fields->in_value, num_bits);
 	if (!in_str) {
 		command_print(cmd, buf_to_hex_str_err_fmt, num_bits);
 		return ERROR_FAIL;
@@ -139,8 +139,8 @@ static int print_dr_tap_scan(struct command_invocation *cmd,
 			jtag_tap_name(tap_field->tap));
 	const char *field_separator = "";
 	for (size_t i = 0; i < tap_field->num_fields; ++i) {
-		const unsigned int num_bits = tap_field->fields[i].num_bits;
-		char * const in_str = buf_to_hex_str(tap_field->fields[i].in_value,
+		unsigned int num_bits = tap_field->fields[i].num_bits;
+		char *in_str = buf_to_hex_str(tap_field->fields[i].in_value,
 				num_bits);
 		if (!in_str) {
 			command_print(cmd, buf_to_hex_str_err_fmt, num_bits);
@@ -157,11 +157,11 @@ static int print_dr_tap_scan(struct command_invocation *cmd,
 static int print_scans(jtag_callback_data_t arg_info, jtag_callback_data_t arg2,
 		jtag_callback_data_t arg3, jtag_callback_data_t arg4)
 {
-	const struct scan_print_info * const info =
+	const struct scan_print_info *info =
 		(const struct scan_print_info *)arg_info;
 	command_print_sameline(info->cmd, "%s ", info->ir_scan ? "IR" : "DR");
 	assert(info->n_active_taps > 0);
-	const unsigned int last_i = info->n_active_taps - 1;
+	unsigned int last_i = info->n_active_taps - 1;
 	for (unsigned int i = 0; i < last_i; ++i) {
 		int res = (info->ir_scan ? print_ir_tap_scan : print_dr_tap_scan)
 			(info->cmd, &info->tap_scans[i], " ");
@@ -178,9 +178,9 @@ static COMMAND_HELPER(parse_ir_scan_fields_on_tap, unsigned int *cur_arg_p,
 	unsigned int cur_arg = *cur_arg_p;
 
 	struct scan_field *field = cmd_queue_alloc(sizeof(*field));
-	const char * const ir_val_str = CMD_ARGV[cur_arg++];
-	const size_t bits = tap->ir_length;
-	uint8_t * const value = cmd_queue_alloc(DIV_ROUND_UP(bits, 8));
+	const char *ir_val_str = CMD_ARGV[cur_arg++];
+	size_t bits = tap->ir_length;
+	uint8_t *value = cmd_queue_alloc(DIV_ROUND_UP(bits, 8));
 	int ret = CALL_COMMAND_HANDLER(command_parse_str_to_buf, ir_val_str,
 			value, bits);
 	if (ret != ERROR_OK)
@@ -201,19 +201,19 @@ static COMMAND_HELPER(parse_dr_scan_fields_on_tap, unsigned int *cur_arg_p,
 {
 	unsigned int cur_arg = *cur_arg_p;
 
-	char * const arg_copy = strdup(CMD_ARGV[cur_arg++]);
+	char *arg_copy = strdup(CMD_ARGV[cur_arg++]);
 	if (!arg_copy) {
 		command_print(CMD, "Out of memory.");
 		return ERROR_FAIL;
 	}
-	const size_t min_chars_per_field = 3;
-	const size_t max_fields = DIV_ROUND_UP(strlen(arg_copy),
+	size_t min_chars_per_field = 3;
+	size_t max_fields = DIV_ROUND_UP(strlen(arg_copy),
 			min_chars_per_field);
 	struct scan_field *fields = cmd_queue_alloc(max_fields
 			* sizeof(*fields));
 	char *val_str = NULL;
 	size_t num_fields = 0;
-	const char * const separators = ",";
+	const char *separators = ",";
 	int ret;
 	for (char *field_str = strtok(arg_copy, separators);
 			field_str; field_str = strtok(NULL, separators)) {
@@ -236,7 +236,7 @@ static COMMAND_HELPER(parse_dr_scan_fields_on_tap, unsigned int *cur_arg_p,
 			ret = ERROR_COMMAND_ARGUMENT_UNDERFLOW;
 			goto cleanup;
 		}
-		const unsigned int bits = signed_bits;
+		unsigned int bits = signed_bits;
 		if (bits / 8 / 1024 > 640) {
 			command_print(CMD,
 					"%d-bits long scan fields are not supported. "
@@ -282,7 +282,7 @@ static COMMAND_HELPER(parse_endstate, unsigned int *cur_arg_p, enum tap_state *e
 		return ERROR_OK;
 	if (++cur_arg == CMD_ARGC)
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	const char * const endstate_name = CMD_ARGV[cur_arg++];
+	const char *endstate_name = CMD_ARGV[cur_arg++];
 	*endstate = tap_state_by_name(endstate_name);
 	if (!scan_is_safe(*endstate)) {
 		command_print(CMD, "endstate: %s is not stable", endstate_name);
@@ -298,8 +298,8 @@ static COMMAND_HELPER(validate_fields_on_taps, struct scan_fields_on_tap *tap_fi
 	qsort(tap_fields, n_active_taps, sizeof(*tap_fields), cmp_scan_fields_on_tap);
 
 	for (unsigned int i = 1; i < n_active_taps; ++i) {
-		const struct jtag_tap * const curr_tap = tap_fields[i].tap;
-		const struct jtag_tap * const prev_tap = tap_fields[i - 1].tap;
+		const struct jtag_tap *curr_tap = tap_fields[i].tap;
+		const struct jtag_tap *prev_tap = tap_fields[i - 1].tap;
 		if (curr_tap->abs_chain_position == prev_tap->abs_chain_position) {
 			command_print(CMD, "TAP %s is passed more then once.",
 					jtag_tap_name(curr_tap));
@@ -318,7 +318,7 @@ static COMMAND_HELPER(parse_scan_fields, unsigned int *cur_arg_p, bool ir_scan,
 {
 	unsigned int cur_arg = *cur_arg_p;
 
-	const char * const start_arg = ir_scan
+	const char *start_arg = ir_scan
 		? JTAG_EXECUTE_SCAN_IR_START_ARG
 		: JTAG_EXECUTE_SCAN_DR_START_ARG;
 	if (cur_arg == CMD_ARGC || strcmp(CMD_ARGV[cur_arg++], start_arg))
