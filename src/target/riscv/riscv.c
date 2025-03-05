@@ -4214,8 +4214,7 @@ _exit:
 		LOG_TARGET_ERROR(target, "Unable to restore the disabled breakpoint.");
 	}
 
-	// TODO: should we update debug_reason if no callback was called?
-	if (success && handle_callbacks) {
+	if (success) {
 		target->state = TARGET_RUNNING;
 		if (handle_callbacks)
 			target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
