@@ -125,6 +125,9 @@ typedef struct {
 #define DTM_DTMCS_VERSION_UNKNOWN ((unsigned int)-1)
 #define RISCV_TINFO_VERSION_UNKNOWN (-1)
 
+#define RISCV013_DTMCS_ABITS_MIN 7
+#define RISCV013_DTMCS_ABITS_MAX 32
+
 struct reg_name_table {
 	unsigned int num_entries;
 	char **reg_names;
@@ -175,14 +178,13 @@ struct riscv_info {
 
 	/* It's possible that each core has a different supported ISA set. */
 	int xlen;
+	/* TODO: use the value from the register cache instead. */
 	riscv_reg_t misa;
-	/* Cached value of vlenb. 0 indicates there is no vector support.
+	/* TODO: use the value from the register cache instead.
+	 * Cached value of vlenb. 0 indicates there is no vector support.
 	 * Note that you can have vector support without misa.V set, because
 	 * Zve* extensions implement vector registers without setting misa.V. */
 	unsigned int vlenb;
-
-	bool mtopi_readable;
-	bool mtopei_readable;
 
 	/* The number of triggers per hart. */
 	unsigned int trigger_count;
@@ -275,10 +277,10 @@ struct riscv_info {
 	riscv_insn_t (*read_progbuf)(struct target *target, unsigned int index);
 	int (*execute_progbuf)(struct target *target, uint32_t *cmderr);
 	int (*invalidate_cached_progbuf)(struct target *target);
-	int (*get_dmi_scan_length)(struct target *target);
-	void (*fill_dmi_write)(struct target *target, char *buf, uint64_t a, uint32_t d);
-	void (*fill_dmi_read)(struct target *target, char *buf, uint64_t a);
-	void (*fill_dm_nop)(struct target *target, char *buf);
+	unsigned int (*get_dmi_address_bits)(const struct target *target);
+	void (*fill_dmi_write)(const struct target *target, uint8_t *buf, uint32_t a, uint32_t d);
+	void (*fill_dmi_read)(const struct target *target, uint8_t *buf, uint32_t a);
+	void (*fill_dm_nop)(const struct target *target, uint8_t *buf);
 
 	int (*authdata_read)(struct target *target, uint32_t *value, unsigned int index);
 	int (*authdata_write)(struct target *target, uint32_t value, unsigned int index);
@@ -300,8 +302,7 @@ struct riscv_info {
 						 riscv_sample_config_t *config,
 						 int64_t until_ms);
 
-	int (*read_memory)(struct target *target, const riscv_mem_access_args_t args);
-	int (*write_memory)(struct target *target, const riscv_mem_access_args_t args);
+	int (*access_memory)(struct target *target, const riscv_mem_access_args_t args);
 
 	unsigned int (*data_bits)(struct target *target);
 
@@ -432,14 +433,14 @@ extern struct scan_field select_dtmcontrol;
 extern struct scan_field select_dbus;
 extern struct scan_field select_idcode;
 
-int dtmcontrol_scan(struct target *target, uint32_t out, uint32_t *in_ptr);
+int dtmcs_scan(struct jtag_tap *tap, uint32_t out, uint32_t *in_ptr);
 
 extern struct scan_field *bscan_tunneled_select_dmi;
 extern uint32_t bscan_tunneled_select_dmi_num_fields;
 typedef enum { BSCAN_TUNNEL_NESTED_TAP, BSCAN_TUNNEL_DATA_REGISTER } bscan_tunnel_type_t;
 extern uint8_t bscan_tunnel_ir_width;
 
-void select_dmi_via_bscan(struct target *target);
+void select_dmi_via_bscan(struct jtag_tap *tap);
 
 /*** OpenOCD Interface */
 int riscv_openocd_poll(struct target *target);
@@ -478,10 +479,10 @@ riscv_insn_t riscv_read_progbuf(struct target *target, int index);
 int riscv_write_progbuf(struct target *target, int index, riscv_insn_t insn);
 int riscv_execute_progbuf(struct target *target, uint32_t *cmderr);
 
-void riscv_fill_dm_nop(struct target *target, char *buf);
-void riscv_fill_dmi_write(struct target *target, char *buf, uint64_t a, uint32_t d);
-void riscv_fill_dmi_read(struct target *target, char *buf, uint64_t a);
-int riscv_get_dmi_scan_length(struct target *target);
+void riscv_fill_dm_nop(const struct target *target, uint8_t *buf);
+void riscv_fill_dmi_write(const struct target *target, uint8_t *buf, uint32_t a, uint32_t d);
+void riscv_fill_dmi_read(const struct target *target, uint8_t *buf, uint32_t a);
+unsigned int riscv_get_dmi_address_bits(const struct target *target);
 
 uint32_t riscv_get_dmi_address(const struct target *target, uint32_t dm_address);
 
@@ -495,7 +496,7 @@ void riscv_semihosting_init(struct target *target);
 
 enum semihosting_result riscv_semihosting(struct target *target, int *retval);
 
-void riscv_add_bscan_tunneled_scan(struct target *target, const struct scan_field *field,
+void riscv_add_bscan_tunneled_scan(struct jtag_tap *tap, const struct scan_field *field,
 		riscv_bscan_tunneled_scan_context_t *ctxt);
 
 int riscv_read_by_any_size(struct target *target, target_addr_t address, uint32_t size, uint8_t *buffer);

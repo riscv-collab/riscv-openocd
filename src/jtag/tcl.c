@@ -62,7 +62,7 @@ struct jtag_tap *jtag_tap_by_jim_obj(Jim_Interp *interp, Jim_Obj *o)
 	return t;
 }
 
-static bool scan_is_safe(tap_state_t state)
+static bool scan_is_safe(enum tap_state state)
 {
 	switch (state) {
 	    case TAP_RESET:
@@ -273,7 +273,7 @@ cleanup:
 
 #define JTAG_EXECUTE_SCAN_ENDSTATE_NEXT_ARG "-endstate"
 
-static COMMAND_HELPER(parse_endstate, unsigned int *cur_arg_p, tap_state_t *endstate)
+static COMMAND_HELPER(parse_endstate, unsigned int *cur_arg_p, enum tap_state *endstate)
 {
 	unsigned int cur_arg = *cur_arg_p;
 	*endstate = TAP_IDLE;
@@ -347,7 +347,7 @@ exit:
 		return ERROR_COMMAND_ARGUMENT_INVALID;
 	}
 
-	tap_state_t endstate;
+	enum tap_state endstate;
 	ret = CALL_COMMAND_HANDLER(parse_endstate, &cur_arg, &endstate);
 	if (ret != ERROR_OK)
 		return ret;
@@ -426,7 +426,7 @@ COMMAND_HANDLER(handle_jtag_execute)
 
 COMMAND_HANDLER(handle_jtag_command_pathmove)
 {
-	tap_state_t states[8];
+	enum tap_state states[8];
 
 	if (CMD_ARGC < 1 || CMD_ARGC > ARRAY_SIZE(states))
 		return ERROR_COMMAND_SYNTAX_ERROR;

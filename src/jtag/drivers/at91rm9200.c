@@ -98,19 +98,19 @@ static uint32_t *pio_base;
 
 /* low level command set
  */
-static bb_value_t at91rm9200_read(void);
+static enum bb_value at91rm9200_read(void);
 static int at91rm9200_write(int tck, int tms, int tdi);
 
 static int at91rm9200_init(void);
 static int at91rm9200_quit(void);
 
-static struct bitbang_interface at91rm9200_bitbang = {
+static const struct bitbang_interface at91rm9200_bitbang = {
 	.read = at91rm9200_read,
 	.write = at91rm9200_write,
 	.blink = NULL,
 };
 
-static bb_value_t at91rm9200_read(void)
+static enum bb_value at91rm9200_read(void)
 {
 	return (pio_base[device->TDO_PIO + PIO_PDSR] & device->TDO_MASK) ? BB_HIGH : BB_LOW;
 }

@@ -115,7 +115,7 @@ static unsigned long dataport;
 static unsigned long statusport;
 #endif
 
-static bb_value_t parport_read(void)
+static enum bb_value parport_read(void)
 {
 	int data = 0;
 
@@ -255,7 +255,7 @@ static int parport_get_giveio_access(void)
 }
 #endif
 
-static struct bitbang_interface parport_bitbang = {
+static const struct bitbang_interface parport_bitbang = {
 	.read = &parport_read,
 	.write = &parport_write,
 	.blink = &parport_led,

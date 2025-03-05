@@ -14,7 +14,7 @@
 #include "hello.h"
 
 /* my private tap controller state, which tracks state for calling code */
-static tap_state_t dummy_state = TAP_RESET;
+static enum tap_state dummy_state = TAP_RESET;
 
 static int dummy_clock;		/* edge detector */
 
@@ -28,7 +28,7 @@ int dummy_read_output_handler(struct command_context *context,
 		const char *data)
 {
 	LOG_DEBUG_IO("%s", data);
-	bb_value_t *tdo_bb = context->output_handler_priv;
+	enum bb_value *tdo_bb = context->output_handler_priv;
 	int tdo;
 	if (sscanf(data, "tdo: %d", &tdo) != 1)
 		return ERROR_OK;
@@ -36,10 +36,10 @@ int dummy_read_output_handler(struct command_context *context,
 	return ERROR_OK;
 }
 
-static bb_value_t dummy_read(void)
+static enum bb_value dummy_read(void)
 {
 	if (dummy_context) {
-		bb_value_t tdo;
+		enum bb_value tdo;
 		struct command_context *read_ctxt = copy_command_context(dummy_context);
 		command_set_output_handler(read_ctxt, dummy_read_output_handler, &tdo);
 		if (command_run_line(read_ctxt, "dummy::get_tdo") != ERROR_OK)
@@ -57,7 +57,7 @@ static int dummy_write(int tck, int tms, int tdi)
 	/* TAP standard: "state transitions occur on rising edge of clock" */
 	if (tck != dummy_clock) {
 		if (tck) {
-			tap_state_t old_state = dummy_state;
+			enum tap_state old_state = dummy_state;
 			dummy_state = tap_state_transition(old_state, tms);
 			if (dummy_context) {
 				int res = command_run_linef(dummy_context,
@@ -106,7 +106,7 @@ static int dummy_led(bool on)
 	return ERROR_OK;
 }
 
-static struct bitbang_interface dummy_bitbang = {
+static const struct bitbang_interface dummy_bitbang = {
 		.read = &dummy_read,
 		.write = &dummy_write,
 		.blink = &dummy_led,

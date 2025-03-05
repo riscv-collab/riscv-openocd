@@ -52,9 +52,16 @@ AC_SEARCH_LIBS([openpty], [util])
 
 AC_CHECK_HEADERS([sys/socket.h])
 AC_CHECK_HEADERS([elf.h])
-AC_EGREP_HEADER(Elf64_Ehdr, [elf.h], [
-  AC_DEFINE([HAVE_ELF64], [1], [Define to 1 if the system has the type `Elf64_Ehdr'.])
-])
+
+AC_CHECK_TYPE([Elf64_Ehdr],
+	AC_DEFINE([HAVE_ELF64], [1], [Define to 1 if the system has the type 'Elf64_Ehdr'.]),
+	[], [[#include <elf.h>]])
+
+AC_MSG_CHECKING([for glibc])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <features.h>]], [[int v = __GLIBC__;return 0;]])],
+	[have_glibc=yes], [have_glibc=no])
+AC_MSG_RESULT($have_glibc)
+
 AC_CHECK_HEADERS([fcntl.h])
 AC_CHECK_HEADERS([malloc.h])
 AC_CHECK_HEADERS([netdb.h])
@@ -155,6 +162,11 @@ m4_define([PCIE_ADAPTERS],
 m4_define([SERIAL_PORT_ADAPTERS],
 	[[[buspirate], [Bus Pirate], [BUS_PIRATE]]])
 
+m4_define([LINUXSPIDEV_ADAPTER],
+	[[[linuxspidev], [Linux spidev driver], [LINUXSPIDEV]]])
+m4_define([VDEBUG_ADAPTER],
+	[[[vdebug], [Cadence Virtual Debug Interface], [VDEBUG]]])
+
 # The word 'Adapter' in "Dummy Adapter" below must begin with a capital letter
 # because there is an M4 macro called 'adapter'.
 m4_define([DUMMY_ADAPTER],
@@ -249,7 +261,7 @@ AC_ARG_ENABLE([malloc_logging],
 
 AC_MSG_CHECKING([whether to enable malloc free space logging]);
 AC_MSG_RESULT([$debug_malloc])
-AS_IF([test "x$debug_malloc" = "xyes"], [
+AS_IF([test "x$debug_malloc" = "xyes" -a "x$have_glibc" = "xyes"], [
   AC_DEFINE([_DEBUG_FREE_SPACE_],[1], [Include malloc free space in logging])
 ])
 
@@ -281,12 +293,13 @@ AC_ARG_ADAPTERS([
   LIBFTDI_ADAPTERS,
   LIBFTDI_USB1_ADAPTERS,
   LIBGPIOD_ADAPTERS,
+  LINUXSPIDEV_ADAPTER,
   SERIAL_PORT_ADAPTERS,
+  DUMMY_ADAPTER,
+  VDEBUG_ADAPTER,
   PCIE_ADAPTERS,
   LIBJAYLINK_ADAPTERS
   ],[auto])
-
-AC_ARG_ADAPTERS([DUMMY_ADAPTER],[no])
 
 AC_ARG_ENABLE([parport],
   AS_HELP_STRING([--enable-parport], [Enable building the pc parallel port driver]),
@@ -305,10 +318,6 @@ AC_ARG_ENABLE([parport_giveio],
 AC_ARG_ENABLE([jtag_vpi],
   AS_HELP_STRING([--enable-jtag_vpi], [Enable building support for JTAG VPI]),
   [build_jtag_vpi=$enableval], [build_jtag_vpi=no])
-
-AC_ARG_ENABLE([vdebug],
-  AS_HELP_STRING([--enable-vdebug], [Enable building support for Cadence Virtual Debug Interface]),
-  [build_vdebug=$enableval], [build_vdebug=no])
 
 AC_ARG_ENABLE([jtag_dpi],
   AS_HELP_STRING([--enable-jtag_dpi], [Enable building support for JTAG DPI]),
@@ -399,8 +408,8 @@ AS_CASE(["${host_cpu}"],
 
 can_build_buspirate=yes
 
-AS_CASE([$host],
-  [*-cygwin*], [
+AS_CASE([$host_os],
+  [cygwin*], [
     is_win32=yes
     parport_use_ppdev=no
 
@@ -420,7 +429,7 @@ AS_CASE([$host],
       ])
     ])
   ],
-  [*-mingw* | *-msys*], [
+  [mingw* | msys*], [
     is_mingw=yes
     is_win32=yes
     parport_use_ppdev=no
@@ -439,7 +448,7 @@ AS_CASE([$host],
 
     AC_SUBST([HOST_CPPFLAGS], ["-D__USE_MINGW_ANSI_STDIO -DFD_SETSIZE=128"])
   ],
-  [*darwin*], [
+  [darwin*], [
     is_darwin=yes
 
     AS_IF([test "x$parport_use_giveio" = "xyes"], [
@@ -497,7 +506,7 @@ AS_IF([test "x$build_dmem" = "xyes"], [
   AC_DEFINE([BUILD_DMEM], [0], [0 if you don't want to debug via Direct Mem.])
 ])
 
-AS_IF([test "x$ADAPTER_VAR([dummy])" = "xyes"], [
+AS_IF([test "x$ADAPTER_VAR([dummy])" != "xno"], [
   build_bitbang=yes
 ])
 
@@ -552,12 +561,6 @@ AS_IF([test "x$build_jtag_vpi" = "xyes"], [
   AC_DEFINE([BUILD_JTAG_VPI], [1], [1 if you want JTAG VPI.])
 ], [
   AC_DEFINE([BUILD_JTAG_VPI], [0], [0 if you don't want JTAG VPI.])
-])
-
-AS_IF([test "x$build_vdebug" = "xyes"], [
-  AC_DEFINE([BUILD_VDEBUG], [1], [1 if you want Cadence vdebug interface.])
-], [
-  AC_DEFINE([BUILD_VDEBUG], [0], [0 if you don't want Cadence vdebug interface.])
 ])
 
 AS_IF([test "x$build_jtag_dpi" = "xyes"], [
@@ -704,6 +707,8 @@ PROCESS_ADAPTERS([LIBJAYLINK_ADAPTERS], ["x$use_libjaylink" = "xyes"], [libjayli
 PROCESS_ADAPTERS([PCIE_ADAPTERS], ["x$is_linux" = "xyes"], [Linux build])
 PROCESS_ADAPTERS([SERIAL_PORT_ADAPTERS], ["x$can_build_buspirate" = "xyes"],
                                          [internal error: validation should happen beforehand])
+PROCESS_ADAPTERS([LINUXSPIDEV_ADAPTER], ["x$is_linux" = "xyes"], [Linux spidev])
+PROCESS_ADAPTERS([VDEBUG_ADAPTER], [true], [unused])
 PROCESS_ADAPTERS([DUMMY_ADAPTER], [true], [unused])
 
 AS_IF([test "x$enable_linuxgpiod" != "xno"], [
@@ -742,7 +747,6 @@ AM_CONDITIONAL([IMX_GPIO], [test "x$build_imx_gpio" = "xyes"])
 AM_CONDITIONAL([AM335XGPIO], [test "x$build_am335xgpio" = "xyes"])
 AM_CONDITIONAL([BITBANG], [test "x$build_bitbang" = "xyes"])
 AM_CONDITIONAL([JTAG_VPI], [test "x$build_jtag_vpi" = "xyes"])
-AM_CONDITIONAL([VDEBUG], [test "x$build_vdebug" = "xyes"])
 AM_CONDITIONAL([JTAG_DPI], [test "x$build_jtag_dpi" = "xyes"])
 AM_CONDITIONAL([USB_BLASTER_DRIVER], [test "x$enable_usb_blaster" != "xno" -o "x$enable_usb_blaster_2" != "xno"])
 AM_CONDITIONAL([AMTJTAGACCEL], [test "x$build_amtjtagaccel" = "xyes"])
@@ -832,6 +836,10 @@ AM_CONDITIONAL([BUILD_USB_RESET], [test "x$is_linux" = "xyes"])
 AC_OUTPUT
 
 
+AS_IF([test "x$use_internal_jimtcl" = "xyes"], [
+  AC_MSG_WARN([Using the internal jimtcl is deprecated and will not be possible in the future.])
+])
+
 echo
 echo
 echo OpenOCD configuration summary
@@ -841,6 +849,8 @@ m4_foreach([adapter], [USB1_ADAPTERS,
 	LIBFTDI_USB1_ADAPTERS,
 	LIBGPIOD_ADAPTERS,
 	LIBJAYLINK_ADAPTERS, PCIE_ADAPTERS, SERIAL_PORT_ADAPTERS,
+	LINUXSPIDEV_ADAPTER,
+	VDEBUG_ADAPTER,
 	DUMMY_ADAPTER,
 	OPTIONAL_LIBRARIES,
 	COVERAGE],

@@ -38,17 +38,17 @@
 
 int interface_jtag_add_scan(bool ir_scan,
 		const struct scan_fields_on_tap *tap_fields,
-		size_t n_active_taps, tap_state_t state);
+		size_t n_active_taps, enum tap_state state);
 int interface_jtag_add_plain_ir_scan(
 		int num_bits, const uint8_t *out_bits, uint8_t *in_bits,
-		tap_state_t endstate);
+		enum tap_state endstate);
 int interface_jtag_add_plain_dr_scan(
 		int num_bits, const uint8_t *out_bits, uint8_t *in_bits,
-		tap_state_t endstate);
+		enum tap_state endstate);
 
 int interface_jtag_add_tlr(void);
-int interface_jtag_add_pathmove(unsigned int num_states, const tap_state_t *path);
-int interface_jtag_add_runtest(unsigned int num_cycles, tap_state_t endstate);
+int interface_jtag_add_pathmove(unsigned int num_states, const enum tap_state *path);
+int interface_jtag_add_runtest(unsigned int num_cycles, enum tap_state endstate);
 
 int interface_add_tms_seq(unsigned int num_bits,
 		const uint8_t *bits, enum tap_state state);

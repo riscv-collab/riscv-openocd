@@ -30,7 +30,7 @@ static volatile uint8_t *gpio_data_direction_register;
 
 /* low level command set
  */
-static bb_value_t ep93xx_read(void);
+static enum bb_value ep93xx_read(void);
 static int ep93xx_write(int tck, int tms, int tdi);
 static int ep93xx_reset(int trst, int srst);
 
@@ -55,13 +55,13 @@ struct adapter_driver ep93xx_adapter_driver = {
 	.jtag_ops = &ep93xx_interface,
 };
 
-static struct bitbang_interface ep93xx_bitbang = {
+static const struct bitbang_interface ep93xx_bitbang = {
 	.read = ep93xx_read,
 	.write = ep93xx_write,
 	.blink = NULL,
 };
 
-static bb_value_t ep93xx_read(void)
+static enum bb_value ep93xx_read(void)
 {
 	return (*gpio_data_register & TDO_BIT) ? BB_HIGH : BB_LOW;
 }

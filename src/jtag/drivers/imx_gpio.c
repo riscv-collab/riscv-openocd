@@ -72,7 +72,7 @@ static inline bool gpio_level(int g)
 	return pio_base[g / 32].dr >> (g & 0x1F) & 1;
 }
 
-static bb_value_t imx_gpio_read(void);
+static enum bb_value imx_gpio_read(void);
 static int imx_gpio_write(int tck, int tms, int tdi);
 
 static int imx_gpio_swdio_read(void);
@@ -82,7 +82,7 @@ static int imx_gpio_swd_write(int swclk, int swdio);
 static int imx_gpio_init(void);
 static int imx_gpio_quit(void);
 
-static struct bitbang_interface imx_gpio_bitbang = {
+static const struct bitbang_interface imx_gpio_bitbang = {
 	.read = imx_gpio_read,
 	.write = imx_gpio_write,
 	.swdio_read = imx_gpio_swdio_read,
@@ -118,7 +118,7 @@ static int speed_coeff = 50000;
 static int speed_offset = 100;
 static unsigned int jtag_delay;
 
-static bb_value_t imx_gpio_read(void)
+static enum bb_value imx_gpio_read(void)
 {
 	return gpio_level(tdo_gpio) ? BB_HIGH : BB_LOW;
 }

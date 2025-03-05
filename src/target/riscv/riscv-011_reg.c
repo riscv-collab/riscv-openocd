@@ -48,10 +48,11 @@ int riscv011_reg_init_all(struct target *target)
 	RISCV_INFO(r);
 	assert(!r->vlenb
 			&& "VLENB discovery is not supported on RISC-V 0.11 targets");
-	assert(!r->mtopi_readable
-			&& "MTOPI discovery is not supported on RISC-V 0.11 targets");
-	assert(!r->mtopei_readable
-			&& "MTOPEI discovery is not supported on RISC-V 0.11 targets");
+	/* Existence of some registers depends on others.
+	 * E.g. the presence of "v0-31" registers is infered from "vlenb" being
+	 * non-zero.
+	 * Currently, discovery of the following registers is not supported on
+	 * RISC-V 0.11 targets. */
 	uint32_t non_discoverable_regs[] = {
 		GDB_REGNO_VLENB,
 		GDB_REGNO_MTOPI,
