@@ -828,7 +828,7 @@ AC_CONFIG_FILES([
   testing/Makefile \
   tools/syntacore/Makefile
 ])
-AM_CONDITIONAL([BUILD_USB_RESET], [test ${host_os} = Linux])
+AM_CONDITIONAL([BUILD_USB_RESET], [test "x$is_linux" = "xyes"])
 AC_OUTPUT
 
 
