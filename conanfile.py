@@ -93,7 +93,7 @@ class Package(ConanFile):
 
     def configure(self):
         if self.options.get_safe("elct_support"):  # Legacy option
-            self.options.rm("elct_support")
+            self.options.rm_safe("elct_support")
             self.options["source"] = "internal"
 
     def package_id(self) -> None:
