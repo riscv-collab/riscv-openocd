@@ -32,10 +32,7 @@ branch = $$(git -C $(top_srcdir) branch --show-current | tr -c '[:alnum:]\n' _)
 revision = $$(git -C $(top_srcdir) rev-parse HEAD | head -c 8)
 maybe_dirty = $$([ -z "$$(git status --untracked-files=no --porcelain)" ] || echo -dirty)
 %C%_libopenocd_la_CPPFLAGS += -DRELSTR=\"-$(branch)-g$(revision)$(maybe_dirty)\"
-mpy_hints_path = $(top_builddir)/makepy_hints.json
-get_riscv_head_py = "import json; print(json.load(open('$(mpy_hints_path)'))['custom']['riscv_rev'])"
-riscv_head = $$(python -c $(get_riscv_head_py))
-riscv_base = $$(git -C $(top_srcdir) merge-base $(riscv_head) HEAD | head -c 8)
+riscv_base = $$(git -C $(top_srcdir) merge-base origin/riscv HEAD | head -c 8)
 %C%_libopenocd_la_CPPFLAGS += -DGITVERSION=\"riscv-upstream-$(riscv_base)-cs-$(revision)$(maybe_dirty)\"
 %C%_libopenocd_la_CPPFLAGS += -DPKGBLDDATE=\"`date +%F-%R`\"
 endif

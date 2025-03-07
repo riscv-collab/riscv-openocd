@@ -143,12 +143,8 @@ class Package(ConanFile):
         self.folders.build = build_folder
 
     def generate(self) -> None:
-        riscv_url = "https://github.com/riscv-collab/riscv-openocd.git"
         git = Git(self)
-        git.run(f"fetch {riscv_url}")
-        self.mp_hints.custom["riscv_rev"] = git.run(
-            "rev-parse FETCH_HEAD"
-        ).strip()
+        git.run(f"fetch origin riscv --depth={self.mp_git_clone_depth}")
         pc = PkgConfigDeps(self)
         pc.generate()
         # hidapi is included using "hidapi.h", not "hidapi/hidapi.h".
