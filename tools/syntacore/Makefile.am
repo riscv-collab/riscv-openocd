@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+# Copyright (c) 2025, Syntacore LLC
+
 if BUILD_USB_RESET
 bin_PROGRAMS = usb_reset
 usb_reset_SOURCES = debug_adapter_reset.c

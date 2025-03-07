@@ -2,6 +2,8 @@
 
 # A collection of reference scripts that are useful for basic fpga tasks
 #
+# Copyright (c) 2023-2025, Syntacore LLC
+#
 # If you experience difficulties with these scripts or would like to introduce
 # a new functionality - feel free to contact OpenOCD maintainer at Syntacore.
 

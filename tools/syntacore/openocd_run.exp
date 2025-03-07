@@ -1,6 +1,10 @@
 #!/usr/bin/env expect
 
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 # Expect script to help with launching OpenOCD in various lab environments
+#
+# Copyright (c) 2023-2025, Syntacore LLC
 #
 # Currently supported some debug adapters from:
 #   * Digilent (digilent-hs2a.cfg)

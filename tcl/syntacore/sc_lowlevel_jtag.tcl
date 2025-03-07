@@ -1,10 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# Expect lib for OpenOCD with commands to manipulate RISCV cores using low-level JTAG commands;
-# All commands start with "ocdjtag_riscv" (like, "ocdjtag_riscv_update_taps_info")
+# A collection of scripts to manipulate RISC-V cores using low-level JTAG
+# commands
 #
-# Usage:
-#    ./openocd -f ocd_lowlevel_jtag.exp
+# Copyright (c) 2023-2025, Syntacore LLC
 
 set __JTAG_TAPS_INFO [dict create]
 
