@@ -2908,9 +2908,9 @@ static int aarch64_jim_configure(struct target *target, struct jim_getopt_info *
 
 	pc = (struct aarch64_private_config *)target->private_config;
 	if (!pc) {
-			pc = calloc(1, sizeof(struct aarch64_private_config));
-			pc->adiv5_config.ap_num = DP_APSEL_INVALID;
-			target->private_config = pc;
+		pc = calloc(1, sizeof(struct aarch64_private_config));
+		pc->adiv5_config.ap_num = DP_APSEL_INVALID;
+		target->private_config = pc;
 	}
 
 	/*
@@ -2940,7 +2940,7 @@ static int aarch64_jim_configure(struct target *target, struct jim_getopt_info *
 
 		switch (n->value) {
 		case CFG_CTI: {
-			if (goi->isconfigure) {
+			if (goi->is_configure) {
 				Jim_Obj *o_cti;
 				struct arm_cti *cti;
 				e = jim_getopt_obj(goi, &o_cti);

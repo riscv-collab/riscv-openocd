@@ -614,6 +614,9 @@ emulation model of target hardware.
 @item @b{xlnx_pcie_xvc}
 @* A JTAG driver exposing Xilinx Virtual Cable over PCI Express to OpenOCD as JTAG/SWD interface.
 
+@item @b{linuxspidev}
+@* A SPI based SWD driver using Linux SPI devices.
+
 @item @b{linuxgpiod}
 @* A bitbang JTAG driver using Linux GPIO through library libgpiod.
 
@@ -3430,6 +3433,70 @@ See @file{interface/beaglebone-swd-native.cfg} for a sample configuration file.
 
 @end deffn
 
+@deffn {Interface Driver} {linuxspidev}
+Linux provides userspace access to SPI through spidev. Full duplex SPI
+transactions are used to simultaneously read and write to/from the target to
+emulate the SWD transport.
+
+@deffn {Config Command} {spidev path} path
+Specifies the path to the spidev device.
+@end deffn
+
+@deffn {Config Command} {spidev mode} value
+Set the mode of the spi port with optional bit flags (default=3).
+See /usr/include/linux/spi/spidev.h for all of the SPI mode options.
+@end deffn
+
+@deffn {Config Command} {spidev queue_entries} value
+Set the maximum number of queued transactions per spi exchange (default=64).
+More queued transactions may offer greater performance when the target doesn't
+need to wait. On the contrary higher numbers will reduce performance when the
+target requests a wait as all queued transactions will need to be exchanged
+before spidev can see the wait request.
+@end deffn
+
+See @file{tcl/interface/spidev_example.cfg} for a sample configuration file.
+
+Electrical connections:
+@example
++--------------+                +--------------+
+|              |     1K         |              |
+|          MOSI|---/\/\/\---+   |              |
+|     Host     |            |   |    Target    |
+|          MISO|------------+---|SWDIO         |
+|              |                |              |
+|           SCK|----------------|SWDCLK        |
+|              |                |              |
++--------------+                +--------------+
+@end example
+
+The 1K resistor works well with most MCUs up to 3 MHz. A lower resistance
+could be used to achieve higher speeds granted that the target SWDIO pin has
+enough drive strength to pull the signal high while being pulled low by this
+resistor.
+
+If you are having trouble here are some tips:
+
+@itemize @bullet
+
+@item @b{Make sure MISO and MOSI are tied together with a 1K resistor.}
+MISO should be attached to the target.
+
+@item @b{Make sure that your host and target are using the same I/O voltage}
+(for example both are using 3.3 volts).
+
+@item @b{Your host's SPI port may not idle low.}
+This will lead to an additional clock edge being sent to the target, causing
+the host and target being 1 clock off from each other. Try setting
+SPI_MOSI_IDLE_LOW in spi_mode. Try using a different spi_mode (0 - 3).
+
+@item @b{Your target may pull SWDIO and/or SWDCLK high.}
+This will create an extra edge when the host releases control of the SPI port
+at the end of a transaction. You'll need to confirm this with a scope or meter.
+Try installing 10K resistors on SWDIO and SWDCLK to ground to stop this.
+
+@end itemize
+@end deffn
 
 @deffn {Interface Driver} {linuxgpiod}
 Linux provides userspace access to GPIO through libgpiod since Linux kernel
@@ -6383,6 +6450,75 @@ flash bank $_FLASHNAME fespi 0x20000000 0 0 0 $_TARGETNAME
 @end example
 @end deffn
 
+@deffn {Flash Driver} {dw-spi}
+@cindex DesignWare SPI controller driver
+@cindex DW-SPI
+Driver for SPI NOR flash chips connected via DesignWare SPI Core, used
+in number of MCUs.
+Currently, only MIPS M4K CPU architecture is supported.
+
+The flash size is autodetected based on the table of known JEDEC IDs hardcoded
+in the OpenOCD sources. When flash size is set to @var{0}, probed Flash
+size is used.
+
+This driver requires configuring DRAM controller first, setting up a
+working area big enough to hold read/write buffers and switching Flash
+chip to 32bit mode via Tcl commands.
+
+@quotation Note
+If chip contains Boot controller, its 24/32bit setting must match
+Flash chip. If Flash chip's reset line is not connected to JTAG adapter,
+CPU reset may cause these configurations to be out of sync.
+@end quotation
+
+
+Mandatory driver's arguments are
+
+@itemize
+@item @var{-freq} ... core frequency in Hz, used in communication speed
+calculation.
+@item @var{-simc} ... @var{SIMC} register block absolute address.
+This value is the same as for Linux's driver device tree register field.
+@item @var{-spi_mst} ... @var{SPI_MST} register address. When available,
+it is used for switching between SPI Boot and Master controllers. This
+value is the same as for Linux's driver device tree register field
+second argument. Set to @var{0} if SPI Boot controller not available.
+@item @var{-if_owner_offset} ... offset of @var{if_owner} field inside
+@var{SPI_MST} register. Set to @var{0} if SPI Boot controller not available.
+@end itemize
+
+Optional driver's arguments are
+
+@itemize
+@item @var{-speed} ... SPI device communication speed in Hz. Minimal
+speed depends on the @var{-freq} variable and has the value of
+@var{freq/0xfffe}. The default value is @var{1000000}.
+@item @var{-chip_select} ... Chip select pin. The default value
+is @var{0}.
+@item @var{-timeout} ... flash communication timeout in
+seconds. The default value is @var{600}.
+@end itemize
+
+For some SoCs there are shortcuts for mandatory arguments
+
+@itemize
+@item @var{-jaguar2} ... configuration for MSCC Jaguar2 SoC family.
+@item @var{-ocelot} ... configuration for MSCC Ocelot SoC family.
+@end itemize
+
+Driver provides shortcut arguments for MSCC @var{-jaguar2} and
+@var{-ocelot} network switch SOCs, which set the correct values for @var{-freq},
+@var{-simc}, @var{-spi_mst} and @var{-if_owner_offset} arguments.
+
+Example of equivalent configurations for Jaguar2 SoC
+
+@example
+flash bank $_FLASHNAME dw-spi 0x40000000 0x02000000 4 4 $_TARGETNAME -freq 250000000 -simc 0x70101000 -spi_mst 0x70000024 -if_owner_offset 6 -speed 3000000
+flash bank $_FLASHNAME dw-spi 0x40000000 0x02000000 4 4 $_TARGETNAME -jaguar2 -speed 3000000
+@end example
+
+@end deffn
+
 @subsection Internal Flash (Microcontrollers)
 
 @deffn {Flash Driver} {aduc702x}
@@ -8030,7 +8166,7 @@ The @var{num} parameter is a value shown by @command{flash banks}.
 @end deffn
 
 @deffn {Flash Driver} {stm32l4x}
-All members of the STM32 G0, G4, L4, L4+, L5, U5, WB and WL
+All members of the STM32 C0, G0, G4, L4, L4+, L5, U0, U5, WB and WL
 microcontroller families from STMicroelectronics include internal flash
 and use ARM Cortex-M0+, M4 and M33 cores.
 The driver automatically recognizes a number of these chips using
@@ -11225,6 +11361,25 @@ follows:
 </feature>
 @end example
 
+@subsection RISC-V @code{$target_name configure} options
+@itemize
+@item @code{-ebreak} [@option{m}|@option{s}|@option{u}|@option{vs}|@option{vu}]
+@option{exception}|@option{halt} -- sets the desired behavior of @code{ebreak}
+instruction on the target. Defaults to @option{halt} in all execution modes.
+
+@itemize
+@item The last argument specifies which action should be taken when a hart
+executes a @code{ebreak}.
+
+@item The first argument specifies in which execution mode the @code{ebreak}
+behavior should change. If this option is omitted the configuration affects
+all execution modes.
+
+@item @code{cget} returns a TCL @code{dict} of execution mode - @code{ebreak}
+action pairs.
+@end itemize
+@end itemize
+
 @subsection RISC-V Debug Configuration Commands
 
 @deffn {Command} {riscv dump_sample_buf} [base64]
@@ -11432,21 +11587,6 @@ Selects whether interrupts will be disabled when single stepping. The default co
 This feature is only useful on hardware that always steps into interrupts and doesn't support dcsr.stepie=0.
 Keep in mind, disabling the option does not guarantee that single stepping will go into interrupt handlers.
 To make that happen, dcsr.stepie would have to be written to 1 as well.
-@end deffn
-
-@deffn {Command} {riscv set_ebreakm} [on|off]
-Control dcsr.ebreakm. When on (default), M-mode ebreak instructions trap to
-OpenOCD. When off, they generate a breakpoint exception handled internally.
-@end deffn
-
-@deffn {Command} {riscv set_ebreaks} [on|off]
-Control dcsr.ebreaks. When on (default), S-mode ebreak instructions trap to
-OpenOCD. When off, they generate a breakpoint exception handled internally.
-@end deffn
-
-@deffn {Command} {riscv set_ebreaku} [on|off]
-Control dcsr.ebreaku. When on (default), U-mode ebreak instructions trap to
-OpenOCD. When off, they generate a breakpoint exception handled internally.
 @end deffn
 
 The commands below can be used to prevent OpenOCD from using certain RISC-V trigger features.

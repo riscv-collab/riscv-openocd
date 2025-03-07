@@ -42,7 +42,7 @@ static bool is_gpio_config_valid(enum adapter_gpio_config_index idx)
 }
 
 /* Bitbang interface read of TDO */
-static bb_value_t linuxgpiod_read(void)
+static enum bb_value linuxgpiod_read(void)
 {
 	int retval;
 
@@ -191,7 +191,7 @@ static int linuxgpiod_blink(bool on)
 	return retval;
 }
 
-static struct bitbang_interface linuxgpiod_bitbang = {
+static const struct bitbang_interface linuxgpiod_bitbang = {
 	.read = linuxgpiod_read,
 	.write = linuxgpiod_write,
 	.swdio_read = linuxgpiod_swdio_read,

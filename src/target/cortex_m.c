@@ -1469,7 +1469,7 @@ static int cortex_m_resume(struct target *target, int current,
 	if (target->smp && !debug_execution) {
 		retval = cortex_m_restore_smp(target, !!handle_breakpoints);
 		if (retval != ERROR_OK)
-			LOG_WARNING("resume of a SMP target failed, trying to resume current one");
+			LOG_TARGET_WARNING(target, "resume of a SMP target failed, trying to resume current one");
 	}
 
 	cortex_m_restart_one(target, !!debug_execution);
@@ -1849,10 +1849,12 @@ static int cortex_m_deassert_reset(struct target *target)
 		target_state_name(target),
 		target_was_examined(target) ? "" : " not");
 
-	/* deassert reset lines */
-	adapter_deassert_reset();
-
 	enum reset_types jtag_reset_config = jtag_get_reset_config();
+
+	/* deassert reset lines */
+	if (jtag_reset_config & RESET_HAS_SRST)
+		adapter_deassert_reset();
+
 
 	if ((jtag_reset_config & RESET_HAS_SRST) &&
 		!(jtag_reset_config & RESET_SRST_NO_GATING) &&
@@ -2553,7 +2555,7 @@ static bool cortex_m_has_tz(struct target *target)
 
 	int retval = target_read_u32(target, DAUTHSTATUS, &dauthstatus);
 	if (retval != ERROR_OK) {
-		LOG_WARNING("Error reading DAUTHSTATUS register");
+		LOG_TARGET_WARNING(target, "Error reading DAUTHSTATUS register");
 		return false;
 	}
 	return (dauthstatus & DAUTHSTATUS_SID_MASK) != 0;
@@ -2602,7 +2604,7 @@ int cortex_m_examine(struct target *target)
 			} else {
 				armv7m->debug_ap = dap_get_ap(swjdp, cortex_m->apsel);
 				if (!armv7m->debug_ap) {
-					LOG_ERROR("Cannot get AP");
+					LOG_TARGET_ERROR(target, "Cannot get AP");
 					return ERROR_FAIL;
 				}
 			}
@@ -2659,9 +2661,9 @@ int cortex_m_examine(struct target *target)
 			LOG_TARGET_WARNING(target, "Erratum 3092511: Cortex-M7 can halt in an incorrect address when breakpoint and exception occurs simultaneously");
 			cortex_m->incorrect_halt_erratum = true;
 			if (armv7m->is_hla_target)
-				LOG_WARNING("No erratum 3092511 workaround on hla adapter");
+				LOG_TARGET_WARNING(target, "No erratum 3092511 workaround on hla adapter");
 			else
-				LOG_INFO("The erratum 3092511 workaround will resume after an incorrect halt");
+				LOG_TARGET_INFO(target, "The erratum 3092511 workaround will resume after an incorrect halt");
 		}
 		LOG_TARGET_DEBUG(target, "cpuid: 0x%8.8" PRIx32 "", cpuid);
 
@@ -2707,6 +2709,10 @@ int cortex_m_examine(struct target *target)
 		if (armv7m->fp_feature == FP_NONE)
 			for (size_t idx = ARMV7M_FPU_FIRST_REG; idx <= ARMV7M_FPU_LAST_REG; idx++)
 				armv7m->arm.core_cache->reg_list[idx].exist = false;
+
+		/* TODO: MVE can be present without floating points. Revisit this test */
+		if (armv7m->fp_feature != FPV5_MVE_F && armv7m->fp_feature != FPV5_MVE_I)
+			armv7m->arm.core_cache->reg_list[ARMV8M_VPR].exist = false;
 
 		if (!cortex_m_has_tz(target))
 			for (size_t idx = ARMV8M_FIRST_REG; idx <= ARMV8M_LAST_REG; idx++)

@@ -102,7 +102,7 @@ struct adapter_driver *adapter_drivers[] = {
 #if BUILD_ARMJTAGEW == 1
 		&armjtagew_adapter_driver,
 #endif
-#if BUILD_BUSPIRATE == 1
+#if BUILD_BUS_PIRATE == 1
 		&buspirate_adapter_driver,
 #endif
 #if BUILD_REMOTE_BITBANG == 1
@@ -122,6 +122,9 @@ struct adapter_driver *adapter_drivers[] = {
 #endif
 #if BUILD_LINUXGPIOD == 1
 		&linuxgpiod_adapter_driver,
+#endif
+#if BUILD_LINUXSPIDEV == 1
+		&linuxspidev_adapter_driver,
 #endif
 #if BUILD_XLNX_PCIE_XVC == 1
 		&xlnx_pcie_xvc_adapter_driver,

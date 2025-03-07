@@ -26,7 +26,6 @@
 #include "riscv.h"
 #include "riscv_reg.h"
 #include "riscv-011_reg.h"
-#include "asm.h"
 #include "gdb_regs.h"
 #include "field_helpers.h"
 
@@ -251,6 +250,32 @@ static unsigned int slot_offset(const struct target *target, slot_t slot)
 	return 0; /* Silence -Werror=return-type */
 }
 
+static uint32_t load(const struct target *target, unsigned int rd,
+		unsigned int base, uint16_t offset)
+{
+	switch (riscv_xlen(target)) {
+		case 32:
+			return lw(rd, base, offset);
+		case 64:
+			return ld(rd, base, offset);
+	}
+	assert(0);
+	return 0; /* Silence -Werror=return-type */
+}
+
+static uint32_t store(const struct target *target, unsigned int src,
+		unsigned int base, uint16_t offset)
+{
+	switch (riscv_xlen(target)) {
+		case 32:
+			return sw(src, base, offset);
+		case 64:
+			return sd(src, base, offset);
+	}
+	assert(0);
+	return 0; /* Silence -Werror=return-type */
+}
+
 static uint32_t load_slot(const struct target *target, unsigned int dest,
 		slot_t slot)
 {
@@ -308,7 +333,7 @@ static void increase_dbus_busy_delay(struct target *target)
 			info->dtmcontrol_idle, info->dbus_busy_delay,
 			info->interrupt_high_delay);
 
-	dtmcontrol_scan(target, DTMCONTROL_DBUS_RESET, NULL /* discard value */);
+	dtmcs_scan(target->tap, DTMCONTROL_DBUS_RESET, NULL /* discard value */);
 }
 
 static void increase_interrupt_high_delay(struct target *target)
@@ -1074,9 +1099,18 @@ static int maybe_write_tselect(struct target *target)
 	return ERROR_OK;
 }
 
+static uint64_t set_ebreakx_fields(uint64_t dcsr, const struct target *target)
+{
+	const struct riscv_private_config * const config = riscv_private_config(target);
+	dcsr = set_field(dcsr, DCSR_EBREAKM, config->dcsr_ebreak_fields[RISCV_MODE_M]);
+	dcsr = set_field(dcsr, DCSR_EBREAKS, config->dcsr_ebreak_fields[RISCV_MODE_S]);
+	dcsr = set_field(dcsr, DCSR_EBREAKU, config->dcsr_ebreak_fields[RISCV_MODE_U]);
+	dcsr = set_field(dcsr, DCSR_EBREAKH, 1);
+	return dcsr;
+}
+
 static int execute_resume(struct target *target, bool step)
 {
-	RISCV_INFO(r);
 	riscv011_info_t *info = get_info(target);
 
 	LOG_DEBUG("step=%d", step);
@@ -1108,10 +1142,7 @@ static int execute_resume(struct target *target, bool step)
 		}
 	}
 
-	info->dcsr = set_field(info->dcsr, DCSR_EBREAKM, r->riscv_ebreakm);
-	info->dcsr = set_field(info->dcsr, DCSR_EBREAKS, r->riscv_ebreaks);
-	info->dcsr = set_field(info->dcsr, DCSR_EBREAKU, r->riscv_ebreaku);
-	info->dcsr = set_field(info->dcsr, DCSR_EBREAKH, 1);
+	info->dcsr = set_ebreakx_fields(info->dcsr, target);
 	info->dcsr &= ~DCSR_HALT;
 
 	if (step)
@@ -1136,7 +1167,7 @@ static int execute_resume(struct target *target, bool step)
 	}
 
 	target->state = TARGET_RUNNING;
-	register_cache_invalidate(target->reg_cache);
+	riscv_reg_cache_invalidate_all(target);
 
 	return ERROR_OK;
 }
@@ -1452,7 +1483,7 @@ static int examine(struct target *target)
 {
 	/* Don't need to select dbus, since the first thing we do is read dtmcontrol. */
 	uint32_t dtmcontrol;
-	if (dtmcontrol_scan(target, 0, &dtmcontrol) != ERROR_OK || dtmcontrol == 0) {
+	if (dtmcs_scan(target->tap, 0, &dtmcontrol) != ERROR_OK || dtmcontrol == 0) {
 		LOG_ERROR("Could not scan dtmcontrol. Check JTAG connectivity/board power.");
 		return ERROR_FAIL;
 	}
@@ -1928,7 +1959,6 @@ static int riscv011_resume(struct target *target, int current,
 
 static int assert_reset(struct target *target)
 {
-	RISCV_INFO(r);
 	riscv011_info_t *info = get_info(target);
 	/* TODO: Maybe what I implemented here is more like soft_reset_halt()? */
 
@@ -1942,10 +1972,7 @@ static int assert_reset(struct target *target)
 
 	/* Not sure what we should do when there are multiple cores.
 	 * Here just reset the single hart we're talking to. */
-	info->dcsr = set_field(info->dcsr, DCSR_EBREAKM, r->riscv_ebreakm);
-	info->dcsr = set_field(info->dcsr, DCSR_EBREAKS, r->riscv_ebreaks);
-	info->dcsr = set_field(info->dcsr, DCSR_EBREAKU, r->riscv_ebreaku);
-	info->dcsr = set_field(info->dcsr, DCSR_EBREAKH, 1);
+	info->dcsr = set_ebreakx_fields(info->dcsr, target);
 	info->dcsr |= DCSR_HALT;
 	if (target->reset_halt)
 		info->dcsr |= DCSR_NDRESET;
@@ -1972,9 +1999,16 @@ static int deassert_reset(struct target *target)
 		return wait_for_state(target, TARGET_RUNNING);
 }
 
-static int read_memory(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer, uint32_t increment)
+static int read_memory(struct target *target, const riscv_mem_access_args_t args)
 {
+	assert(riscv_mem_access_is_read(args));
+
+	const target_addr_t address = args.address;
+	const uint32_t size = args.size;
+	const uint32_t count = args.count;
+	const uint32_t increment = args.increment;
+	uint8_t * const buffer = args.read_buffer;
+
 	if (increment != size) {
 		LOG_ERROR("read_memory with custom increment not implemented");
 		return ERROR_NOT_IMPLEMENTED;
@@ -2142,9 +2176,20 @@ static int setup_write_memory(struct target *target, uint32_t size)
 	return ERROR_OK;
 }
 
-static int write_memory(struct target *target, target_addr_t address,
-		uint32_t size, uint32_t count, const uint8_t *buffer)
+static int write_memory(struct target *target, const riscv_mem_access_args_t args)
 {
+	assert(riscv_mem_access_is_write(args));
+
+	if (args.increment != args.size) {
+		LOG_TARGET_ERROR(target, "Write increment size has to be equal to element size");
+		return ERROR_NOT_IMPLEMENTED;
+	}
+
+	const target_addr_t address = args.address;
+	const uint32_t size = args.size;
+	const uint32_t count = args.count;
+	const uint8_t * const buffer = args.write_buffer;
+
 	riscv011_info_t *info = get_info(target);
 	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
 
@@ -2280,6 +2325,15 @@ error:
 	return ERROR_FAIL;
 }
 
+static int access_memory(struct target *target, const riscv_mem_access_args_t args)
+{
+	assert(riscv_mem_access_is_valid(args));
+	const bool is_write = riscv_mem_access_is_write(args);
+	if (is_write)
+		return write_memory(target, args);
+	return read_memory(target, args);
+}
+
 static int arch_state(struct target *target)
 {
 	return ERROR_OK;
@@ -2371,7 +2425,7 @@ static int init_target(struct command_context *cmd_ctx,
 {
 	LOG_DEBUG("init");
 	RISCV_INFO(generic_info);
-	generic_info->read_memory = read_memory;
+	generic_info->access_memory = access_memory;
 	generic_info->authdata_read = &riscv011_authdata_read;
 	generic_info->authdata_write = &riscv011_authdata_write;
 	generic_info->print_info = &riscv011_print_info;
@@ -2405,8 +2459,6 @@ struct target_type riscv011_target = {
 
 	.assert_reset = assert_reset,
 	.deassert_reset = deassert_reset,
-
-	.write_memory = write_memory,
 
 	.arch_state = arch_state,
 };

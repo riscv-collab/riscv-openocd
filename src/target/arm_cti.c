@@ -25,7 +25,7 @@ struct arm_cti {
 	struct adiv5_ap *ap;
 };
 
-static LIST_HEAD(all_cti);
+static OOCD_LIST_HEAD(all_cti);
 
 const char *arm_cti_name(struct arm_cti *self)
 {
@@ -468,7 +468,7 @@ static int cti_create(struct jim_getopt_info *goi)
 	adiv5_mem_ap_spot_init(&cti->spot);
 
 	/* Do the rest as "configure" options */
-	goi->isconfigure = 1;
+	goi->is_configure = true;
 	e = cti_configure(goi, cti);
 	if (e != JIM_OK) {
 		free(cti);

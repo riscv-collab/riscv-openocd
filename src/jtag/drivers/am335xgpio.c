@@ -206,7 +206,7 @@ static void restore_gpio(enum adapter_gpio_config_index idx)
 	}
 }
 
-static bb_value_t am335xgpio_read(void)
+static enum bb_value am335xgpio_read(void)
 {
 	return get_gpio_value(&adapter_gpio_config[ADAPTER_GPIO_IDX_TDO]) ? BB_HIGH : BB_LOW;
 }
@@ -283,7 +283,7 @@ static int am335xgpio_blink(bool on)
 	return ERROR_OK;
 }
 
-static struct bitbang_interface am335xgpio_bitbang = {
+static const struct bitbang_interface am335xgpio_bitbang = {
 	.read = am335xgpio_read,
 	.write = am335xgpio_write,
 	.swdio_read = am335xgpio_swdio_read,

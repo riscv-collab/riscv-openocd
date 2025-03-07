@@ -320,7 +320,6 @@ static void log_memory_access64(target_addr_t address, uint64_t value,
 
 static enum riscv_halt_reason riscv_halt_reason(struct target *target);
 static void riscv_info_init(struct target *target, struct riscv_info *r);
-static void riscv_invalidate_register_cache(struct target *target);
 static int riscv_step_rtos_hart(struct target *target);
 
 static void riscv_sample_buf_maybe_add_timestamp(struct target *target, bool before)
@@ -341,18 +340,18 @@ static void riscv_sample_buf_maybe_add_timestamp(struct target *target, bool bef
 
 static int riscv_resume_go_all_harts(struct target *target);
 
-void select_dmi_via_bscan(struct target *target)
+void select_dmi_via_bscan(struct jtag_tap *tap)
 {
-	jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
+	jtag_add_ir_scan(tap, &select_user4, TAP_IDLE);
 	if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER)
-		jtag_add_dr_scan(target->tap, bscan_tunnel_data_register_select_dmi_num_fields,
+		jtag_add_dr_scan(tap, bscan_tunnel_data_register_select_dmi_num_fields,
 										bscan_tunnel_data_register_select_dmi, TAP_IDLE);
 	else /* BSCAN_TUNNEL_NESTED_TAP */
-		jtag_add_dr_scan(target->tap, bscan_tunnel_nested_tap_select_dmi_num_fields,
+		jtag_add_dr_scan(tap, bscan_tunnel_nested_tap_select_dmi_num_fields,
 										bscan_tunnel_nested_tap_select_dmi, TAP_IDLE);
 }
 
-int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_ptr)
+static int dtmcs_scan_via_bscan(struct jtag_tap *tap, uint32_t out, uint32_t *in_ptr)
 {
 	/* On BSCAN TAP: Select IR=USER4, issue tunneled IR scan via BSCAN TAP's DR */
 	uint8_t tunneled_dr_width[4] = {32};
@@ -417,10 +416,10 @@ int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_
 		tunneled_dr[0].out_value = bscan_one;
 		tunneled_dr[0].in_value = NULL;
 	}
-	jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
-	jtag_add_dr_scan(target->tap, ARRAY_SIZE(tunneled_ir), tunneled_ir, TAP_IDLE);
-	jtag_add_dr_scan(target->tap, ARRAY_SIZE(tunneled_dr), tunneled_dr, TAP_IDLE);
-	select_dmi_via_bscan(target);
+	jtag_add_ir_scan(tap, &select_user4, TAP_IDLE);
+	jtag_add_dr_scan(tap, ARRAY_SIZE(tunneled_ir), tunneled_ir, TAP_IDLE);
+	jtag_add_dr_scan(tap, ARRAY_SIZE(tunneled_dr), tunneled_dr, TAP_IDLE);
+	select_dmi_via_bscan(tap);
 
 	int retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
@@ -438,40 +437,42 @@ int dtmcontrol_scan_via_bscan(struct target *target, uint32_t out, uint32_t *in_
 }
 
 /* TODO: rename "dtmcontrol"-> "dtmcs" */
-int dtmcontrol_scan(struct target *target, uint32_t out, uint32_t *in_ptr)
+int dtmcs_scan(struct jtag_tap *tap, uint32_t out, uint32_t *in_ptr)
 {
 	uint8_t value[4];
 
 	if (bscan_tunnel_ir_width != 0)
-		return dtmcontrol_scan_via_bscan(target, out, in_ptr);
+		return dtmcs_scan_via_bscan(tap, out, in_ptr);
 
 	buf_set_u32(value, 0, 32, out);
 
-	jtag_add_ir_scan(target->tap, &select_dtmcontrol, TAP_IDLE);
+	jtag_add_ir_scan(tap, &select_dtmcontrol, TAP_IDLE);
 
 	struct scan_field field = {
 		.num_bits = 32,
 		.out_value = value,
 		.in_value = in_ptr ? value : NULL
 	};
-	jtag_add_dr_scan(target->tap, 1, &field, TAP_IDLE);
+	jtag_add_dr_scan(tap, 1, &field, TAP_IDLE);
 
 	/* Always return to dbus. */
-	jtag_add_ir_scan(target->tap, &select_dbus, TAP_IDLE);
+	jtag_add_ir_scan(tap, &select_dbus, TAP_IDLE);
 
 	int retval = jtag_execute_queue();
 	if (retval != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "dtmcs scan failed, error code = %d", retval);
+		LOG_ERROR("'dtmcs' scan failed on TAP %s, error code = %d",
+				jtag_tap_name(tap), retval);
 		return retval;
 	}
 
 	if (in_ptr) {
 		assert(field.in_value);
 		uint32_t in = buf_get_u32(field.in_value, 0, 32);
-		LOG_TARGET_DEBUG(target, "DTMCS: 0x%" PRIx32 " -> 0x%" PRIx32, out, in);
+		LOG_DEBUG("TAP %s: DTMCS: 0x%" PRIx32 " -> 0x%" PRIx32,
+				jtag_tap_name(tap), out, in);
 		*in_ptr = in;
 	} else {
-		LOG_TARGET_DEBUG(target, "DTMCS: 0x%" PRIx32 " -> ?", out);
+		LOG_DEBUG("TAP %s: DTMCS: 0x%" PRIx32 " -> ?", jtag_tap_name(tap), out);
 	}
 	return ERROR_OK;
 }
@@ -498,9 +499,30 @@ static struct target_type *get_target_type(struct target *target)
 	}
 }
 
+static struct riscv_private_config *alloc_default_riscv_private_config(void)
+{
+	struct riscv_private_config * const config = malloc(sizeof(*config));
+	if (!config) {
+		LOG_ERROR("Out of memory!");
+		return NULL;
+	}
+
+	for (unsigned int i = 0; i < ARRAY_SIZE(config->dcsr_ebreak_fields); ++i)
+		config->dcsr_ebreak_fields[i] = true;
+
+	return config;
+}
+
 static int riscv_create_target(struct target *target, Jim_Interp *interp)
 {
 	LOG_TARGET_DEBUG(target, "riscv_create_target()");
+	struct riscv_private_config *config = target->private_config;
+	if (!config) {
+		config = alloc_default_riscv_private_config();
+		if (!config)
+			return ERROR_FAIL;
+		target->private_config = config;
+	}
 	target->arch_info = calloc(1, sizeof(struct riscv_info));
 	if (!target->arch_info) {
 		LOG_TARGET_ERROR(target, "Failed to allocate RISC-V target structure.");
@@ -508,6 +530,155 @@ static int riscv_create_target(struct target *target, Jim_Interp *interp)
 	}
 	riscv_info_init(target, target->arch_info);
 	return ERROR_OK;
+}
+
+static struct jim_nvp nvp_ebreak_config_opts[] = {
+	{ .name = "m", .value = RISCV_MODE_M },
+	{ .name = "s", .value = RISCV_MODE_S },
+	{ .name = "u", .value = RISCV_MODE_U },
+	{ .name = "vs", .value = RISCV_MODE_VS },
+	{ .name = "vu", .value = RISCV_MODE_VU },
+	{ .name = NULL, .value = N_RISCV_MODE }
+};
+
+#define RISCV_EBREAK_MODE_INVALID -1
+
+static struct jim_nvp nvp_ebreak_mode_opts[] = {
+	{ .name = "exception", .value = false },
+	{ .name = "halt", .value = true },
+	{ .name = NULL, .value = RISCV_EBREAK_MODE_INVALID }
+};
+
+static int jim_configure_ebreak(struct riscv_private_config *config, struct jim_getopt_info *goi)
+{
+	if (goi->argc == 0) {
+		Jim_WrongNumArgs(goi->interp, 1, goi->argv - 1,
+				"[?execution_mode?] ?ebreak_action?");
+		return JIM_ERR;
+	}
+	struct jim_nvp *common_mode_nvp;
+	if (jim_nvp_name2value_obj(goi->interp, nvp_ebreak_mode_opts, goi->argv[0],
+				&common_mode_nvp) == JIM_OK) {
+		/* Here a common "ebreak" action is processed, e.g:
+		 * "riscv.cpu configure -ebreak halt"
+		 */
+		for (int ebreak_ctl_i = 0; ebreak_ctl_i < N_RISCV_MODE; ++ebreak_ctl_i)
+			config->dcsr_ebreak_fields[ebreak_ctl_i] = common_mode_nvp->value;
+		return jim_getopt_obj(goi, NULL);
+	}
+
+	/* Here a "ebreak" action for a specific execution mode is processed, e.g:
+	 * "riscv.cpu configure -ebreak m halt"
+	 */
+	if (goi->argc < 2) {
+		Jim_WrongNumArgs(goi->interp, 2, goi->argv - 2,
+				"?ebreak_action?");
+		return JIM_ERR;
+	}
+	struct jim_nvp *ctrl_nvp;
+	if (jim_getopt_nvp(goi, nvp_ebreak_config_opts, &ctrl_nvp) != JIM_OK) {
+		jim_getopt_nvp_unknown(goi, nvp_ebreak_config_opts, /*hadprefix*/ true);
+		return JIM_ERR;
+	}
+	struct jim_nvp *mode_nvp;
+	if (jim_getopt_nvp(goi, nvp_ebreak_mode_opts, &mode_nvp) != JIM_OK) {
+		jim_getopt_nvp_unknown(goi, nvp_ebreak_mode_opts, /*hadprefix*/ true);
+		return JIM_ERR;
+	}
+	config->dcsr_ebreak_fields[ctrl_nvp->value] = mode_nvp->value;
+	return JIM_OK;
+}
+
+/**
+ * Obtain dcsr.ebreak* configuration as a Tcl dictionary.
+ * Print the resulting string to the "buffer" and return the string length.
+ * The "buffer" can be NULL, in which case only the length is computed but
+ * nothing is written.
+ */
+static int ebreak_config_to_tcl_dict(const struct riscv_private_config *config,
+		char *buffer)
+{
+	int len = 0;
+	const char *separator = "";
+	for (int ebreak_ctl_i = 0; ebreak_ctl_i < N_RISCV_MODE;
+			++ebreak_ctl_i) {
+		const char * const format = "%s%s %s";
+		const char * const priv_mode =
+			jim_nvp_value2name_simple(nvp_ebreak_config_opts, ebreak_ctl_i)->name;
+		const char * const mode = jim_nvp_value2name_simple(nvp_ebreak_mode_opts,
+				config->dcsr_ebreak_fields[ebreak_ctl_i])->name;
+		if (!buffer)
+			len += snprintf(NULL, 0, format, separator, priv_mode, mode);
+		else
+			len += sprintf(buffer + len, format, separator, priv_mode, mode);
+
+		separator = "\n";
+	}
+	return len;
+}
+
+static int jim_report_ebreak_config(const struct riscv_private_config *config,
+		Jim_Interp *interp)
+{
+	const int len = ebreak_config_to_tcl_dict(config, NULL);
+	char *str = malloc(len + 1);
+	if (!str) {
+		LOG_ERROR("Unable to allocate a string of %d bytes.", len + 1);
+		return JIM_ERR;
+	}
+	ebreak_config_to_tcl_dict(config, str);
+	Jim_SetResultString(interp, str, len);
+	free(str);
+	return JIM_OK;
+}
+
+enum riscv_cfg_opts {
+	RISCV_CFG_EBREAK,
+	RISCV_CFG_INVALID = -1
+};
+
+static struct jim_nvp nvp_config_opts[] = {
+	{ .name = "-ebreak", .value = RISCV_CFG_EBREAK },
+	{ .name = NULL, .value = RISCV_CFG_INVALID }
+};
+
+static int riscv_jim_configure(struct target *target,
+		struct jim_getopt_info *goi)
+{
+	struct riscv_private_config *config = target->private_config;
+	if (!config) {
+		config = alloc_default_riscv_private_config();
+		if (!config)
+			return JIM_ERR;
+		target->private_config = config;
+	}
+	if (!goi->argc)
+		return JIM_OK;
+
+	struct jim_nvp *n;
+	int e = jim_nvp_name2value_obj(goi->interp, nvp_config_opts,
+				goi->argv[0], &n);
+	if (e != JIM_OK)
+		return JIM_CONTINUE;
+
+	e = jim_getopt_obj(goi, NULL);
+	if (e != JIM_OK)
+		return e;
+
+	if (!goi->is_configure && goi->argc > 0) {
+		/* Expecting no arguments */
+		Jim_WrongNumArgs(goi->interp, 2, goi->argv - 2, "");
+		return JIM_ERR;
+	}
+	switch (n->value) {
+	case RISCV_CFG_EBREAK:
+		return goi->is_configure
+			? jim_configure_ebreak(config, goi)
+			: jim_report_ebreak_config(config, goi->interp);
+	default:
+		assert(false && "'jim_getopt_nvp' should have returned an error.");
+	}
+	return JIM_ERR;
 }
 
 static int riscv_init_target(struct command_context *cmd_ctx,
@@ -566,6 +737,8 @@ static void free_wp_triggers_cache(struct target *target)
 static void riscv_deinit_target(struct target *target)
 {
 	LOG_TARGET_DEBUG(target, "riscv_deinit_target()");
+
+	free(target->private_config);
 
 	struct riscv_info *info = target->arch_info;
 	struct target_type *tt = get_target_type(target);
@@ -2584,7 +2757,7 @@ static int riscv_examine(struct target *target)
 
 	RISCV_INFO(info);
 	uint32_t dtmcontrol;
-	if (dtmcontrol_scan(target, 0, &dtmcontrol) != ERROR_OK || dtmcontrol == 0) {
+	if (dtmcs_scan(target->tap, 0, &dtmcontrol) != ERROR_OK || dtmcontrol == 0) {
 		LOG_TARGET_ERROR(target, "Could not read dtmcontrol. Check JTAG connectivity/board power.");
 		return ERROR_FAIL;
 	}
@@ -2771,10 +2944,15 @@ static int riscv_halt_go_all_harts(struct target *target)
 				return ERROR_FAIL;
 		}
 	} else {
+		// Safety check:
+		if (riscv_reg_cache_any_dirty(target, LOG_LVL_ERROR))
+			LOG_TARGET_INFO(target, "BUG: Registers should not be dirty while "
+					"the target is not halted!");
+
+		riscv_reg_cache_invalidate_all(target);
+
 		if (r->halt_go(target) != ERROR_OK)
 			return ERROR_FAIL;
-
-		riscv_invalidate_register_cache(target);
 	}
 
 	return ERROR_OK;
@@ -2858,7 +3036,11 @@ static int riscv_assert_reset(struct target *target)
 	struct target_type *tt = get_target_type(target);
 	if (!tt)
 		return ERROR_FAIL;
-	riscv_invalidate_register_cache(target);
+
+	if (riscv_reg_cache_any_dirty(target, LOG_LVL_INFO))
+		LOG_TARGET_INFO(target, "Discarding values of dirty registers.");
+
+	riscv_reg_cache_invalidate_all(target);
 	return tt->assert_reset(target);
 }
 
@@ -2985,7 +3167,15 @@ static int resume_go(struct target *target, int current,
 static int resume_finish(struct target *target, int debug_execution)
 {
 	assert(target->state == TARGET_HALTED);
-	register_cache_invalidate(target->reg_cache);
+	if (riscv_reg_cache_any_dirty(target, LOG_LVL_ERROR)) {
+		/* If this happens, it means there is a bug in the previous
+		 * register-flushing algorithm: not all registers were flushed
+		 * back to the target in preparation for the resume.*/
+		LOG_TARGET_ERROR(target,
+				"BUG: registers should have been flushed by this point.");
+	}
+
+	riscv_reg_cache_invalidate_all(target);
 
 	target->state = debug_execution ? TARGET_DEBUG_RUNNING : TARGET_RUNNING;
 	target->debug_reason = DBG_REASON_NOTHALTED;
@@ -3009,7 +3199,7 @@ static int riscv_resume(
 
 	struct list_head *targets;
 
-	LIST_HEAD(single_target_list);
+	OOCD_LIST_HEAD(single_target_list);
 	struct target_list single_target_entry = {
 		.lh = {NULL, NULL},
 		.target = target
@@ -3231,8 +3421,14 @@ static int riscv_address_translate(struct target *target,
 
 		uint8_t buffer[8];
 		assert(info->pte_shift <= 3);
-		int retval = r->read_memory(target, pte_address,
-				4, (1 << info->pte_shift) / 4, buffer, 4);
+		const riscv_mem_access_args_t args = {
+			.address = pte_address,
+			.read_buffer = buffer,
+			.size = 4,
+			.increment = 4,
+			.count = (1 << info->pte_shift) / 4,
+		};
+		int retval = r->access_memory(target, args);
 		if (retval != ERROR_OK)
 			return ERROR_FAIL;
 
@@ -3468,29 +3664,40 @@ static int check_virt_memory_access(struct target *target, target_addr_t address
 static int riscv_read_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, uint8_t *buffer)
 {
+	const riscv_mem_access_args_t args = {
+		.address = phys_address,
+		.read_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = size,
+	};
 	RISCV_INFO(r);
-	return r->read_memory(target, phys_address, size, count, buffer, size);
+	return r->access_memory(target, args);
 }
 
 static int riscv_write_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, const uint8_t *buffer)
 {
-	struct target_type *tt = get_target_type(target);
-	if (!tt)
-		return ERROR_FAIL;
-	return tt->write_memory(target, phys_address, size, count, buffer);
+	const riscv_mem_access_args_t args = {
+		.address = phys_address,
+		.write_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = size,
+	};
+
+	RISCV_INFO(r);
+	return r->access_memory(target, args);
 }
 
-static int riscv_rw_memory(struct target *target, target_addr_t address, uint32_t size,
-		uint32_t count, uint8_t *read_buffer, const uint8_t *write_buffer)
+static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t args)
 {
-	/* Exactly one of the buffers must be set, the other must be NULL */
-	assert(!!read_buffer != !!write_buffer);
+	assert(riscv_mem_access_is_valid(args));
 
-	const bool is_write = write_buffer ? true : false;
-	if (count == 0) {
+	const bool is_write = riscv_mem_access_is_write(args);
+	if (args.count == 0) {
 		LOG_TARGET_WARNING(target, "0-length %s 0x%" TARGET_PRIxADDR,
-				is_write ? "write to" : "read from", address);
+				is_write ? "write to" : "read from", args.address);
 		return ERROR_OK;
 	}
 
@@ -3500,25 +3707,19 @@ static int riscv_rw_memory(struct target *target, target_addr_t address, uint32_
 		return result;
 
 	RISCV_INFO(r);
-	struct target_type *tt = get_target_type(target);
-	if (!tt)
-		return ERROR_FAIL;
+	if (!mmu_enabled)
+		return r->access_memory(target, args);
 
-	if (!mmu_enabled) {
-		if (is_write)
-			return tt->write_memory(target, address, size, count, write_buffer);
-		else
-			return r->read_memory(target, address, size, count, read_buffer, size);
-	}
-
-	result = check_virt_memory_access(target, address, size, count, is_write);
+	result = check_virt_memory_access(target, args.address,
+			args.size, args.count, is_write);
 	if (result != ERROR_OK)
 		return result;
 
 	uint32_t current_count = 0;
-	while (current_count < count) {
+	target_addr_t current_address = args.address;
+	while (current_count < args.count) {
 		target_addr_t physical_addr;
-		result = target->type->virt2phys(target, address, &physical_addr);
+		result = target->type->virt2phys(target, current_address, &physical_addr);
 		if (result != ERROR_OK) {
 			LOG_TARGET_ERROR(target, "Address translation failed.");
 			return result;
@@ -3527,16 +3728,24 @@ static int riscv_rw_memory(struct target *target, target_addr_t address, uint32_
 		/* TODO: For simplicity, this algorithm assumes the worst case - the smallest possible page size,
 		 * which is  4 KiB. The algorithm can be improved to detect the real page size, and allow to use larger
 		 * memory transfers and avoid extra unnecessary virt2phys address translations. */
-		uint32_t chunk_count = MIN(count - current_count, (RISCV_PGSIZE - RISCV_PGOFFSET(address)) / size);
+		uint32_t chunk_count = MIN(args.count - current_count,
+				(RISCV_PGSIZE - RISCV_PGOFFSET(current_address))
+				/ args.size);
+
+		riscv_mem_access_args_t current_access = args;
+		current_access.address = physical_addr;
+		current_access.count = chunk_count;
 		if (is_write)
-			result = tt->write_memory(target, physical_addr, size, chunk_count, write_buffer + current_count * size);
+			current_access.write_buffer += current_count * args.size;
 		else
-			result = r->read_memory(target, physical_addr, size, chunk_count, read_buffer + current_count * size, size);
+			current_access.read_buffer += current_count * args.size;
+
+		result = r->access_memory(target, current_access);
 		if (result != ERROR_OK)
 			return result;
 
 		current_count += chunk_count;
-		address += chunk_count * size;
+		current_address += chunk_count * args.size;
 	}
 	return ERROR_OK;
 }
@@ -3544,13 +3753,29 @@ static int riscv_rw_memory(struct target *target, target_addr_t address, uint32_
 static int riscv_read_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
-	return riscv_rw_memory(target, address, size, count, buffer, NULL);
+	const riscv_mem_access_args_t args = {
+		.address = address,
+		.read_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = size,
+	};
+
+	return riscv_rw_memory(target, args);
 }
 
 static int riscv_write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
-	return riscv_rw_memory(target, address, size, count, NULL, buffer);
+	const riscv_mem_access_args_t args = {
+		.address = address,
+		.write_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = size,
+	};
+
+	return riscv_rw_memory(target, args);
 }
 
 static const char *riscv_get_gdb_arch(const struct target *target)
@@ -4088,7 +4313,7 @@ int riscv_openocd_poll(struct target *target)
 
 	struct list_head *targets;
 
-	LIST_HEAD(single_target_list);
+	OOCD_LIST_HEAD(single_target_list);
 	struct target_list single_target_entry = {
 		.lh = {NULL, NULL},
 		.target = target
@@ -4247,7 +4472,15 @@ static int riscv_openocd_step_impl(struct target *target, int current,
 		LOG_TARGET_ERROR(target, "Unable to step rtos hart.");
 	}
 
-	register_cache_invalidate(target->reg_cache);
+	if (riscv_reg_cache_any_dirty(target, LOG_LVL_ERROR)) {
+		/* If this happens, it means there is a bug in the previous
+		 * register-flushing algorithm: not all registers were flushed
+		 * back to the target prior to single-step. */
+		LOG_TARGET_ERROR(target,
+				"BUG: registers should have been flushed by this point.");
+	}
+
+	riscv_reg_cache_invalidate_all(target);
 
 	if (info->isrmask_mode == RISCV_ISRMASK_STEPONLY)
 		if (riscv_interrupts_restore(target, current_mstatus) != ERROR_OK) {
@@ -4919,52 +5152,69 @@ COMMAND_HANDLER(riscv_set_autofence)
 	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
-COMMAND_HANDLER(riscv_set_ebreakm)
+COMMAND_HELPER(ebreakx_deprecation_helper, enum riscv_priv_mode mode)
 {
-	struct target *target = get_current_target(CMD_CTX);
-	RISCV_INFO(r);
-
+	struct target * const target = get_current_target(CMD_CTX);
+	struct riscv_private_config * const config = riscv_private_config(target);
+	const char *mode_str;
+	switch (mode) {
+	case RISCV_MODE_M:
+		mode_str = "m";
+		break;
+	case RISCV_MODE_S:
+		mode_str = "s";
+		break;
+	case RISCV_MODE_U:
+		mode_str = "u";
+		break;
+	default:
+		assert(0 && "Unexpected execution mode");
+		mode_str = "unexpected";
+	}
+	if (CMD_ARGC > 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
 	if (CMD_ARGC == 0) {
-		command_print(CMD, "riscv_ebreakm enabled: %s", r->riscv_ebreakm ? "on" : "off");
-		return ERROR_OK;
-	} else if (CMD_ARGC == 1) {
-		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->riscv_ebreakm);
+		LOG_WARNING("DEPRECATED! use '%s cget -ebreak' not '%s'",
+				target_name(target), CMD_NAME);
+		command_print(CMD, "riscv_ebreak%s enabled: %s", mode_str,
+				config->dcsr_ebreak_fields[mode] ? "on" : "off");
 		return ERROR_OK;
 	}
+	assert(CMD_ARGC == 1);
+	command_print(CMD, "DEPRECATED! use '%s configure -ebreak %s' not '%s'",
+			target_name(target), mode_str, CMD_NAME);
+	bool ebreak_ctl;
+	COMMAND_PARSE_ON_OFF(CMD_ARGV[0], ebreak_ctl);
+	config->dcsr_ebreak_fields[mode] = ebreak_ctl;
+	switch (mode) {
+	case RISCV_MODE_S:
+		config->dcsr_ebreak_fields[RISCV_MODE_VS] = ebreak_ctl;
+		break;
+	case RISCV_MODE_U:
+		config->dcsr_ebreak_fields[RISCV_MODE_VU] = ebreak_ctl;
+		break;
+	default:
+		break;
+	}
+	return ERROR_OK;
+}
 
-	return ERROR_COMMAND_SYNTAX_ERROR;
+COMMAND_HANDLER(riscv_set_ebreakm)
+{
+	return CALL_COMMAND_HANDLER(ebreakx_deprecation_helper,
+			RISCV_MODE_M);
 }
 
 COMMAND_HANDLER(riscv_set_ebreaks)
 {
-	struct target *target = get_current_target(CMD_CTX);
-	RISCV_INFO(r);
-
-	if (CMD_ARGC == 0) {
-		command_print(CMD, "riscv_ebreaks enabled: %s", r->riscv_ebreaks ? "on" : "off");
-		return ERROR_OK;
-	} else if (CMD_ARGC == 1) {
-		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->riscv_ebreaks);
-		return ERROR_OK;
-	}
-
-	return ERROR_COMMAND_SYNTAX_ERROR;
+	return CALL_COMMAND_HANDLER(ebreakx_deprecation_helper,
+			RISCV_MODE_S);
 }
 
 COMMAND_HANDLER(riscv_set_ebreaku)
 {
-	struct target *target = get_current_target(CMD_CTX);
-	RISCV_INFO(r);
-
-	if (CMD_ARGC == 0) {
-		command_print(CMD, "riscv_ebreaku enabled: %s", r->riscv_ebreaku ? "on" : "off");
-		return ERROR_OK;
-	} else if (CMD_ARGC == 1) {
-		COMMAND_PARSE_ON_OFF(CMD_ARGV[0], r->riscv_ebreaku);
-		return ERROR_OK;
-	}
-
-	return ERROR_COMMAND_SYNTAX_ERROR;
+	return CALL_COMMAND_HANDLER(ebreakx_deprecation_helper,
+			RISCV_MODE_U);
 }
 
 COMMAND_HELPER(riscv_clear_trigger, int trigger_id, const char *name)
@@ -5196,7 +5446,14 @@ COMMAND_HANDLER(handle_repeat_read)
 		LOG_ERROR("malloc failed");
 		return ERROR_FAIL;
 	}
-	int result = r->read_memory(target, address, size, count, buffer, 0);
+	const riscv_mem_access_args_t args = {
+		.address = address,
+		.read_buffer = buffer,
+		.size = size,
+		.count = count,
+		.increment = 0,
+	};
+	int result = r->access_memory(target, args);
 	if (result == ERROR_OK) {
 		target_handle_md_output(cmd, target, address, size, count, buffer,
 			false);
@@ -5416,7 +5673,7 @@ COMMAND_HANDLER(riscv_exec_progbuf)
 	if (riscv_reg_flush_all(target) != ERROR_OK)
 		return ERROR_FAIL;
 	int error = riscv_program_exec(&prog, target);
-	riscv_invalidate_register_cache(target);
+	riscv_reg_cache_invalidate_all(target);
 
 	if (error != ERROR_OK) {
 		LOG_TARGET_ERROR(target, "exec_progbuf: Program buffer execution failed.");
@@ -5732,24 +5989,24 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.handler = riscv_set_ebreakm,
 		.mode = COMMAND_ANY,
 		.usage = "[on|off]",
-		.help = "Control dcsr.ebreakm. When off, M-mode ebreak instructions "
-			"don't trap to OpenOCD. Defaults to on."
+		.help = "DEPRECATED! use '<target_name> configure -ebreak' or "
+			"'<target_name> cget -ebreak'"
 	},
 	{
 		.name = "set_ebreaks",
 		.handler = riscv_set_ebreaks,
 		.mode = COMMAND_ANY,
 		.usage = "[on|off]",
-		.help = "Control dcsr.ebreaks. When off, S-mode ebreak instructions "
-			"don't trap to OpenOCD. Defaults to on."
+		.help = "DEPRECATED! use '<target_name> configure -ebreak' or "
+			"'<target_name> cget -ebreak'"
 	},
 	{
 		.name = "set_ebreaku",
 		.handler = riscv_set_ebreaku,
 		.mode = COMMAND_ANY,
 		.usage = "[on|off]",
-		.help = "Control dcsr.ebreaku. When off, U-mode ebreak instructions "
-			"don't trap to OpenOCD. Defaults to on."
+		.help = "DEPRECATED! use '<target_name> configure -ebreak' or "
+			"'<target_name> cget -ebreak'"
 	},
 	{
 		.name = "etrigger",
@@ -5869,6 +6126,7 @@ struct target_type riscv_target = {
 	.name = "riscv",
 
 	.target_create = riscv_create_target,
+	.target_jim_configure = riscv_jim_configure,
 	.init_target = riscv_init_target,
 	.deinit_target = riscv_deinit_target,
 	.examine = riscv_examine,
@@ -5948,10 +6206,6 @@ static void riscv_info_init(struct target *target, struct riscv_info *r)
 
 	r->vsew64_supported = YNM_MAYBE;
 
-	r->riscv_ebreakm = true;
-	r->riscv_ebreaks = true;
-	r->riscv_ebreaku = true;
-
 	r->wp_allow_equality_match_trigger = true;
 	r->wp_allow_ge_lt_trigger = true;
 	r->wp_allow_napot_trigger = true;
@@ -5970,8 +6224,6 @@ static int riscv_resume_go_all_harts(struct target *target)
 	} else {
 		LOG_TARGET_DEBUG(target, "Hart requested resume, but was already resumed.");
 	}
-
-	riscv_invalidate_register_cache(target);
 	return ERROR_OK;
 }
 
@@ -6065,17 +6317,6 @@ unsigned int riscv_vlenb(const struct target *target)
 	return r->vlenb;
 }
 
-static void riscv_invalidate_register_cache(struct target *target)
-{
-	/* Do not invalidate the register cache if it is not yet set up
-	 * (e.g. when the target failed to get examined). */
-	if (!target->reg_cache)
-		return;
-
-	LOG_TARGET_DEBUG(target, "Invalidating register cache.");
-	register_cache_invalidate(target->reg_cache);
-}
-
 int riscv_get_hart_state(struct target *target, enum riscv_hart_state *state)
 {
 	RISCV_INFO(r);
@@ -6118,28 +6359,28 @@ int riscv_execute_progbuf(struct target *target, uint32_t *cmderr)
 	return r->execute_progbuf(target, cmderr);
 }
 
-void riscv_fill_dmi_write(struct target *target, char *buf, uint64_t a, uint32_t d)
+void riscv_fill_dmi_write(const struct target *target, uint8_t *buf, uint32_t a, uint32_t d)
 {
 	RISCV_INFO(r);
 	r->fill_dmi_write(target, buf, a, d);
 }
 
-void riscv_fill_dmi_read(struct target *target, char *buf, uint64_t a)
+void riscv_fill_dmi_read(const struct target *target, uint8_t *buf, uint32_t a)
 {
 	RISCV_INFO(r);
 	r->fill_dmi_read(target, buf, a);
 }
 
-void riscv_fill_dm_nop(struct target *target, char *buf)
+void riscv_fill_dm_nop(const struct target *target, uint8_t *buf)
 {
 	RISCV_INFO(r);
 	r->fill_dm_nop(target, buf);
 }
 
-int riscv_get_dmi_scan_length(struct target *target)
+unsigned int riscv_get_dmi_address_bits(const struct target *target)
 {
 	RISCV_INFO(r);
-	return r->get_dmi_scan_length(target);
+	return r->get_dmi_address_bits(target);
 }
 
 static int check_if_trigger_exists(struct target *target, unsigned int index)
@@ -6297,10 +6538,10 @@ int riscv_enumerate_triggers(struct target *target)
 	return ERROR_OK;
 }
 
-void riscv_add_bscan_tunneled_scan(struct target *target, const struct scan_field *field,
+void riscv_add_bscan_tunneled_scan(struct jtag_tap *tap, const struct scan_field *field,
 					riscv_bscan_tunneled_scan_context_t *ctxt)
 {
-	jtag_add_ir_scan(target->tap, &select_user4, TAP_IDLE);
+	jtag_add_ir_scan(tap, &select_user4, TAP_IDLE);
 
 	memset(ctxt->tunneled_dr, 0, sizeof(ctxt->tunneled_dr));
 	if (bscan_tunnel_type == BSCAN_TUNNEL_DATA_REGISTER) {
@@ -6333,5 +6574,5 @@ void riscv_add_bscan_tunneled_scan(struct target *target, const struct scan_fiel
 		ctxt->tunneled_dr[3].num_bits = 3;
 		ctxt->tunneled_dr[3].out_value = bscan_zero;
 	}
-	jtag_add_dr_scan(target->tap, ARRAY_SIZE(ctxt->tunneled_dr), ctxt->tunneled_dr, TAP_IDLE);
+	jtag_add_dr_scan(tap, ARRAY_SIZE(ctxt->tunneled_dr), ctxt->tunneled_dr, TAP_IDLE);
 }
