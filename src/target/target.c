@@ -35,7 +35,7 @@
  #include <helper/time_support.h>
  #include <jtag/jtag.h>
  #include <flash/nor/core.h>
- 
+ #include <unistd.h>
  #include "target.h"
  #include "target_type.h"
  #include "target_request.h"
@@ -48,6 +48,235 @@
  #include "arm_cti.h"
  #include "smp.h"
  #include "semihosting_common.h"
+
+ /**************************secure iot qspi stuff*********************/
+ #define WRITE 0
+#define READ 1
+
+#define FIFO_FULL 16
+#define FIFO_EMPTY 0
+
+/*Macros for Instruction MODE*/
+#define CCR_IMODE_NIL             0x0
+#define CCR_IMODE_SINGLE_LINE     0x1
+#define CCR_IMODE_TWO_LINE        0x2
+#define CCR_IMODE_FOUR_LINE       0x3
+/*Macros for Address MODE*/
+#define CCR_ADMODE_NIL            0x0
+#define CCR_ADMODE_SINGLE_LINE    0x1
+#define CCR_ADMODE_TWO_LINE       0x2
+#define CCR_ADMODE_FOUR_LINE      0x3
+/*Macros for Address Size*/
+#define CCR_ADSIZE_8_BIT          0x0
+#define CCR_ADSIZE_16_BIT         0x1
+#define CCR_ADSIZE_24_BIT         0x2
+#define CCR_ADSIZE_32_BIT         0x3
+/*Macros for Alternate Byte mode*/
+#define CCR_ABMODE_NIL            0x0
+#define CCR_ABMODE_SINGLE_LINE    0x1
+#define CCR_ABMODE_TW0_LINE       0x2
+#define CCR_ABMODE_FOUR_LINE      0x3
+/*Macros for Alternate Byte size*/
+#define CCR_ABSIZE_8_BIT          0x0
+#define CCR_ABSIZE_16_BIT         0x1
+#define CCR_ABSIZE_24_BIT         0x2
+#define CCR_ABSIZE_32_BIT         0x3
+/*Macros for Data mode*/
+#define CCR_DMODE_NO_DATA         0x0
+#define CCR_DMODE_SINGLE_LINE     0x1
+#define CCR_DMODE_TWO_LINE        0x2
+#define CCR_DMODE_FOUR_LINE       0x3
+/*Macros for Functional mode*/
+#define CCR_FMODE_INDIRECT_WRITE  0x0
+#define CCR_FMODE_INDIRECT_READ   0x1
+#define CCR_FMODE_APM             0x2
+#define CCR_FMODE_MMM             0x3
+/*Macros for Memory map mode*/
+#define CCR_MM_MODE_XIP           0x0
+#define CCR_MM_MODE_RAM           0x1
+
+
+
+#define CR_PRESCALER(x)   (x<<24)//8bit
+#define CR_PMM(x)         (x<<23)
+#define CR_APMS(x)        (x<<22)
+#define CR_TOIE(x)        (x<<20)//1bit
+#define CR_SMIE(x)        (x<<19)
+#define CR_FTIE(x)        (x<<18)
+#define CR_TCIE(x)        (x<<17)
+#define CR_TEIE(x)        (x<<16)
+#define CR_FTHRES(x)      (x<<8 )//4bit
+#define CR_FSEL(x)        (x<<7 )//Not used
+#define CR_DFM(x)         (x<<6 )//Not used
+#define CR_SSHIF(x)       (x<<4 )//Not used 1bit
+#define CR_TCEN(x)        (x<<3 )
+#define CR_DMAEN(x)       (x<<2 )//Not used
+#define CR_ABORT(x)       (x<<1 )
+#define CR_EN(x)          (x<<0 )
+
+//Bit vectors for DCR 
+#define DCR_MODE_BYTE(x)   (x<<21)
+#define DCR_FSIZE(x)       (x<<16)//5bit 
+#define DCR_CSHT(x)        (x<<8 )//3bit Not used
+#define DCR_CKMODE(x)        (x)//1bit 
+
+//Bit vectors for status register
+#define SR_FLEVEL(x)      (x<<8)//5bit
+#define SR_BUSY           (1<<5)//1bit
+#define SR_TOF            (1<<4)
+#define SR_SMF            (1<<3)
+#define SR_FTF            (1<<2)
+#define SR_TCF            (1<<1)
+#define SR_TEF            (1<<0)
+
+//Bit vectors for flag clear register 
+#define FCR_CTOF (1<<4)
+#define FCR_CSMF (1<<3)
+#define FCR_CTCF (1<<1)//1bit
+#define FCR_CTEF (1<<0)
+
+//Bit vectors for CCR
+#define CCR_DDRM(x)                (x<<31) 
+/* #define CCR_DHHC(x)                (x<<30)//Not used */
+#define CCR_MM_MODE(x)             (x<<30) //memory Map mode XIP=0;RAM=1;
+#define CCR_DUMMY_BIT(x)           (x<<29) // Needed by Micron Flash Memories
+#define CCR_SIOO(x)                (x<<28)
+#define CCR_FMODE(x)               (x<<26)
+#define CCR_DMODE(x)               (x<<24)
+#define CCR_DUMMY_CONFIRMATION(x)  (x<<23) // Needed by Micron Flash Memories
+#define CCR_DCYC(x)                (x<<18)
+#define CCR_ABSIZE(x)              (x<<16)
+#define CCR_ABMODE(x)              (x<<14)
+#define CCR_ADSIZE(x)              (x<<12)
+#define CCR_ADMODE(x)              (x<<10)
+#define CCR_IMODE(x)               (x<<8 )
+#define CCR_INSTRUCTION(x)         (x<<0 )
+
+typedef struct{
+    uint8_t functional_mode;              /**< Functional mode                                                           */
+    uint8_t instruction;                  /**< Instruction                                                               */
+    uint8_t instruction_mode;             /**< Instruction mode                                                          */
+    uint8_t address_mode;                 /**< Address mode                                                              */
+    uint8_t address_size;                 /**< Address size                                                              */
+    uint32_t address;                     /**< Address                                                                   */
+    uint8_t alternate_byte_mode;          /**< Alternate byte mode                                                       */
+    uint8_t alternate_byte;               /**< Alternate byte                                                            */
+    uint8_t dummy_mode:1;                 /**< Dummy mode                                                                */
+    uint8_t dummy_bit:1;                  /**< Dummy bit                                                                 */
+    uint8_t dummy_cycles:5;               /**< Dummy Cycles                                                              */
+    uint8_t sioo:1;                       /**< Send instruction only once                                                */
+    uint8_t mm_mode:1;                    /**< Memory map mode enable                                                    */
+    uint8_t data_mode;                    /**< Data mode                                                                 */
+    uint32_t length;                      /**< Data length                                                               */
+    uint8_t *data_buffer;                 /**< Pointer to data buffer                                                    */
+    uint8_t FMEM_SIZE;                    /**< Flash memory size                                                         */
+    uint8_t CLK_MODE:1;                   /**< Clock mode                                                                */
+      uint32_t TCEN       : 1;            /**< Timeout counter enable                                                    */
+      uint32_t TEIE       : 1;            /**< Transfer error interrupt enable                                           */
+      uint32_t TCIE       : 1;            /**< Transfer complete interrupt enable                                        */
+      uint32_t FTIE       : 1;            /**< FIFO threshold interrupt enable                                           */
+      uint32_t SMIE       : 1;            /**< Status match interrupt enable                                             */
+      uint32_t TOIE       : 1;            /**< TimeOut interrupt enable                                                  */
+      uint32_t APMS       : 1;            /**< Automatic poll mode stop                                                  */
+      uint32_t PMM        : 1;            /**< Polling match mode                                                        */
+      uint32_t PRESCALER  : 8;            /**< Clock prescaler                                                           */
+      uint8_t fthresh;
+}qspi_msg;
+
+
+uint32_t QSPI_Transaction(struct target *target,uint32_t instance_number,qspi_msg *msg){
+    if(instance_number>1)
+      return -1;
+    // if(msg->length>16)
+    //   return -16;
+    uint32_t qspi_base = 0x40000+(instance_number*0x100);
+    uint32_t cr_address = qspi_base+0x00;
+    uint32_t dcr_address = qspi_base+0x04;
+    // uint32_t sr_address = qspi_base+0x08;
+    uint32_t fcr_address = qspi_base+0x0c;
+    uint32_t dlr_address = qspi_base+0x10;
+    uint32_t ccr_address = qspi_base+0x14;
+    uint32_t ar_address = qspi_base+0x18;
+    uint32_t abr_address = qspi_base+0x1c;
+    // uint32_t dr_address = qspi_base+0x20;
+
+    target_write_u32(target, cr_address,(CR_PRESCALER(msg->PRESCALER) |CR_PMM(msg->PMM) | CR_APMS(msg->APMS) | CR_TOIE(msg->TOIE) |CR_SMIE(msg->SMIE) | CR_FTIE(msg->FTIE) | CR_TCIE(msg->TCIE) | CR_TEIE(msg->TEIE) | CR_TCEN(msg->TOIE) | CR_EN(1)));         
+    target_write_u32(target, dcr_address,(DCR_FSIZE(msg->FMEM_SIZE) | DCR_CKMODE(msg->CLK_MODE)));    
+    uint32_t temp;
+    // do{
+    //     temp = QUADSPI_Reg(instance_number)->SR;
+    //     temp &= SR_BUSY;
+    // }while(temp==SR_BUSY);//check for busy status
+
+    target_write_u32(target, fcr_address,(FCR_CTOF|FCR_CSMF|FCR_CTCF|FCR_CTEF));//clear flags
+    target_write_u32(target, dlr_address,msg->length);
+    temp = (CCR_INSTRUCTION(msg->instruction) | CCR_IMODE(msg->instruction_mode) | CCR_ADMODE(msg->address_mode) | CCR_ADSIZE(msg->address_size) |\
+    CCR_ABMODE(msg->alternate_byte_mode) | CCR_ABSIZE(msg->sioo) | CCR_DCYC(msg->dummy_cycles) | CCR_DUMMY_CONFIRMATION(msg->dummy_mode) |\
+    CCR_DMODE(msg->data_mode) | CCR_FMODE(msg->functional_mode) | CCR_SIOO(msg->sioo) | CCR_DUMMY_BIT(msg->dummy_bit) | CCR_MM_MODE(msg->mm_mode));
+    target_write_u32(target, ccr_address,temp);
+    target_write_u32(target, ar_address,msg->address);
+    target_write_u32(target, abr_address,msg->alternate_byte);
+
+    // uint8_t i = 0;
+    // uint32_t status_reg;
+    // if(msg->functional_mode == CCR_FMODE_INDIRECT_WRITE && msg->length!= 0)
+    // {
+    //   QUADSPI_Reg(instance_number)->CR&= ~(CR_FTHRES(15));
+    //   while(1){
+    //     status_reg = QUADSPI_Reg(instance_number)->SR;
+    //     status_reg &= SR_FTF;
+    //     if(status_reg){
+    //       QUADSPI_Reg(instance_number)->DR.data_8 = msg->data_buffer[i];
+    //       i++;
+    //         if(i == msg->length)
+    //           break;
+    //     }
+    //   }
+    //   do{
+    //       temp = QUADSPI_Reg(instance_number)->SR;
+    //       temp&=SR_FLEVEL(FIFO_EMPTY);
+    //     }while(temp != 0);
+        
+    // }
+    // else if(msg->functional_mode == CCR_FMODE_INDIRECT_READ)
+    // {
+    //   QUADSPI_Reg(instance_number)->CR&= ~(CR_FTHRES(15));
+    //   while(1){
+    //     status_reg = QUADSPI_Reg(instance_number)->SR;
+    //     status_reg &= SR_FTF;
+    //     if(status_reg){
+    //       msg->data_buffer[i] = QUADSPI_Reg(instance_number)->DR.data_8;
+    //       i++;
+    //         if(i == msg->length)
+    //           break;
+    //     }
+    //   }
+    // }
+    // if(msg->functional_mode == CCR_FMODE_MMM && msg->mm_mode == CCR_MM_MODE_RAM){
+    //   QUADSPI_Reg(instance_number)->CR&=~(CR_FTHRES(15));
+    //   QUADSPI_Reg(instance_number)->CR|=(CR_FTHRES(msg->fthresh));
+    //   return 0;
+    // }
+    // if(msg->functional_mode == CCR_FMODE_MMM && msg->mm_mode == CCR_MM_MODE_XIP){
+    //   QUADSPI_Reg(instance_number)->CR&=~(CR_FTHRES(15));
+    //   return 0;
+    // }
+
+    // if(msg->data_mode == CCR_DMODE_NO_DATA)
+    // {
+    //   do{
+    //   temp = QUADSPI_Reg(instance_number)->SR;
+    //   temp &= SR_TCF;
+    // }while(temp == 0);
+    // }
+    // GPT_Delay_Microsecs_H(100);   
+    // QUADSPI_Reg(instance_number)->CR&= ~CR_EN(1);
+    return 0;
+}
+/***************************secure iot qspi stuff ends**********************************/
+/***************************secure iot flash stuff starts*******************************/
+
+/***************************secure iot flash stuff ends*******************************/
  
  /* default halt wait timeout (ms) */
  #define DEFAULT_HALT_TIMEOUT 5000
@@ -4394,7 +4623,18 @@
  COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], qspi_number);
  struct target *target = get_current_target(CMD_CTX);
  command_print(CMD, "Flash write is invoked with qspi %x",qspi_number);
+//  usleep(2000000);
+ uint32_t value32;
+ uint8_t value8;
+ qspi_msg msg;
+ QSPI_Transaction(target,0,&msg);
  target_write_u32(target, 0x80001000,qspi_number);
+ target_read_u32(target,0x80001000,&value32);
+ command_print(CMD, "Value read %x",value32);
+ target_write_u8(target, 0x80001000,0x99);
+ target_read_u8(target,0x80001000,&value8);
+ command_print(CMD, "Value read %x",value8);
+ 
  return ERROR_OK;
  }
  COMMAND_HANDLER(handle_target_read_memory)
