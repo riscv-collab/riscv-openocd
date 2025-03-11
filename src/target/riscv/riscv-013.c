@@ -1367,7 +1367,9 @@ static int csr_read_progbuf(struct target *target, uint64_t *value,
 	return register_read_abstract(target, value, GDB_REGNO_S0) != ERROR_OK;
 }
 
-
+/**
+ * Reads a general-purpose register (GPR) via the program buffer.
+ */
 static int gpr_read_progbuf(struct target *target, uint64_t *value,
 		enum gdb_regno number)
 {
