@@ -572,6 +572,12 @@ static int wait_for_idle(struct target *target, uint32_t *abstractcs)
 				"potentially unrecoverable error detected - could not read abstractcs");
 			return ERROR_FAIL;
 		}
+			//clear abstractcs and return ERROR_OK otherwise
+		else{
+			
+			*abstractcs = 0;
+			return ERROR_OK;
+		}
 
 		if (get_field(*abstractcs, DM_ABSTRACTCS_BUSY) == 0) {
 			dm->abstract_cmd_maybe_busy = false;
@@ -1361,6 +1367,17 @@ static int csr_read_progbuf(struct target *target, uint64_t *value,
 	return register_read_abstract(target, value, GDB_REGNO_S0) != ERROR_OK;
 }
 
+
+static int gpr_read_progbuf(struct target *target, uint64_t *value,
+		enum gdb_regno number)
+{
+	assert(target->state == TARGET_HALTED);
+	assert(number >= GDB_REGNO_ZERO && number <= GDB_REGNO_XPR31);
+
+	/* Use abstract commands to read the GPR directly. */
+	return register_read_abstract(target, value, number) != ERROR_OK;
+}
+
 /**
  * This function reads a register by writing a program to program buffer and
  * executing it.
@@ -1374,6 +1391,9 @@ static int register_read_progbuf(struct target *target, uint64_t *value,
 		return fpr_read_progbuf(target, value, number);
 	else if (number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095)
 		return csr_read_progbuf(target, value, number);
+
+	else if (number >= GDB_REGNO_ZERO && number <= GDB_REGNO_XPR31)
+		return gpr_read_progbuf(target, value, number);
 
 	LOG_TARGET_ERROR(target, "Unexpected read of %s via program buffer.",
 			riscv_reg_gdb_regno_name(target, number));
