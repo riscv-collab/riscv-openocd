@@ -1,32 +1,36 @@
 {
     "version": "0.5",
     "requires": [
-        "testgen-model-interface/0.1.0-rc.0.42+sc.sc-dt.2025.02@sc/main#246dacbec26504892c53fa2b0dcd13a231c4a5ca%1738592592.187",
-        "sc-zstd/1.5.6-rc.0.308+sc.sc-dt.2025.01@sc/main#d4c0272ae8a66b7cac3e8b6b2965b86126fe4d8f%1735007569.427",
-        "sc-lzma/5.6.1-rc.0.308+sc.sc-dt.2025.01@sc/main#4f1c3d2fe7c272f0f82e72fdca019e2785b14cf2%1735020341.265",
-        "riscv-isa-sim/0.1.0-rc.0.300+sc.sc-dt.2025.02@sc/main#7dd2940be111e6722f56504334ed4169c307d7e7%1738593233.38",
-        "riscv-gdb/15.1.0-rc.1.75+sc.sc-dt.2025.01@sc/main#7d357f8313c25e0f0f784a2fd3f83d440b63449a%1735021601.427",
-        "riscv-gcc/14.2.0-rc.0.147+sc.sc-dt.2025.01@sc/main#7a8380cee42968dc92ce3c667029f9c49453ce75%1735012208.314",
-        "riscv-binutils/2.43.1-rc.0.57+sc.sc-dt.2025.01@sc/main#a5dd6cd33bc0ca89796a9c9cf48ae0a4709ffa93%1735008434.804",
+        "testgen-model-interface/24.2.0-rc.1.3+sc.sc-dt.2025.03@sc/main#930673d8cda8b4f890089b96933304487d2e9e16%1741341073.386",
+        "sc-zstd/1.5.6-rc.1.19+sc.sc-dt.2025.03@sc/main#fa14897cdcf0f528d7c6323a59ceec2a062b7b5c%1741359293.828",
+        "sc-lzma/5.6.1-rc.1.19+sc.sc-dt.2025.03@sc/main#5a6e85fad84c0515930fe65e785c446aba478d47%1741372350.634",
+        "riscv-isa-sim/0.1.0-rc.1.8+sc.sc-dt.2025.03@sc/main#c7f4853de79070b5eceabde4a4855c5f5af12a7c%1741341780.216",
+        "riscv-gdb/15.1.0-rc.1.106+sc.sc-dt.2025.03@sc/main#7f62986699104997967730e57caa8889c8a423f9%1741715332.054",
+        "riscv-gcc/14.2.0-rc.0.159+sc.sc-dt.2025.03@sc/main#ce9b9d092eb7a20b76d08d989ac7eecb185a449a%1741363846.319",
+        "riscv-binutils/2.43.1-rc.0.63+sc.sc-dt.2025.03@sc/main#aa67ba8460dee32d69fc31b3c257134e5fbc03dd%1741360370.314",
         "rapidyaml/0.5.0#c6f48c5eb99c1d0bad5c4ac8e6960375%1699016203.526",
-        "python-gcc-12/3.10.7-rc.0.308+sc.sc-dt.2025.01@sc/main#c30a75ba036edae737e3b5478a5ca53328dfa50e%1735009256.328",
-        "gdb_source_deps/0.0.1-rc.0.308+sc.sc-dt.2025.01@sc/main#1c3dd029af697752910459b44e6a8b2a945986a1%1734990043.993",
+        "python-gcc-12/3.10.7-rc.1.21+sc.sc-dt.2025.03@sc/main#5e849d640a59b6261ea0aeb26ca3c21a185bc656%1741361116.943",
+        "gdb_source_deps/0.0.1-rc.1.19+sc.sc-dt.2025.03@sc/main#990edf769cfbba4a89f46e112bf399979a195c00%1741341109.014",
         "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
-        "external_openocd_tests/0.0.3-rc.0.308+sc.sc-dt.2025.01@sc/main#22546ea2346e0b6c1153de98deda3dd564bd8c99%1734990063.374",
-        "dejagnu/1.6.3-rc.0.308+sc.sc-dt.2025.01@sc/main#8803f0504d50a9c24709734b8e6c92d7b48c0c29%1734990009.843",
+        "external_openocd_tests/0.0.3-rc.1.19+sc.sc-dt.2025.03@sc/main#dad956f50c1e8a189ccc2f13ab3b3622ab6d1e39%1741341265.114",
+        "dejagnu/1.6.3-rc.1.19+sc.sc-dt.2025.03@sc/main#a59577e5fd36f00069dec17ab7599e940b8173de%1741341365.4",
         "c4core/0.1.11#5c6caad554b14584140f7e66c47eefb5%1699016213.432"
     ],
     "build_requires": [
-        "riscv-newlib/4.4.0-rc.0.49+sc.sc-dt.2025.01@sc/main#9a1b8ff6f3ca64464fabed8b30c09a97edbc2dac%1734995265.554",
-        "riscv-glibc/2.38.0-rc.0.69+sc.sc-dt.2025.01@sc/main#32e596248c6609d2fd929a0fbb0d00da5cf3fd90%1734995339.263",
-        "riscv-gcc-raw/14.2.0-rc.0.147+sc.sc-dt.2025.01@sc/main#db8e3f2046f409e1a36a45f667afa91193a2a594%1734994538.721",
-        "riscv-binutils-raw/2.43.1-rc.0.57+sc.sc-dt.2025.01@sc/main#1400e2cbffeecb09c79104e5a06cc1cdec903322%1734990970.593",
-        "multilib-desc/1.0.0-rc.0.308+sc.sc-dt.2025.01@sc/main#06e66d76bbc0b5500dd0288fcdf768c6511942cb%1734990026.472",
-        "hwbp_qemu_files/1.0.0-rc.0.310+sc.sc-dt.2025.01@sc/main#c999742ff2c1d5ca2e8b3a26cf9fff6149b6c069%1734990061.123",
-        "glibc-linux-headers/6.6.3-rc.0.308+sc.sc-dt.2025.01@sc/main#2ad1aa88ecde8a43d0a1aced3369d1bd86f12f6a%1734991451.493"
+        "riscv-newlib/4.4.0-rc.0.54+sc.sc-dt.2025.03@sc/main#df1106905ef751d4cd40f21a33cae3fbfcd65719%1741346304.147",
+        "riscv-glibc/2.38.0-rc.0.79+sc.sc-dt.2025.03@sc/main#dcf1eeb774fb5c48a0bad347326fd58ed09b2a62%1741346828.835",
+        "riscv-gcc-raw/14.2.0-rc.0.159+sc.sc-dt.2025.03@sc/main#98f037e2fe4655ff09106e0aa3395099717f3f9a%1741345436.694",
+        "riscv-binutils-raw/2.43.1-rc.0.63+sc.sc-dt.2025.03@sc/main#f25685b7ef9c18ee7f04225022c7e28ccd60ad56%1741342050.585",
+        "multilib-desc/1.0.0-rc.1.19+sc.sc-dt.2025.03@sc/main#760cffa7b24b2e4ce61c04bfb5bdae04a2c585b2%1741341321.581",
+        "hwbp_qemu_files_scr_linux/1.0.0-rc.1.19+sc.sc-dt.2025.03@sc/main#3a64485409d41cf140670389148ce2d3ceb7e262%1741341306.866",
+        "hwbp_qemu_files/1.0.0-rc.1.19+sc.sc-dt.2025.03@sc/main#e16a8d3dde4c4b0bfca16a81269e22dfe58d78be%1741341262.228",
+        "glibc-linux-headers/6.6.3-rc.1.19+sc.sc-dt.2025.03@sc/main#24162dc0f10eccba9b0684044a64b5156b21fa02%1741342426.906",
+        "cmake/3.26.4#0b40747e190e755932767f2ec4768ff5%1724678437.897"
     ],
     "python_requires": [
+        "makepy_hints/1.15.0-rc.0.11+sc.main@sc/main#8de164ffe4da6f53f12f9b6f175af1f2a9299dcc%1738739693.748",
         "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main#e057286806bd371381f6c54288e9de0e6c9c5ed8%1738665671.841",
+        "makepy_hints/1.15.0-rc.0.2+sc.main@sc/main#1b3476e99aca7205f181eea9dc903dc7f5007402%1738588181.386",
         "makepy_hints/1.0.0-rc.0.316+sc.main@sc/main#aa0106d519ec11492ae1ac9a5c2c300b3d44b918%1718273456.505"
     ]
 }

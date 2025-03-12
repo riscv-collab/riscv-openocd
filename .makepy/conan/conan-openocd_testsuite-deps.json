@@ -1,10 +1,10 @@
 {
   "build": {},
   "host": {
-    "external_openocd_tests": "0.0.3-rc.0.308+sc.sc-dt.2025.01@sc/main#22546ea2346e0b6c1153de98deda3dd564bd8c99",
-    "riscv-gcc": "14.2.0-rc.0.147+sc.sc-dt.2025.01@sc/main#7a8380cee42968dc92ce3c667029f9c49453ce75",
-    "riscv-gdb": "15.1.0-rc.1.75+sc.sc-dt.2025.01@sc/main#7d357f8313c25e0f0f784a2fd3f83d440b63449a",
-    "riscv-isa-sim": "0.1.0-rc.0.300+sc.sc-dt.2025.02@sc/main#7dd2940be111e6722f56504334ed4169c307d7e7",
-    "dejagnu": "1.6.3-rc.0.308+sc.sc-dt.2025.01@sc/main#8803f0504d50a9c24709734b8e6c92d7b48c0c29"
+    "external_openocd_tests": "0.0.3-rc.1.19+sc.sc-dt.2025.03@sc/main#dad956f50c1e8a189ccc2f13ab3b3622ab6d1e39",
+    "riscv-gcc": "14.2.0-rc.0.159+sc.sc-dt.2025.03@sc/main#ce9b9d092eb7a20b76d08d989ac7eecb185a449a",
+    "riscv-gdb": "15.1.0-rc.1.106+sc.sc-dt.2025.03@sc/main#7f62986699104997967730e57caa8889c8a423f9",
+    "riscv-isa-sim": "0.1.0-rc.1.8+sc.sc-dt.2025.03@sc/main#c7f4853de79070b5eceabde4a4855c5f5af12a7c",
+    "dejagnu": "1.6.3-rc.1.19+sc.sc-dt.2025.03@sc/main#a59577e5fd36f00069dec17ab7599e940b8173de"
   }
 }
