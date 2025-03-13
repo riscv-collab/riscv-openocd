@@ -829,7 +829,15 @@ uint32_t sector4KErase(struct target *target,uint8_t qspinum,uint32_t address){
     flash_msg.dummy_bit = 0;
     flash_msg.mm_mode = CCR_MM_MODE_XIP;
     flash_msg.alternate_byte_mode = CCR_ABMODE_NIL;
-    return QSPI_Transaction(target,qspinum,&flash_msg);
+	QSPI_Transaction(target,qspinum,&flash_msg);
+	uint8_t temp;
+    while(1){
+        temp = readStatusRegister1(target,qspinum);
+        temp = temp & 0x01;
+        if(temp != 0x01)
+        break;
+    }
+    return SUCCESS;
     
 }
 /**
@@ -855,7 +863,15 @@ uint32_t sector32KErase(struct target *target,uint8_t qspinum,uint32_t address){
     flash_msg.dummy_bit = 0;
     flash_msg.mm_mode = CCR_MM_MODE_XIP;
     flash_msg.alternate_byte_mode = CCR_ABMODE_NIL;
-    return QSPI_Transaction(target,qspinum,&flash_msg);
+	QSPI_Transaction(target,qspinum,&flash_msg);    
+    uint8_t temp;
+    while(1){
+        temp = readStatusRegister1(target,qspinum);
+        temp = temp & 0x01;
+        if(temp != 0x01)
+        break;
+    }
+    return SUCCESS;
 }
 /**
  * @fn void chipErase(struct target *target,uint8_t qspinum)
@@ -5862,6 +5878,17 @@ else if(CMD_ARGC==2){
 }
  // Print the length of the executable binary data (excluding the ELF header)
  command_print(CMD, "Length of executable binary data (excluding ELF header): 0x%lx bytes\n", executable_binary_length);
+
+/*handling sector erase operation*/
+uint32_t erase_start_address = mask_address & ~(0xFFF);
+uint32_t erase_end_address = (mask_address+executable_binary_length) & ~(0xFFF);
+for(uint32_t s = erase_start_address;s<=erase_end_address;s+=0x1000){
+	log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "Erasing sector:%x\n",s);	
+	writeEnable(target,qspi_number);/*Enable write operation*/
+	sector4KErase(target,qspi_number,s);
+	writeDisable(target,qspi_number);/*Enable write operation*/
+}
+/*handling sector erase operation*/
 
  if(CMD_ARGC==1){
 	size_t offset = 0x000;
