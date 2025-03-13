@@ -5791,7 +5791,6 @@ uint32_t psram_init(struct target *target,uint8_t qspinum, int ram_size,uint8_t 
 //  uint8_t data[16];
 //  COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], qspi_number);
  struct target *target __attribute__((unused)) = get_current_target(CMD_CTX);
- 
  FILE *file = fopen(CMD_ARGV[0], "rb");
  if (file == NULL) {
 	 // perror("Error opening file");
@@ -5840,6 +5839,8 @@ uint32_t psram_init(struct target *target,uint8_t qspinum, int ram_size,uint8_t 
  if(CMD_ARGC==1){
  // Get the program header table offset and number of entries
  fseek(file, elf_header.e_phoff, SEEK_SET);
+
+
  for (int l = 0; l < elf_header.e_phnum; l++) {
 	 // Read the program header
 	 uint32_t val = fread(&phdr, sizeof(Elf64_Phdr), 1, file);
@@ -5849,11 +5850,7 @@ uint32_t psram_init(struct target *target,uint8_t qspinum, int ram_size,uint8_t 
 	 }
 	 // Check if the current program header is of type PT_LOAD (executable segment)
 	 if (phdr.p_type == PT_LOAD) {
-		 // Only consider executable segments (those with the PF_X flag)
-		 if (phdr.p_flags & PF_X) {
-			 // Add the size of this segment to the total executable binary length
-			 executable_binary_length += phdr.p_filesz;
-		 }
+		executable_binary_length+=phdr.p_filesz;
 	 }
  }
 }
@@ -5867,27 +5864,25 @@ else if(CMD_ARGC==2){
  command_print(CMD, "Length of executable binary data (excluding ELF header): 0x%lx bytes\n", executable_binary_length);
 
  if(CMD_ARGC==1){
+	size_t offset = 0x000;
  // Now read and process the program headers for executable content
- fseek(file, elf_header.e_phoff, SEEK_SET);
+ FILE *fileheader = fopen(CMD_ARGV[0], "rb");
+ fseek(fileheader, elf_header.e_phoff, SEEK_SET);
  for (int l = 0; l < elf_header.e_phnum; l++) {
 	log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "PROGRAM HEADER:%x\n",l);	
 	 // Read the program header
-	 uint32_t val = fread(&phdr, sizeof(Elf64_Phdr), 1, file);
+	 uint32_t val = fread(&phdr, sizeof(Elf64_Phdr), 1, fileheader);
 	 if (val != 1) {
 		 fclose(file);
 		 return -1;  // Error reading program header
 	 }
 	 // Check if the current program header is of type PT_LOAD (executable segment)
 	 if (phdr.p_type == PT_LOAD) {
-		 // Ensure we're reading from the segment containing executable code
-		 if (phdr.p_flags & PF_X) {
-			 // Print valid opcodes: Read from the segment starting at p_offset
-			//  command_print(CMD, "Reading opcode section from offset 0x%lx:\n", phdr.p_offset);
 			 fseek(file, phdr.p_offset, SEEK_SET); // Move to the segment's start
 			 unsigned char buffer[CHUNK_SIZE];
 			 uint8_t bytesReadInChunk;
-			 size_t offset = 0x000;
-			 size_t remaining_bytes = executable_binary_length;
+			 size_t remaining_bytes = phdr.p_filesz;
+			 log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nSection length:%lx\n",remaining_bytes);
 			 uint8_t to_read;
 			 while (remaining_bytes > 0) {
 				to_read = (remaining_bytes>CHUNK_SIZE)?CHUNK_SIZE:remaining_bytes;
@@ -5904,8 +5899,9 @@ else if(CMD_ARGC==2){
 		 }
 	 }
  }
- }
  fclose(file);
+
+ 
 }else if(CMD_ARGC==2){
 	unsigned char buffer[CHUNK_SIZE];
 	uint8_t bytesReadInChunk;
@@ -5925,10 +5921,8 @@ else if(CMD_ARGC==2){
 		offset += bytesReadInChunk;
 		remaining_bytes-=bytesReadInChunk;
 }
-
-    // Close the file
-    fclose(file);
-
+ // Close the file
+ fclose(file);
 }
  command_print(CMD, "Completed writing");
  return ERROR_OK;
