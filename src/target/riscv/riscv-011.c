@@ -2339,7 +2339,8 @@ error:
 	return ERROR_FAIL;
 }
 
-static int access_memory(struct target *target, const riscv_mem_access_args_t args)
+static int access_memory(struct target *target,
+		const riscv_mem_access_args_t args, const bool is_virtual)
 {
 	assert(riscv_mem_access_is_valid(args));
 	const bool is_write = riscv_mem_access_is_write(args);

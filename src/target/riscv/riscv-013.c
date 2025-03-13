@@ -64,7 +64,8 @@ static int register_read_direct(struct target *target, riscv_reg_t *value,
 		enum gdb_regno number);
 static int register_write_direct(struct target *target, enum gdb_regno number,
 		riscv_reg_t value);
-static int riscv013_access_memory(struct target *target, const riscv_mem_access_args_t args);
+static int riscv013_access_memory(struct target *target,
+		const riscv_mem_access_args_t args, const bool is_virtual);
 static bool riscv013_get_impebreak(const struct target *target);
 static unsigned int riscv013_get_progbufsize(const struct target *target);
 
@@ -1277,7 +1278,8 @@ static int scratch_read64(struct target *target, scratch_mem_t *scratch,
 					.count = 2,
 					.increment = 4,
 				};
-				if (riscv013_access_memory(target, args) != ERROR_OK)
+				if (riscv013_access_memory(target, args,
+						/* is_virtual */ false) != ERROR_OK)
 					return ERROR_FAIL;
 				*value = buf_get_u64(buffer,
 						/* first = */ 0, /* bit_num = */ 64);
@@ -1319,7 +1321,8 @@ static int scratch_write64(struct target *target, scratch_mem_t *scratch,
 					.count = 2,
 					.increment = 4,
 				};
-				if (riscv013_access_memory(target, args) != ERROR_OK)
+				if (riscv013_access_memory(target, args,
+						/* is_virtual */ false) != ERROR_OK)
 					return ERROR_FAIL;
 			}
 			break;
@@ -4551,8 +4554,8 @@ access_memory_abstract(struct target *target, const riscv_mem_access_args_t args
 			write_memory_abstract(target, args);
 }
 
-static int
-riscv013_access_memory(struct target *target, const riscv_mem_access_args_t args)
+static int riscv013_access_memory(struct target *target,
+		const riscv_mem_access_args_t args, const bool is_virtual)
 {
 	assert(riscv_mem_access_is_valid(args));
 
@@ -4580,12 +4583,15 @@ riscv013_access_memory(struct target *target, const riscv_mem_access_args_t args
 		riscv_mem_access_method_t method = r->mem_access_methods[i];
 		switch (method) {
 			case RISCV_MEM_ACCESS_PROGBUF:
+				// TODO: pass is_virtual here in future commits
 				skip_reason[method] = access_memory_progbuf(target, args);
 				break;
 			case RISCV_MEM_ACCESS_SYSBUS:
+				// TODO: pass is_virtual here in future commits
 				skip_reason[method] = access_memory_sysbus(target, args);
 				break;
 			case RISCV_MEM_ACCESS_ABSTRACT:
+				// TODO: pass is_virtual here in future commits
 				skip_reason[method] = access_memory_abstract(target, args);
 				break;
 			default:

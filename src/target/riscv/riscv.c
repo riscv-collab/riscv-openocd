@@ -155,6 +155,13 @@ bool riscv_virt2phys_mode_is_sw(const struct target *target)
 	return r->virt2phys_mode == RISCV_VIRT2PHYS_MODE_SW;
 }
 
+bool riscv_virt2phys_mode_is_off(const struct target *target)
+{
+	assert(target);
+	RISCV_INFO(r);
+	return r->virt2phys_mode == RISCV_VIRT2PHYS_MODE_OFF;
+}
+
 const char *riscv_virt2phys_mode_to_str(riscv_virt2phys_mode_t mode)
 {
 	assert(mode == RISCV_VIRT2PHYS_MODE_OFF
@@ -3149,7 +3156,7 @@ static int riscv_address_translate(struct target *target,
 			.increment = 4,
 			.count = (1 << info->pte_shift) / 4,
 		};
-		int retval = r->access_memory(target, args);
+		int retval = r->access_memory(target, args, /* is_virtual */ false);
 		if (retval != ERROR_OK)
 			return ERROR_FAIL;
 
@@ -3382,6 +3389,14 @@ static int check_virt_memory_access(struct target *target, target_addr_t address
 	return ERROR_OK;
 }
 
+static int riscv_access_phys_memory(struct target *target,
+	const riscv_mem_access_args_t args)
+{
+	RISCV_INFO(r);
+	return r->access_memory(target, args, /* is_virtual */ false);
+}
+
+
 static int riscv_read_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, uint8_t *buffer)
 {
@@ -3392,8 +3407,7 @@ static int riscv_read_phys_memory(struct target *target, target_addr_t phys_addr
 		.count = count,
 		.increment = size,
 	};
-	RISCV_INFO(r);
-	return r->access_memory(target, args);
+	return riscv_access_phys_memory(target, args);
 }
 
 static int riscv_write_phys_memory(struct target *target, target_addr_t phys_address,
@@ -3406,12 +3420,11 @@ static int riscv_write_phys_memory(struct target *target, target_addr_t phys_add
 		.count = count,
 		.increment = size,
 	};
-
-	RISCV_INFO(r);
-	return r->access_memory(target, args);
+	return riscv_access_phys_memory(target, args);
 }
 
-static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t args)
+static int riscv_access_virt_memory(struct target *target,
+		const riscv_mem_access_args_t args)
 {
 	assert(riscv_mem_access_is_valid(args));
 
@@ -3423,8 +3436,11 @@ static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t 
 	}
 
 	RISCV_INFO(r);
+	if (riscv_virt2phys_mode_is_off(target))
+		return r->access_memory(target, args, /* is_virtual */ false);
+
 	if (riscv_virt2phys_mode_is_hw(target))
-		return r->access_memory(target, args);
+		return r->access_memory(target, args, /* is_virtual */ true);
 
 	int result = check_virt_memory_access(target, args.address,
 			args.size, args.count, is_write);
@@ -3456,7 +3472,8 @@ static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t 
 		else
 			current_access.read_buffer += current_count * args.size;
 
-		result = r->access_memory(target, current_access);
+		result = r->access_memory(target,
+				current_access, /* is_virtual */ false);
 		if (result != ERROR_OK)
 			return result;
 
@@ -3477,7 +3494,7 @@ static int riscv_read_memory(struct target *target, target_addr_t address,
 		.increment = size,
 	};
 
-	return riscv_rw_memory(target, args);
+	return riscv_access_virt_memory(target, args);
 }
 
 static int riscv_write_memory(struct target *target, target_addr_t address,
@@ -3491,7 +3508,7 @@ static int riscv_write_memory(struct target *target, target_addr_t address,
 		.increment = size,
 	};
 
-	return riscv_rw_memory(target, args);
+	return riscv_access_virt_memory(target, args);
 }
 
 static const char *riscv_get_gdb_arch(const struct target *target)
@@ -5224,7 +5241,9 @@ COMMAND_HANDLER(handle_repeat_read)
 		.count = count,
 		.increment = 0,
 	};
-	int result = r->access_memory(target, args);
+	/* TODO: Add a command parameter that enables
+	 * choosing between virtual and physical access */
+	int result = r->access_memory(target, args, /* is_virtual */ false);
 	if (result == ERROR_OK) {
 		target_handle_md_output(cmd, target, address, size, count, buffer,
 			false);
@@ -5607,7 +5626,7 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.handler = handle_repeat_read,
 		.mode = COMMAND_ANY,
 		.usage = "count address [size=4]",
-		.help = "Repeatedly read the value at address."
+		.help = "Repeatedly read the value at physical address."
 	},
 	{
 		.name = "set_command_timeout_sec",
