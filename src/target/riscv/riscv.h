@@ -239,6 +239,7 @@ struct riscv_info {
 	/* Used by riscv_openocd_poll(). */
 	bool halted_needs_event_callback;
 	enum target_event halted_callback_event;
+	unsigned int halt_group_repoll_count;
 
 	enum riscv_isrmasking_mode isrmask_mode;
 
@@ -473,10 +474,10 @@ int riscv_get_hart_state(struct target *target, enum riscv_hart_state *state);
 
 /* These helper functions let the generic program interface get target-specific
  * information. */
-size_t riscv_progbuf_size(struct target *target);
+unsigned int riscv_progbuf_size(struct target *target);
 
 riscv_insn_t riscv_read_progbuf(struct target *target, int index);
-int riscv_write_progbuf(struct target *target, int index, riscv_insn_t insn);
+int riscv_write_progbuf(struct target *target, unsigned int index, riscv_insn_t insn);
 int riscv_execute_progbuf(struct target *target, uint32_t *cmderr);
 
 void riscv_fill_dm_nop(const struct target *target, uint8_t *buf);
