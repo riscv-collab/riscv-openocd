@@ -5786,21 +5786,24 @@ uint32_t psram_init(struct target *target,uint8_t qspinum, int ram_size,uint8_t 
   * argv[2] = filename
   * argv[3] = size if code.bin is fed
   */
- unsigned int qspi_number;
+ unsigned int qspi_number = 0;
 //  uint32_t address = 0x30;
 //  uint8_t data[16];
- COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], qspi_number);
- struct target *target = get_current_target(CMD_CTX);
+//  COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], qspi_number);
+ struct target *target __attribute__((unused)) = get_current_target(CMD_CTX);
  
- FILE *file = fopen(CMD_ARGV[1], "rb");
+ FILE *file = fopen(CMD_ARGV[0], "rb");
  if (file == NULL) {
 	 // perror("Error opening file");
 	 command_print(CMD, "File ");
 	 return -1;
  }
- 
- // Read the ELF header
+ uint32_t start_address;
  Elf64_Ehdr elf_header;
+ command_print(CMD, "Argc:%d\n", CMD_ARGC);
+ if(CMD_ARGC == 1){
+ // Read the ELF header
+
  size_t bytesRead = fread(&elf_header, 1, sizeof(Elf64_Ehdr), file);
  if (bytesRead != sizeof(Elf64_Ehdr)) {
 	 fclose(file);
@@ -5816,17 +5819,27 @@ uint32_t psram_init(struct target *target,uint8_t qspinum, int ram_size,uint8_t 
 	 fclose(file);
 	 return -1;
  }
- 
- // Print the entry point address (start address) in hexadecimal
- command_print(CMD, "(start address): 0x%lx\n", elf_header.e_entry);
- 
- // Get the program header table offset and number of entries
- fseek(file, elf_header.e_phoff, SEEK_SET);
- Elf64_Phdr phdr;
- 
+	start_address = elf_header.e_entry;
+ }
+ else if(CMD_ARGC == 2){
+	COMMAND_PARSE_NUMBER(uint, CMD_ARGV[1], start_address);
+ }
+	// Print the entry point address (start address) in hexadecimal
+ command_print(CMD, "(start address): 0x%x\n", start_address);
+ if((start_address>=0x90000000) &&(start_address<=0xAFFFFFFF)){
+	qspi_number = 0;
+ }else if((start_address>=0xB0000000) &&(start_address<=0xCFFFFFFF)){
+	qspi_number = 1;
+ }
+ uint32_t mask_address =start_address&~(0xF<<28);
+ command_print(CMD, "mask address: 0x%x\n", mask_address);
+ command_print(CMD, "QSPI number: 0x%x\n", qspi_number);
  // Variable to accumulate the total length of binary data for executable sections
  size_t executable_binary_length = 0;
- 
+ Elf64_Phdr phdr;
+ if(CMD_ARGC==1){
+ // Get the program header table offset and number of entries
+ fseek(file, elf_header.e_phoff, SEEK_SET);
  for (int l = 0; l < elf_header.e_phnum; l++) {
 	 // Read the program header
 	 uint32_t val = fread(&phdr, sizeof(Elf64_Phdr), 1, file);
@@ -5834,7 +5847,6 @@ uint32_t psram_init(struct target *target,uint8_t qspinum, int ram_size,uint8_t 
 		 fclose(file);
 		 return -1;  // Error reading program header
 	 }
- 
 	 // Check if the current program header is of type PT_LOAD (executable segment)
 	 if (phdr.p_type == PT_LOAD) {
 		 // Only consider executable segments (those with the PF_X flag)
@@ -5844,12 +5856,21 @@ uint32_t psram_init(struct target *target,uint8_t qspinum, int ram_size,uint8_t 
 		 }
 	 }
  }
+}
+else if(CMD_ARGC==2){
+	    // Seek to the end to find the length of the file
+	fseek(file, 0, SEEK_END);
+	executable_binary_length  = ftell(file);
+	rewind(file);  // Rewind to the beginning of the file
+}
  // Print the length of the executable binary data (excluding the ELF header)
  command_print(CMD, "Length of executable binary data (excluding ELF header): 0x%lx bytes\n", executable_binary_length);
- 
+
+ if(CMD_ARGC==1){
  // Now read and process the program headers for executable content
  fseek(file, elf_header.e_phoff, SEEK_SET);
  for (int l = 0; l < elf_header.e_phnum; l++) {
+	log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "PROGRAM HEADER:%x\n",l);	
 	 // Read the program header
 	 uint32_t val = fread(&phdr, sizeof(Elf64_Phdr), 1, file);
 	 if (val != 1) {
@@ -5866,17 +5887,49 @@ uint32_t psram_init(struct target *target,uint8_t qspinum, int ram_size,uint8_t 
 			 unsigned char buffer[CHUNK_SIZE];
 			 uint8_t bytesReadInChunk;
 			 size_t offset = 0x000;
-			 while ((bytesReadInChunk = fread(buffer, 1, CHUNK_SIZE, file)) > 0) {
+			 size_t remaining_bytes = executable_binary_length;
+			 uint8_t to_read;
+			 while (remaining_bytes > 0) {
+				to_read = (remaining_bytes>CHUNK_SIZE)?CHUNK_SIZE:remaining_bytes;
+				bytesReadInChunk = fread(buffer, 1, to_read, file);
 				writeEnable(target,qspi_number);/*Enable write operation*/
-				inputpageQuad(target,qspi_number,buffer,0x1000+offset,bytesReadInChunk);/*To write data to flash*/
-				log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "Writing at offset:%lx\n",offset);
-				writeDisable(target,qspi_number);/*Disable write operation*/
+				inputpageQuad(target,qspi_number,buffer,mask_address+offset,bytesReadInChunk);/*To write data to flash*/
+				writeDisable(target,qspi_number);/*Enable write operation*/
+				log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",start_address+offset);
+				for(uint8_t i = 0;i<16;i++){
+					log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__,  "%x ",buffer[i]);
+				}
 				 offset += bytesReadInChunk;
-			 }
+				 remaining_bytes-=bytesReadInChunk;
 		 }
 	 }
  }
+ }
  fclose(file);
+}else if(CMD_ARGC==2){
+	unsigned char buffer[CHUNK_SIZE];
+	uint8_t bytesReadInChunk;
+	size_t offset = 0x000;
+	size_t remaining_bytes = executable_binary_length;
+	uint8_t to_read;
+	while (remaining_bytes > 0) {
+	   to_read = (remaining_bytes>CHUNK_SIZE)?CHUNK_SIZE:remaining_bytes;
+	   bytesReadInChunk = fread(buffer, 1, to_read, file);
+	   writeEnable(target,qspi_number);/*Enable write operation*/
+	   inputpageQuad(target,qspi_number,buffer,mask_address+offset,bytesReadInChunk);/*To write data to flash*/
+	   writeDisable(target,qspi_number);/*Enable write operation*/
+	   log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",start_address+offset);
+	   for(uint8_t i = 0;i<16;i++){
+		   log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__,  "%x ",buffer[i]);
+	   }
+		offset += bytesReadInChunk;
+		remaining_bytes-=bytesReadInChunk;
+}
+
+    // Close the file
+    fclose(file);
+
+}
  command_print(CMD, "Completed writing");
  return ERROR_OK;
  }
