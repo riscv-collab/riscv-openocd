@@ -368,7 +368,7 @@ COMMAND_HANDLER(handle_ila_capture_mask_command)
 
 	for (i = 0; i < msb - lsb + 1; i++) {
 		mask = CMD_ARGV[1][i];
-		ila_device_set_capture_mask_val(current, lsb + i, trig_cap_mask_to_val[mask]);
+		ila_device_set_capture_mask_val(current, msb - i, trig_cap_mask_to_val[mask]);
 	}
 
 	return ERROR_OK;
