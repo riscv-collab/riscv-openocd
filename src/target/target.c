@@ -5955,6 +5955,39 @@ for(uint32_t s = erase_start_address;s<=erase_end_address;s+=0x1000){
  return ERROR_OK;
  }
 
+ COMMAND_HANDLER(handle_sector_erase)
+ {
+ /*
+  * argv[1] = QSPI number
+  * 
+  */
+ unsigned int start_address,no_of_sectors,mode,qspi_number=0;
+ COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], mode);
+ COMMAND_PARSE_NUMBER(uint, CMD_ARGV[1], start_address);
+ COMMAND_PARSE_NUMBER(uint, CMD_ARGV[2], no_of_sectors);
+ struct target *target = get_current_target(CMD_CTX);
+ command_print(CMD, "Requested sectors are erased");
+ log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "Sector Erase in Progress!!");
+ if((start_address>=0x90000000) &&(start_address<=0xAFFFFFFF)){
+	qspi_number = 0;
+ }else if((start_address>=0xB0000000) &&(start_address<=0xCFFFFFFF)){
+	qspi_number = 1;
+ }
+ uint32_t mask_value =(mode==4)?(~(0xFFF)):((mode==32)?~(0x7FFF):0);
+ uint32_t increment=(mode==4)?(0x1000):((mode==32)?(0x8000):0);
+ uint32_t mask_address =start_address&~(0xF<<28);
+ uint32_t erase_start_address = mask_address & mask_value;
+ for(uint32_t s = erase_start_address,i=0;i<no_of_sectors;s+=increment,i++){
+	log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "Erasing sector:%x\n",s);
+	writeEnable(target,qspi_number);/*Enable write operation*/
+	if(mode==4)
+	sector4KErase(target,qspi_number,s);
+	else if (mode==32)
+	sector32KErase(target,qspi_number,s);
+	writeDisable(target,qspi_number);/*Enable write operation*/
+ }
+ return 0;
+}
 
 
 
@@ -7305,6 +7338,13 @@ for(uint32_t s = erase_start_address;s<=erase_end_address;s+=0x1000){
 		.help = "Flash write command",
 		.usage = "statename timeoutmsecs",
 	},
+	{
+		.name = "flash_sector_erase",
+		.mode = COMMAND_EXEC,
+		.handler = handle_sector_erase,
+		.help = "Flash xip command",
+		.usage = "statename timeoutmsecs",
+	},
 	 {
 		 .name = "invoke-event",
 		 .mode = COMMAND_EXEC,
@@ -8409,6 +8449,14 @@ for(uint32_t s = erase_start_address;s<=erase_end_address;s+=0x1000){
 		.help = "Flash xip command",
 		.usage = "statename timeoutmsecs",
 	},
+	{
+		.name = "flash_sector_erase",
+		.mode = COMMAND_EXEC,
+		.handler = handle_sector_erase,
+		.help = "Flash xip command",
+		.usage = "statename timeoutmsecs",
+	},
+	
 	 {
 		 .name = "test_mem_access",
 		 .handler = handle_test_mem_access_command,
