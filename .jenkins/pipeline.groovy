@@ -1,4 +1,4 @@
-@Library('jenkins-lib@v4.2.x') _
+@Library('jenkins-lib@1.2503.4') _
 
 import tools.automation.TI
 
