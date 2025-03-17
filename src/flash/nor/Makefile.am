@@ -80,6 +80,8 @@ NOR_DRIVERS = \
 	%D%/virtual.c \
 	%D%/w600.c \
 	%D%/xcf.c \
+	%D%/secure_iot_flash_driver.c \
+	%D%/secure_iot_qspi.c \
 	%D%/xmc1xxx.c \
 	%D%/xmc4xxx.c
 
@@ -98,4 +100,6 @@ NORHEADERS = \
 	%D%/spi.h \
 	%D%/stm32l4x.h \
 	%D%/stmqspi.h \
+	%D%/secure_iot_flash_driver.h \
+	%D%/secure_iot_qspi.h \
 	%D%/msp432.h
