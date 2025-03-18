@@ -1,4 +1,6 @@
+from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Any, Iterable, Mapping
 
 from conan import ConanFile  # type: ignore
 from conan.errors import ConanException  # type: ignore
@@ -73,20 +75,161 @@ _windows_configure_args = _shared_configure_args + [
 ]
 
 
+class _Option(ABC):
+    @property
+    @abstractmethod
+    def application_order(self) -> int:
+        pass
+
+    @abstractmethod
+    def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
+        pass
+
+    @abstractmethod
+    def to_conan_default(self) -> tuple[str, str | None]:
+        pass
+
+    @abstractmethod
+    def apply(self, recipe: Any) -> None:
+        pass
+
+
+class _OptionAlias(_Option):
+    application_order = 0
+
+    def __init__(
+        self, name: str, *, final_name: str, mapping: Mapping[str, str]
+    ):
+        self.name = name
+        self.final_name = final_name
+        self.mapping = mapping
+
+    def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
+        return (self.name, [None, *self.mapping.keys()])
+
+    def to_conan_default(self) -> tuple[str, str | None]:
+        return (self.name, None)
+
+    def apply(self, recipe: Any) -> None:
+        if recipe.mp_opts.as_str_or_none(self.name) is not None:
+            setattr(
+                recipe.options,
+                self.final_name,
+                self.mapping[recipe.mp_opts.as_str(self.name)],
+            )
+        recipe.options.rm_safe(self.name)
+
+
+class _OptionPreset(_Option):
+    application_order = 1
+    name = "preset"
+
+    def __init__(self, presets: Mapping[str, Mapping[str, str]]):
+        self._presets = presets
+
+    def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
+        return (self.name, [None, *self._presets.keys()])
+
+    def to_conan_default(self) -> tuple[str, str | None]:
+        return (self.name, None)
+
+    def apply(self, recipe: Any) -> None:
+        preset_name = recipe.mp_opts.as_str_or_none(self.name)
+        recipe.options.rm_safe(self.name)
+        if preset_name is None:
+            return
+
+        if any(
+            recipe.mp_opts.as_str_or_none(option)
+            != recipe.default_options[option]
+            for option in recipe.mp_opts.keys()
+        ):
+            raise ConanException(
+                "Either specify a preset or any of the other options."
+            )
+
+        for option, value in self._presets[preset_name].items():
+            setattr(recipe.options, option, value)
+
+
+class _FinalOption(_Option):
+    application_order = 2
+
+    def __init__(
+        self, name: str, *, values: Iterable[str], default: str | None = None
+    ):
+        assert default is None or default in values
+        self.name = name
+        self.values = values
+        self.default = default
+
+    def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
+        return (self.name, set([self.default, *self.values]))
+
+    def to_conan_default(self) -> tuple[str, str | None]:
+        return (self.name, self.default)
+
+    def apply(self, recipe: Any) -> None:
+        value = recipe.mp_opts.as_str_or_none(self.name)
+        if not value in self.values:
+            assert value is None
+            raise ConanException(
+                f"Option '{self.name}' is not specified. Use one of {self.values}."
+            )
+
+
+_options = [
+    _OptionAlias(
+        "elct_support",
+        final_name="source",
+        mapping={
+            "True": "internal",
+            "true": "internal",
+            "False": "syntacore",
+            "false": "syntacore",
+            "": "syntacore",
+        },
+    ),
+    _OptionAlias(
+        "release",
+        final_name="preset",
+        mapping={
+            "internal": "internal_release",
+            "external": "external_release",
+        },
+    ),
+    _OptionPreset(
+        {
+            "internal_release": {
+                "source": "internal",
+            },
+            "external_release": {
+                "source": "syntacore",
+            },
+        }
+    ),
+    _FinalOption(
+        "source",
+        values=["internal", "syntacore"],
+    ),
+    _FinalOption(
+        "sanitize",
+        values=["disable", "enable", "strict"],
+        default="disable",
+    ),
+]
+assert sorted(_options, key=lambda o: o.application_order) == _options
+
+
 # pylint: disable=no-member,not-callable
 class Package(ConanFile):  # type: ignore
     name = "openocd"
     settings = "os", "arch", "build_type", "compiler"
-    options = {
-        "source": [None, "internal", "syntacore"],  # TODO: "riscv", "mainline"
-        "sanitize": ["disable", "enable", "strict"],
-        "elct_support": [None, True, False],  # Legacy option
+    options_description = {
+        "preset": "Select a preset for all other options. Once a preset is selected, specifying any other option is an error."
     }
-    default_options = {
-        "source": None,
-        "sanitize": "disable",
-        "elct_support": None,
-    }
+    options = dict(o.to_conan_option() for o in _options)
+    default_options = dict(o.to_conan_default() for o in _options)
     package_type = "application"
     url = "<default_remote_git_service>/tools/toolchain/openocd"
 
@@ -96,12 +239,8 @@ class Package(ConanFile):  # type: ignore
     mp_git_clone_depth = 2000  # We need some history to find the merge base
 
     def configure(self) -> None:
-        match self.mp_opts.as_str("elct_support"):
-            case "True":
-                self.options.source = "internal"  # type: ignore
-            case "False":
-                self.options.source = "syntacore"  # type: ignore
-        self.options.rm_safe("elct_support")  # type: ignore
+        for option in _options:
+            option.apply(self)
 
     def package_id(self) -> None:
         self.info.settings.rm_safe("compiler")

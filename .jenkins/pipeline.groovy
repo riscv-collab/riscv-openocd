@@ -231,7 +231,7 @@ workflow('openocd') {
         }
         shellScript {
             '''
-                mpy conan install
+                mpy conan install -o source=internal
                 mpy sh ./bootstrap nosubmodule
                 mpy sh env PKG_CONFIG_LIBDIR=build/Release \
                     ./configure --enable-dummy
@@ -256,7 +256,7 @@ workflow('openocd') {
         }
         shellScript {
             '''
-                mpy conan install
+                mpy conan install -o source=internal
                 mpy sh ./bootstrap nosubmodule
                 mpy sh env PKG_CONFIG_LIBDIR=build/Release ./configure
                 mpy sh make html
