@@ -74,12 +74,12 @@ class Package(ConanFile):
     name = "openocd"
     settings = "os", "arch", "build_type", "compiler"
     options = {
-        "source": ["internal", "syntacore"],  # TODO: "riscv", "mainline"
+        "source": [None, "internal", "syntacore"],  # TODO: "riscv", "mainline"
         "sanitize": ["disable", "enable", "strict"],
-        "elct_support": [None, True, False],
+        "elct_support": [None, True, False],  # Legacy option
     }
     default_options = {
-        "source": "internal",
+        "source": None,
         "sanitize": "disable",
         "elct_support": None,
     }
@@ -92,9 +92,12 @@ class Package(ConanFile):
     mp_git_clone_depth = 2000  # We need some history to find the merge base
 
     def configure(self):
-        if self.options.get_safe("elct_support"):  # Legacy option
-            self.options.rm_safe("elct_support")
-            self.options["source"] = "internal"
+        match self.options.get_safe("elct_support"):
+            case "True":
+                self.options.source = "internal"
+            case "False":
+                self.options.source = "syntacore"
+        self.options.rm_safe("elct_support")
 
     def package_id(self) -> None:
         self.info.settings.rm_safe("compiler")
