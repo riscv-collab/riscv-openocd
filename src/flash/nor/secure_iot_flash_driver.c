@@ -931,13 +931,36 @@ for (int l = 0; l < elf_header.e_phnum; l++) {
             while (remaining_bytes > 0) {
                to_read = (remaining_bytes>CHUNK_SIZE)?CHUNK_SIZE:remaining_bytes;
                bytesReadInChunk = fread(buffer, 1, to_read, file);
-               writeEnable(target,qspi_number);/*Enable write operation*/
-               inputpageQuad(target,qspi_number,buffer,mask_address+offset,bytesReadInChunk);/*To write data to flash*/
-               writeDisable(target,qspi_number);/*Enable write operation*/
                log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",start_address+offset);
-               for(uint8_t i = 0;i<16;i++){
+               for(uint8_t i = 0;i<bytesReadInChunk;i++){
                    log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__,  "%x ",buffer[i]);
                }
+               writeEnable(target,qspi_number);/*Enable write operation*/
+               if(((mask_address+offset)&(~(0xFF))) == (((mask_address+offset)+bytesReadInChunk-1)&(~(0xFF)))){//check if start address and end address in same sector
+                writeEnable(target,qspi_number);/*Enable write operation*/
+                inputpageQuad(target,qspi_number,buffer,mask_address+offset,bytesReadInChunk);/*To write data to flash*/
+                writeDisable(target,qspi_number);/*Enable write operation*/
+            }
+            else
+            {
+                log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nCrossing sector");
+                uint32_t part1_address,part2_address;
+                uint8_t part1_length,part2_length;
+                part1_address = (mask_address+offset);
+                part2_address = ((mask_address+offset)+bytesReadInChunk-1)&(~(0xFF));
+                part1_length = (part2_address-(mask_address+offset));
+                part2_length = (mask_address+offset)+bytesReadInChunk-part2_address;
+                log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nCrossing sector part1 addr:%x",part1_address);
+                log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nCrossing sector part2 addr:%x",part2_address);
+                
+                writeEnable(target,qspi_number);/*Enable write operation*/
+                inputpageQuad(target,qspi_number,buffer,part1_address,part1_length);/*To write data to flash*/
+                writeDisable(target,qspi_number);/*Enable write operation*/
+                writeEnable(target,qspi_number);/*Enable write operation*/
+                inputpageQuad(target,qspi_number,buffer+part1_length,part2_address,part2_length);/*To write data to flash*/
+                writeDisable(target,qspi_number);/*Enable write operation*/
+            }
+
                 offset += bytesReadInChunk;
                 remaining_bytes-=bytesReadInChunk;
         }
