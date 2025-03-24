@@ -274,13 +274,13 @@ workflow('openocd') {
         matrix {
             [
                 [
-                    image    : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
-                    profile  : ['default'],
-                    o_source : ['internal', 'syntacore']
+                    image     : ['cpp_centos_7', 'cpp_rocky_8', 'cpp_ubuntu_18', 'cpp_ubuntu_20', 'cpp_ubuntu_22'],
+                    profile   : ['default'],
+                    extraArgs : ['--options:host elct_support=True', '--options:host elct_support=False'],
                 ], [
-                    image    : ['cpp_ubuntu_22'],
-                    profile  : ['makepy_sc_mingw', 'mp_armhf'],
-                    o_source : ['internal', 'syntacore']
+                    image     : ['cpp_ubuntu_22'],
+                    profile   : ['makepy_sc_mingw', 'mp_armhf'],
+                    extraArgs : ['--options:host elct_support=True'],
                 ]
             ]
         }
