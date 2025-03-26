@@ -1,11 +1,13 @@
-# type: ignore
-# pylint: disable=no-member,pointless-statement,invalid-name,not-callable,cyclic-import
 from pathlib import Path
 
-from conan import ConanFile
-from conan.errors import ConanException
-from conan.tools.gnu import Autotools, AutotoolsToolchain, PkgConfigDeps
-from conan.tools.scm import Git
+from conan import ConanFile  # type: ignore
+from conan.errors import ConanException  # type: ignore
+from conan.tools.gnu import (  # type: ignore
+    Autotools,
+    AutotoolsToolchain,
+    PkgConfigDeps,
+)
+from conan.tools.scm import Git  # type: ignore
 
 _shared_configure_args = [
     "--enable-amtjtagaccel",
@@ -71,7 +73,8 @@ _windows_configure_args = _shared_configure_args + [
 ]
 
 
-class Package(ConanFile):
+# pylint: disable=no-member,not-callable
+class Package(ConanFile):  # type: ignore
     name = "openocd"
     settings = "os", "arch", "build_type", "compiler"
     options = {
@@ -87,18 +90,18 @@ class Package(ConanFile):
     package_type = "application"
     url = "<default_remote_git_service>/tools/toolchain/openocd"
 
-    python_requires = "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main"
+    python_requires = "makepy_hints/1.19.0-rc.0.12+sc.main@sc/main"
     python_requires_extend = "makepy_hints.MakepyConanFile"
 
     mp_git_clone_depth = 2000  # We need some history to find the merge base
 
-    def configure(self):
-        match self.options.get_safe("elct_support"):
+    def configure(self) -> None:
+        match self.mp_opts.as_str("elct_support"):
             case "True":
-                self.options.source = "internal"
+                self.options.source = "internal"  # type: ignore
             case "False":
-                self.options.source = "syntacore"
-        self.options.rm_safe("elct_support")
+                self.options.source = "syntacore"  # type: ignore
+        self.options.rm_safe("elct_support")  # type: ignore
 
     def package_id(self) -> None:
         self.info.settings.rm_safe("compiler")
@@ -138,11 +141,12 @@ class Package(ConanFile):
             },
         )
 
-        if self.options.source == "internal" and self.settings.os == "Linux":
+        if self.options.source == "internal" and self.settings.os == "Linux":  # type: ignore
             self.requires("jansson", options={"shared": False})
 
     def layout(self) -> None:
-        build_folder = Path("build") / str(self.settings.build_type)
+        build_folder = Path("build") / str(self.settings.build_type)  # type: ignore
+
         self.folders.generators = build_folder
         self.folders.build = build_folder
 
@@ -160,28 +164,29 @@ class Package(ConanFile):
         hidapi_pc_path.write_text(hidapi_pc_data, encoding="utf-8")
 
         ac = AutotoolsToolchain(self)
-        match self.settings.os:
+
+        match self.settings.os:  # type: ignore
             case "Linux":
                 extra_configure_args = _linux_configure_args
             case "Windows":
                 extra_configure_args = _windows_configure_args
             case _:
-                raise ConanException(f"Unexpected host OS '{self.settings.os}'")
+                raise ConanException(f"Unexpected host OS '{self.settings.os}'")  # type: ignore
 
         for configure_arg in extra_configure_args:
             ac.configure_args.append(configure_arg)
 
         if (
-            self.options.source == "internal" and self.settings.os == "Linux"
+            self.mp_opts.as_str("source") == "internal" and self.settings.os == "Linux"  # type: ignore
         ):  # TODO: just build form other repo
             ac.configure_args.append("--enable-syntacore-extensions")
 
-        if self.options.sanitize != "disable":
+        if self.mp_opts.as_str("sanitize") != "disable":
             ac.extra_cflags.extend(["-fsanitize=undefined", "-Wl,-ldl"])
-            if self.options.sanitize == "strict":
+            if self.mp_opts.as_str("sanitize") == "strict":
                 ac.extra_cflags.append("-fno-sanitize-recover")
 
-        match self.settings.build_type:
+        match self.settings.build_type:  # type: ignore
             case "Release":
                 ac.extra_cflags.append("-O2")
                 # FIXME: YCAT-43010
@@ -190,7 +195,7 @@ class Package(ConanFile):
                 ac.extra_cflags.extend(["-O0", "-g"])
             case _:
                 raise ConanException(
-                    f"Unexpected build_type '{self.settings.build_type}'"
+                    f"Unexpected build_type '{self.settings.build_type}'"  # type: ignore
                 )
 
         ac.generate()

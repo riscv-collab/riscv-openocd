@@ -21,7 +21,7 @@
         "autoconf/2.71#f9307992909d7fb3df459340f1932809%1718360141.211"
     ],
     "python_requires": [
-        "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main#e057286806bd371381f6c54288e9de0e6c9c5ed8%1738665671.841",
+        "makepy_hints/1.19.0-rc.0.12+sc.main@sc/main#ebdbf4c6d8e369c03c684abe7f086ff1b29f9964%1742826898.971",
         "makepy_hints/1.14.0-rc.0.5+sc.main@sc/main#cbd7a66a3ba35ef50ddf80eddfc46c58ce41166c%1733745329.621"
     ]
 }
