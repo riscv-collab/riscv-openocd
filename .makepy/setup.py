@@ -217,15 +217,22 @@ def main() -> None:
     conductor.add(GenericSuite())
     conductor.add(SyntacoreSuite())
     configs = ConanConfigs()
-    configs.add(
-        profile="mp_armhf", options={"source": ["internal", "syntacore"]}
-    )
-    configs.add_windows(options={"source": ["internal", "syntacore"]})
-    configs.add_ubuntu18(options={"source": ["internal", "syntacore"]})
-    configs.add_centos7(options={"source": ["internal", "syntacore"]})
-    configs.add_ubuntu20(options={"source": ["internal", "syntacore"]})
-    configs.add_ubuntu22(options={"source": ["internal", "syntacore"]})
-    configs.add_rocky8(options={"source": ["internal", "syntacore"]})
+    for profile in [
+        "mp_ubuntu18",
+        "mp_ubuntu20",
+        "mp_ubuntu22",
+        "mp_centos7",
+        "mp_rocky8",
+        "mp_armhf",
+        "makepy_sc_mingw",
+    ]:
+        configs.add(
+            profile=profile,
+            options={
+                "source": ["internal", "syntacore"],
+                "sanitize": ["disable"],
+            },
+        )
 
     conan = ConanSuite(
         name="openocd",

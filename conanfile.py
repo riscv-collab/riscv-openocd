@@ -81,12 +81,13 @@ class _Option(ABC):
     def application_order(self) -> int:
         pass
 
-    @abstractmethod
-    def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
-        pass
+    name: str
+
+    def to_conan_default(self) -> tuple[str, None]:
+        return (self.name, None)
 
     @abstractmethod
-    def to_conan_default(self) -> tuple[str, str | None]:
+    def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
         pass
 
     @abstractmethod
@@ -107,9 +108,6 @@ class _OptionAlias(_Option):
     def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
         return (self.name, [None, *self.mapping.keys()])
 
-    def to_conan_default(self) -> tuple[str, str | None]:
-        return (self.name, None)
-
     def apply(self, recipe: Any) -> None:
         if recipe.mp_opts.as_str_or_none(self.name) is not None:
             setattr(
@@ -129,9 +127,6 @@ class _OptionPreset(_Option):
 
     def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
         return (self.name, [None, *self._presets.keys()])
-
-    def to_conan_default(self) -> tuple[str, str | None]:
-        return (self.name, None)
 
     def apply(self, recipe: Any) -> None:
         preset_name = recipe.mp_opts.as_str_or_none(self.name)
@@ -155,10 +150,8 @@ class _OptionPreset(_Option):
 class _FinalOption(_Option):
     application_order = 2
 
-    def __init__(
-        self, name: str, *, values: Iterable[str], default: str | None = None
-    ):
-        assert default is None or default in values
+    def __init__(self, name: str, *, values: Iterable[str], default: str):
+        assert default in values
         self.name = name
         self.values = values
         self.default = default
@@ -166,16 +159,9 @@ class _FinalOption(_Option):
     def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
         return (self.name, set([self.default, *self.values]))
 
-    def to_conan_default(self) -> tuple[str, str | None]:
-        return (self.name, self.default)
-
     def apply(self, recipe: Any) -> None:
-        value = recipe.mp_opts.as_str_or_none(self.name)
-        if not value in self.values:
-            assert value is None
-            raise ConanException(
-                f"Option '{self.name}' is not specified. Use one of {self.values}."
-            )
+        if recipe.mp_opts.as_str_or_none(self.name) is None:
+            setattr(recipe.options, self.name, self.default)
 
 
 _options = [
@@ -211,6 +197,7 @@ _options = [
     _FinalOption(
         "source",
         values=["internal", "syntacore"],
+        default="internal",
     ),
     _FinalOption(
         "sanitize",
