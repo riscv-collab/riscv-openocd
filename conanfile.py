@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from conan import ConanFile
+from conan.errors import ConanException
 from conan.tools.gnu import Autotools, AutotoolsToolchain, PkgConfigDeps
 from conan.tools.scm import Git
 
@@ -165,7 +166,7 @@ class Package(ConanFile):
             case "Windows":
                 extra_configure_args = _windows_configure_args
             case _:
-                self.output.error(f"Unexpected host OS '{self.settings.os}'")
+                raise ConanException(f"Unexpected host OS '{self.settings.os}'")
 
         for configure_arg in extra_configure_args:
             ac.configure_args.append(configure_arg)
@@ -188,7 +189,7 @@ class Package(ConanFile):
             case "Debug":
                 ac.extra_cflags.extend(["-O0", "-g"])
             case _:
-                self.output.error(
+                raise ConanException(
                     f"Unexpected build_type '{self.settings.build_type}'"
                 )
 
