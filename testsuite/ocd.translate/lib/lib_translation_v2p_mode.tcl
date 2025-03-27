@@ -13,8 +13,6 @@ proc translation_v2p_mode_test {v2p_mode} {
 
     set expected_data 0xdeadbeef
 
-    compile_page_table_generator
-
     set available_modes [list sv39 sv48 sv57]
     set modes [list]
 

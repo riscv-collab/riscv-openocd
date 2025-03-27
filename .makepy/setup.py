@@ -82,6 +82,7 @@ class _ConfigCommand(Command):
                 f"-DRISCVSpike_DIR={args.hints.host['riscv-isa-sim'].vars['SC_SPIKE_PATH']}",
                 f"-DRISCVGCC_DIR={args.hints.host['riscv-gcc'].vars['SC_GCC_PATH']}",
                 f"-DRISCVGDB_DIR={args.hints.host['riscv-gdb'].vars['SC_RISCV_GDB_PATH']}",
+                f"-DMMU_GEN_DIR={args.hints.host['mmu-gen'].vars['SC_MMU_GEN_PATH']}",
                 f"-DDEJAGNU_DIR={args.hints.host['dejagnu'].vars['SC_DEJAGNU_PATH']}",
                 f"-DRISCVTESTS_DIR={args.hints.host['external_openocd_tests'].vars['SC_EXTERNAL_OPENOCD_TESTS_PATH']}",
                 f"-DOPENOCD_INSTALL_PATH={Path(args.openocd_install).resolve()}",

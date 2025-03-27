@@ -13,6 +13,11 @@ if(NOT DEFINED RISCVSpike_DIR)
 endif()
 set(RISCV_SPIKE_SIM_BINARY ${RISCVSpike_DIR}/bin/spike)
 
+if (NOT DEFINED MMU_GEN_DIR)
+  message(FATAL_ERROR "MMU_GEN_DIR is not defined")
+endif()
+set(MMU_GEN_BINARY ${MMU_GEN_DIR}/bin/mmu-gen)
+
 if(NOT DEFINED RISCVTESTS_DIR)
   message(FATAL_ERROR "RISCVTESTS_DIR is not defined")
 endif()

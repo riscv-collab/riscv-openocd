@@ -22,7 +22,6 @@ proc run_test {} {
 
     set lib_translate_support [ocdtlb_test_resource_path lib_translate_support.tcl]
     source $lib_translate_support
-    compile_page_table_generator
 
     set VA_OFFSET 0xa0000
     set PA_OFFSET 0xc0000

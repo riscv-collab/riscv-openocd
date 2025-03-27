@@ -10,6 +10,7 @@
         "riscv-binutils/2.43.1-rc.0.63+sc.sc-dt.2025.03@sc/main#aa67ba8460dee32d69fc31b3c257134e5fbc03dd%1741360370.314",
         "rapidyaml/0.5.0#c6f48c5eb99c1d0bad5c4ac8e6960375%1699016203.526",
         "python-gcc-12/3.10.7-rc.1.21+sc.sc-dt.2025.03@sc/main#5e849d640a59b6261ea0aeb26ca3c21a185bc656%1741361116.943",
+        "mmu-gen/1.0.0-rc.1.28+sc.main-experimental@sc/main#6bb32729b8a97151fc0500c03609a90f0d09aeee%1743421725.029",
         "gdb_source_deps/0.0.1-rc.1.19+sc.sc-dt.2025.03@sc/main#990edf769cfbba4a89f46e112bf399979a195c00%1741341109.014",
         "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
         "external_openocd_tests/0.0.3-rc.1.19+sc.sc-dt.2025.03@sc/main#dad956f50c1e8a189ccc2f13ab3b3622ab6d1e39%1741341265.114",
@@ -28,6 +29,7 @@
         "cmake/3.26.4#0b40747e190e755932767f2ec4768ff5%1724678437.897"
     ],
     "python_requires": [
+        "makepy_hints/1.19.0-rc.0.1+sc.main@sc/main#a07dfeb8fbcaefd366ff901df01163fe802bf45b%1741855587.551",
         "makepy_hints/1.15.0-rc.0.11+sc.main@sc/main#8de164ffe4da6f53f12f9b6f175af1f2a9299dcc%1738739693.748",
         "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main#e057286806bd371381f6c54288e9de0e6c9c5ed8%1738665671.841",
         "makepy_hints/1.15.0-rc.0.2+sc.main@sc/main#1b3476e99aca7205f181eea9dc903dc7f5007402%1738588181.386",

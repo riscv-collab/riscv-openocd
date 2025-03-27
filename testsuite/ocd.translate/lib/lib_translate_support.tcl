@@ -1,10 +1,3 @@
-proc compile_page_table_generator {} {
-    set default_bin_prefix [tool_state_get default_bin_prefix]
-    set generator_path [ocdtlb_test_resource_path mmu_gen.c]
-    append generator $default_bin_prefix "_mmu_gen.exe"
-    exec gcc -w -O0 -fno-unroll-loops -std=c2x $generator_path -o $generator
-}
-
 proc generate_page_table { CONFIG_NAME } {
     set default_bin_prefix [tool_state_get default_bin_prefix]
     append section_source_path $default_bin_prefix "_section.c"
@@ -16,7 +9,8 @@ proc generate_page_table { CONFIG_NAME } {
     append page_table_file $CONFIG_NAME "_page_table.bin"
     append pte_header $CONFIG_NAME "_pte.h"
 
-    verbose "[exec ./$generator $CONFIG_NAME $pte_header]" 1
+    global MMU_GEN
+    verbose "[exec $MMU_GEN $CONFIG_NAME $pte_header]" 1
 
     append section_source_content "#include <stdio.h>\n"
     append section_source_content "#include <stdint.h>\n"

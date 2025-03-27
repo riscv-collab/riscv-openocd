@@ -18,6 +18,7 @@ class Package(ConanFile):
         self.requires("riscv-gdb")
         self.requires("riscv-isa-sim")
         self.requires("dejagnu")
+        self.requires("mmu-gen")
 
     def generate(self):
         tc = CMakeToolchain(self)

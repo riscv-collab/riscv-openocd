@@ -24,6 +24,12 @@ if {![info exists CC_FOR_TARGET]} {
   verbose "using CC_FOR_TARGET from local config: $CC_FOR_TARGET" 1
 }
 
+if {![info exists MMU_GEN]} {
+  set MMU_GEN mmu-gen
+} else {
+  verbose "using MMU_GEN from local config: $MMU_GEN" 1
+}
+
 set OPENOCD "${OPENOCD_ROOT}/bin/openocd"
 set OPENOCD_LOG_LEVEL 3
 # enables exp_internal . That is enables internal debug of expect
@@ -52,6 +58,11 @@ if {[auto_execok $CC_FOR_TARGET] eq ""} {
 
 if {[auto_execok $GDB_BIN] eq "" } {
   puts "ERROR: could not find GDB for target ($GDB_BIN), check your PATH"
+  exit 1
+}
+
+if {[auto_execok $MMU_GEN] eq ""} {
+  puts "ERROR: could not detect $MMU_GEN MMU generator in PATH"
   exit 1
 }
 

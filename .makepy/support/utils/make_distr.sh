@@ -25,6 +25,7 @@ cp -r "${SC_DEJAGNU_PATH}"    "${DISTRIB_LOCATION}/dejagnu"
 cp -r "${SC_SPIKE_PATH}"      "${DISTRIB_LOCATION}/spike"
 cp -r "${SC_RISCV_GDB_PATH}"  "${DISTRIB_LOCATION}/gdb"
 cp -r "${SC_GCC_PATH}"        "${DISTRIB_LOCATION}/compiler"
+cp -r "${SC_MMU_GEN_PATH}"    "${DISTRIB_LOCATION}/mmu-gen"
 
 cat << EOF > "${DISTRIB_LOCATION}/site.exp"
 variable DEPLOYMENT_ROOT [file dirname [file normalize [info script]]]
@@ -33,6 +34,7 @@ set OPENOCD_ROOT  "\${DEPLOYMENT_ROOT}/openocd"
 set SPIKE_SIM     "\${DEPLOYMENT_ROOT}/spike/bin/spike"
 set GDB_BIN       "\${DEPLOYMENT_ROOT}/gdb/rv64elf/bin/riscv64-unknown-elf-gdb"
 set CC_FOR_TARGET "\${DEPLOYMENT_ROOT}/compiler/bin/riscv64-unknown-elf-gcc"
+set MMU_GEN       "\${DEPLOYMENT_ROOT}/mmu-gen/bin/mmu-gen"
 
 source "\${DEPLOYMENT_ROOT}/acceptance_tests/syntacore/site.exp"
 
@@ -55,6 +57,7 @@ puts "OpenOCD root: \${OPENOCD_ROOT}"
 puts "Spike simulator: \${SPIKE_SIM}"
 puts "GDB binary: \${GDB_BIN}"
 puts "Compiler: \${CC_FOR_TARGET}"
+puts "MMU generator: \${MMU_GEN}"
 puts ""
 puts "Debug Adapter Serial: \${OPENOCD_DEBUG_ADAPTER_SERIAL}"
 puts "Debug Adapter Speed: \${OPENOCD_DEBUG_ADAPTER_SPEED}"
