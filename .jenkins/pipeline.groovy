@@ -279,9 +279,14 @@ workflow('openocd') {
                     extraArgs : ['--options:host elct_support=True', '--options:host elct_support=False'],
                 ], [
                     image     : ['cpp_ubuntu_22'],
-                    profile   : ['makepy_sc_mingw', 'mp_armhf'],
+                    profile   : ['makepy_sc_mingw'],
+                    extraArgs : ['--options:host elct_support=True', '--options:host elct_support=False'],
+                ], [
+                    image     : ['cpp_ubuntu_22'],
+                    profile   : ['mp_armhf'],
                     extraArgs : ['--options:host elct_support=True'],
                 ]
+
             ]
         }
     }
