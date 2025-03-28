@@ -7,7 +7,7 @@
 
 #include"secure_iot_flash_driver.h"
 #define CHUNK_SIZE 16
-qspi_msg flash_msg={.PRESCALER=27,.CLK_MODE=0,.FMEM_SIZE = 27,.FTIE = 0,.TCEN=0,.TEIE=0,.TOIE=0,.SMIE = 0,.APMS= 0,.PMM=0};
+qspi_msg flash_msg={.PRESCALER=6,.CLK_MODE=0,.FMEM_SIZE = 27,.FTIE = 0,.TCEN=0,.TEIE=0,.TOIE=0,.SMIE = 0,.APMS= 0,.PMM=0};
 
 
 /**
@@ -995,6 +995,121 @@ command_print(CMD, "Completed writing");
 return ERROR_OK;
 }
 
+
+
+COMMAND_HANDLER(handle_flash_write_length)
+{
+/*
+ * argv[1] = QSPI number
+ * argv[2] = filename
+ * argv[3] = size if code.bin is fed
+ */
+uint8_t flag=0;
+unsigned int qspi_number = 0;
+//  uint32_t address = 0x30;
+//  uint8_t data[16];
+//  COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], qspi_number);
+struct target *target __attribute__((unused)) = get_current_target(CMD_CTX);
+const char *ext = strrchr(CMD_ARGV[0], '.');
+    // Check if an extension exists
+    if (ext != NULL) {
+        // Compare the extension with the desired formats
+        if (strcmp(ext, ".bin") == 0) {
+            flag = 2;
+        } else if (strcmp(ext, ".elf") == 0 || strcmp(ext, ".shakti") == 0) {
+            flag = 1;
+        } else {
+            command_print(CMD,"Invalid file format\n");
+        }
+    } else {
+        command_print(CMD,"No extension found\n");
+    }
+
+FILE *file = fopen(CMD_ARGV[0], "rb");
+if (file == NULL) {
+    // perror("Error opening file");
+    command_print(CMD, "File doesnt exist");
+    return -1;
+}
+Elf64_Ehdr elf_header;
+if(flag==1){
+    size_t bytesRead = fread(&elf_header, 1, sizeof(Elf64_Ehdr), file);
+if (bytesRead != sizeof(Elf64_Ehdr)) {
+    fclose(file);
+    return -1;
+}
+}
+
+
+uint32_t start_address;
+
+// Read the ELF header
+COMMAND_PARSE_NUMBER(uint, CMD_ARGV[1], start_address);
+// Print the entry point address (start address) in hexadecimal
+command_print(CMD, "(start address): 0x%x\n", start_address);
+if((start_address>=0x90000000) &&(start_address<=0xAFFFFFFF)){
+   qspi_number = 0;
+}else if((start_address>=0xB0000000) &&(start_address<=0xCFFFFFFF)){
+   qspi_number = 1;
+}
+uint32_t mask_address =start_address&~(0xF<<28);
+command_print(CMD, "mask address: 0x%x\n", mask_address);
+command_print(CMD, "QSPI number: 0x%x\n", qspi_number);
+// Variable to accumulate the total length of binary data for executable sections
+size_t executable_binary_length = 0;
+Elf64_Phdr phdr;
+if(flag==1){
+// Get the program header table offset and number of entries
+fseek(file, elf_header.e_phoff, SEEK_SET);
+
+
+for (int l = 0; l < elf_header.e_phnum; l++) {
+    // Read the program header
+    uint32_t val = fread(&phdr, sizeof(Elf64_Phdr), 1, file);
+    if (val != 1) {
+        fclose(file);
+        return -1;  // Error reading program header
+    }
+    // Check if the current program header is of type PT_LOAD (executable segment)
+    if (phdr.p_type == PT_LOAD) {
+       executable_binary_length+=phdr.p_filesz;
+    }
+}
+}
+else if(flag==2){
+       // Seek to the end to find the length of the file
+   fseek(file, 0, SEEK_END);
+   executable_binary_length  = ftell(file);
+   rewind(file);  // Rewind to the beginning of the file
+}
+uint64_t executable_binary_length_copy = (uint64_t)executable_binary_length;
+uint8_t *ptr;     
+ptr =(uint8_t*)&executable_binary_length_copy;
+writeEnable(target,qspi_number);/*Enable write operation*/
+sector4KErase(target,qspi_number,mask_address & ~(0xFFF));
+writeDisable(target,qspi_number);/*Enable write operation*/
+writeEnable(target,qspi_number);/*Enable write operation*/
+inputpageQuad(target,qspi_number,ptr,mask_address,8);/*To write data to flash*/
+writeDisable(target,qspi_number);/*Enable write operation*/
+// Print the length of the executable binary data (excluding the ELF header)
+command_print(CMD, "Length of executable binary data (excluding ELF header): 0x%lx bytes\n", executable_binary_length_copy);
+command_print(CMD, "Completed writing length at mask address :%x",mask_address);
+return ERROR_OK;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 COMMAND_HANDLER(handle_sector_erase)
 {
 /*
@@ -1029,7 +1144,13 @@ for(uint32_t s = erase_start_address,i=0;i<no_of_sectors;s+=increment,i++){
 return 0;
 }
 
-
+COMMAND_HANDLER(handle_reset)
+{
+struct target *target = get_current_target(CMD_CTX);
+target_write_u32(target,0x40408,3);
+target_write_u32(target,0x40400,0);
+return 0;
+}
 
 
 COMMAND_HANDLER(handle_flash_erase)
@@ -1104,6 +1225,20 @@ static const struct command_registration secureiot_exec_command_handlers[] = {
        .help = "Flash xip command",
        .usage = "fsec",
    },
+   {
+       .name = "reset",
+       .mode = COMMAND_EXEC,
+       .handler = handle_reset,
+       .help = "reset command",
+       .usage = "fsec",
+   },
+   {
+        .name = "flash_write_length",
+        .mode = COMMAND_EXEC,
+        .handler = handle_flash_write_length,
+        .help = "reset command",
+        .usage = "fsec",
+   },    
 	COMMAND_REGISTRATION_DONE
 };
 
