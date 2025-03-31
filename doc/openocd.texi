@@ -11673,6 +11673,20 @@ The second argument configures how OpenOCD should use the selected trigger featu
 With no parameters, prints current trigger features configuration.
 @end deffn
 
+@deffn {Command} {riscv set_group} grouptype group ['trigger' triggernum]
+OpenOCD assigns a hart or a given external trigger into a RISC-V halt group.
+This command associates current target or supplied external trigger(s) with this halt group.
+
+@option{trigger} and @var{triggernum} Specify the index of the external trigger.
+When an external input trigger fires, the harts in the halt group will get halted.
+Similarly, all external output triggers will be notified when a hart in the halt group halts.
+
+The only supported value of @var{grouptype} is @option{halt_group}. RISC-V resume groups
+are not allowed because the concept of a target resuming due to a different reason than
+user's resume request is not supported by OpenOCD and GDB.
+@end deffn
+
+
 @subsection RISC-V Authentication Commands
 
 The following commands can be used to authenticate to a RISC-V system. Eg.  a

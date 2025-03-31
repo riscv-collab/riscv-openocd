@@ -68,12 +68,8 @@ static int riscv013_access_memory(struct target *target, const riscv_mem_access_
 static bool riscv013_get_impebreak(const struct target *target);
 static unsigned int riscv013_get_progbufsize(const struct target *target);
 
-typedef enum {
-	HALT_GROUP,
-	RESUME_GROUP
-} grouptype_t;
 static int set_group(struct target *target, bool *supported, unsigned int group,
-		grouptype_t grouptype);
+		enum grouptype grouptype, bool is_trigger, unsigned int trigger_num);
 
 /**
  * Since almost everything can be accomplish by scanning the dbus register, all
@@ -138,6 +134,8 @@ typedef struct {
 	 * abstractcs.busy may have remained set. In that case we may need to
 	 * re-check the busy state before executing these operations. */
 	bool abstract_cmd_maybe_busy;
+
+	struct riscv_ext_trigger external_triggers[RISCV_MAX_EXTTRIGGERS];
 } dm013_info_t;
 
 typedef struct {
@@ -1732,7 +1730,7 @@ static int halt_set_dcsr_ebreak(struct target *target)
 
 	if (info->haltgroup_supported) {
 		bool supported;
-		if (set_group(target, &supported, 0, HALT_GROUP) != ERROR_OK)
+		if (set_group(target, &supported, 0, HALT_GROUP, false, 0) != ERROR_OK)
 			return ERROR_FAIL;
 		if (!supported)
 			LOG_TARGET_ERROR(target, "Couldn't place hart in halt group 0. "
@@ -1754,7 +1752,7 @@ static int halt_set_dcsr_ebreak(struct target *target)
 	/* Add it back to the halt group. */
 	if (info->haltgroup_supported) {
 		bool supported;
-		if (set_group(target, &supported, target->smp, HALT_GROUP) != ERROR_OK)
+		if (set_group(target, &supported, target->smp, HALT_GROUP, false, 0) != ERROR_OK)
 			return ERROR_FAIL;
 		if (!supported)
 			LOG_TARGET_ERROR(target, "Couldn't place hart back in halt group %d. "
@@ -1785,19 +1783,46 @@ static void deinit_target(struct target *target)
 }
 
 static int set_group(struct target *target, bool *supported, unsigned int group,
-		grouptype_t grouptype)
+		enum grouptype grouptype, bool is_trigger, unsigned int trigger_num)
 {
-	uint32_t write_val = DM_DMCS2_HGWRITE;
 	assert(group <= 31);
+	assert(trigger_num < 16);
+
+	if (!is_trigger && dm013_select_target(target) != ERROR_OK)
+		return ERROR_FAIL;
+
+	dm013_info_t *dm = get_dm(target);
+	if (!dm)
+		return ERROR_FAIL;
+	if (is_trigger && dm->external_triggers[trigger_num].haltgroup_was_set &&
+			dm->external_triggers[trigger_num].haltgroup_num == group) {
+		LOG_TARGET_WARNING(target, "External trigger %d (at address dbgbase=0x%" PRIx32 ") "
+				"for halt group %d has been set.", trigger_num, dm->base, group);
+		return ERROR_OK;
+	}
+
+	uint32_t write_val = DM_DMCS2_HGWRITE;
 	write_val = set_field(write_val, DM_DMCS2_GROUP, group);
 	write_val = set_field(write_val, DM_DMCS2_GROUPTYPE, (grouptype == HALT_GROUP) ? 0 : 1);
+	write_val = set_field(write_val, DM_DMCS2_DMEXTTRIGGER, trigger_num);
+	write_val = set_field(write_val, DM_DMCS2_HGSELECT,
+			    is_trigger ? DM_DMCS2_HGSELECT_TRIGGERS : DM_DMCS2_HGSELECT_HARTS);
 	if (dm_write(target, DM_DMCS2, write_val) != ERROR_OK)
 		return ERROR_FAIL;
 	uint32_t read_val;
 	if (dm_read(target, &read_val, DM_DMCS2) != ERROR_OK)
 		return ERROR_FAIL;
 	if (supported)
-		*supported = (get_field(read_val, DM_DMCS2_GROUP) == group);
+		*supported = (get_field(read_val, DM_DMCS2_GROUP) == group &&
+			get_field(read_val, DM_DMCS2_GROUPTYPE) == ((grouptype == HALT_GROUP) ? 0 : 1) &&
+			get_field(read_val, DM_DMCS2_HGSELECT) ==
+				(is_trigger ? DM_DMCS2_HGSELECT_TRIGGERS : DM_DMCS2_HGSELECT_HARTS) &&
+			get_field(read_val, DM_DMCS2_DMEXTTRIGGER) == trigger_num);
+	if (is_trigger && *supported) {
+		dm->external_triggers[trigger_num].haltgroup_was_set = true;
+		dm->external_triggers[trigger_num].haltgroup_num = group;
+	}
+
 	return ERROR_OK;
 }
 
@@ -2145,8 +2170,9 @@ static int examine(struct target *target)
 	}
 
 	if (target->smp) {
-		if (set_group(target, &info->haltgroup_supported, target->smp, HALT_GROUP) != ERROR_OK)
+		if (set_group(target, &info->haltgroup_supported, target->smp, HALT_GROUP, false, 0) != ERROR_OK)
 			return ERROR_FAIL;
+
 		if (info->haltgroup_supported)
 			LOG_TARGET_INFO(target, "Core %d made part of halt group %d.", info->index,
 					target->smp);
@@ -2880,6 +2906,8 @@ static int init_target(struct command_context *cmd_ctx,
 
 	generic_info->handle_became_unavailable = &handle_became_unavailable;
 	generic_info->tick = &tick;
+
+	generic_info->set_group = &set_group;
 
 	if (!generic_info->version_specific) {
 		generic_info->version_specific = calloc(1, sizeof(riscv013_info_t));

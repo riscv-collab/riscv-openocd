@@ -5588,6 +5588,76 @@ COMMAND_HANDLER(handle_riscv_virt2phys_mode)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(riscv_set_group)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	if (CMD_ARGC < 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	enum grouptype grouptype;
+	if (!strcmp("halt_group", CMD_ARGV[0])) {
+		grouptype = HALT_GROUP;
+	} else {
+		/* Ext. triggers for resume groups are not supported: neither OpenOCD nor GDB
+		 * have a concept of hart resuming on its own due to an external reason, without
+		 * an explicit resume request. */
+		LOG_ERROR("%s is not a valid argument. "
+			"The only supported group type is 'halt_group'.", CMD_ARGV[1]);
+		return ERROR_COMMAND_ARGUMENT_INVALID;
+	}
+
+	unsigned int group;
+	COMMAND_PARSE_NUMBER(uint, CMD_ARGV[1], group);
+	if (group > 31) {
+		LOG_ERROR("%d is not a valid group number - expecting a number in range 0..31.",
+			group);
+		return ERROR_COMMAND_ARGUMENT_INVALID;
+	}
+
+	if (!r->set_group) {
+		LOG_TARGET_ERROR(target, "set_group is not implemented for this target.");
+		return ERROR_FAIL;
+	}
+
+	bool is_trigger = false;
+	unsigned int trigger_num = 0;
+	switch (CMD_ARGC) {
+	case 2:
+		break;
+	case 4:
+		if (strcmp("trigger", CMD_ARGV[2]))
+			return ERROR_COMMAND_SYNTAX_ERROR;
+		is_trigger = true;
+		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[3], trigger_num);
+		if (trigger_num > 15) {
+			LOG_ERROR("%d is not a valid external trigger number - expecting a number in range 0..15.",
+				trigger_num);
+			return ERROR_COMMAND_ARGUMENT_INVALID;
+		}
+		break;
+	default:
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	bool supported;
+	if (r->set_group(target, &supported, group, grouptype, is_trigger, trigger_num) != ERROR_OK)
+		return ERROR_FAIL;
+
+	if (supported)
+		LOG_TARGET_INFO(target, "%s %d made part of halt group %d.",
+			(is_trigger ? "External trigger" : "Core"),
+			(is_trigger ? trigger_num : (unsigned int)target->coreid), group);
+	else
+		LOG_TARGET_WARNING(target, "%s %d could not be made part of halt group %d.",
+			(is_trigger ? "External trigger" : "Core"),
+			(is_trigger ? trigger_num : (unsigned int)target->coreid), group);
+
+	return ERROR_OK;
+}
+
+
 static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "dump_sample_buf",
@@ -5849,6 +5919,13 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.help = "When on (default), OpenOCD will automatically execute fence instructions in some situations. "
 			"When off, users need to take care of memory coherency themselves, for example by using "
 			"`riscv exec_progbuf` to execute fence or CMO instructions."
+	},
+	{
+		.name = "set_group",
+		.handler = riscv_set_group,
+		.mode = COMMAND_ANY,
+		.usage = "grouptype group ['trigger' triggernum]",
+		.help = "Set a hart or a given external trigger to the halt group."
 	},
 	COMMAND_REGISTRATION_DONE
 };

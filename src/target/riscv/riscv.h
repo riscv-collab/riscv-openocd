@@ -21,6 +21,7 @@ struct riscv_program;
 #define RISCV_MAX_TRIGGERS 32
 #define RISCV_MAX_HWBPS 16
 #define RISCV_MAX_DMS 100
+#define RISCV_MAX_EXTTRIGGERS 16
 
 #define DEFAULT_COMMAND_TIMEOUT_SEC 5
 
@@ -122,6 +123,11 @@ typedef struct {
 	char *name;
 } range_list_t;
 
+enum grouptype {
+	HALT_GROUP,
+	RESUME_GROUP
+};
+
 #define DTM_DTMCS_VERSION_UNKNOWN ((unsigned int)-1)
 #define RISCV_TINFO_VERSION_UNKNOWN (-1)
 
@@ -143,6 +149,17 @@ typedef struct riscv_mem_access_args {
 	uint32_t count;
 	uint32_t increment;
 } riscv_mem_access_args_t;
+
+struct riscv_ext_trigger {
+	bool haltgroup_was_set;
+	unsigned int haltgroup_num;
+	/*
+	In future, this can be added:
+
+	bool resumegroup_was_set;
+	unsigned int resumegroup_num;
+	 */
+};
 
 static inline bool
 riscv_mem_access_is_valid(const riscv_mem_access_args_t args)
@@ -306,6 +323,9 @@ struct riscv_info {
 	int (*access_memory)(struct target *target, const riscv_mem_access_args_t args);
 
 	unsigned int (*data_bits)(struct target *target);
+
+	int (*set_group)(struct target *target, bool *supported, unsigned int group,
+		enum grouptype grouptype, bool is_trigger, unsigned int trigger_num);
 
 	COMMAND_HELPER((*print_info), struct target *target);
 
