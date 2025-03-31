@@ -22,6 +22,23 @@ qspi_msg flash_msg={.PRESCALER=6,.CLK_MODE=0,.FMEM_SIZE = 27,.FTIE = 0,.TCEN=0,.
  * 
  * @return SUCCESS if operation is successful,ENODEV if invalid instance number and ELENEXCEED is length of read and write parameters exceeded.
  */
+void print_progress_bar(int progress, int total) {
+    int bar_width = 50;  // Width of the progress bar
+    float progress_percentage = (float)progress / total;
+    int filled = (int)(progress_percentage * bar_width);
+
+    // Print the progress bar
+    log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\r[");
+    for (int i = 0; i < bar_width; i++) {
+        if (i < filled) {
+            log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "#");  // Filled part of the bar
+        } else {
+            log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, " ");  // Empty part of the bar
+        }
+    }
+    log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "] %.2f%%", progress_percentage * 100);
+    // fflush(stdout);  // Ensure that the output is immediately displayed
+}
 uint32_t fastReadQuad(struct target *target,uint8_t qspinum,uint8_t* data,uint32_t address,uint8_t data_length){
     flash_msg.address = address;
     flash_msg.address_mode = CCR_ADMODE_SINGLE_LINE;
@@ -832,7 +849,7 @@ if (file == NULL) {
 }
 uint32_t start_address;
 Elf64_Ehdr elf_header;
-command_print(CMD, "Argc:%d\n", CMD_ARGC);
+// command_print(CMD, "Argc:%d\n", CMD_ARGC);
 if(CMD_ARGC == 1){
 // Read the ELF header
 
@@ -857,15 +874,15 @@ else if(CMD_ARGC == 2){
    COMMAND_PARSE_NUMBER(uint, CMD_ARGV[1], start_address);
 }
    // Print the entry point address (start address) in hexadecimal
-command_print(CMD, "(start address): 0x%x\n", start_address);
+command_print(CMD, "Start address: 0x%x\n", start_address);
 if((start_address>=0x90000000) &&(start_address<=0xAFFFFFFF)){
    qspi_number = 0;
 }else if((start_address>=0xB0000000) &&(start_address<=0xCFFFFFFF)){
    qspi_number = 1;
 }
 uint32_t mask_address =start_address&~(0xF<<28);
-command_print(CMD, "mask address: 0x%x\n", mask_address);
-command_print(CMD, "QSPI number: 0x%x\n", qspi_number);
+// command_print(CMD, "mask address: 0x%x\n", mask_address);
+// command_print(CMD, "QSPI number: 0x%x\n", qspi_number);
 // Variable to accumulate the total length of binary data for executable sections
 size_t executable_binary_length = 0;
 Elf64_Phdr phdr;
@@ -894,26 +911,27 @@ else if(CMD_ARGC==2){
    rewind(file);  // Rewind to the beginning of the file
 }
 // Print the length of the executable binary data (excluding the ELF header)
-command_print(CMD, "Length of executable binary data (excluding ELF header): 0x%lx bytes\n", executable_binary_length);
+command_print(CMD, "Length of executable binary data (excluding ELF header): %ld bytes\n", executable_binary_length);
 
 /*handling sector erase operation*/
 uint32_t erase_start_address = mask_address & ~(0xFFF);
 uint32_t erase_end_address = (mask_address+executable_binary_length) & ~(0xFFF);
 for(uint32_t s = erase_start_address;s<=erase_end_address;s+=0x1000){
-   log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "Erasing sector:%x\n",s);	
+   log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "Erasing sector:%x\n",s);	
    writeEnable(target,qspi_number);/*Enable write operation*/
    sector4KErase(target,qspi_number,s);
    writeDisable(target,qspi_number);/*Enable write operation*/
 }
 /*handling sector erase operation*/
-
+uint32_t progressed_length = 0;
+log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nWriting code to flash in progress:\n");	
 if(CMD_ARGC==1){
    size_t offset = 0x000;
 // Now read and process the program headers for executable content
 FILE *fileheader = fopen(CMD_ARGV[0], "rb");
 fseek(fileheader, elf_header.e_phoff, SEEK_SET);
 for (int l = 0; l < elf_header.e_phnum; l++) {
-   log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "PROGRAM HEADER:%x\n",l);	
+   log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "PROGRAM HEADER:%x\n",l);	
     // Read the program header
     uint32_t val = fread(&phdr, sizeof(Elf64_Phdr), 1, fileheader);
     if (val != 1) {
@@ -926,14 +944,14 @@ for (int l = 0; l < elf_header.e_phnum; l++) {
             unsigned char buffer[CHUNK_SIZE];
             uint8_t bytesReadInChunk;
             size_t remaining_bytes = phdr.p_filesz;
-            log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nSection length:%lx\n",remaining_bytes);
+            log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nSection length:%lx\n",remaining_bytes);
             uint8_t to_read;
             while (remaining_bytes > 0) {
                to_read = (remaining_bytes>CHUNK_SIZE)?CHUNK_SIZE:remaining_bytes;
                bytesReadInChunk = fread(buffer, 1, to_read, file);
-               log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",start_address+offset);
+               log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",start_address+offset);
                for(uint8_t i = 0;i<bytesReadInChunk;i++){
-                   log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__,  "%x ",buffer[i]);
+                   log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__,  "%x ",buffer[i]);
                }
                writeEnable(target,qspi_number);/*Enable write operation*/
                if(((mask_address+offset)&(~(0xFF))) == (((mask_address+offset)+bytesReadInChunk-1)&(~(0xFF)))){//check if start address and end address in same sector
@@ -943,15 +961,15 @@ for (int l = 0; l < elf_header.e_phnum; l++) {
             }
             else
             {
-                log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nCrossing sector");
+                log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nCrossing sector");
                 uint32_t part1_address,part2_address;
                 uint8_t part1_length,part2_length;
                 part1_address = (mask_address+offset);
                 part2_address = ((mask_address+offset)+bytesReadInChunk-1)&(~(0xFF));
                 part1_length = (part2_address-(mask_address+offset));
                 part2_length = (mask_address+offset)+bytesReadInChunk-part2_address;
-                log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nCrossing sector part1 addr:%x",part1_address);
-                log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nCrossing sector part2 addr:%x",part2_address);
+                log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nCrossing sector part1 addr:%x",part1_address);
+                log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nCrossing sector part2 addr:%x",part2_address);
                 
                 writeEnable(target,qspi_number);/*Enable write operation*/
                 inputpageQuad(target,qspi_number,buffer,part1_address,part1_length);/*To write data to flash*/
@@ -960,7 +978,8 @@ for (int l = 0; l < elf_header.e_phnum; l++) {
                 inputpageQuad(target,qspi_number,buffer+part1_length,part2_address,part2_length);/*To write data to flash*/
                 writeDisable(target,qspi_number);/*Enable write operation*/
             }
-
+                progressed_length +=bytesReadInChunk;
+                print_progress_bar(progressed_length, executable_binary_length);
                 offset += bytesReadInChunk;
                 remaining_bytes-=bytesReadInChunk;
         }
@@ -981,16 +1000,19 @@ fclose(file);
       writeEnable(target,qspi_number);/*Enable write operation*/
       inputpageQuad(target,qspi_number,buffer,mask_address+offset,bytesReadInChunk);/*To write data to flash*/
       writeDisable(target,qspi_number);/*Enable write operation*/
-      log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",start_address+offset);
+      log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",start_address+offset);
       for(uint8_t i = 0;i<16;i++){
-          log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__,  "%x ",buffer[i]);
+          log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__,  "%x ",buffer[i]);
       }
+      progressed_length +=bytesReadInChunk;
+      print_progress_bar(progressed_length, executable_binary_length);
        offset += bytesReadInChunk;
        remaining_bytes-=bytesReadInChunk;
 }
 // Close the file
 fclose(file);
 }
+log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nCompleted writing!!");	
 command_print(CMD, "Completed writing");
 return ERROR_OK;
 }
