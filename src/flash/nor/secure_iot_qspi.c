@@ -104,7 +104,7 @@ uint32_t QSPI_Transaction(struct target *target,uint32_t instance_number,qspi_ms
      temp &= SR_TCF;
    }while(temp == 0);
    }
-   usleep(100); 
+  //  usleep(100); 
    target_write_u32(target, cr_address,0x00);
    return 0;
 }

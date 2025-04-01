@@ -1107,9 +1107,9 @@ else if(flag==2){
 uint64_t executable_binary_length_copy = (uint64_t)executable_binary_length;
 uint8_t *ptr;     
 ptr =(uint8_t*)&executable_binary_length_copy;
-writeEnable(target,qspi_number);/*Enable write operation*/
-sector4KErase(target,qspi_number,mask_address & ~(0xFFF));
-writeDisable(target,qspi_number);/*Enable write operation*/
+// writeEnable(target,qspi_number);/*Enable write operation*/
+// sector4KErase(target,qspi_number,mask_address & ~(0xFFF));
+// writeDisable(target,qspi_number);/*Enable write operation*/
 writeEnable(target,qspi_number);/*Enable write operation*/
 inputpageQuad(target,qspi_number,ptr,mask_address,8);/*To write data to flash*/
 writeDisable(target,qspi_number);/*Enable write operation*/
