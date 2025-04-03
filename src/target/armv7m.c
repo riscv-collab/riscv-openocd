@@ -786,6 +786,7 @@ int armv7m_arch_state(struct target *target)
 static const struct reg_arch_type armv7m_reg_type = {
 	.get = armv7m_get_core_reg,
 	.set = armv7m_set_core_reg,
+	.flush = NULL,
 };
 
 /** Builds cache of architecturally defined registers.  */

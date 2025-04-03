@@ -9271,7 +9271,7 @@ various operations. The current target may be changed
 by using @command{targets} command with the name of the
 target which should become current.
 
-@deffn {Command} {reg} [(number|name) [(value|'force')]]
+@deffn {Command} {reg} [(number|name)] [value] ['force']
 Access a single register by @var{number} or by its @var{name}.
 The target must generally be halted before access to CPU core
 registers is allowed. Depending on the hardware, some other
@@ -9285,15 +9285,17 @@ which are also dirty (and will be written back later)
 are flagged as such.
 
 @emph{With number/name}: display that register's value.
-Use @var{force} argument to read directly from the target,
-bypassing any internal cache.
+Use @var{force} argument to read directly from the target
+(as opposed to OpenOCD's internal register cache).
 
 @emph{With both number/name and value}: set register's value.
 Writes may be held in a writeback cache internal to OpenOCD,
 so that setting the value marks the register as dirty instead
 of immediately flushing that value. Resuming CPU execution
 (including by single stepping) or otherwise activating the
-relevant module will flush such values.
+relevant module will flush such values. The use of @var{force}
+causes the register value to be written to the target
+immediately.
 
 Cores may have surprisingly many registers in their
 Debug and trace infrastructure:
@@ -9310,10 +9312,13 @@ Debug and trace infrastructure:
 @end example
 @end deffn
 
-@deffn {Command} {set_reg} dict
-Set register values of the target.
+@deffn {Command} {set_reg} ['-force'] dict
+Set register values of the target. The new register values may be
+kept in OpenOCD's cache and not written to the target immediately
+(unless @var{-force} is used).
 
 @itemize
+@item @option{-force} ... Force immediate write of the new register values.
 @item @var{dict} ... Tcl dictionary with pairs of register names and values.
 @end itemize
 
@@ -9329,7 +9334,7 @@ set_reg @{pc 0 sp 0x1000@}
 Get register values from the target and return them as Tcl dictionary with pairs
 of register names and values.
 If option "-force" is set, the register values are read directly from the
-target, bypassing any caching.
+target, not from OpenOCD's internal cache.
 
 @itemize
 @item @var{list} ... List of register names
@@ -9341,6 +9346,13 @@ counter (pc) and stack pointer (sp) register:
 @example
 get_reg @{pc sp@}
 @end example
+@end deffn
+
+@deffn {Command} {flush_reg_cache} [-invalidate]
+Flush the internal OpenOCD's register cache - write back the dirty register values to the target.
+If @option{-invalidate} is set, also invalidate (forget) the OpenOCD's cached register values;
+therefore the next call to get_reg is guaranteed to read the fresh register value directly
+from the target.
 @end deffn
 
 @deffn {Command} {write_memory} address width data ['phys']

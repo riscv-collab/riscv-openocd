@@ -37,11 +37,10 @@ int riscv_program_init(struct riscv_program *p, struct target *t);
 /* Write the program to the program buffer. */
 int riscv_program_write(struct riscv_program *program);
 
-/* Executes a program, returning 0 if the program successfully executed.  Note
- * that this may cause registers to be saved or restored, which could result to
- * calls to things like riscv013_reg_save which itself could require a
- * program to execute.  That's OK, just make sure this eventually terminates.
- * */
+/* Executes the RISC-V Program Buffer and returns ERROR_OK if the program
+ * buffer got successfully executed. In case of failure, more detailed error reason
+ * can be found in p->execution_result.
+ */
 int riscv_program_exec(struct riscv_program *p, struct target *t);
 
 /* A lower level interface, you shouldn't use this unless you have a reason. */

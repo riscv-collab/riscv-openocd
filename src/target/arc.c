@@ -293,6 +293,7 @@ static int arc_set_register(struct reg *reg, uint8_t *buf)
 static const struct reg_arch_type arc_reg_type = {
 	.get = arc_get_register,
 	.set = arc_set_register,
+	.flush = NULL,
 };
 
 /* GDB register groups. For now we support only general and "empty" */

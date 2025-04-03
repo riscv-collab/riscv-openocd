@@ -1471,6 +1471,86 @@ unsigned int target_data_bits(struct target *target)
 	return 32;
 }
 
+static bool target_implements_reg_flush(const struct reg_cache *cache)
+{
+	while (cache) {
+		for (unsigned int i = 0; i < cache->num_regs; i++) {
+			struct reg *reg = &cache->reg_list[i];
+			if (reg->type->flush)
+				return true;
+		}
+		cache = cache->next;
+	}
+	return false;
+}
+
+static int target_flush_all_regs_default(struct target *target, bool invalidate)
+{
+	struct reg_cache *cache = target->reg_cache;
+
+	/* In targets where per-register flushing isn't implemented yet, this function
+	 * would result in many errors (one for each dirty register). The check below is
+	 * to prevent that, and just a single clear error message will be printed. */
+	if (!target_implements_reg_flush(cache)) {
+		LOG_TARGET_ERROR(target, "Unable to flush register cache - operation not yet supported "
+			"by %s implementation in OpenOCD", target->type->name);
+		return ERROR_FAIL;
+	}
+
+	unsigned int total_count = 0;
+	unsigned int dirty_count = 0;
+	unsigned int failed_count = 0;
+	while (cache) {
+		for (unsigned int i = 0; i < cache->num_regs; i++) {
+			total_count++;
+			struct reg *reg = &cache->reg_list[i];
+
+			if (!reg->exist || !reg->valid)
+				continue;
+
+			if (reg->dirty) {
+				dirty_count++;
+				if (!reg->type->flush) {
+					LOG_TARGET_WARNING(target, "Flushing register '%s' is not implemented", reg->name);
+					failed_count++;
+					continue;
+				}
+				LOG_TARGET_DEBUG(target, "Flushing register %s", reg->name);
+				int result = reg->type->flush(reg);
+				if (result != ERROR_OK) {
+					LOG_TARGET_ERROR(target, "Failed to flush register '%s'", reg->name);
+					failed_count++;
+					continue;
+				}
+				if (reg->dirty) {
+					LOG_TARGET_ERROR(target, "BUG: Register '%s' remains dirty after flushing", reg->name);
+					return ERROR_FAIL;
+				}
+			}
+			if (invalidate) {
+				LOG_TARGET_DEBUG(target, "Invalidating register '%s'", reg->name);
+				reg->valid = false;
+			}
+		}
+		cache = cache->next;
+	}
+
+	if (dirty_count == 0) {
+		LOG_TARGET_INFO(target, "No registers dirty, nothing to flush");
+		return ERROR_OK;
+	}
+
+	LOG_TARGET_DEBUG(target, "Found %u dirty registers out of %u registers", dirty_count, total_count);
+	if (failed_count > 0) {
+		LOG_TARGET_ERROR(target, "Failed to flush %u out of %u dirty registers",
+			failed_count, dirty_count);
+		return ERROR_FAIL;
+	}
+	LOG_TARGET_DEBUG(target, "All dirty registers flushed");
+
+	return ERROR_OK;
+}
+
 static int target_profiling(struct target *target, uint32_t *samples,
 			uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
 {
@@ -1536,6 +1616,9 @@ static int target_init_one(struct command_context *cmd_ctx,
 
 	if (!target->type->profiling)
 		target->type->profiling = target_profiling_default;
+
+	if (!target->type->flush_all_regs)
+		target->type->flush_all_regs = target_flush_all_regs_default;
 
 	return ERROR_OK;
 }
@@ -3107,16 +3190,24 @@ COMMAND_HANDLER(handle_reg_command)
 	/* display a register */
 	if ((CMD_ARGC == 1) || ((CMD_ARGC == 2) && !((CMD_ARGV[1][0] >= '0')
 			&& (CMD_ARGV[1][0] <= '9')))) {
-		if ((CMD_ARGC == 2) && (strcmp(CMD_ARGV[1], "force") == 0))
-			reg->valid = false;
+		if (CMD_ARGC == 2
+			&& strcmp(CMD_ARGV[1], "force") == 0
+			&& reg->valid) {
+			int retval = register_flush(target, reg, true);
+			if (retval != ERROR_OK) {
+				LOG_TARGET_ERROR(target, "Failed to flush register '%s' before force-reading", reg->name);
+				return retval;
+			}
+		}
 
 		if (!reg->valid) {
 			int retval = reg->type->get(reg);
 			if (retval != ERROR_OK) {
-				LOG_ERROR("Could not read register '%s'", reg->name);
+				LOG_TARGET_ERROR(target, "Could not read register '%s'", reg->name);
 				return retval;
 			}
 		}
+
 		char *value = buf_to_hex_str(reg->value, reg->size);
 		command_print(CMD, "%s (/%i): 0x%s", reg->name, (int)(reg->size), value);
 		free(value);
@@ -3124,7 +3215,14 @@ COMMAND_HANDLER(handle_reg_command)
 	}
 
 	/* set register value */
-	if (CMD_ARGC == 2) {
+	if (CMD_ARGC >= 2 && CMD_ARGC <= 3) {
+		bool flush = false;
+
+		if (CMD_ARGC >= 3 && !strcmp(CMD_ARGV[2], "force"))
+			flush = true;
+		else if (CMD_ARGC >= 3)
+			return ERROR_COMMAND_SYNTAX_ERROR;
+
 		uint8_t *buf = malloc(DIV_ROUND_UP(reg->size, 8));
 		if (!buf) {
 			LOG_ERROR("Failed to allocate memory");
@@ -3138,17 +3236,21 @@ COMMAND_HANDLER(handle_reg_command)
 		}
 
 		retval = reg->type->set(reg, buf);
+		free(buf);
+
 		if (retval != ERROR_OK) {
 			LOG_ERROR("Could not write to register '%s'", reg->name);
+			return retval;
 		} else {
 			char *value = buf_to_hex_str(reg->value, reg->size);
 			command_print(CMD, "%s (/%i): 0x%s", reg->name, (int)(reg->size), value);
 			free(value);
 		}
 
-		free(buf);
+		if (reg->dirty && flush)
+			return register_flush(target, reg, false);
 
-		return retval;
+		return ERROR_OK;
 	}
 
 	return ERROR_COMMAND_SYNTAX_ERROR;
@@ -4743,6 +4845,14 @@ static int target_jim_get_reg(Jim_Interp *interp, int argc,
 			return JIM_ERR;
 		}
 
+		if (force && reg->valid && reg->dirty) {
+			int retval = register_flush(target, reg, false);
+			if (retval != ERROR_OK) {
+				Jim_SetResultFormatted(interp, "failed to flush dirty register '%s' before force-reading", reg->name);
+				return retval;
+			}
+		}
+
 		if (force || !reg->valid) {
 			int retval = reg->type->get(reg);
 
@@ -4782,18 +4892,30 @@ static int target_jim_get_reg(Jim_Interp *interp, int argc,
 
 COMMAND_HANDLER(handle_set_reg_command)
 {
-	if (CMD_ARGC != 1)
+	if (CMD_ARGC < 1 || CMD_ARGC > 2)
 		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	bool flush = false;
+
+	/* Check for the "-force" argument */
+	if (CMD_ARGC == 2) {
+		if (!strcmp(CMD_ARGV[0], "-force")) {
+			flush = true;
+		} else {
+			command_print(CMD, "unknown argument '%s'", CMD_ARGV[0]);
+			return ERROR_COMMAND_ARGUMENT_INVALID;
+		}
+	}
 
 	int tmp;
 #if JIM_VERSION >= 80
-	Jim_Obj **dict = Jim_DictPairs(CMD_CTX->interp, CMD_JIMTCL_ARGV[0], &tmp);
+	Jim_Obj **dict = Jim_DictPairs(CMD_CTX->interp, CMD_JIMTCL_ARGV[CMD_ARGC - 1], &tmp);
 
 	if (!dict)
 		return ERROR_FAIL;
 #else
 	Jim_Obj **dict;
-	int ret = Jim_DictPairs(CMD_CTX->interp, CMD_JIMTCL_ARGV[0], &dict, &tmp);
+	int ret = Jim_DictPairs(CMD_CTX->interp, CMD_JIMTCL_ARGV[CMD_ARGC - 1], &dict, &tmp);
 
 	if (ret != JIM_OK)
 		return ERROR_FAIL;
@@ -4833,6 +4955,14 @@ COMMAND_HANDLER(handle_set_reg_command)
 			command_print(CMD, "failed to set '%s' to register '%s'",
 				reg_value, reg_name);
 			return retval;
+		}
+
+		if (flush && reg->valid && reg->dirty) {
+			retval = register_flush(target, reg, false);
+			if (retval != ERROR_OK) {
+				Jim_SetResultFormatted(CMD_CTX->interp, "Failed to flush register '%s'", reg->name);
+				return retval;
+			}
 		}
 	}
 
@@ -5571,14 +5701,14 @@ static const struct command_registration target_instance_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.jim_handler = target_jim_get_reg,
 		.help = "Get register values from the target",
-		.usage = "list",
+		.usage = "['-force'] list",
 	},
 	{
 		.name = "set_reg",
 		.mode = COMMAND_EXEC,
 		.handler = handle_set_reg_command,
 		.help = "Set target register values",
-		.usage = "dict",
+		.usage = "['-force'] dict",
 	},
 	{
 		.name = "read_memory",
@@ -6496,6 +6626,24 @@ nextw:
 	return retval;
 }
 
+COMMAND_HANDLER(handle_flush_reg_cache_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+
+	if (CMD_ARGC > 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	bool invalidate = false;
+
+	if (CMD_ARGC == 1) {
+		if (strcmp(CMD_ARGV[0], "-invalidate"))
+			return ERROR_COMMAND_SYNTAX_ERROR;
+		invalidate = true;
+	}
+
+	return target->type->flush_all_regs(target, invalidate);
+}
+
 static const struct command_registration target_exec_command_handlers[] = {
 	{
 		.name = "fast_load_image",
@@ -6533,9 +6681,9 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.name = "reg",
 		.handler = handle_reg_command,
 		.mode = COMMAND_EXEC,
-		.help = "display (reread from target with \"force\") or set a register; "
-			"with no arguments, displays all registers and their values",
-		.usage = "[(register_number|register_name) [(value|'force')]]",
+		.help = "display (reread from target with \"force\") or set a register "
+			"(write to the target immediately with \"force\"); ",
+		.usage = "[(register_number|register_name) [value] ['force']]",
 	},
 	{
 		.name = "poll",
@@ -6709,14 +6857,21 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.jim_handler = target_jim_get_reg,
 		.help = "Get register values from the target",
-		.usage = "list",
+		.usage = "['-force'] list",
 	},
 	{
 		.name = "set_reg",
 		.mode = COMMAND_EXEC,
 		.handler = handle_set_reg_command,
 		.help = "Set target register values",
-		.usage = "dict",
+		.usage = "['-force'] dict",
+	},
+	{
+		.name = "flush_reg_cache",
+		.handler = handle_flush_reg_cache_command,
+		.mode = COMMAND_EXEC,
+		.help = "Flush register cache",
+		.usage = "['-invalidate']",
 	},
 	{
 		.name = "read_memory",
@@ -6761,7 +6916,6 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.help = "Test the target's memory access functions",
 		.usage = "size",
 	},
-
 	COMMAND_REGISTRATION_DONE
 };
 static int target_register_user_commands(struct command_context *cmd_ctx)

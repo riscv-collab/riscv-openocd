@@ -8,19 +8,6 @@
 #include "riscv.h"
 #include "riscv_reg.h"
 #include "riscv_reg_impl.h"
-/**
- * TODO: Currently `reg->get/set` is implemented in terms of
- * `riscv_get/set_register`.  However, the intention behind
- * `riscv_get/set_register` is to work with the cache, therefore it accesses
- * and modifyes register cache directly.  The idea is to implement
- * `riscv_get/set_register` in terms of `riscv_reg_impl_cache_entry` and
- * `reg->get/set`.
- * Once this is done, the following includes should be removed.
- */
-#include "debug_defines.h"
-#include "riscv-011.h"
-#include "riscv-013.h"
-#include "field_helpers.h"
 
 static const char * const default_reg_names[GDB_REGNO_COUNT] = {
 	[GDB_REGNO_ZERO] = "zero",
@@ -586,6 +573,7 @@ static int resize_reg(const struct target *target, uint32_t regno, bool exist,
 	reg->size = size;
 	reg->exist = exist;
 	if (reg->exist) {
+		assert(size > 0);
 		reg->value = malloc(DIV_ROUND_UP(reg->size, 8));
 		if (!reg->value) {
 			LOG_ERROR("Failed to allocate memory.");
@@ -784,97 +772,19 @@ int riscv_reg_flush_all(struct target *target)
 	 * may become dirty in the process (e.g. S0, S1). For that reason, flush
 	 * registers in reverse order, so that GPRs are flushed last.
 	 */
+	int res = ERROR_OK;
 	for (unsigned int number = target->reg_cache->num_regs; number-- > 0; ) {
 		struct reg *reg = riscv_reg_impl_cache_entry(target, number);
-		if (reg->valid && reg->dirty) {
-			riscv_reg_t value = buf_get_u64(reg->value, 0, reg->size);
-
-			LOG_TARGET_DEBUG(target, "%s is dirty; write back 0x%" PRIx64,
-					reg->name, value);
-			if (riscv_reg_write(target, number, value) != ERROR_OK)
-				return ERROR_FAIL;
-		}
+		assert(reg->type->flush
+				&& "All RISC-V registers must have the 'flush' method defined");
+		if (reg->type->flush(reg) != ERROR_OK)
+			res = ERROR_FAIL;
 	}
-	LOG_TARGET_DEBUG(target, "Flush of register cache completed");
-	return ERROR_OK;
-}
-
-/**
- * This function is used internally by functions that change register values.
- * If `write_through` is true, it is ensured that the value of the target's
- * register is set to be equal to the `value` argument. The cached value is
- * updated if the register is cacheable.
- * TODO: Currently `reg->get/set` is implemented in terms of
- * `riscv_get/set_register`.  However, the intention behind
- * `riscv_get/set_register` is to work with the cache, therefore it accesses
- * and modifyes register cache directly.  The idea is to implement
- * `riscv_get/set_register` in terms of `riscv_reg_impl_cache_entry` and
- * `reg->get/set`.
- */
-static int riscv_set_or_write_register(struct target *target,
-		enum gdb_regno regid, riscv_reg_t value, bool write_through)
-{
-	RISCV_INFO(r);
-	assert(r);
-	if (r->dtm_version == DTM_DTMCS_VERSION_0_11)
-		return riscv011_set_register(target, regid, value);
-
-	keep_alive();
-
-	if (regid == GDB_REGNO_PC) {
-		return riscv_set_or_write_register(target, GDB_REGNO_DPC, value, write_through);
-	} else if (regid == GDB_REGNO_PRIV) {
-		riscv_reg_t dcsr;
-
-		if (riscv_reg_get(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-			return ERROR_FAIL;
-		dcsr = set_field(dcsr, CSR_DCSR_PRV, get_field(value, VIRT_PRIV_PRV));
-		dcsr = set_field(dcsr, CSR_DCSR_V, get_field(value, VIRT_PRIV_V));
-		return riscv_set_or_write_register(target, GDB_REGNO_DCSR, dcsr, write_through);
-	}
-
-	struct reg *reg = riscv_reg_impl_cache_entry(target, regid);
-	assert(riscv_reg_impl_is_initialized(reg));
-
-	if (!reg->exist) {
-		LOG_TARGET_DEBUG(target, "Register %s does not exist.", reg->name);
-		return ERROR_FAIL;
-	}
-
-	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_DEBUG(target,
-				"Target not halted, writing to target: %s <- 0x%" PRIx64,
-				reg->name, value);
-		return riscv013_set_register(target, regid, value);
-	}
-
-	const bool need_to_write = !reg->valid || reg->dirty ||
-		value != buf_get_u64(reg->value, 0, reg->size);
-	const bool cacheable = riscv_reg_impl_gdb_regno_cacheable(regid, need_to_write);
-
-	if (!cacheable || (write_through && need_to_write)) {
-		LOG_TARGET_DEBUG(target,
-				"Writing to target: %s <- 0x%" PRIx64 " (cacheable=%s, valid=%s, dirty=%s)",
-				reg->name, value, cacheable ? "true" : "false",
-				reg->valid ? "true" : "false",
-				reg->dirty ? "true" : "false");
-		if (riscv013_set_register(target, regid, value) != ERROR_OK)
-			return ERROR_FAIL;
-
-		reg->dirty = false;
-	} else {
-		reg->dirty = need_to_write;
-	}
-
-	buf_set_u64(reg->value, 0, reg->size, value);
-	reg->valid = cacheable;
-
-	LOG_TARGET_DEBUG(target,
-			"Wrote 0x%" PRIx64 " to %s (cacheable=%s, valid=%s, dirty=%s)",
-			value, reg->name, cacheable ? "true" : "false",
-			reg->valid ? "true" : "false",
-			reg->dirty ? "true" : "false");
-	return ERROR_OK;
+	if (res == ERROR_OK)
+		LOG_TARGET_DEBUG(target, "Flush of register cache completed successfully");
+	else
+		LOG_TARGET_ERROR(target, "Flush of register cache failed");
+	return res;
 }
 
 bool riscv_reg_cache_any_dirty(const struct target *target, int log_level)
@@ -908,83 +818,49 @@ void riscv_reg_cache_invalidate_all(struct target *target)
 /**
  * This function is used to change the value of a register. The new value may
  * be cached, and may not be written until the hart is resumed.
- * TODO: Currently `reg->get/set` is implemented in terms of
- * `riscv_get/set_register`.  However, the intention behind
- * `riscv_get/set_register` is to work with the cache, therefore it accesses
- * and modifyes register cache directly.  The idea is to implement
- * `riscv_get/set_register` in terms of `riscv_reg_impl_cache_entry` and
- * `reg->get/set`.
  */
 int riscv_reg_set(struct target *target, enum gdb_regno regid,
 		riscv_reg_t value)
 {
-	return riscv_set_or_write_register(target, regid, value,
-			/* write_through */ false);
+	struct reg * const reg = riscv_reg_impl_cache_entry(target, regid);
+	assert(riscv_reg_impl_is_initialized(reg));
+	assert(reg->size <= sizeof(riscv_reg_t) * CHAR_BIT);
+	assert(reg->size <= 64);
+	uint8_t buf[64 / 8];
+	buf_set_u64(buf, 0, reg->size, value);
+	return reg->type->set(reg, buf);
 }
 
 /**
  * This function is used to change the value of a register. The new value may
  * be cached, but it will be written to hart immediately.
- * TODO: Currently `reg->get/set` is implemented in terms of
- * `riscv_get/set_register`.  However, the intention behind
- * `riscv_get/set_register` is to work with the cache, therefore it accesses
- * and modifyes register cache directly.  The idea is to implement
- * `riscv_get/set_register` in terms of `riscv_reg_impl_cache_entry` and
- * `reg->get/set`.
  */
 int riscv_reg_write(struct target *target, enum gdb_regno regid,
 		riscv_reg_t value)
 {
-	return riscv_set_or_write_register(target, regid, value,
-			/* write_through */ true);
+	int res = riscv_reg_set(target, regid, value);
+	if (res != ERROR_OK)
+		return res;
+	struct reg * const reg = riscv_reg_impl_cache_entry(target, regid);
+	return reg->type->flush(reg);
 }
 
 /**
  * This function is used to get the value of a register. If possible, the value
  * in cache will be updated.
- * TODO: Currently `reg->get/set` is implemented in terms of
- * `riscv_get/set_register`.  However, the intention behind
- * `riscv_get/set_register` is to work with the cache, therefore it accesses
- * and modifyes register cache directly.  The idea is to implement
- * `riscv_get/set_register` in terms of `riscv_reg_impl_cache_entry` and
- * `reg->get/set`.
  */
 int riscv_reg_get(struct target *target, riscv_reg_t *value,
 		enum gdb_regno regid)
 {
-	RISCV_INFO(r);
-	assert(r);
-	if (r->dtm_version == DTM_DTMCS_VERSION_0_11)
-		return riscv011_get_register(target, value, regid);
+	assert(value);
 
-	keep_alive();
-
-	if (regid == GDB_REGNO_PC)
-		return riscv_reg_get(target, value, GDB_REGNO_DPC);
-
-	struct reg *reg = riscv_reg_impl_cache_entry(target, regid);
+	struct reg * const reg = riscv_reg_impl_cache_entry(target, regid);
 	assert(riscv_reg_impl_is_initialized(reg));
-	if (!reg->exist) {
-		LOG_TARGET_DEBUG(target, "Register %s does not exist.", reg->name);
-		return ERROR_FAIL;
-	}
-
-	if (reg->valid) {
-		*value = buf_get_u64(reg->value, 0, reg->size);
-		LOG_TARGET_DEBUG(target, "Read %s: 0x%" PRIx64 " (cached)", reg->name,
-				*value);
-		return ERROR_OK;
-	}
-
-	LOG_TARGET_DEBUG(target, "Reading %s from target", reg->name);
-	if (riscv013_get_register(target, value, regid) != ERROR_OK)
-		return ERROR_FAIL;
-
-	buf_set_u64(reg->value, 0, reg->size, *value);
-	reg->valid = riscv_reg_impl_gdb_regno_cacheable(regid, /* is write? */ false) &&
-		target->state == TARGET_HALTED;
-	reg->dirty = false;
-
-	LOG_TARGET_DEBUG(target, "Read %s: 0x%" PRIx64, reg->name, *value);
+	assert(reg->size <= sizeof(riscv_reg_t) * CHAR_BIT);
+	assert(reg->size <= 64);
+	int res = reg->type->get(reg);
+	if (res != ERROR_OK)
+		return res;
+	*value = buf_get_u64(reg->value, 0, reg->size);
 	return ERROR_OK;
 }

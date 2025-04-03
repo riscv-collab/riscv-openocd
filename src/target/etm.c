@@ -215,6 +215,7 @@ static int etm_write_reg(struct reg *reg, uint32_t value);
 static const struct reg_arch_type etm_scan6_type = {
 	.get = etm_get_reg,
 	.set = etm_set_reg_w_exec,
+	.flush = NULL,
 };
 
 /* Look up register by ID ... most ETM instances only

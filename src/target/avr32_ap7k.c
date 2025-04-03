@@ -157,6 +157,7 @@ static int avr32_set_core_reg(struct reg *reg, uint8_t *buf)
 static const struct reg_arch_type avr32_reg_type = {
 	.get = avr32_get_core_reg,
 	.set = avr32_set_core_reg,
+	.flush = NULL,
 };
 
 static struct reg_cache *avr32_build_reg_cache(struct target *target)

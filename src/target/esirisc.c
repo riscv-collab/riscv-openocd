@@ -1420,6 +1420,7 @@ static int esirisc_set_reg(struct reg *reg, uint8_t *buf)
 static const struct reg_arch_type esirisc_reg_type = {
 	.get = esirisc_get_reg,
 	.set = esirisc_set_reg,
+	.flush = NULL,
 };
 
 static struct reg_cache *esirisc_build_reg_cache(struct target *target)

@@ -655,6 +655,7 @@ static int armv4_5_set_core_reg(struct reg *reg, uint8_t *buf)
 static const struct reg_arch_type arm_reg_type = {
 	.get = armv4_5_get_core_reg,
 	.set = armv4_5_set_core_reg,
+	.flush = NULL,
 };
 
 struct reg_cache *arm_build_reg_cache(struct target *target, struct arm *arm)

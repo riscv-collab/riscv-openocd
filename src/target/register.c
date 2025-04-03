@@ -14,6 +14,8 @@
 
 #include "register.h"
 #include <helper/log.h>
+#include <target/target.h>
+#include <target/target_type.h>
 
 /**
  * @file
@@ -115,12 +117,72 @@ static int register_set_dummy_core_reg(struct reg *reg, uint8_t *buf)
 	return ERROR_OK;
 }
 
+static int register_flush_dummy(struct reg *reg)
+{
+	reg->dirty = false;
+
+	return ERROR_OK;
+}
+
 static const struct reg_arch_type dummy_type = {
 	.get = register_get_dummy_core_reg,
 	.set = register_set_dummy_core_reg,
+	.flush = register_flush_dummy,
 };
 
 void register_init_dummy(struct reg *reg)
 {
 	reg->type = &dummy_type;
+}
+
+int register_flush(const struct target *target, struct reg *reg, bool invalidate)
+{
+	if (!reg) {
+		LOG_ERROR("BUG: %s called with NULL", __func__);
+		return ERROR_FAIL;
+	}
+
+	if (!reg->exist) {
+		LOG_ERROR("BUG: %s called with non-existent register", __func__);
+		return ERROR_FAIL;
+	}
+
+	if (!reg->dirty) {
+		LOG_TARGET_DEBUG(target, "Register '%s' is not dirty, nothing to flush", reg->name);
+		if (reg->valid && invalidate) {
+			LOG_TARGET_DEBUG(target, "Invalidating register '%s'", reg->name);
+			reg->valid = false;
+		}
+		return ERROR_OK;
+	}
+
+	if (!reg->type->flush) {
+		LOG_TARGET_ERROR(target, "Unable to flush dirty register '%s' - operation not yet supported "
+			"by %s implementation in OpenOCD", reg->name, target->type->name);
+		return ERROR_NOT_IMPLEMENTED;
+	}
+
+	if (!reg->valid) {
+		LOG_ERROR("BUG: Register '%s' is not valid, but flush attempted", reg->name);
+		return ERROR_FAIL;
+	}
+
+	LOG_TARGET_DEBUG(target, "Flushing register '%s'", reg->name);
+
+	int result = reg->type->flush(reg);
+	if (result != ERROR_OK) {
+		LOG_TARGET_ERROR(target, "Failed to flush register '%s'", reg->name);
+		return result;
+	}
+
+	if (reg->dirty) {
+		LOG_ERROR("BUG: Register '%s' remained dirty after flushing", reg->name);
+		return ERROR_FAIL;
+	}
+	if (reg->valid && invalidate) {
+		LOG_TARGET_DEBUG(target, "Invalidating register '%s' after flush", reg->name);
+		reg->valid = false;
+	}
+
+	return ERROR_OK;
 }

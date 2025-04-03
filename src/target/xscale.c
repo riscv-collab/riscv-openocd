@@ -2854,6 +2854,7 @@ static int xscale_analyze_trace(struct target *target, struct command_invocation
 static const struct reg_arch_type xscale_reg_type = {
 	.get = xscale_get_reg,
 	.set = xscale_set_reg,
+	.flush = NULL,
 };
 
 static void xscale_build_reg_cache(struct target *target)

@@ -490,6 +490,7 @@ static int xtensa_core_reg_set(struct reg *reg, uint8_t *buf)
 static const struct reg_arch_type xtensa_reg_type = {
 	.get = xtensa_core_reg_get,
 	.set = xtensa_core_reg_set,
+	.flush = NULL,
 };
 
 /* Convert a register index that's indexed relative to windowbase, to the real address. */

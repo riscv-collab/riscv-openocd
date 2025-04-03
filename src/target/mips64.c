@@ -370,6 +370,7 @@ int mips64_arch_state(struct target *target)
 static const struct reg_arch_type mips64_reg_type = {
 	.get = mips64_get_core_reg,
 	.set = mips64_set_core_reg,
+	.flush = NULL,
 };
 
 int mips64_build_reg_cache(struct target *target)
