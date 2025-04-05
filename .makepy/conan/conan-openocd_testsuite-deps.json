@@ -1,11 +1,11 @@
 {
   "build": {},
   "host": {
-    "external_openocd_tests": "0.0.3-rc.1.19+sc.sc-dt.2025.03@sc/main#dad956f50c1e8a189ccc2f13ab3b3622ab6d1e39",
-    "riscv-gcc": "14.2.0-rc.0.159+sc.sc-dt.2025.03@sc/main#ce9b9d092eb7a20b76d08d989ac7eecb185a449a",
-    "riscv-gdb": "15.1.0-rc.1.106+sc.sc-dt.2025.03@sc/main#7f62986699104997967730e57caa8889c8a423f9",
-    "riscv-isa-sim": "0.1.0-rc.1.8+sc.sc-dt.2025.03@sc/main#c7f4853de79070b5eceabde4a4855c5f5af12a7c",
-    "dejagnu": "1.6.3-rc.1.19+sc.sc-dt.2025.03@sc/main#a59577e5fd36f00069dec17ab7599e940b8173de",
-    "mmu-gen": "1.0.0-rc.1.28+sc.main-experimental@sc/main#6bb32729b8a97151fc0500c03609a90f0d09aeee"
+    "external_openocd_tests": "0.0.3-rc.1.27+sc.sc-dt.2025.04@sc/main#840616a60ac14ec1f949d05c7b2b2fa8efaab268",
+    "riscv-gcc": "14.2.0-rc.0.160+sc.sc-dt.2025.04@sc/main#d5e51eee4853331cda9e17d074578cb831b06a49",
+    "riscv-gdb": "15.1.0-rc.1.122+sc.sc-dt.2025.04@sc/main#41a78e5f88c7140d3ea93a525c218d93ac6cef50",
+    "riscv-isa-sim": "0.1.0-rc.1.22+sc.sc-dt.2025.04@sc/main#3cb6152b8cd4c37dcf0844b82ac9e67ff9658b13",
+    "dejagnu": "1.6.3-rc.1.26+sc.sc-dt.2025.04@sc/main#025252fcb3c97f8082ef20ea6e1a1f5da24c0955",
+    "mmu-gen": "1.0.0-rc.1.29+fk-sc.mmu-gen-experimental@sc/main#40888d055487c87c6303796a60b6af792417a6d2"
   }
 }

@@ -15,7 +15,7 @@
     "libftdi": "1.5#55ee16fbd5bbe4eab9d6f1f03fe0bf85",
     "hidapi": "0.13.1#20fbe2186ac901286e0f5e7181cf1db7",
     "jansson": "2.14#42fc601d5b8e236e050e48f2321ef851",
-    "libjaylink": "0.3.1-343+sc.main-experimental@sc/main#53a119886bdf4c0afcbbe19c6d282b7027da3732",
-    "jimtcl": "0.83.0-343+sc.main-experimental@sc/main#53a119886bdf4c0afcbbe19c6d282b7027da3732"
+    "libjaylink": "0.3.1-355+sc.sc-dt.2025.04@sc/main#31e68f8d20b989f29b00c2f0d89822bde0687a69",
+    "jimtcl": "0.83.0-355+sc.sc-dt.2025.04@sc/main#49c1c8de41c86abac2bb4b6920770f4ac2a16a43"
   }
 }
