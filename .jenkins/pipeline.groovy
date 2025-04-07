@@ -96,14 +96,13 @@ workflow('openocd') {
                 source .jenkins/common.sh
                 workdir=build/testsuite
 
-                runTests $workdir
-                EXIT_CODE=$?
+                runTests $workdir || EXIT_CODE=$?
 
                 sc-jenkins-lib artifacts push \
                     "artifacts-${VARS_job}-${VARS_image}-${VARS_profile}-${VARS_target}-${VARS_o_source}-${VARS_s_build_type}-${VARS_o_sanitize}" \
                     "${workdir}/testing" \
                     1w
-                exit $EXIT_CODE
+                exit ${EXIT_CODE:-0}
             '''
         }
     }
@@ -135,14 +134,13 @@ workflow('openocd') {
                 workdir=build/testsuite
 
                 VARS_tests_valgrind_path=valgrind
-                runTests $workdir
-                EXIT_CODE=$?
+                runTests $workdir || EXIT_CODE=$?
 
                 sc-jenkins-lib artifacts push \
                     "artifacts-${VARS_job}-${VARS_image}-${VARS_profile}-${VARS_target}-${VARS_o_source}" \
                     "${workdir}/testing" \
                     1w
-                exit $EXIT_CODE
+                exit ${EXIT_CODE:-0}
             '''
         }
     }
@@ -169,14 +167,13 @@ workflow('openocd') {
                 source .jenkins/common.sh
                 workdir=build/testsuite
 
-                runTests $workdir
-                EXIT_CODE=$?
+                runTests $workdir || EXIT_CODE=$?
 
                 sc-jenkins-lib artifacts push \
                     "artifacts-${VARS_job}-${VARS_image}-${VARS_profile}-${VARS_target}-${VARS_o_source}" \
                     "${workdir}/testing" \
                     1w
-                exit $EXIT_CODE
+                exit ${EXIT_CODE:-0}
             '''
         }
     }
@@ -203,14 +200,13 @@ workflow('openocd') {
                 source .jenkins/common.sh
                 workdir=build/testsuite
 
-                runTransferableTests $workdir
-                EXIT_CODE=$?
+                runTransferableTests $workdir || EXIT_CODE=$?
 
                 sc-jenkins-lib artifacts push \
                     "artifacts-${VARS_job}-${VARS_image}-${VARS_profile}-${VARS_target}-${VARS_o_source}" \
                     "${workdir}/testing" \
                     1w
-                exit $EXIT_CODE
+                exit ${EXIT_CODE:-0}
             '''
         }
     }
