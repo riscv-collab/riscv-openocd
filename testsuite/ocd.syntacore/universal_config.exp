@@ -3,7 +3,7 @@ proc run_test {} {
   # disconnect and kill the default openocd
   ocd_manual_finish
 
-  proc ocd_launch_script { tcl_script } {
+  proc ocd_launch_script { tcl_script {dont_create_targets 0} } {
     global OPENOCD
     global OPENOCD_ROOT
     global srcdir
@@ -25,8 +25,13 @@ proc run_test {} {
       $openocd_adapter_flags \
       $target_cfg_flags \
       [list -f $srcdir/$subdir/universal_config_tests/common_test_init.tcl] \
-      $test_script_flags \
     ]
+
+    if { $dont_create_targets == 0 } {
+      lappend cmd {*}[list -c unicfg_testlib_create_common_targets]
+    }
+
+    lappend cmd {*}$test_script_flags
 
     set NCORES [target_info cpu,cores_num]
     set ::env(NCORES) $NCORES
@@ -40,8 +45,14 @@ proc run_test {} {
     eval exec -ignorestderr $cmd 2>> ${default_bin_prefix}_${tcl_script}.log
   }
 
+  set DISABLE_TARGET_CREATION  1
+
+  ocd_launch_script jtag_topology_base.tcl $DISABLE_TARGET_CREATION
+  ocd_launch_script deprecated_harts_num_api.tcl $DISABLE_TARGET_CREATION
+
   ocd_launch_script not_testable.tcl
   ocd_launch_script chipname_test.tcl
+  ocd_launch_script tapmap.tcl
   ocd_launch_script harts_num_test.tcl
   ocd_launch_script hooks_test.tcl
   ocd_launch_script reset_config_test.tcl

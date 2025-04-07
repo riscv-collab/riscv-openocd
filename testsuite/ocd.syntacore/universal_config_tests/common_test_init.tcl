@@ -1,7 +1,14 @@
 set NCORES $::env(NCORES)
 set IS_SIM $::env(IS_SIM)
 
-sc_target_config harts_num $NCORES
-if { $IS_SIM == 1 } {
-  sc_target_config new_tap_for_each_target 0
+proc unicfg_testlib_create_common_targets {} {
+
+  global NCORES
+  global IS_SIM
+
+  if { $IS_SIM == 1 } {
+    sc_target_config jtag_topology ${NCORES}riscvl5
+  } else {
+    sc_target_config harts_num $NCORES
+  }
 }
