@@ -702,8 +702,7 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
       -c "gdb_port 0" \
       -c "telnet_port 0" \
       -c "tcl_port 0" \
-      -c "sc_target_config new_tap_for_each_target 0" \
-      -c "sc_target_config harts_num $NumberOfHarts"]
+      -c "sc_target_config jtag_topology ${NumberOfHarts}riscvl5"]
   }
 
   if {$SETTINGS(load_extra_scripts) == 1} {
