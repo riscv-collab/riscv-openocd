@@ -10,7 +10,7 @@
         "riscv-binutils/2.43.1-rc.0.67+sc.sc-dt.2025.04@sc/main#0d18ca2fccfbecb7d8580daabb683472ede71bdb%1743809464.996",
         "rapidyaml/0.5.0#c6f48c5eb99c1d0bad5c4ac8e6960375%1699016203.526",
         "python-gcc-12/3.10.7-rc.1.26+sc.sc-dt.2025.04@sc/main#37be0b3513e33595e01c2c1fbe07de7b4deaa61c%1743810247.979",
-        "mmu-gen/1.0.0-rc.1.29+fk-sc.mmu-gen-experimental@sc/main#40888d055487c87c6303796a60b6af792417a6d2%1742388900.111",
+        "mmu-gen/1.0.0-rc.1.28+sc.main-experimental@sc/main#6bb32729b8a97151fc0500c03609a90f0d09aeee%1743421725.029",
         "gdb_source_deps/0.0.1-rc.1.29+sc.sc-dt.2025.04@sc/main#399f24a8f072ff9c7171fe0fce5ff142c6e42065%1743792079.216",
         "fast_float/5.2.0#9bf1a3fac625789f2b571d43efb8013b%1700236504.274",
         "external_openocd_tests/0.0.3-rc.1.27+sc.sc-dt.2025.04@sc/main#840616a60ac14ec1f949d05c7b2b2fa8efaab268%1743791822.086",
