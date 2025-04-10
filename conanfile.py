@@ -235,6 +235,7 @@ class Package(ConanFile):  # type: ignore
     def requirements(self) -> None:
         self.tool_requires("libtool")
         self.tool_requires("pkgconf")
+        self.tool_requires("openocd_platform_configs")
 
         self.requires("libusb", options={"shared": False})
         #'libftdi' depends on 'libusb'
