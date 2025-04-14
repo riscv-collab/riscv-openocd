@@ -1,3 +1,27 @@
+[project]
+name = "openocd"
+version = "0.0.0"
+requires-python = ">=3.10"
+
+[dependency-groups]
+dev = [
+  "black>=24.1.1",
+  "cmakelang>=0.6.13",
+  "hwrs>=0.2.0",
+  "isort>=5.13.2",
+  "lgrw>=0.3.10",
+  "makepy>=1.2504a20",
+  "mypy>=1.8.0",
+  "pexpect>=4.9.0",
+  "pylint>=3.0.3",
+  "requests>=2.31.0",
+  "yamllint>=1.33.0",
+  "labgrid>=23.1a3.dev58",
+]
+
+[tool.makepy]
+legacy_venv = false
+
 [tool.black]
 line-length = 80
 
@@ -6,8 +30,11 @@ profile = "black"
 line_length = 80
 
 [tool.mypy]
-strict = "True"
-implicit_reexport = "True"
+strict = true
+disable_error_code = [
+  "import-untyped",
+  "attr-defined"
+]
 
 [tool.pylint]
 max-line-length = 80
