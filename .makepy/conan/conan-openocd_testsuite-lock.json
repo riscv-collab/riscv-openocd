@@ -29,6 +29,7 @@
         "cmake/3.26.4#0b40747e190e755932767f2ec4768ff5%1724678437.897"
     ],
     "python_requires": [
+        "makepy_hints/1.20.0-rc.0.32+sc.main@sc/main#da85ca43e10e8ba61eb899eb6801a3b3f7910b5b%1744791596.318",
         "makepy_hints/1.19.0-rc.0.1+sc.main@sc/main#a07dfeb8fbcaefd366ff901df01163fe802bf45b%1741855587.551",
         "makepy_hints/1.18.0-rc.0.23+sc.main@sc/main#de10ee61dd20d2d2530e011217d76f13e46285a8%1741782258.193",
         "makepy_hints/1.18.0-rc.0.14+sc.main@sc/main#18ca98e3708dc756f752c68278cb593465a36134%1741347127.026",

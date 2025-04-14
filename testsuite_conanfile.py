@@ -9,7 +9,7 @@ from conan.tools.files import copy
 class Package(ConanFile):
     url = "<default_remote_git_service>/tools/toolchain/openocd"
 
-    python_requires = "makepy_hints/1.15.0-rc.0.10+sc.main@sc/main"
+    python_requires = "makepy_hints/1.20.0-rc.0.32+sc.main@sc/main"
     python_requires_extend = "makepy_hints.MakepyConanFile"
 
     def requirements(self) -> None:

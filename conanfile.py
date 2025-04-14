@@ -218,7 +218,7 @@ class Package(ConanFile):
     package_type = "application"
     url = "<default_remote_git_service>/tools/toolchain/openocd"
 
-    python_requires = "makepy_hints/1.19.0-rc.0.12+sc.main@sc/main"
+    python_requires = "makepy_hints/1.20.0-rc.0.32+sc.main@sc/main"
     python_requires_extend = "makepy_hints.MakepyConanFile"
 
     mp_git_clone_depth = 2000  # We need some history to find the merge base
