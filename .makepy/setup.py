@@ -7,10 +7,16 @@ from pathlib import Path
 from _ocd_test_suite import _OcdTestSuite
 from hwrs import HWRSSuite
 from makepy import Command, Conductor
-from makepy.conan import BinaryPackage, Conan, MakepyHintsHook, RevisionedRef
+from makepy.conan import (
+    BinaryPackage,
+    Conan,
+    ConanConfigs,
+    ConanSuite,
+    MakepyHintsHook,
+    RevisionedRef,
+)
 from makepy.generic import GenericSuite, ParallelHook, PrivilegedContainerHook
 from makepy.lint import FormatCommand, LintCommand
-from makepy.syntacore import ConanConfigs, ConanSuite, SyntacoreSuite
 from makepy.utils import git
 from makepy.utils import main as _main_decorator
 from makepy.utils import run_shell
@@ -216,7 +222,6 @@ def main() -> None:
     conductor = Conductor()
 
     conductor.add(GenericSuite())
-    conductor.add(SyntacoreSuite())
     configs = ConanConfigs()
     for profile in [
         "mp_ubuntu18",
