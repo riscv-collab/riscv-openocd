@@ -1,15 +1,14 @@
+# type: ignore
+# pylint: disable=no-member,pointless-statement,invalid-name,not-callable,cyclic-import
+
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from conan import ConanFile  # type: ignore
-from conan.errors import ConanException  # type: ignore
-from conan.tools.gnu import (  # type: ignore
-    Autotools,
-    AutotoolsToolchain,
-    PkgConfigDeps,
-)
-from conan.tools.scm import Git  # type: ignore
+from conan import ConanFile
+from conan.errors import ConanException
+from conan.tools.gnu import Autotools, AutotoolsToolchain, PkgConfigDeps
+from conan.tools.scm import Git
 
 _shared_configure_args = [
     "--enable-amtjtagaccel",
@@ -208,8 +207,7 @@ _options = [
 assert sorted(_options, key=lambda o: o.application_order) == _options
 
 
-# pylint: disable=no-member,not-callable
-class Package(ConanFile):  # type: ignore
+class Package(ConanFile):
     name = "openocd"
     settings = "os", "arch", "build_type", "compiler"
     options_description = {
@@ -268,11 +266,11 @@ class Package(ConanFile):  # type: ignore
             },
         )
 
-        if self.options.source == "internal" and self.settings.os == "Linux":  # type: ignore
+        if self.options.source == "internal" and self.settings.os == "Linux":
             self.requires("jansson", options={"shared": False})
 
     def layout(self) -> None:
-        build_folder = Path("build") / str(self.settings.build_type)  # type: ignore
+        build_folder = Path("build") / str(self.settings.build_type)
 
         self.folders.generators = build_folder
         self.folders.build = build_folder
@@ -292,19 +290,20 @@ class Package(ConanFile):  # type: ignore
 
         ac = AutotoolsToolchain(self)
 
-        match self.settings.os:  # type: ignore
+        match self.settings.os:
             case "Linux":
                 extra_configure_args = _linux_configure_args
             case "Windows":
                 extra_configure_args = _windows_configure_args
             case _:
-                raise ConanException(f"Unexpected host OS '{self.settings.os}'")  # type: ignore
+                raise ConanException(f"Unexpected host OS '{self.settings.os}'")
 
         for configure_arg in extra_configure_args:
             ac.configure_args.append(configure_arg)
 
         if (
-            self.mp_opts.as_str("source") == "internal" and self.settings.os == "Linux"  # type: ignore
+            self.mp_opts.as_str("source") == "internal"
+            and self.settings.os == "Linux"
         ):  # TODO: just build form other repo
             ac.configure_args.append("--enable-syntacore-extensions")
 
@@ -313,7 +312,7 @@ class Package(ConanFile):  # type: ignore
             if self.mp_opts.as_str("sanitize") == "strict":
                 ac.extra_cflags.append("-fno-sanitize-recover")
 
-        match self.settings.build_type:  # type: ignore
+        match self.settings.build_type:
             case "Release":
                 ac.extra_cflags.append("-O2")
                 # FIXME: YCAT-43010
@@ -322,7 +321,7 @@ class Package(ConanFile):  # type: ignore
                 ac.extra_cflags.extend(["-O0", "-g"])
             case _:
                 raise ConanException(
-                    f"Unexpected build_type '{self.settings.build_type}'"  # type: ignore
+                    f"Unexpected build_type '{self.settings.build_type}'"
                 )
 
         ac.generate()
