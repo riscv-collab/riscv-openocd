@@ -156,14 +156,14 @@ class _FinalOption(_Option):
         self.default = default
 
     def to_conan_option(self) -> tuple[str, Iterable[str | None]]:
-        return (self.name, set([self.default, *self.values]))
+        return (self.name, set([None, self.default, *self.values]))
 
     def apply(self, recipe: Any) -> None:
         if recipe.mp_opts.as_str_or_none(self.name) is None:
             setattr(recipe.options, self.name, self.default)
 
 
-_options = [
+_options: list[_Option] = [
     _OptionAlias(
         "elct_support",
         final_name="source",
