@@ -390,6 +390,12 @@ proc parse_gdb_info_threads { report } {
   #   ...
   #(gdb)
   set TYPE "gdb_info_threads"
+
+  # See ECMA-48 [5.4 Control sequences]
+  set control_seq_re {\e\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]}
+  regsub $control_seq_re $report {} report
+  regsub -all {[^[:print:]^\n]} $report {} report
+  set report [string trim $report \n]
   set rlines [split $report "\t\n"]
 
   if {[llength $rlines] < 3} {
