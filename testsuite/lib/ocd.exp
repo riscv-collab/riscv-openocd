@@ -89,6 +89,15 @@ proc gdb_get_prompt_pattern {} {
   return ".*\\(gdb\\)\\s$"
 }
 
+proc gdb_run_sanitize_reply {reply} {
+  # See ECMA-48 [5.4 Control sequences]
+  set control_seq_re {\e\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]}
+  regsub -all $control_seq_re $reply {} reply
+  regsub -all {[^[:print:][:blank:]\n]} $reply {} reply
+  set reply [string trim $reply \n]
+  return $reply
+}
+
 proc gdb_run_command {msg} {
   if {![tool_state_has client_spawn_id]} {
     tsuplib_internal_error "trying to send <$msg> without gdb connection"
@@ -104,7 +113,7 @@ proc gdb_run_command {msg} {
 
   expect {
     -re [gdb_get_prompt_pattern] {
-      return  $expect_out(buffer)
+      set gdb_reply $expect_out(buffer)
     }
     eof {
       tsuplib_internal_error "gdb: unexpected EOF while waiting results of <$msg>"
@@ -113,6 +122,7 @@ proc gdb_run_command {msg} {
       tsuplib_internal_error "gdb: unexpected timeout while waiting results of <$msg>"
     }
   }
+  return [gdb_run_sanitize_reply $gdb_reply]
 }
 
 proc ocd_gdb_connect {} {
