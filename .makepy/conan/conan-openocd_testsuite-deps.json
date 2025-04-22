@@ -3,7 +3,7 @@
   "host": {
     "external_openocd_tests": "0.0.3-rc.1.27+sc.sc-dt.2025.04@sc/main#840616a60ac14ec1f949d05c7b2b2fa8efaab268",
     "riscv-gcc": "14.2.0-rc.0.160+sc.sc-dt.2025.04@sc/main#d5e51eee4853331cda9e17d074578cb831b06a49",
-    "riscv-gdb": "15.1.0-rc.1.122+sc.sc-dt.2025.04@sc/main#41a78e5f88c7140d3ea93a525c218d93ac6cef50",
+    "riscv-gdb": "16.2.0-rc.1.1+sc.main-experimental@sc/main#b93cf448e13f3cc5f4c886302ddeec35ae2ac863",
     "riscv-isa-sim": "0.1.0-rc.1.22+sc.sc-dt.2025.04@sc/main#3cb6152b8cd4c37dcf0844b82ac9e67ff9658b13",
     "dejagnu": "1.6.3-rc.1.26+sc.sc-dt.2025.04@sc/main#025252fcb3c97f8082ef20ea6e1a1f5da24c0955",
     "mmu-gen": "1.0.0-rc.1.28+sc.main-experimental@sc/main#6bb32729b8a97151fc0500c03609a90f0d09aeee"

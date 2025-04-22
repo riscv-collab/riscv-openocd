@@ -2,7 +2,7 @@
   "build": {
     "libtool": "2.4.7#08316dad5c72c541ed21e039e4cf217b",
     "pkgconf": "2.2.0#6462942a22803086372db44689ba825f",
-    "openocd_platform_configs": "0.0.1-rc.0.9+sc.main-experimental@sc/main"
+    "openocd_platform_configs": "0.0.1-rc.0.9+sc.main-experimental@sc/main#38fc523df8a88257b89e93494a57862cd0280694"
   },
   "host": {
     "libusb": {
