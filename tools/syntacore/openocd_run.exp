@@ -680,6 +680,7 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
       -c "adapter speed [getDefaultJTAGSpeed]" \
       -c "adapter serial $AdapterSerial" \
       -f "$SyntacoreConfigFile" \
+      -c "sc_target_config irlen 5" \
       -c "sc_target_config harts_num $NumberOfHarts"]
   } else {
     send_user -- "spike mode selected\n"
