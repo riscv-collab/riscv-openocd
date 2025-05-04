@@ -158,5 +158,5 @@ proc ocd_gdb_connect {} {
   }
   gdb_run_command "set height 0"
   gdb_run_command "set style enabled off"
-  gdb_run_command "target remote :[tool_state_get openocd_gdb_port]"
+  gdb_run_command "target remote 127.0.0.1:[tool_state_get openocd_gdb_port]"
 }
