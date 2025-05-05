@@ -5143,7 +5143,12 @@ static int stlink_dap_init(void)
 
 	if ((mode != STLINK_MODE_DEBUG_SWIM) &&
 		!(stlink_dap_handle->version.flags & STLINK_F_HAS_DAP_REG)) {
-		LOG_ERROR("ST-Link version does not support DAP direct transport");
+		LOG_ERROR("The firmware in the ST-Link adapter only supports deprecated HLA.");
+		LOG_ERROR("Please consider updating the ST-Link firmware with a version");
+		LOG_ERROR("newer that V2J24 (2015), available for downloading on ST website:");
+		LOG_ERROR("  https://www.st.com/en/development-tools/stsw-link007.html");
+		LOG_ERROR("In mean time, you can re-run OpenOCD for ST-Link HLA as:");
+		LOG_ERROR("  openocd -f interface/stlink-hla.cfg ...");
 		return ERROR_FAIL;
 	}
 	return ERROR_OK;
@@ -5217,11 +5222,10 @@ static const struct swim_driver stlink_swim_ops = {
 	.reconnect = stlink_swim_op_reconnect,
 };
 
-static const char *const stlink_dap_transport[] = { "dapdirect_swd", "dapdirect_jtag", "swim", NULL };
-
 struct adapter_driver stlink_dap_adapter_driver = {
 	.name = "st-link",
-	.transports = stlink_dap_transport,
+	.transport_ids = TRANSPORT_DAPDIRECT_SWD | TRANSPORT_DAPDIRECT_JTAG | TRANSPORT_SWIM,
+	.transport_preferred_id = TRANSPORT_DAPDIRECT_SWD,
 	.commands = stlink_dap_command_handlers,
 
 	.init = stlink_dap_init,

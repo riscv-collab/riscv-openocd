@@ -489,7 +489,7 @@ static struct riscv_private_config *alloc_default_riscv_private_config(void)
 	return config;
 }
 
-static int riscv_create_target(struct target *target, Jim_Interp *interp)
+static int riscv_create_target(struct target *target)
 {
 	LOG_TARGET_DEBUG(target, "riscv_create_target()");
 	struct riscv_private_config *config = target->private_config;

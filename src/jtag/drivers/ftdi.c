@@ -1665,8 +1665,6 @@ static const struct swd_driver ftdi_swd = {
 	.run = ftdi_swd_run_queue,
 };
 
-static const char * const ftdi_transports[] = { "jtag", "swd", NULL };
-
 static struct jtag_interface ftdi_interface = {
 	.supported = DEBUG_CAP_TMS_SEQ,
 	.execute_queue = ftdi_execute_queue,
@@ -1674,7 +1672,8 @@ static struct jtag_interface ftdi_interface = {
 
 struct adapter_driver ftdi_adapter_driver = {
 	.name = "ftdi",
-	.transports = ftdi_transports,
+	.transport_ids = TRANSPORT_JTAG | TRANSPORT_SWD,
+	.transport_preferred_id = TRANSPORT_JTAG,
 	.commands = ftdi_command_handlers,
 
 	.init = ftdi_initialize,
