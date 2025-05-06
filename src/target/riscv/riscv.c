@@ -155,7 +155,7 @@ bool riscv_virt2phys_mode_is_sw(const struct target *target)
 	return r->virt2phys_mode == RISCV_VIRT2PHYS_MODE_SW;
 }
 
-const char *riscv_virt2phys_mode_to_str(riscv_virt2phys_mode_t mode)
+const char *riscv_virt2phys_mode_to_str(enum riscv_virt2phys_mode mode)
 {
 	assert(mode == RISCV_VIRT2PHYS_MODE_OFF
 			|| mode == RISCV_VIRT2PHYS_MODE_SW
@@ -1768,16 +1768,16 @@ int riscv_remove_watchpoint(struct target *target,
 	return ERROR_OK;
 }
 
-typedef enum {
+enum mctrl6hitstatus {
 	M6_HIT_ERROR,
 	M6_HIT_NOT_SUPPORTED,
 	M6_NOT_HIT,
 	M6_HIT_BEFORE,
 	M6_HIT_AFTER,
 	M6_HIT_IMM_AFTER
-} mctrl6hitstatus;
+};
 
-static mctrl6hitstatus check_mcontrol6_hit_status(struct target *target,
+static enum mctrl6hitstatus check_mcontrol6_hit_status(struct target *target,
 		riscv_reg_t tdata1, uint64_t hit_mask)
 {
 	const uint32_t hit0 = get_field(tdata1, CSR_MCONTROL6_HIT0);
@@ -1870,7 +1870,7 @@ static int riscv_trigger_detect_hit_bits(struct target *target, int64_t *unique_
 					*need_single_step = true;
 				} else if (r->tinfo_version == RISCV_TINFO_VERSION_UNKNOWN
 					|| r->tinfo_version == CSR_TINFO_VERSION_1) {
-					mctrl6hitstatus hits_status = check_mcontrol6_hit_status(target,
+					enum mctrl6hitstatus hits_status = check_mcontrol6_hit_status(target,
 								tdata1, hit_mask);
 					if (hits_status == M6_HIT_ERROR)
 						return ERROR_FAIL;
@@ -2078,7 +2078,7 @@ static int get_loadstore_memoffset(struct target *target,
 		const riscv_insn_t instruction, int16_t *memoffset)
 {
 	uint32_t opcode = get_opcode(instruction);
-	int16_t offset;
+	int16_t offset = 0;
 
 	switch (opcode) {
 	case MATCH_LB:
@@ -2911,8 +2911,7 @@ static int resume_finish(struct target *target, bool debug_execution)
  * @par single_hart When true, only resume a single hart even if SMP is
  * configured.  This is used to run algorithms on just one hart.
  */
-static int riscv_resume(
-		struct target *target,
+static int riscv_resume(struct target *target,
 		bool current,
 		target_addr_t address,
 		bool handle_breakpoints,
@@ -3049,7 +3048,6 @@ static int riscv_mmu(struct target *target, int *enabled)
 				/* In hypervisor mode regular satp translation
 				 * doesn't happen. */
 				return ERROR_OK;
-
 		}
 
 		riscv_reg_t vsatp;
@@ -3145,7 +3143,7 @@ static int riscv_address_translate(struct target *target,
 
 		uint8_t buffer[8];
 		assert(info->pte_shift <= 3);
-		const riscv_mem_access_args_t args = {
+		const struct riscv_mem_access_args args = {
 			.address = pte_address,
 			.read_buffer = buffer,
 			.size = 4,
@@ -3388,7 +3386,7 @@ static int check_virt_memory_access(struct target *target, target_addr_t address
 static int riscv_read_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, uint8_t *buffer)
 {
-	const riscv_mem_access_args_t args = {
+	const struct riscv_mem_access_args args = {
 		.address = phys_address,
 		.read_buffer = buffer,
 		.size = size,
@@ -3402,7 +3400,7 @@ static int riscv_read_phys_memory(struct target *target, target_addr_t phys_addr
 static int riscv_write_phys_memory(struct target *target, target_addr_t phys_address,
 			uint32_t size, uint32_t count, const uint8_t *buffer)
 {
-	const riscv_mem_access_args_t args = {
+	const struct riscv_mem_access_args args = {
 		.address = phys_address,
 		.write_buffer = buffer,
 		.size = size,
@@ -3414,7 +3412,7 @@ static int riscv_write_phys_memory(struct target *target, target_addr_t phys_add
 	return r->access_memory(target, args);
 }
 
-static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t args)
+static int riscv_rw_memory(struct target *target, const struct riscv_mem_access_args args)
 {
 	assert(riscv_mem_access_is_valid(args));
 
@@ -3456,7 +3454,7 @@ static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t 
 				(RISCV_PGSIZE - RISCV_PGOFFSET(current_address))
 				/ args.size);
 
-		riscv_mem_access_args_t current_access = args;
+		struct riscv_mem_access_args current_access = args;
 		current_access.address = physical_addr;
 		current_access.count = chunk_count;
 		if (is_write)
@@ -3477,7 +3475,7 @@ static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t 
 static int riscv_read_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, uint8_t *buffer)
 {
-	const riscv_mem_access_args_t args = {
+	const struct riscv_mem_access_args args = {
 		.address = address,
 		.read_buffer = buffer,
 		.size = size,
@@ -3491,7 +3489,7 @@ static int riscv_read_memory(struct target *target, target_addr_t address,
 static int riscv_write_memory(struct target *target, target_addr_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
-	const riscv_mem_access_args_t args = {
+	const struct riscv_mem_access_args args = {
 		.address = address,
 		.write_buffer = buffer,
 		.size = size,
@@ -3548,8 +3546,7 @@ static int riscv_get_gdb_reg_list_internal(struct target *target,
 		if (is_read &&
 				target->reg_cache->reg_list[i].exist &&
 				!target->reg_cache->reg_list[i].valid) {
-			if (target->reg_cache->reg_list[i].type->get(
-						&target->reg_cache->reg_list[i]) != ERROR_OK)
+			if (target->reg_cache->reg_list[i].type->get(&target->reg_cache->reg_list[i]) != ERROR_OK)
 				return ERROR_FAIL;
 		}
 	}
@@ -4008,8 +4005,8 @@ static int sample_memory(struct target *target)
 					r->sample_buf.used + 1 + r->sample_config.bucket[i].size_bytes < r->sample_buf.size) {
 				assert(i < RISCV_SAMPLE_BUF_TIMESTAMP_BEFORE);
 				r->sample_buf.buf[r->sample_buf.used] = i;
-				result = riscv_read_phys_memory(
-					target, r->sample_config.bucket[i].address,
+				result = riscv_read_phys_memory(target,
+					r->sample_config.bucket[i].address,
 					r->sample_config.bucket[i].size_bytes, 1,
 					r->sample_buf.buf + r->sample_buf.used + 1);
 				if (result == ERROR_OK)
@@ -4497,7 +4494,7 @@ static int parse_reg_ranges_impl(struct list_head *ranges, char *args,
 		/* Check for overlap, name uniqueness. */
 		range_list_t *entry;
 		list_for_each_entry(entry, ranges, list) {
-			if ((entry->low <= high) && (low <= entry->high)) {
+			if (entry->low <= high && low <= entry->high) {
 				if (low == high)
 					LOG_WARNING("Duplicate %s register number - "
 							"Register %u has already been exposed previously", reg_type, low);
@@ -4624,10 +4621,10 @@ COMMAND_HANDLER(riscv_authdata_read)
 			return ERROR_FAIL;
 		command_print_sameline(CMD, "0x%08" PRIx32, value);
 		return ERROR_OK;
-	} else {
-		LOG_TARGET_ERROR(target, "authdata_read is not implemented for this target.");
-		return ERROR_FAIL;
 	}
+
+	LOG_TARGET_ERROR(target, "authdata_read is not implemented for this target.");
+	return ERROR_FAIL;
 }
 
 COMMAND_HANDLER(riscv_authdata_write)
@@ -5225,7 +5222,7 @@ COMMAND_HANDLER(handle_repeat_read)
 		LOG_ERROR("malloc failed");
 		return ERROR_FAIL;
 	}
-	const riscv_mem_access_args_t args = {
+	const struct riscv_mem_access_args args = {
 		.address = address,
 		.read_buffer = buffer,
 		.size = size,
@@ -5233,10 +5230,8 @@ COMMAND_HANDLER(handle_repeat_read)
 		.increment = 0,
 	};
 	int result = r->access_memory(target, args);
-	if (result == ERROR_OK) {
-		target_handle_md_output(cmd, target, address, size, count, buffer,
-			false);
-	}
+	if (result == ERROR_OK)
+		target_handle_md_output(cmd, target, address, size, count, buffer, false);
 	free(buffer);
 	return result;
 }
@@ -5562,7 +5557,7 @@ COMMAND_HANDLER(handle_riscv_virt2phys_mode)
 {
 	struct riscv_info *info = riscv_info(get_current_target(CMD_CTX));
 	if (CMD_ARGC == 0) {
-		riscv_virt2phys_mode_t mode = info->virt2phys_mode;
+		enum riscv_virt2phys_mode mode = info->virt2phys_mode;
 		command_print(CMD, "%s", riscv_virt2phys_mode_to_str(mode));
 		return ERROR_OK;
 	}

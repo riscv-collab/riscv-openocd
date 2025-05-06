@@ -7,13 +7,13 @@
 
 #define RISCV013_MAX_PROGBUF_SIZE 16
 
-typedef enum {
+enum riscv_progbuf_exec_result {
 	RISCV_PROGBUF_EXEC_RESULT_NOT_EXECUTED,
 	RISCV_PROGBUF_EXEC_RESULT_UNKNOWN,
 	RISCV_PROGBUF_EXEC_RESULT_EXCEPTION,
 	RISCV_PROGBUF_EXEC_RESULT_UNKNOWN_ERROR,
 	RISCV_PROGBUF_EXEC_RESULT_SUCCESS
-} riscv_progbuf_exec_result_t;
+};
 
 /* The various RISC-V debug specifications all revolve around setting up
  * program buffers and executing them on the target.  This structure contains a
@@ -28,7 +28,7 @@ struct riscv_program {
 
 	/* execution result of the program */
 	/* TODO: remove this field. We should make it a parameter to riscv_program_exec */
-	riscv_progbuf_exec_result_t execution_result;
+	enum riscv_progbuf_exec_result execution_result;
 };
 
 /* Initializes a program with the header. */
