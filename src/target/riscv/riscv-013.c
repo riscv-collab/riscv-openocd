@@ -534,7 +534,33 @@ static int dm_write(struct target *target, uint32_t address, uint32_t value)
 	return dmi_write(target, riscv013_get_dmi_address(target, address), value);
 }
 
-static bool check_dbgbase_exists(struct target *target)
+static int activate_dm(struct target *target, uint32_t dm_base_addr)
+{
+	uint32_t dmcontrol = 0;
+
+	LOG_TARGET_DEBUG(target, "Activating the DM with DMI base address (dbgbase) = 0x%x", dm_base_addr);
+	if (dmi_write(target, DM_DMCONTROL + dm_base_addr, DM_DMCONTROL_DMACTIVE) != ERROR_OK)
+		return ERROR_FAIL;
+
+	const time_t start = time(NULL);
+	LOG_TARGET_DEBUG(target, "Waiting for the DM to become active.");
+	while (1) {
+		if (dmi_read(target, &dmcontrol, DM_DMCONTROL + dm_base_addr) != ERROR_OK)
+			return ERROR_FAIL;
+		if (get_field32(dmcontrol, DM_DMCONTROL_DMACTIVE))
+			break;
+		if (time(NULL) - start > riscv_get_command_timeout_sec()) {
+			LOG_TARGET_ERROR(target, "Debug Module (at address dbgbase=0x%" PRIx32 ") did not become active in %d s. "
+					"Increase the timeout with 'riscv set_command_timeout_sec'.",
+					dm_base_addr, riscv_get_command_timeout_sec());
+			return ERROR_TIMEOUT_REACHED;
+		}
+	}
+	LOG_TARGET_DEBUG(target, "DM has become active.");
+	return ERROR_OK;
+}
+
+static int check_dbgbase_exists(struct target *target)
 {
 	uint32_t next_dm = 0;
 	unsigned int count = 1;
@@ -543,7 +569,14 @@ static bool check_dbgbase_exists(struct target *target)
 	while (1) {
 		uint32_t current_dm = next_dm;
 		if (current_dm == target->dbgbase)
-			return true;
+			return ERROR_OK;
+
+		uint32_t dmcontrol = 0;
+		if (dmi_read(target, &dmcontrol, DM_DMCONTROL + current_dm) != ERROR_OK)
+			break;
+		if (!get_field32(dmcontrol, DM_DMCONTROL_DMACTIVE) && activate_dm(target, current_dm) != ERROR_OK)
+			break;
+
 		if (dmi_read(target, &next_dm, DM_NEXTDM + current_dm) != ERROR_OK)
 			break;
 		LOG_TARGET_DEBUG(target, "dm @ 0x%x --> nextdm=0x%x", current_dm, next_dm);
@@ -558,7 +591,7 @@ static bool check_dbgbase_exists(struct target *target)
 			break;
 		}
 	}
-	return false;
+	return ERROR_FAIL;
 }
 
 static int dmstatus_read(struct target *target, uint32_t *dmstatus,
@@ -1868,26 +1901,12 @@ static int reset_dm(struct target *target)
 		} while (get_field32(dmcontrol, DM_DMCONTROL_DMACTIVE));
 		LOG_TARGET_DEBUG(target, "DM reset initiated.");
 	}
+	/* TODO: Move the code above into `deactivate_dm()` function
+	 * (a logical counterpart to activate_dm()). */
 
-	LOG_TARGET_DEBUG(target, "Activating the DM.");
-	result = dm_write(target, DM_DMCONTROL, DM_DMCONTROL_DMACTIVE);
+	result = activate_dm(target, dm->base);
 	if (result != ERROR_OK)
 		return result;
-
-	const time_t start = time(NULL);
-	LOG_TARGET_DEBUG(target, "Waiting for the DM to come out of reset.");
-	do {
-		result = dm_read(target, &dmcontrol, DM_DMCONTROL);
-		if (result != ERROR_OK)
-			return result;
-
-		if (time(NULL) - start > riscv_get_command_timeout_sec()) {
-			LOG_TARGET_ERROR(target, "Debug Module did not become active in %d s. "
-					"Increase the timeout with 'riscv set_command_timeout_sec'.",
-					riscv_get_command_timeout_sec());
-			return ERROR_TIMEOUT_REACHED;
-		}
-	} while (!get_field32(dmcontrol, DM_DMCONTROL_DMACTIVE));
 
 	LOG_TARGET_DEBUG(target, "DM successfully reset.");
 	dm->was_reset = true;
@@ -2043,7 +2062,7 @@ static int examine(struct target *target)
 			info->abits, RISCV013_DTMCS_ABITS_MIN);
 	}
 
-	if (!check_dbgbase_exists(target)) {
+	if (check_dbgbase_exists(target) != ERROR_OK) {
 		LOG_TARGET_ERROR(target, "Could not find debug module with DMI base address (dbgbase) = 0x%x", target->dbgbase);
 		return ERROR_FAIL;
 	}
