@@ -251,9 +251,9 @@ typedef struct {
 	/* This target was selected using hasel. */
 	bool selected;
 
-	/* When false, we need to set dcsr.ebreak*, halting the target if that's
-	 * necessary. */
-	bool dcsr_ebreak_is_set;
+	/* When false, we need to configure certain bits in the dcsr register.
+	 * To do that, we may momentarily halt the target, if necessary. */
+	bool dcsr_register_is_set;
 
 	/* This hart was placed into a halt group in examine(). */
 	bool haltgroup_supported;
@@ -1674,9 +1674,9 @@ static int wait_for_authbusy(struct target *target, uint32_t *dmstatus)
 	return ERROR_OK;
 }
 
-static int set_dcsr_ebreak(struct target *target, bool step)
+static int set_dcsr_config(struct target *target, bool step)
 {
-	LOG_TARGET_DEBUG(target, "Set dcsr.ebreak*");
+	LOG_TARGET_DEBUG(target, "Set dcsr config");
 
 	if (dm013_select_target(target) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1694,18 +1694,20 @@ static int set_dcsr_ebreak(struct target *target, bool step)
 	dcsr = set_field(dcsr, CSR_DCSR_EBREAKU, config->dcsr_ebreak_fields[RISCV_MODE_U]);
 	dcsr = set_field(dcsr, CSR_DCSR_EBREAKVS, config->dcsr_ebreak_fields[RISCV_MODE_VS]);
 	dcsr = set_field(dcsr, CSR_DCSR_EBREAKVU, config->dcsr_ebreak_fields[RISCV_MODE_VU]);
+	dcsr = set_field(dcsr, CSR_DCSR_CETRIG, config->dcsr_cetrig);
 	if (dcsr != original_dcsr &&
 			riscv_reg_set(target, GDB_REGNO_DCSR, dcsr) != ERROR_OK)
 		return ERROR_FAIL;
-	info->dcsr_ebreak_is_set = true;
+	// TODO: Read back the DCSR and check if these WARL bits are set as the user intended.
+	info->dcsr_register_is_set = true;
 	return ERROR_OK;
 }
 
-static int halt_set_dcsr_ebreak(struct target *target)
+static int halt_set_dcsr_config(struct target *target)
 {
 	RISCV_INFO(r);
 	RISCV013_INFO(info);
-	LOG_TARGET_DEBUG(target, "Halt to set DCSR.ebreak*");
+	LOG_TARGET_DEBUG(target, "Halt to set dcsr config");
 
 	/* Remove this hart from the halt group.  This won't work on all targets
 	 * because the debug spec allows halt groups to be hard-coded, but I
@@ -1743,7 +1745,7 @@ static int halt_set_dcsr_ebreak(struct target *target)
 
 	r->prepped = true;
 	if (riscv013_halt_go(target) != ERROR_OK ||
-			set_dcsr_ebreak(target, false) != ERROR_OK ||
+			set_dcsr_config(target, false) != ERROR_OK ||
 			riscv013_step_or_resume_current_hart(target, false) != ERROR_OK) {
 		result = ERROR_FAIL;
 	} else {
@@ -2132,7 +2134,7 @@ static int examine(struct target *target)
 	if (result != ERROR_OK)
 		return result;
 
-	if (set_dcsr_ebreak(target, false) != ERROR_OK)
+	if (set_dcsr_config(target, false) != ERROR_OK)
 		return ERROR_FAIL;
 
 	if (state_at_examine_start == RISCV_STATE_RUNNING) {
@@ -2779,7 +2781,7 @@ static int riscv013_get_hart_state(struct target *target, enum riscv_hart_state 
 		return ERROR_FAIL;
 	if (get_field(dmstatus, DM_DMSTATUS_ANYHAVERESET)) {
 		LOG_TARGET_INFO(target, "Hart unexpectedly reset!");
-		info->dcsr_ebreak_is_set = false;
+		info->dcsr_register_is_set = false;
 		/* TODO: Can we make this more obvious to eg. a gdb user? */
 		uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE |
 			DM_DMCONTROL_ACKHAVERESET;
@@ -2830,17 +2832,17 @@ static int handle_became_unavailable(struct target *target,
 
 	riscv_reg_cache_invalidate_all(target);
 
-	info->dcsr_ebreak_is_set = false;
+	info->dcsr_register_is_set = false;
 	return ERROR_OK;
 }
 
 static int tick(struct target *target)
 {
 	RISCV013_INFO(info);
-	if (!info->dcsr_ebreak_is_set &&
+	if (!info->dcsr_register_is_set &&
 			target->state == TARGET_RUNNING &&
 			target_was_examined(target))
-		return halt_set_dcsr_ebreak(target);
+		return halt_set_dcsr_config(target);
 	return ERROR_OK;
 }
 
@@ -2939,13 +2941,13 @@ static int assert_reset(struct target *target)
 	return riscv013_invalidate_cached_progbuf(target);
 }
 
-static bool dcsr_ebreak_config_equals_reset_value(const struct target *target)
+static bool dcsr_config_equals_reset_value(const struct target *target)
 {
 	const struct riscv_private_config * const config = riscv_private_config(target);
 	for (int i = 0; i < N_RISCV_MODE; ++i)
 		if (config->dcsr_ebreak_fields[i])
 			return false;
-	return true;
+	return !config->dcsr_cetrig;
 }
 
 static int deassert_reset(struct target *target)
@@ -3023,7 +3025,7 @@ static int deassert_reset(struct target *target)
 		target->state = TARGET_RUNNING;
 		target->debug_reason = DBG_REASON_NOTHALTED;
 	}
-	info->dcsr_ebreak_is_set = dcsr_ebreak_config_equals_reset_value(target);
+	info->dcsr_register_is_set = dcsr_config_equals_reset_value(target);
 	return ERROR_OK;
 }
 
@@ -5367,6 +5369,16 @@ static enum riscv_halt_reason riscv013_halt_reason(struct target *target)
 		return RISCV_HALT_INTERRUPT;
 	case CSR_DCSR_CAUSE_GROUP:
 		return RISCV_HALT_GROUP;
+	case CSR_DCSR_CAUSE_OTHER:
+		switch (get_field(dcsr, CSR_DCSR_EXTCAUSE)) {
+		case 0:
+			LOG_TARGET_WARNING(target, "halted because of hart in a critical error state.");
+			return RISCV_HALT_CRITICAL_ERROR;
+		default:
+			LOG_TARGET_ERROR(target, "Unknown DCSR extcause field: 0x%"
+					PRIx64, get_field(dcsr, CSR_DCSR_EXTCAUSE));
+			return RISCV_HALT_UNKNOWN;
+		}
 	}
 
 	LOG_TARGET_ERROR(target, "Unknown DCSR cause field: 0x%" PRIx64, get_field(dcsr, CSR_DCSR_CAUSE));
@@ -5462,7 +5474,7 @@ static int riscv013_on_step_or_resume(struct target *target, bool step)
 		if (execute_autofence(target) != ERROR_OK)
 			return ERROR_FAIL;
 
-	if (set_dcsr_ebreak(target, step) != ERROR_OK)
+	if (set_dcsr_config(target, step) != ERROR_OK)
 		return ERROR_FAIL;
 
 	if (riscv_reg_flush_all(target) != ERROR_OK)

@@ -486,6 +486,8 @@ static struct riscv_private_config *alloc_default_riscv_private_config(void)
 	for (unsigned int i = 0; i < ARRAY_SIZE(config->dcsr_ebreak_fields); ++i)
 		config->dcsr_ebreak_fields[i] = true;
 
+	config->dcsr_cetrig = true;
+
 	return config;
 }
 
@@ -523,6 +525,15 @@ static struct jim_nvp nvp_ebreak_mode_opts[] = {
 	{ .name = "exception", .value = false },
 	{ .name = "halt", .value = true },
 	{ .name = NULL, .value = RISCV_EBREAK_MODE_INVALID }
+};
+
+
+#define RISCV_CETRIG_INVALID -1
+
+static struct jim_nvp nvp_cetrig_opts[] = {
+	{ .name = "disable", .value = false },
+	{ .name = "enable", .value = true },
+	{ .name = NULL, .value = RISCV_CETRIG_INVALID }
 };
 
 static int jim_configure_ebreak(struct riscv_private_config *config, struct jim_getopt_info *goi)
@@ -611,13 +622,42 @@ static int jim_report_ebreak_config(const struct riscv_private_config *config,
 	return JIM_OK;
 }
 
+static int jim_configure_cetrig(struct riscv_private_config *config,
+		struct jim_getopt_info *goi)
+{
+	if (goi->argc == 0) {
+		Jim_WrongNumArgs(goi->interp, 1, goi->argv - 1,
+				"?disable|enable?");
+		return JIM_ERR;
+	}
+
+	struct jim_nvp *opt_nvp;
+	if (jim_getopt_nvp(goi, nvp_cetrig_opts, &opt_nvp) != JIM_OK) {
+		jim_getopt_nvp_unknown(goi, nvp_cetrig_opts, /*hadprefix*/ true);
+		return JIM_ERR;
+	}
+	config->dcsr_cetrig = opt_nvp->value;
+	return JIM_OK;
+}
+
+static int jim_report_cetrig_config(const struct riscv_private_config *config,
+		Jim_Interp *interp)
+{
+	const char *cetrig_opt = jim_nvp_value2name_simple(nvp_cetrig_opts,
+			config->dcsr_cetrig)->name;
+	Jim_SetResultString(interp, cetrig_opt, strlen(cetrig_opt));
+	return JIM_OK;
+}
+
 enum riscv_cfg_opts {
 	RISCV_CFG_EBREAK,
+	RISCV_CFG_CETRIG,
 	RISCV_CFG_INVALID = -1
 };
 
 static struct jim_nvp nvp_config_opts[] = {
 	{ .name = "-ebreak", .value = RISCV_CFG_EBREAK },
+	{ .name = "-cetrig", .value = RISCV_CFG_CETRIG },
 	{ .name = NULL, .value = RISCV_CFG_INVALID }
 };
 
@@ -654,6 +694,10 @@ static int riscv_jim_configure(struct target *target,
 		return goi->is_configure
 			? jim_configure_ebreak(config, goi)
 			: jim_report_ebreak_config(config, goi->interp);
+	case RISCV_CFG_CETRIG:
+		return goi->is_configure
+			? jim_configure_cetrig(config, goi)
+			: jim_report_cetrig_config(config, goi->interp);
 	default:
 		assert(false && "'jim_getopt_nvp' should have returned an error.");
 	}
@@ -2617,6 +2661,7 @@ static int set_debug_reason(struct target *target, enum riscv_halt_reason halt_r
 			break;
 		case RISCV_HALT_INTERRUPT:
 		case RISCV_HALT_GROUP:
+		case RISCV_HALT_CRITICAL_ERROR:
 			target->debug_reason = DBG_REASON_DBGRQ;
 			break;
 		case RISCV_HALT_SINGLESTEP:

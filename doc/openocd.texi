@@ -11437,6 +11437,15 @@ action pairs.
 @end itemize
 @end itemize
 
+@itemize
+@item @code{-cetrig} @option{disable}|@option{enable} -- determines how OpenOCD should
+configure the @code{cetrig} in the dcsr register. Defaults to @option{disable}.
+
+@itemize
+@item @code{cget} returns the currently configured state for @code{cetrig}.
+@end itemize
+@end itemize
+
 @subsection RISC-V Debug Configuration Commands
 
 @deffn {Command} {riscv dump_sample_buf} [base64]
