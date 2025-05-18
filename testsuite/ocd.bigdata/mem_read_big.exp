@@ -15,6 +15,13 @@ proc run_test {} {
   ocdtlb_run_expect "load_image $default_bin_prefix.exe"
 
   set extra_timeout [target_info env,long_op_timeout]
+  if {[target_info sim] ne ""} {
+    # Currently, simuation platforms that have program buffer disabled work
+    # EXTREMELY slow on memory read operations
+    if {[lsearch [target_info sim,options] {--dm-progsize=0}] != -1} {
+      set extra_timeout [expr { $extra_timeout * 2 }]
+    }
+  }
   set rs [ocdtlb_run_expect "read_memory $MEM_ADDR 8 8192" expect_success $extra_timeout]
   set data8 [ocdtlb_rsp_get $rs data]
   set front(0) [lindex $data8 0]
