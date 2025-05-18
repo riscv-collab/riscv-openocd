@@ -81,8 +81,8 @@ proc utils_spawn_universal_launcher { args \
   }
   set script_timeout [expr {[target_info env,scripting_timeout] * $script_timeout_multiplier}]
   verbose "launcher timeout: $script_timeout"
-  set timeout $script_timeout
   expect {
+    -timeout $script_timeout
     eof {
       verbose "  universal launcher execution terminated" 1
       set result [wait]

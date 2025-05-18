@@ -290,8 +290,8 @@ proc tsuplib_shutdown_openocd { cleanup_type } {
   # we expect SIGINT to eventually initiate shutdown-like procedure, so
   # we are waiting for eof
   set shutdown_timeout [target_info env,long_op_timeout]
-  set timeout $shutdown_timeout
   expect {
+    -timeout $shutdown_timeout
     -i $openocd_instance_spawn_id
     eof {
       verbose "OpenOCD managed to successfully shutdown" 1
@@ -407,8 +407,8 @@ proc tsuplib_tclrpc_run_command {msg {extra_timeout ""} {capture_mode "catch"} }
     set effective_timeout [expr { $effective_timeout * 10 }]
   }
   verbose "effective timeout for the command: $effective_timeout" 3
-  set timeout $effective_timeout
   expect {
+    -timeout $effective_timeout
     \x1a {
       # drop the last character, which is 0x1a (aka end-of-file), this character
       # marks the end of TCL-RPC message. We don't want it in our results,
