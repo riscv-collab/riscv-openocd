@@ -6,7 +6,7 @@ proc ocd_scaled_delay_value { per_core_delay } {
     return $per_core_delay
   }
   set cores_num [target_info cpu,cores_num]
-  return [expr { $cores_num * $per_core_delay} ]
+  return [expr { $cores_num * $per_core_delay}]
 }
 
 proc ocd_resume_delay {} {
@@ -286,7 +286,7 @@ proc tsuplib_shutdown_openocd { cleanup_type } {
   }
 
   verbose "about to kill openocd instance" 2
-  exec kill -s SIGINT [exp_pid -i $openocd_instance_spawn_id ]
+  exec kill -s SIGINT [exp_pid -i $openocd_instance_spawn_id]
   # we expect SIGINT to eventually initiate shutdown-like procedure, so
   # we are waiting for eof
   set shutdown_timeout [target_info env,long_op_timeout]
