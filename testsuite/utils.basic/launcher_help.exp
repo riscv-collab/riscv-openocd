@@ -14,14 +14,12 @@ proc run_test {} {
     help \
     ide-mode \
     i-know-what-im-doing \
-    load \
     log-session \
     no-extra-scripts \
     no-targets \
     reset-adapter \
     run-command \
     run-script \
-    save \
     scan-only \
     single-core \
     smp \
