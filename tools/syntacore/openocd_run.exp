@@ -47,6 +47,7 @@ set COMMAND_LINE_OPTIONS [dict create \
   --help "flag. prints this help" \
   --ide-mode "flag. hide most of CSRs. Useful if you want to debug an application using IDE (like Eclipse)" \
   --i-know-what-im-doing "value:config_file. Use only if your really understand the purpose of this flag" \
+  --jtag-topology "value:topology_string. Use the specified Jtag Topology String instead of to derive target config" \
   --log-session "value:log_path. Path to session log" \
   --no-extra-scripts "flag. avoid loading of extra scripts (common routines to help with debugging)" \
   --no-targets "devel:flag. create only TAP, do not create OpenOCD targets" \
@@ -91,6 +92,7 @@ set SETTINGS(telnet) 0
 set SETTINGS(telnet_port) 4444
 set SETTINGS(ide_mode) 0
 set SETTINGS(unlock_usb_devices) ""
+set SETTINGS(jtag_topology_string) ""
 set SETTINGS(bindto) 0.0.0.0
 set SETTINGS(configure_hook) ""
 set SETTINGS(load_extra_scripts) 1
@@ -138,6 +140,16 @@ proc printOptionList { Options } {
   }
 }
 
+proc printJtagTopologyStringFormat {} {
+  set TopologyStringFormat [join [list \
+      "\"atom\[:atom]...\", where atom is any of:" \
+      "- <num>l<irlen> - <num> TAPS with IRLEN=<irlen> for each one" \
+      "- riscv<num>l<irlen> - <num> TAPS with IRLEN=<irlen> with a single riscv target attached" \
+      "- <num>riscvl<irlen> - not for Syntacore cores. SINGLE TAP with IRLEN=<irlen> and <num> RISC-V targets attached to it" \
+    ] "\n    "]
+  send_user -- "  $TopologyStringFormat\n"
+}
+
 proc printUsage {} {
   global COMMAND_LINE_OPTIONS
   set UserOptions [list]
@@ -156,6 +168,8 @@ proc printUsage {} {
   printOptionList $UserOptions
   send_user -- "Development-only Options:\n"
   printOptionList $DevelOptions
+  send_user -- "Jtag Topology String Format:\n"
+  printJtagTopologyStringFormat
   send_user -- "Dependencies:\n"
   send_user -- "  lsusb, telnet (optional)\n"
 }
@@ -240,6 +254,8 @@ for { set i 0 } { $i < $argc } { incr i } {
     set SETTINGS(configure_hook) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--i-know-what-im-doing) } {
     set SETTINGS(unlock_usb_devices) $optarg
+  } elseif { $option == $COMMAND_LINE_ARG(--jtag-topology) } {
+    set SETTINGS(jtag_topology_string) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--log-session) } {
     set SETTINGS(log_session) $optarg
   } elseif { $option == $COMMAND_LINE_ARG(--stand-db) } {
@@ -605,10 +621,16 @@ proc selectDebugAdapter { DebugAdapters } {
   return $Index
 }
 
-proc detectNumberOfTaps {DebugInterface AdapterSerial} {
+proc deriveJtagTopology {DebugInterface AdapterSerial} {
   global SETTINGS
+
+  if {$SETTINGS(jtag_topology_string) ne ""} {
+    return $SETTINGS(jtag_topology_string)
+  }
+
   if {$SETTINGS(spike_mode) == 1} {
-    return 1
+    set harts_num $SETTINGS(spike_harts)
+    return "${harts_num}riscvl5"
   }
 
   set ScanSpeed [getDefaultJTAGSpeed]
@@ -638,7 +660,7 @@ proc detectNumberOfTaps {DebugInterface AdapterSerial} {
         send_user -- "Make sure that a correct debug adapter is selected or try to reset the device\n"
         fatalError "No TAP detected! "
       }
-      return $TapCount
+      return "riscv${TapCount}l5"
     }
     eof {
       printErrorMessage "unexpected EOF (while waiting for TAP count)"
@@ -655,7 +677,7 @@ proc detectNumberOfTaps {DebugInterface AdapterSerial} {
   }
 }
 
-proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
+proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial JtagTopologyString} {
   global SETTINGS
 
   set SyntacoreConfigFile "[getOpenOCDRootDir]/share/openocd/scripts/target/syntacore_target.cfg"
@@ -664,13 +686,16 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
   }
 
   if { $SETTINGS(spike_mode) == 0 } {
-    set NumberOfHarts $TapCount
-
     if {![file exists "$DebugInterfaceCfg"]} {
       fatalError "unable to locate Debug Interface Config: $DebugInterfaceCfg"
     }
     if {$SETTINGS(enforce_single_core) == 1} {
-      set NumberOfHarts 1
+      if {[llength [split $JtagTopologyString :]] != 1} {
+        global COMMAND_LINE_ARG
+        set opt $COMMAND_LINE_ARG(--single-core)
+        fatalError "when Jtag Topology String has several atoms, $opt is not supported"
+      }
+      set JtagTopologyString "riscv1l5"
     }
     set OpenOCDArgs [list \
       -f "$DebugInterfaceCfg" \
@@ -678,8 +703,7 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
       -c "adapter speed [getDefaultJTAGSpeed]" \
       -c "adapter serial $AdapterSerial" \
       -f "$SyntacoreConfigFile" \
-      -c "sc_target_config irlen 5" \
-      -c "sc_target_config harts_num $NumberOfHarts"]
+      -c "sc_target_config jtag_topology ${JtagTopologyString}"]
   } else {
     send_user -- "spike mode selected\n"
     if { $SETTINGS(spike_harts) == 0 } {
@@ -688,9 +712,8 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
     if { $SETTINGS(bitbang_port) == 0 } {
       fatalError "bitbang port must be specified"
     }
-    set NumberOfHarts $SETTINGS(spike_harts)
     if {$SETTINGS(enforce_single_core) == 1} {
-      set NumberOfHarts 1
+      set JtagTopologyString "1riscvl5"
     }
 
     set OpenOCDArgs [list \
@@ -701,7 +724,7 @@ proc buildOpenOCDCommandLine {DebugInterfaceCfg AdapterSerial TapCount} {
       -c "gdb_port 0" \
       -c "telnet_port 0" \
       -c "tcl_port 0" \
-      -c "sc_target_config jtag_topology ${NumberOfHarts}riscvl5"]
+      -c "sc_target_config jtag_topology ${JtagTopologyString}"]
   }
 
   if {$SETTINGS(load_extra_scripts) == 1} {
@@ -968,10 +991,10 @@ proc runTelnetClient { OpenOCDSpawnID } {
   }
 }
 
-proc runOpenOCD {DebugInterfaceCfg AdapterSerial TapCount} {
+proc runOpenOCD {DebugInterfaceCfg AdapterSerial JtagTopologyString} {
   global SETTINGS
 
-  set OpenOCDArgs [buildOpenOCDCommandLine $DebugInterfaceCfg $AdapterSerial $TapCount]
+  set OpenOCDArgs [buildOpenOCDCommandLine $DebugInterfaceCfg $AdapterSerial $JtagTopologyString]
 
   set Commands "[openocdBinary]"
   foreach Arg $OpenOCDArgs {
@@ -1083,7 +1106,8 @@ resetDebugAdapterIfNeeded $UsbBusId $UsbDeviceId
 
 set AdapterConfig $DEBUG_ADAPTER_INFO(openocd_config)
 set AdapterSerial $DEBUG_ADAPTER_INFO(adapter_serial)
-set TapCount [detectNumberOfTaps $AdapterConfig $AdapterSerial]
+
+set JtagTopologyString [deriveJtagTopology $AdapterConfig $AdapterSerial]
 
 runSpikeIfNeeded
-runOpenOCD $AdapterConfig $AdapterSerial $TapCount
+runOpenOCD $AdapterConfig $AdapterSerial $JtagTopologyString
