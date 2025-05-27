@@ -11727,13 +11727,26 @@ the target supports, these commands let you
 set those triggers directly. (It's also possible to do so by writing the
 appropriate CSRs.)
 
-@deffn {Command} {riscv etrigger set} [@option{m}] [@option{s}] [@option{u}] [@option{vs}] [@option{vu}] exception_codes
+@option{trigger_action} selects one of the configurable RISC-V trigger actions:
+
+@itemize @minus
+@item @option{exception}:  Raise a breakpoint exception
+@item @option{halt}: Enter Debug Mode
+@item @option{trace_on}:  Trace on
+@item @option{trace_off}: Trace off
+@item @option{trace_notify}: Trace notify
+@item @option{external0}: Send a signal to TM external trigger output 0
+@item @option{external1}: Send a signal to TM external trigger output 1
+@end itemize
+
+@deffn {Command} {riscv etrigger set} [@option{m}] [@option{s}] [@option{u}] [@option{vs}] [@option{vu}] exception_codes [@option{trigger_action}]
 Set an exception trigger (type 5) on the current target, which halts the target when it
 fires.  @option{m}, @option{s}, @option{u}, @option{vs}, and @option{vu} control
 which execution modes the trigger fires in. @var{exception_codes} is a bit
 field, where each bit corresponds to an exception code in mcause (defined in the
 RISC-V Privileged Spec). The etrigger will fire on the exceptions whose bits are
-set in @var{exception_codes}.
+set in @var{exception_codes}. @option{trigger_action} control the desired behavior
+on the target when the trigger fires. Defaults to @option{halt}, which halts the target.
 
 For details on this trigger type, see the RISC-V Debug Specification.
 @end deffn
@@ -11742,7 +11755,11 @@ For details on this trigger type, see the RISC-V Debug Specification.
 Clear the type 5 trigger that was set using @command{riscv etrigger set}.
 @end deffn
 
-@deffn {Command} {riscv icount set} [@option{m}] [@option{s}] [@option{u}] [@option{vs}] [@option{vu}] [@option{pending}] count
+@deffn {Command} {riscv etrigger list}
+List the type 5 trigger that was set using @command{riscv etrigger set}.
+@end deffn
+
+@deffn {Command} {riscv icount set} [@option{m}] [@option{s}] [@option{u}] [@option{vs}] [@option{vu}] [@option{pending}] count [@option{trigger_action}]
 Set an instruction count
 trigger (type 3) on the current target, which halts the target when it fires.
 @option{m}, @option{s}, @option{u}, @option{vs}, and @option{vu} control which
@@ -11751,6 +11768,8 @@ pending bit is set, which is unlikely to be useful unless you're debugging the
 hardware implementation of this trigger.
 @var{count} sets the number of instructions to execute before the trigger is
 taken.
+@option{trigger_action} control the desired behavior on the target when the
+trigger fires. Defaults to @option{halt}, which halts the target.
 
 For details on this trigger type, see the RISC-V Debug Specification.
 @end deffn
@@ -11759,21 +11778,56 @@ For details on this trigger type, see the RISC-V Debug Specification.
 Clear the type 3 trigger that was set using @command{riscv icount set}.
 @end deffn
 
-@deffn {Command} {riscv itrigger set} [@option{m}] [@option{s}] [@option{u}] [@option{vs}] [@option{vu}] [@option{nmi}] mie_bits
+@deffn {Command} {riscv icount list}
+List the type 3 trigger that was set using @command{riscv icount set}.
+@end deffn
+
+@deffn {Command} {riscv itrigger set} [@option{m}] [@option{s}] [@option{u}] [@option{vs}] [@option{vu}] [@option{nmi}] mie_bits [@option{trigger_action}]
 Set an interrupt trigger (type 4) on the current target, which halts the target when it
 fires.  @option{m}, @option{s}, @option{u}, @option{vs}, and @option{vu} control
 which execution modes the trigger fires in.  If [@option{nmi}] is passed then
 the trigger will fire on non-maskable interrupts in those modes. @var{mie_bits}
 controls which interrupts the trigger fires on, using the same bit assignments
 as in the mie CSR (defined in the RISC-V Privileged Spec).
+@option{trigger_action} control the desired behavior on the target when the
+trigger fires. Defaults to @option{halt}, which halts the target.
 
 For details on this trigger type, see the RISC-V Debug Specification.
 @end deffn
 
+@deffn {Command} {riscv itrigger clear}
+Clear the type 4 trigger that was set using @command{riscv itrigger set}.
+@end deffn
+
+@deffn {Command} {riscv itrigger list}
+List the type 4 trigger that was set using @command{riscv itrigger set}.
+@end deffn
+
+@deffn {Command} {riscv mcontrol set} [@option{m}] [@option{s}] [@option{u}] [@option{vs}] [@option{vu}] address [@option{trigger_action}]
+Set a match trigger (type 2 or 6) on the current target, which sets the desired behavior on
+the target when it fires.  @option{m}, @option{s}, @option{u}, @option{vs}, and @option{vu}
+control which execution modes the trigger fires in. @option{execute}, @option{store},
+and @option{load} control the trigger how to fire.
+@option{trigger_action} control the desired behavior on the target when the
+trigger fires. Defaults to @option{halt}, which halts the target.
+
+For details on this trigger type, see the RISC-V Debug Specification.
+@end deffn
+
+@deffn {Command} {riscv mcontrol clear} [trigger_id]
+Clear the type 2 or 6 trigger that was set using @command{riscv mcontrol set}.
+@option{trigger_id} specifies the trigger id of a match trigger to clear.
+@end deffn
+
+@deffn {Command} {riscv mcontrol list}
+List the type 2 or 6 trigger that was set using @command{riscv mcontrol set}.
+@end deffn
+
 @deffn {Command} {riscv reserve_trigger} [index @option{on|off}]
 Manages the set of reserved triggers. Reserving a trigger results in OpenOCD
-not using it internally (e.g. skipping it when setting a watchpoint or a
-hardware breakpoint), so that the user or the application has unfettered
+not using it internally (e.g. skipping it when setting a watchpoint, a
+hardware breakpoint, an exception trigger, an instruction trigger or a
+match trigger), so that the user or the application has unfettered
 control over the trigger. By default there are no reserved triggers.
 
 @enumerate
@@ -11783,10 +11837,6 @@ control over the trigger. By default there are no reserved triggers.
 @item If called without parameters, returns indices of reserved triggers.
 @end enumerate
 
-@end deffn
-
-@deffn {Command} {riscv itrigger clear}
-Clear the type 4 trigger that was set using @command{riscv itrigger set}.
 @end deffn
 
 @subsection RISC-V Program Buffer Commands

@@ -121,12 +121,24 @@ static uint32_t bscan_tunnel_nested_tap_select_dmi_num_fields = ARRAY_SIZE(_bsca
 static struct scan_field *bscan_tunnel_data_register_select_dmi = _bscan_tunnel_data_register_select_dmi;
 static uint32_t bscan_tunnel_data_register_select_dmi_num_fields = ARRAY_SIZE(_bscan_tunnel_data_register_select_dmi);
 
+enum trigger_action {
+	TRIGGER_ACTION_BREAKPOINT = 0,
+	TRIGGER_ACTION_DEBUG_MODE = 1,
+	TRIGGER_ACTION_TRACE_ON = 2,
+	TRIGGER_ACTION_TRACE_OFF = 3,
+	TRIGGER_ACTION_TRACE_NOTIFY = 4,
+	TRIGGER_ACTION_EXTERNAL0 = 8,
+	TRIGGER_ACTION_EXTERNAL1 = 9
+};
+
 struct trigger {
 	uint64_t address;
 	uint32_t length;
 	uint64_t mask;
 	uint64_t value;
 	bool is_read, is_write, is_execute;
+	bool is_vs, is_vu, is_m, is_s, is_u;
+	enum trigger_action action;
 	int unique_id;
 };
 
@@ -768,6 +780,12 @@ static void trigger_from_breakpoint(struct trigger *trigger,
 	trigger->is_read = false;
 	trigger->is_write = false;
 	trigger->is_execute = true;
+	trigger->is_vs = true;
+	trigger->is_vu = true;
+	trigger->is_m = true;
+	trigger->is_s = true;
+	trigger->is_u = true;
+	trigger->action = TRIGGER_ACTION_DEBUG_MODE;
 	/* unique_id is unique across both breakpoints and watchpoints. */
 	trigger->unique_id = breakpoint->unique_id;
 }
@@ -1171,10 +1189,10 @@ static struct match_triggers_tdata1_fields fill_match_triggers_tdata1_fields_t2(
 		.common =
 			field_value(CSR_MCONTROL_TYPE(riscv_xlen(target)), CSR_TDATA1_TYPE_MCONTROL) |
 			field_value(CSR_MCONTROL_DMODE(riscv_xlen(target)), 1) |
-			field_value(CSR_MCONTROL_ACTION, CSR_MCONTROL_ACTION_DEBUG_MODE) |
-			field_value(CSR_MCONTROL_M, 1) |
-			field_value(CSR_MCONTROL_S, !!(r->misa & BIT('S' - 'A'))) |
-			field_value(CSR_MCONTROL_U, !!(r->misa & BIT('U' - 'A'))) |
+			field_value(CSR_MCONTROL_ACTION, trigger->action) |
+			field_value(CSR_MCONTROL_M, trigger->is_m) |
+			field_value(CSR_MCONTROL_S, trigger->is_s && !!(r->misa & BIT('S' - 'A'))) |
+			field_value(CSR_MCONTROL_U, trigger->is_u && !!(r->misa & BIT('U' - 'A'))) |
 			field_value(CSR_MCONTROL_EXECUTE, trigger->is_execute) |
 			field_value(CSR_MCONTROL_LOAD, trigger->is_read) |
 			field_value(CSR_MCONTROL_STORE, trigger->is_write),
@@ -1208,12 +1226,12 @@ static struct match_triggers_tdata1_fields fill_match_triggers_tdata1_fields_t6(
 		.common =
 			field_value(CSR_MCONTROL6_TYPE(riscv_xlen(target)), CSR_TDATA1_TYPE_MCONTROL6) |
 			field_value(CSR_MCONTROL6_DMODE(riscv_xlen(target)), 1) |
-			field_value(CSR_MCONTROL6_ACTION, CSR_MCONTROL_ACTION_DEBUG_MODE) |
-			field_value(CSR_MCONTROL6_M, 1) |
-			field_value(CSR_MCONTROL6_S, misa_s) |
-			field_value(CSR_MCONTROL6_U, misa_u) |
-			field_value(CSR_MCONTROL6_VS, misa_h && misa_s) |
-			field_value(CSR_MCONTROL6_VU, misa_h && misa_u) |
+			field_value(CSR_MCONTROL6_ACTION, trigger->action) |
+			field_value(CSR_MCONTROL6_M, trigger->is_m) |
+			field_value(CSR_MCONTROL6_S, misa_s && trigger->is_s) |
+			field_value(CSR_MCONTROL6_U, misa_u && trigger->is_u) |
+			field_value(CSR_MCONTROL6_VS, misa_h && misa_s && trigger->is_vs) |
+			field_value(CSR_MCONTROL6_VU, misa_h && misa_u && trigger->is_vu) |
 			field_value(CSR_MCONTROL6_EXECUTE, trigger->is_execute) |
 			field_value(CSR_MCONTROL6_LOAD, trigger->is_read) |
 			field_value(CSR_MCONTROL6_STORE, trigger->is_write),
@@ -1356,8 +1374,8 @@ static int maybe_add_trigger_t2_t6(struct target *target,
 }
 
 static int maybe_add_trigger_t3(struct target *target, bool vs, bool vu,
-				bool m, bool s, bool u, bool pending, unsigned int count,
-				int unique_id)
+				bool m, bool s, bool u, bool pending, enum trigger_action action,
+				unsigned int count, int unique_id)
 {
 	int ret;
 	riscv_reg_t tdata1;
@@ -1367,7 +1385,7 @@ static int maybe_add_trigger_t3(struct target *target, bool vs, bool vu,
 	tdata1 = 0;
 	tdata1 = set_field(tdata1, CSR_ICOUNT_TYPE(riscv_xlen(target)), CSR_TDATA1_TYPE_ICOUNT);
 	tdata1 = set_field(tdata1, CSR_ICOUNT_DMODE(riscv_xlen(target)), 1);
-	tdata1 = set_field(tdata1, CSR_ICOUNT_ACTION, CSR_ICOUNT_ACTION_DEBUG_MODE);
+	tdata1 = set_field(tdata1, CSR_ICOUNT_ACTION, action);
 	tdata1 = set_field(tdata1, CSR_ICOUNT_VS, vs);
 	tdata1 = set_field(tdata1, CSR_ICOUNT_VU, vu);
 	tdata1 = set_field(tdata1, CSR_ICOUNT_PENDING, pending);
@@ -1388,8 +1406,8 @@ static int maybe_add_trigger_t3(struct target *target, bool vs, bool vu,
 }
 
 static int maybe_add_trigger_t4(struct target *target, bool vs, bool vu,
-				bool nmi, bool m, bool s, bool u, riscv_reg_t interrupts,
-				int unique_id)
+				bool nmi, bool m, bool s, bool u, enum trigger_action action,
+				riscv_reg_t interrupts, int unique_id)
 {
 	int ret;
 	riscv_reg_t tdata1, tdata2;
@@ -1399,7 +1417,7 @@ static int maybe_add_trigger_t4(struct target *target, bool vs, bool vu,
 	tdata1 = 0;
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_TYPE(riscv_xlen(target)), CSR_TDATA1_TYPE_ITRIGGER);
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_DMODE(riscv_xlen(target)), 1);
-	tdata1 = set_field(tdata1, CSR_ITRIGGER_ACTION, CSR_ITRIGGER_ACTION_DEBUG_MODE);
+	tdata1 = set_field(tdata1, CSR_ITRIGGER_ACTION, action);
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_VS, vs);
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_VU, vu);
 	tdata1 = set_field(tdata1, CSR_ITRIGGER_NMI, nmi);
@@ -1421,8 +1439,8 @@ static int maybe_add_trigger_t4(struct target *target, bool vs, bool vu,
 }
 
 static int maybe_add_trigger_t5(struct target *target, bool vs, bool vu,
-				bool m, bool s, bool u, riscv_reg_t exception_codes,
-				int unique_id)
+				bool m, bool s, bool u, enum trigger_action action,
+				riscv_reg_t exception_codes, int unique_id)
 {
 	int ret;
 	riscv_reg_t tdata1, tdata2;
@@ -1432,7 +1450,7 @@ static int maybe_add_trigger_t5(struct target *target, bool vs, bool vu,
 	tdata1 = 0;
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_TYPE(riscv_xlen(target)), CSR_TDATA1_TYPE_ETRIGGER);
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_DMODE(riscv_xlen(target)), 1);
-	tdata1 = set_field(tdata1, CSR_ETRIGGER_ACTION, CSR_ETRIGGER_ACTION_DEBUG_MODE);
+	tdata1 = set_field(tdata1, CSR_ETRIGGER_ACTION, action);
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_VS, vs);
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_VU, vu);
 	tdata1 = set_field(tdata1, CSR_ETRIGGER_M, m);
@@ -1728,6 +1746,12 @@ static void trigger_from_watchpoint(struct trigger *trigger,
 	trigger->is_read = (watchpoint->rw == WPT_READ || watchpoint->rw == WPT_ACCESS);
 	trigger->is_write = (watchpoint->rw == WPT_WRITE || watchpoint->rw == WPT_ACCESS);
 	trigger->is_execute = false;
+	trigger->is_vs = true;
+	trigger->is_vu = true;
+	trigger->is_m = true;
+	trigger->is_s = true;
+	trigger->is_u = true;
+	trigger->action = TRIGGER_ACTION_DEBUG_MODE;
 	/* unique_id is unique across both breakpoints and watchpoints. */
 	trigger->unique_id = watchpoint->unique_id;
 }
@@ -4999,7 +5023,7 @@ COMMAND_HANDLER(riscv_set_ebreaku)
 COMMAND_HELPER(riscv_clear_trigger, int trigger_id, const char *name)
 {
 	struct target *target = get_current_target(CMD_CTX);
-	if (CMD_ARGC != 1)
+	if (CMD_ARGC > 2)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
 	if (find_first_trigger_by_id(target, trigger_id) < 0) {
@@ -5007,6 +5031,92 @@ COMMAND_HELPER(riscv_clear_trigger, int trigger_id, const char *name)
 		return ERROR_FAIL;
 	}
 	return remove_trigger(target, trigger_id);
+}
+
+static const struct jim_nvp nvp_trigger_actions[] = {
+	{ .name = "exception", .value = TRIGGER_ACTION_BREAKPOINT },
+	{ .name = "halt", .value = TRIGGER_ACTION_DEBUG_MODE },
+	{ .name = "trace_on", .value = TRIGGER_ACTION_TRACE_ON },
+	{ .name = "trace_off", .value = TRIGGER_ACTION_TRACE_OFF },
+	{ .name = "trace_notify", .value = TRIGGER_ACTION_TRACE_NOTIFY },
+	{ .name = "external0", .value = TRIGGER_ACTION_EXTERNAL0 },
+	{ .name = "external1", .value = TRIGGER_ACTION_EXTERNAL1 },
+	{ .name = NULL, .value = -1 },
+};
+
+COMMAND_HELPER(riscv_list_trigger, int trigger_id, const char *name)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	if (CMD_ARGC != 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	int trigger_idx = find_first_trigger_by_id(target, trigger_id);
+	if (trigger_idx < 0) {
+		command_print(CMD, "No %s is set.", name);
+		return ERROR_OK;
+	}
+
+	riscv_reg_t tdata1, tdata2;
+	// Select which trigger to use
+	if (riscv_reg_set(target, GDB_REGNO_TSELECT, trigger_idx) != ERROR_OK)
+		return ERROR_FAIL;
+
+	// Read back tdata1, tdata2, (tdata3)
+	if (riscv_reg_get(target, &tdata1, GDB_REGNO_TDATA1) != ERROR_OK)
+		return ERROR_FAIL;
+	if (riscv_reg_get(target, &tdata2, GDB_REGNO_TDATA2) != ERROR_OK)
+		return ERROR_FAIL;
+
+	switch (get_field(tdata1, CSR_TDATA1_TYPE(riscv_xlen(target)))) {
+	case CSR_TDATA1_TYPE_ITRIGGER:
+		command_print(CMD, "Interrupt Trigger(%d): vs=%s, vu=%s, nmi=%s, m=%s, s=%s, u=%s, "
+			"interrupts=0x%" PRIx64 ", action=%s", trigger_id,
+			get_field(tdata1, CSR_ITRIGGER_VS) ? "true" : "false",
+			get_field(tdata1, CSR_ITRIGGER_VU) ? "true" : "false",
+			get_field(tdata1, CSR_ITRIGGER_NMI) ? "true" : "false",
+			get_field(tdata1, CSR_ITRIGGER_M) ? "true" : "false",
+			get_field(tdata1, CSR_ITRIGGER_S) ? "true" : "false",
+			get_field(tdata1, CSR_ITRIGGER_U) ? "true" : "false",
+			tdata2, jim_nvp_value2name_simple(nvp_trigger_actions, get_field(tdata1, CSR_ITRIGGER_ACTION))->name);
+		break;
+	case CSR_TDATA1_TYPE_ICOUNT:
+			command_print(CMD, "Icount Trigger(%d): vs=%s, vu=%s, pending=%s, m=%s, s=%s, u=%s, "
+			"count=%" PRIi64 ", action=%s", trigger_id,
+			get_field(tdata1, CSR_ICOUNT_VS) ? "true" : "false",
+			get_field(tdata1, CSR_ICOUNT_VU) ? "true" : "false",
+			get_field(tdata1, CSR_ICOUNT_PENDING) ? "true" : "false",
+			get_field(tdata1, CSR_ICOUNT_M) ? "true" : "false",
+			get_field(tdata1, CSR_ICOUNT_S) ? "true" : "false",
+			get_field(tdata1, CSR_ICOUNT_U) ? "true" : "false",
+			get_field(tdata1, CSR_ICOUNT_COUNT),
+			jim_nvp_value2name_simple(nvp_trigger_actions, get_field(tdata1, CSR_ICOUNT_ACTION))->name);
+		break;
+	case CSR_TDATA1_TYPE_ETRIGGER:
+		command_print(CMD, "Exception Trigger(%d): vs=%s, vu=%s, m=%s, s=%s, u=%s, "
+			"exception_codes=%"  PRIx64 ", action=%s", trigger_id,
+			get_field(tdata1, CSR_ETRIGGER_VS) ? "true" : "false",
+			get_field(tdata1, CSR_ETRIGGER_VU) ? "true" : "false",
+			get_field(tdata1, CSR_ITRIGGER_M) ? "true" : "false",
+			get_field(tdata1, CSR_ITRIGGER_S) ? "true" : "false",
+			get_field(tdata1, CSR_ITRIGGER_U) ? "true" : "false",
+			tdata2, jim_nvp_value2name_simple(nvp_trigger_actions, get_field(tdata1, CSR_ETRIGGER_ACTION))->name);
+		break;
+	case CSR_TDATA1_TYPE_MCONTROL:
+	case CSR_TDATA1_TYPE_MCONTROL6:
+		command_print(CMD, "Match Trigger(%d): vs=%s, vu=%s, m=%s, s=%s, u=%s, execute=%s, "
+			"store=%s, load=%s, address=0x%" PRIx64 ", action=%s", trigger_id,
+			get_field(tdata1, CSR_MCONTROL6_VS) ? "true" : "false",
+			get_field(tdata1, CSR_MCONTROL6_VU) ? "true" : "false",
+			get_field(tdata1, CSR_MCONTROL6_M) ? "true" : "false",
+			get_field(tdata1, CSR_MCONTROL6_S) ? "true" : "false",
+			get_field(tdata1, CSR_MCONTROL6_U) ? "true" : "false",
+			get_field(tdata1, CSR_MCONTROL6_EXECUTE) ? "true" : "false",
+			get_field(tdata1, CSR_MCONTROL6_STORE) ? "true" : "false",
+			get_field(tdata1, CSR_MCONTROL6_LOAD) ? "true" : "false",
+			tdata2, jim_nvp_value2name_simple(nvp_trigger_actions, get_field(tdata1, CSR_MCONTROL6_ACTION))->name);
+		break;
+	}
+	return ERROR_OK;
 }
 
 COMMAND_HANDLER(riscv_itrigger)
@@ -5032,6 +5142,7 @@ COMMAND_HANDLER(riscv_itrigger)
 		bool m = false;
 		bool s = false;
 		bool u = false;
+		enum trigger_action action = TRIGGER_ACTION_DEBUG_MODE;
 		riscv_reg_t interrupts = 0;
 
 		for (unsigned int i = 1; i < CMD_ARGC; i++) {
@@ -5047,6 +5158,8 @@ COMMAND_HANDLER(riscv_itrigger)
 				s = true;
 			else if (!strcmp(CMD_ARGV[i], "u"))
 				u = true;
+			else if (jim_nvp_name2value_simple(nvp_trigger_actions, CMD_ARGV[i])->name)
+				action = jim_nvp_name2value_simple(nvp_trigger_actions, (CMD_ARGV[i]))->value;
 			else
 				COMMAND_PARSE_NUMBER(u64, CMD_ARGV[i], interrupts);
 		}
@@ -5059,7 +5172,7 @@ COMMAND_HANDLER(riscv_itrigger)
 				  "least one of vs, vu, m, s, or u.");
 			return ERROR_FAIL;
 		}
-		int result = maybe_add_trigger_t4(target, vs, vu, nmi, m, s, u, interrupts, ITRIGGER_UNIQUE_ID);
+		int result = maybe_add_trigger_t4(target, vs, vu, nmi, m, s, u, action, interrupts, ITRIGGER_UNIQUE_ID);
 		if (result != ERROR_OK)
 			LOG_TARGET_ERROR(target, "Failed to set requested itrigger.");
 		return result;
@@ -5067,8 +5180,11 @@ COMMAND_HANDLER(riscv_itrigger)
 	} else if (!strcmp(CMD_ARGV[0], "clear")) {
 		return riscv_clear_trigger(CMD, ITRIGGER_UNIQUE_ID, "itrigger");
 
+	} else if (!strcmp(CMD_ARGV[0], "list")) {
+		return riscv_list_trigger(CMD, ITRIGGER_UNIQUE_ID, "itrigger");
+
 	} else {
-		LOG_ERROR("First argument must be either 'set' or 'clear'.");
+		LOG_ERROR("First argument must be either 'set', 'clear' or 'list'.");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 	return ERROR_OK;
@@ -5097,6 +5213,7 @@ COMMAND_HANDLER(riscv_icount)
 		bool s = false;
 		bool u = false;
 		bool pending = false;
+		enum trigger_action action = TRIGGER_ACTION_DEBUG_MODE;
 		unsigned int count = 0;
 
 		for (unsigned int i = 1; i < CMD_ARGC; i++) {
@@ -5112,6 +5229,8 @@ COMMAND_HANDLER(riscv_icount)
 				s = true;
 			else if (!strcmp(CMD_ARGV[i], "u"))
 				u = true;
+			else if (jim_nvp_name2value_simple(nvp_trigger_actions, CMD_ARGV[i])->name)
+				action = jim_nvp_name2value_simple(nvp_trigger_actions, (CMD_ARGV[i]))->value;
 			else
 				COMMAND_PARSE_NUMBER(uint, CMD_ARGV[i], count);
 		}
@@ -5124,7 +5243,7 @@ COMMAND_HANDLER(riscv_icount)
 				  "least one of vs, vu, m, s, or u.");
 			return ERROR_FAIL;
 		}
-		int result = maybe_add_trigger_t3(target, vs, vu, m, s, u, pending, count, ICOUNT_UNIQUE_ID);
+		int result = maybe_add_trigger_t3(target, vs, vu, m, s, u, pending, action, count, ICOUNT_UNIQUE_ID);
 		if (result != ERROR_OK)
 			LOG_TARGET_ERROR(target, "Failed to set requested icount trigger.");
 		return result;
@@ -5132,8 +5251,11 @@ COMMAND_HANDLER(riscv_icount)
 	} else if (!strcmp(CMD_ARGV[0], "clear")) {
 		return riscv_clear_trigger(CMD, ICOUNT_UNIQUE_ID, "icount trigger");
 
+	} else if (!strcmp(CMD_ARGV[0], "list")) {
+		return riscv_list_trigger(CMD, ICOUNT_UNIQUE_ID, "icount trigger");
+
 	} else {
-		LOG_ERROR("First argument must be either 'set' or 'clear'.");
+		LOG_ERROR("First argument must be either 'set', 'clear' or 'list'.");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 	return ERROR_OK;
@@ -5161,6 +5283,7 @@ COMMAND_HANDLER(riscv_etrigger)
 		bool m = false;
 		bool s = false;
 		bool u = false;
+		enum trigger_action action = TRIGGER_ACTION_DEBUG_MODE;
 		riscv_reg_t exception_codes = 0;
 
 		for (unsigned int i = 1; i < CMD_ARGC; i++) {
@@ -5174,6 +5297,8 @@ COMMAND_HANDLER(riscv_etrigger)
 				s = true;
 			else if (!strcmp(CMD_ARGV[i], "u"))
 				u = true;
+			else if (jim_nvp_name2value_simple(nvp_trigger_actions, CMD_ARGV[i])->name)
+				action = jim_nvp_name2value_simple(nvp_trigger_actions, (CMD_ARGV[i]))->value;
 			else
 				COMMAND_PARSE_NUMBER(u64, CMD_ARGV[i], exception_codes);
 		}
@@ -5186,7 +5311,7 @@ COMMAND_HANDLER(riscv_etrigger)
 				  "least one of vs, vu, m, s, or u.");
 			return ERROR_FAIL;
 		}
-		int result = maybe_add_trigger_t5(target, vs, vu, m, s, u, exception_codes, ETRIGGER_UNIQUE_ID);
+		int result = maybe_add_trigger_t5(target, vs, vu, m, s, u, action, exception_codes, ETRIGGER_UNIQUE_ID);
 		if (result != ERROR_OK)
 			LOG_TARGET_ERROR(target, "Failed to set requested etrigger.");
 		return result;
@@ -5194,8 +5319,146 @@ COMMAND_HANDLER(riscv_etrigger)
 	} else if (!strcmp(CMD_ARGV[0], "clear")) {
 		return riscv_clear_trigger(CMD, ETRIGGER_UNIQUE_ID, "etrigger");
 
+	} else if (!strcmp(CMD_ARGV[0], "list")) {
+		return riscv_list_trigger(CMD, ETRIGGER_UNIQUE_ID, "etrigger");
+
 	} else {
-		LOG_ERROR("First argument must be either 'set' or 'clear'.");
+		LOG_ERROR("First argument must be either 'set', 'clear' or 'list'.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+	return ERROR_OK;
+}
+
+/* monotonic counter/id-number for match triggers */
+static int mcontrol_unique_id = -CSR_TDATA1_TYPE_MCONTROL6;
+
+COMMAND_HANDLER(riscv_mcontrol)
+{
+	if (CMD_ARGC < 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+	int unique_id;
+
+	if (riscv_enumerate_triggers(target) != ERROR_OK)
+		return ERROR_FAIL;
+
+	if (!strcmp(CMD_ARGV[0], "set")) {
+		unique_id = mcontrol_unique_id--;
+		bool vs = false;
+		bool vu = false;
+		bool m = false;
+		bool s = false;
+		bool u = false;
+		bool execute = false;
+		bool store = false;
+		bool load = false;
+		enum trigger_action action = TRIGGER_ACTION_DEBUG_MODE;
+		riscv_addr_t address = ULLONG_MAX;
+		uint32_t length = 4;
+
+		for (unsigned int i = 1; i < CMD_ARGC; i++) {
+			if (!strcmp(CMD_ARGV[i], "vs"))
+				vs = true;
+			else if (!strcmp(CMD_ARGV[i], "vu"))
+				vu = true;
+			else if (!strcmp(CMD_ARGV[i], "m"))
+				m = true;
+			else if (!strcmp(CMD_ARGV[i], "s"))
+				s = true;
+			else if (!strcmp(CMD_ARGV[i], "u"))
+				u = true;
+			else if (!strcmp(CMD_ARGV[i], "execute"))
+				execute = true;
+			else if (!strcmp(CMD_ARGV[i], "store"))
+				store = true;
+			else if (!strcmp(CMD_ARGV[i], "load"))
+				load = true;
+			else if (jim_nvp_name2value_simple(nvp_trigger_actions, CMD_ARGV[i])->name)
+				action = jim_nvp_name2value_simple(nvp_trigger_actions, (CMD_ARGV[i]))->value;
+			else
+				COMMAND_PARSE_ADDRESS(CMD_ARGV[i], address);
+		}
+		if (address == ULLONG_MAX) {
+			LOG_ERROR("Doesn't make sense to set match trigger without address.");
+			return ERROR_FAIL;
+		} else if (!vs && !vu && !m && !s && !u) {
+			LOG_ERROR("Doesn't make sense to set match trigger without at "
+				  "least one of vs, vu, m, s, or u.");
+			return ERROR_FAIL;
+		} else if (!execute && !store && !load) {
+			LOG_ERROR("Doesn't make sense to set match trigger without at "
+				  "least one of execute, store, load.");
+			return ERROR_FAIL;
+		} else if (execute && (store || load)) {
+			LOG_ERROR("Doesn't make sense to set match trigger with one of "
+				  "store, load when execute was set.");
+			return ERROR_FAIL;
+		}
+		struct trigger trigger = {
+			.address = address,
+			.length = length,
+			.mask = ~0LL,
+			.is_read = load,
+			.is_write = store,
+			.is_execute = execute,
+			.is_vs = vs,
+			.is_vu = vu,
+			.is_m = m,
+			.is_s = s,
+			.is_u = u,
+			.action = action,
+			.unique_id = unique_id,
+		};
+		int result;
+		do {
+			result = maybe_add_trigger_t2_t6(target, &trigger,
+					fill_match_triggers_tdata1_fields_t2(target, &trigger));
+			if (result == ERROR_OK)
+				break;
+			result = maybe_add_trigger_t2_t6(target, &trigger,
+					fill_match_triggers_tdata1_fields_t6(target, &trigger));
+			if (result == ERROR_OK)
+				break;
+		} while (0);
+		if (result != ERROR_OK)
+			LOG_TARGET_ERROR(target, "Failed to set requested match trigger.");
+		return result;
+
+	} else if (!strcmp(CMD_ARGV[0], "clear")) {
+		switch (CMD_ARGC) {
+		case 1:
+			for (unsigned int i = 0; i < r->trigger_count; i++) {
+				if (r->trigger_unique_id[i] <= -CSR_TDATA1_TYPE_MCONTROL6) {
+					if (riscv_clear_trigger(CMD, r->trigger_unique_id[i], "match trigger") != ERROR_OK) {
+						LOG_TARGET_ERROR(target, "Failed to clear match trigger (unique_id=%" PRIi64 ").",
+								r->trigger_unique_id[i]);
+						return ERROR_FAIL;
+					}
+				}
+			}
+			break;
+		case 2:
+			COMMAND_PARSE_NUMBER(int, CMD_ARGV[1], unique_id);
+			return riscv_clear_trigger(CMD, unique_id, "match trigger");
+		default:
+			return ERROR_COMMAND_SYNTAX_ERROR;
+		}
+
+	} else if (!strcmp(CMD_ARGV[0], "list")) {
+		for (unsigned int i = 0; i < r->trigger_count; i++) {
+			if (r->trigger_unique_id[i] <= -CSR_TDATA1_TYPE_MCONTROL6) {
+				if (riscv_list_trigger(CMD, r->trigger_unique_id[i], "match trigger") != ERROR_OK) {
+					LOG_TARGET_ERROR(target, "Failed to list match trigger (unique_id=%" PRIi64 ").",
+							r->trigger_unique_id[i]);
+					return ERROR_FAIL;
+				}
+			}
+		}
+
+	} else {
+		LOG_ERROR("First argument must be either 'set', 'clear' or 'list'.");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 	return ERROR_OK;
@@ -5791,22 +6054,33 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.name = "etrigger",
 		.handler = riscv_etrigger,
 		.mode = COMMAND_EXEC,
-		.usage = "set [vs] [vu] [m] [s] [u] <exception_codes>|clear",
-		.help = "Set or clear a single exception trigger."
+		.usage = "set [vs] [vu] [m] [s] [u] <exception_codes> "
+			"[('exception'|'halt'|'trace_on'|'trace_off'|'trace_notify'|'external0'|'external1')]|clear|list",
+		.help = "Set, clear or list a single exception trigger."
 	},
 	{
 		.name = "icount",
 		.handler = riscv_icount,
 		.mode = COMMAND_EXEC,
-		.usage = "set [vs] [vu] [m] [s] [u] [pending] <count>|clear",
-		.help = "Set or clear a single instruction count trigger."
+		.usage = "set [vs] [vu] [m] [s] [u] [pending] <count> "
+			"[('exception'|'halt'|'trace_on'|'trace_off'|'trace_notify'|'external0'|'external1')]|clear|list",
+		.help = "Set, clear or list a single instruction count trigger."
 	},
 	{
 		.name = "itrigger",
 		.handler = riscv_itrigger,
 		.mode = COMMAND_EXEC,
-		.usage = "set [vs] [vu] [nmi] [m] [s] [u] <mie_bits>|clear",
-		.help = "Set or clear a single interrupt trigger."
+		.usage = "set [vs] [vu] [nmi] [m] [s] [u] <mie_bits> "
+			"[('exception'|'halt'|'trace_on'|'trace_off'|'trace_notify'|'external0'|'external1')]|clear|list",
+		.help = "Set, clear or list a single interrupt trigger."
+	},
+	{
+		.name = "mcontrol",
+		.handler = riscv_mcontrol,
+		.mode = COMMAND_EXEC,
+		.usage = "set [vs] [vu] [m] [s] [u] [execute] [store] [load] <address> "
+			"[('exception'|'halt'|'trace_on'|'trace_off'|'trace_notify'|'external0'|'external1')] |clear [trigger_id]|list",
+		.help = "Add, remove or list match triggers."
 	},
 	{
 		.name = "exec_progbuf",
