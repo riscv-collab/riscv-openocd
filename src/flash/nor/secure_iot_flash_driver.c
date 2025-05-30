@@ -914,19 +914,10 @@ else if(CMD_ARGC==2){
 command_print(CMD, "Length of executable binary data (excluding ELF header): %ld bytes\n", executable_binary_length);
 
 /*handling sector erase operation*/
-uint32_t erase_start_address = mask_address & ~(0xFFF);
-uint32_t erase_end_address = (mask_address+executable_binary_length) & ~(0xFFF);
-for(uint32_t s = erase_start_address;s<=erase_end_address;s+=0x1000){
-   log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "Erasing sector:%x\n",s);	
-   writeEnable(target,qspi_number);/*Enable write operation*/
-   sector4KErase(target,qspi_number,s);
-   writeDisable(target,qspi_number);/*Enable write operation*/
-}
-/*handling sector erase operation*/
 uint32_t progressed_length = 0;
 log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__, "\nWriting code to flash in progress:\n");	
 if(CMD_ARGC==1){
-   size_t offset = 0x000;
+   
 // Now read and process the program headers for executable content
 FILE *fileheader = fopen(CMD_ARGV[0], "rb");
 fseek(fileheader, elf_header.e_phoff, SEEK_SET);
@@ -940,16 +931,27 @@ for (int l = 0; l < elf_header.e_phnum; l++) {
     }
     // Check if the current program header is of type PT_LOAD (executable segment)
     if (phdr.p_type == PT_LOAD) {
-            fseek(file, phdr.p_offset, SEEK_SET); // Move to the segment's start
+        log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "Segment start virtual address: 0x%lx\n",phdr.p_paddr);
+        fseek(file, phdr.p_offset, SEEK_SET); // Move to the segment's start
             unsigned char buffer[CHUNK_SIZE];
             uint8_t bytesReadInChunk;
             size_t remaining_bytes = phdr.p_filesz;
             log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nSection length:%lx\n",remaining_bytes);
             uint8_t to_read;
+            mask_address=phdr.p_paddr&~(0xF<<28);
+            uint32_t erase_start_address = mask_address & ~(0xFFF);
+            uint32_t erase_end_address = (mask_address+remaining_bytes) & ~(0xFFF);
+            for(uint32_t s = erase_start_address;s<=erase_end_address;s+=0x1000){
+               log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "Erasing sector:%x\n",s);	
+               writeEnable(target,qspi_number);/*Enable write operation*/
+               sector4KErase(target,qspi_number,s);
+               writeDisable(target,qspi_number);/*Enable write operation*/
+            }
+            size_t offset = 0x000;
             while (remaining_bytes > 0) {
                to_read = (remaining_bytes>CHUNK_SIZE)?CHUNK_SIZE:remaining_bytes;
                bytesReadInChunk = fread(buffer, 1, to_read, file);
-               log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",start_address+offset);
+               log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",mask_address+offset);
                for(uint8_t i = 0;i<bytesReadInChunk;i++){
                    log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__,  "%x ",buffer[i]);
                }
@@ -1120,6 +1122,50 @@ return ERROR_OK;
 }
 
 
+COMMAND_HANDLER(handle_flash_write_data)
+{
+/*
+ * argv[1] = address
+ * argv[2 ... n-1] = data
+ */
+    uint32_t start_address,length=0;
+    uint32_t total_length = (CMD_ARGC)-1;
+    uint8_t qspi_number=0;
+    uint8_t __attribute__((unused)) data[CMD_ARGC-1];
+    struct target *target __attribute__((unused)) = get_current_target(CMD_CTX);
+    COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], start_address);
+    if((start_address>=0x90000000) &&(start_address<=0xAFFFFFFF)){
+        qspi_number = 0;
+    }else if((start_address>=0xB0000000) &&(start_address<=0xCFFFFFFF)){
+        qspi_number = 1;
+    }
+    // printf("Start address :%x",start_address);
+    // log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__,  "\nqspi_number :%x ,total_length :%x",qspi_number,total_length);
+    // Read the ELF header
+    for(uint32_t i = 0;i<total_length;i++){
+        COMMAND_PARSE_NUMBER(u8, CMD_ARGV[i+1], data[i]);
+    }
+    // for(uint8_t j = 0;j<total_length;j++){
+    //       log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__,  "%x ",data[j]);
+    // }
+    uint8_t *ptr = data;
+    for(uint32_t address __attribute__((unused)) = start_address&~(0xF<<28),l=0,remaining_length=total_length;remaining_length;address+=length){
+        length = (remaining_length>16)?16:remaining_length;
+            writeEnable(target,qspi_number);/*Enable write operation*/
+            inputpageQuad(target,qspi_number,ptr+l,address,length);/*To write data to flash*/
+            writeDisable(target,qspi_number);/*Enable write operation*/
+        //     printf("Every iteration data: %x\n",address);
+        //     log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__,  "Address : %x\n",address);
+        //     for(uint8_t k = 0;k<length;k++){
+        //     log_printf(LOG_LVL_OUTPUT, __FILE__, __LINE__, __func__,  "%x ",(ptr+l)[k]);
+        // }
+        remaining_length-=length;
+        l+=length;
+    }
+return ERROR_OK;
+}
+
+
 
 
 
@@ -1258,6 +1304,13 @@ static const struct command_registration secureiot_exec_command_handlers[] = {
         .name = "flash_write_length",
         .mode = COMMAND_EXEC,
         .handler = handle_flash_write_length,
+        .help = "reset command",
+        .usage = "fsec",
+   },    
+      {
+        .name = "flash_write_data",
+        .mode = COMMAND_EXEC,
+        .handler = handle_flash_write_data,
         .help = "reset command",
         .usage = "fsec",
    },    
