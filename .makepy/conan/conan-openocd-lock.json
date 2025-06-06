@@ -1,13 +1,17 @@
 {
     "version": "0.5",
     "requires": [
+        "zlib/1.2.13#13c96f538b52e1600c40b88994de240f%1682321681.826",
         "libusb/1.0.26#c0c00750b383839aa140a0be628d552c%1699027750.602",
         "libudev/system#86e335f85cbb299d6c9fc6260b3f1b0b%1699027725.148",
         "libjaylink/0.3.1-355+sc.sc-dt.2025.04@sc/main#31e68f8d20b989f29b00c2f0d89822bde0687a69%1743791990.56",
         "libftdi/1.5#55ee16fbd5bbe4eab9d6f1f03fe0bf85%1718294061.052",
+        "libbacktrace/cci.20210118#ec1aa63bbc10145c6a299e68e711670c%1700236196.326",
         "jimtcl/0.83.0-355+sc.sc-dt.2025.04@sc/main#49c1c8de41c86abac2bb4b6920770f4ac2a16a43%1743792004.803",
         "jansson/2.14#42fc601d5b8e236e050e48f2321ef851%1712843826.616",
-        "hidapi/0.13.1#20fbe2186ac901286e0f5e7181cf1db7%1718294130.61"
+        "hidapi/0.13.1#20fbe2186ac901286e0f5e7181cf1db7%1718294130.61",
+        "bzip2/1.0.8#457c272f7da34cb9c67456dd217d36c4%1717689743.097",
+        "boost/1.83.0#f0c3932db7f65b606ed78357ecbdcbef%1699016182.893"
     ],
     "build_requires": [
         "pkgconf/2.2.0#6462942a22803086372db44689ba825f%1732111592.538",
@@ -18,10 +22,12 @@
         "m4/1.4.19#b38ced39a01e31fef5435bc634461fd2%1717689741.889",
         "libtool/2.4.7#08316dad5c72c541ed21e039e4cf217b%1718296814.154",
         "gnu-config/cci.20210814#dc430d754f465e8c74463019672fb97b%1718363816.46",
+        "b2/4.9.6#53783bdbbdbb6c13732b25f1f6ea6c58%1700236039.812",
         "automake/1.16.5#058bda3e21c36c9aa8425daf3c1faf50%1718359402.592",
         "autoconf/2.71#f9307992909d7fb3df459340f1932809%1718360141.211"
     ],
     "python_requires": [
+        "makepy_hints/1.27.0-rc.0.0+sc.release.1.2506@sc/main#026d9aed33aee9187767a373802c7093cdedc903%1748869996.108",
         "makepy_hints/1.25.0-rc.0.3+sc.main@sc/main#998f8e0f50ad0bf7b58466e1bacc46449282ef2d%1747150697.454",
         "makepy_hints/1.20.0-rc.0.32+sc.main@sc/main#da85ca43e10e8ba61eb899eb6801a3b3f7910b5b%1744791596.318",
         "makepy_hints/1.20.0-rc.0.5+sc.main@sc/main#7e358521c49c146583afd1daaebdc89a402b3369%1743416454.924",
