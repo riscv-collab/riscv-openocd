@@ -486,10 +486,14 @@ static uint32_t riscv013_get_dmi_address(const struct target *target, uint32_t a
 	return address + base;
 }
 
+static int dm013_select_target(struct target *target);
+
 static int batch_run_timeout(struct target *target, struct riscv_batch *batch);
 
 static int dmi_read(struct target *target, uint32_t *value, uint32_t address)
 {
+	if (dm013_select_target(target) != ERROR_OK)
+		return ERROR_FAIL;
 	struct riscv_batch *batch = riscv_batch_alloc(target, 1);
 	riscv_batch_add_dmi_read(batch, address, RISCV_DELAY_BASE);
 	int res = batch_run_timeout(target, batch);
@@ -521,6 +525,8 @@ static int dm_read_exec(struct target *target, uint32_t *value, uint32_t address
 
 static int dmi_write(struct target *target, uint32_t address, uint32_t value)
 {
+	if (dm013_select_target(target) != ERROR_OK)
+		return ERROR_FAIL;
 	struct riscv_batch *batch = riscv_batch_alloc(target, 1);
 	riscv_batch_add_dmi_write(batch, address, value, /*read_back*/ true,
 			RISCV_DELAY_BASE);
@@ -5149,7 +5155,12 @@ static int dm013_select_hart(struct target *target, int hart_index)
 
 	uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE;
 	dmcontrol = set_dmcontrol_hartsel(dmcontrol, hart_index);
-	if (dm_write(target, DM_DMCONTROL, dmcontrol) != ERROR_OK) {
+	struct riscv_batch *batch = riscv_batch_alloc(target, 1);
+	riscv_batch_add_dmi_write(batch, riscv013_get_dmi_address(target, DM_DMCONTROL),
+				dmcontrol, /*read_back*/ true, RISCV_DELAY_BASE);
+	result = batch_run_timeout(target, batch);
+	riscv_batch_free(batch);
+	if (result != ERROR_OK) {
 		/* Who knows what the state is? */
 		dm->current_hartid = HART_INDEX_UNKNOWN;
 		return ERROR_FAIL;
