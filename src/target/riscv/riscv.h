@@ -47,26 +47,26 @@ typedef uint64_t riscv_reg_t;
 typedef uint32_t riscv_insn_t;
 typedef uint64_t riscv_addr_t;
 
-typedef enum {
+enum yes_no_maybe {
 	YNM_MAYBE,
 	YNM_YES,
 	YNM_NO
-} yes_no_maybe_t;
+};
 
-typedef enum riscv_mem_access_method {
+enum riscv_mem_access_method {
 	RISCV_MEM_ACCESS_PROGBUF,
 	RISCV_MEM_ACCESS_SYSBUS,
 	RISCV_MEM_ACCESS_ABSTRACT,
 	RISCV_MEM_ACCESS_MAX_METHODS_NUM
-} riscv_mem_access_method_t;
+};
 
-typedef enum riscv_virt2phys_mode {
+enum riscv_virt2phys_mode {
 	RISCV_VIRT2PHYS_MODE_HW,
 	RISCV_VIRT2PHYS_MODE_SW,
 	RISCV_VIRT2PHYS_MODE_OFF
-} riscv_virt2phys_mode_t;
+};
 
-const char *riscv_virt2phys_mode_to_str(riscv_virt2phys_mode_t mode);
+const char *riscv_virt2phys_mode_to_str(enum riscv_virt2phys_mode mode);
 
 enum riscv_halt_reason {
 	RISCV_HALT_INTERRUPT,
@@ -133,7 +133,7 @@ struct reg_name_table {
 	char **reg_names;
 };
 
-typedef struct riscv_mem_access_args {
+struct riscv_mem_access_args {
 	target_addr_t address;
 
 	const uint8_t *write_buffer;
@@ -142,23 +142,23 @@ typedef struct riscv_mem_access_args {
 	uint32_t size;
 	uint32_t count;
 	uint32_t increment;
-} riscv_mem_access_args_t;
+};
 
 static inline bool
-riscv_mem_access_is_valid(const riscv_mem_access_args_t args)
+riscv_mem_access_is_valid(const struct riscv_mem_access_args args)
 {
 	return !args.read_buffer != !args.write_buffer;
 }
 
 static inline bool
-riscv_mem_access_is_read(const riscv_mem_access_args_t args)
+riscv_mem_access_is_read(const struct riscv_mem_access_args args)
 {
 	assert(riscv_mem_access_is_valid(args));
 	return !args.write_buffer && args.read_buffer;
 }
 
 static inline bool
-riscv_mem_access_is_write(const riscv_mem_access_args_t args)
+riscv_mem_access_is_write(const struct riscv_mem_access_args args)
 {
 	assert(riscv_mem_access_is_valid(args));
 	return !args.read_buffer && args.write_buffer;
@@ -223,7 +223,7 @@ struct riscv_info {
 	int64_t trigger_hit;
 
 	/* The configured approach to translate virtual addresses to physical */
-	riscv_virt2phys_mode_t virt2phys_mode;
+	enum riscv_virt2phys_mode virt2phys_mode;
 
 	bool triggers_enumerated;
 
@@ -303,7 +303,7 @@ struct riscv_info {
 						 riscv_sample_config_t *config,
 						 int64_t until_ms);
 
-	int (*access_memory)(struct target *target, const riscv_mem_access_args_t args);
+	int (*access_memory)(struct target *target, const struct riscv_mem_access_args args);
 
 	unsigned int (*data_bits)(struct target *target);
 
@@ -330,7 +330,7 @@ struct riscv_info {
 	bool *reserved_triggers;
 
 	/* Memory access methods to use, ordered by priority, highest to lowest. */
-	riscv_mem_access_method_t mem_access_methods[RISCV_MEM_ACCESS_MAX_METHODS_NUM];
+	enum riscv_mem_access_method mem_access_methods[RISCV_MEM_ACCESS_MAX_METHODS_NUM];
 
 	unsigned int num_enabled_mem_access_methods;
 
@@ -356,7 +356,7 @@ struct riscv_info {
 	/* Track when we were last asked to do something substantial. */
 	int64_t last_activity;
 
-	yes_no_maybe_t vsew64_supported;
+	enum yes_no_maybe vsew64_supported;
 
 	bool range_trigger_fallback_encountered;
 

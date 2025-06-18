@@ -2013,7 +2013,7 @@ static int deassert_reset(struct target *target)
 		return wait_for_state(target, TARGET_RUNNING);
 }
 
-static int read_memory(struct target *target, const riscv_mem_access_args_t args)
+static int read_memory(struct target *target, const struct riscv_mem_access_args args)
 {
 	assert(riscv_mem_access_is_read(args));
 
@@ -2190,7 +2190,7 @@ static int setup_write_memory(struct target *target, uint32_t size)
 	return ERROR_OK;
 }
 
-static int write_memory(struct target *target, const riscv_mem_access_args_t args)
+static int write_memory(struct target *target, const struct riscv_mem_access_args args)
 {
 	assert(riscv_mem_access_is_write(args));
 
@@ -2339,7 +2339,7 @@ error:
 	return ERROR_FAIL;
 }
 
-static int access_memory(struct target *target, const riscv_mem_access_args_t args)
+static int access_memory(struct target *target, const struct riscv_mem_access_args args)
 {
 	assert(riscv_mem_access_is_valid(args));
 	const bool is_write = riscv_mem_access_is_write(args);
