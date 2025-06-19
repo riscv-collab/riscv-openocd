@@ -1,6 +1,6 @@
-// NOTE: shamelessly stolen from
-// https://askubuntu.com/questions/645/how-do-you-reset-a-usb-device-from-the-command-line
-// License: any modifications are under WTFPL
+// SPDX-License-Identifier: GPL-2.0-only
+
+/* Copied from https://github.com/gregkh/usbutils/commit/1bfa07c58fdcfb955812f3ce6e28336dd323ff83 */
 
 /* usbreset -- send a USB port reset to a USB device */
 
