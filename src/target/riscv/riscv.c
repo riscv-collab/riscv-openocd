@@ -1609,6 +1609,16 @@ static int riscv_add_breakpoint(struct target *target, struct breakpoint *breakp
 	LOG_TARGET_DEBUG(target, "@0x%" TARGET_PRIxADDR, breakpoint->address);
 	assert(breakpoint);
 	if (breakpoint->type == BKPT_SOFT) {
+		if (breakpoint->length == 0) {
+			breakpoint->length = riscv_supports_extension(target, 'c') ? 2 : 4; 
+			uint8_t *instr_buffer = (uint8_t *)realloc (breakpoint->orig_instr, breakpoint->length);
+			if (!instr_buffer) {
+				LOG_ERROR("Fail to realloc memory with original instruction");
+				return ERROR_FAIL;
+			}
+			breakpoint->orig_instr = instr_buffer;
+		}
+
 		/** @todo check RVC for size/alignment */
 		if (!(breakpoint->length == 4 || breakpoint->length == 2)) {
 			LOG_TARGET_ERROR(target, "Invalid breakpoint length %d", breakpoint->length);
