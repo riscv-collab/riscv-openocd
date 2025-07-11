@@ -9696,10 +9696,11 @@ hardware support for a handful of code breakpoints and data
 watchpoints.
 In addition, CPUs almost always support software breakpoints.
 
-@deffn {Command} {bp} [address len [@option{hw}]]
+@deffn {Command} {bp} [address (len|@option{default}) [@option{hw}]]
 With no parameters, lists all active breakpoints.
 Else sets a breakpoint on code execution starting
-at @var{address} for @var{length} bytes.
+at @var{address} for @var{length} bytes. When @option{default} is passed
+the length is derived automatically.
 This is a software breakpoint, unless @option{hw} is specified
 in which case it will be a hardware breakpoint.
 

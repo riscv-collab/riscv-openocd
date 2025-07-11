@@ -1315,6 +1315,14 @@ int target_add_breakpoint(struct target *target,
 	return target->type->add_breakpoint(target, breakpoint);
 }
 
+static int target_get_default_breakpoint_size(struct target *target, target_addr_t addr,
+		uint32_t asid, int hw, unsigned int *length)
+{
+	if (!target->type->get_default_breakpoint_length)
+		return ERROR_NOT_IMPLEMENTED;
+	return target->type->get_default_breakpoint_length(target, addr, asid, hw, length);
+}
+
 int target_add_context_breakpoint(struct target *target,
 		struct breakpoint *breakpoint)
 {
@@ -3976,6 +3984,24 @@ static int handle_bp_command_set(struct command_invocation *cmd,
 	return retval;
 }
 
+static COMMAND_HELPER(parse_bp_length, uint32_t asid, target_addr_t addr,
+		int hw, unsigned int *length)
+{
+	if (strcmp(CMD_ARGV[1], "default") == 0) {
+		struct target *target = get_current_target(CMD_CTX);
+		int ret_errno = target_get_default_breakpoint_size(target, addr, asid, hw, length);
+		if (ret_errno == ERROR_NOT_IMPLEMENTED) {
+			command_print(CMD, "Default breakpoint size derivation is "
+				"not implemented on target %s", target_name(target));
+		} else if (ret_errno != ERROR_OK) {
+			command_print(CMD, "Unknown error when deriving default breakpoint size");
+		}
+		return ret_errno;
+	}
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], *length);
+	return ERROR_OK;
+}
+
 COMMAND_HANDLER(handle_bp_command)
 {
 	target_addr_t addr;
@@ -3990,21 +4016,21 @@ COMMAND_HANDLER(handle_bp_command)
 		case 2:
 			asid = 0;
 			COMMAND_PARSE_ADDRESS(CMD_ARGV[0], addr);
-			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], length);
+			CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
 			return handle_bp_command_set(CMD, addr, asid, length, hw);
 
 		case 3:
 			if (strcmp(CMD_ARGV[2], "hw") == 0) {
 				hw = BKPT_HARD;
 				COMMAND_PARSE_ADDRESS(CMD_ARGV[0], addr);
-				COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], length);
 				asid = 0;
+				CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
 				return handle_bp_command_set(CMD, addr, asid, length, hw);
 			} else if (strcmp(CMD_ARGV[2], "hw_ctx") == 0) {
 				hw = BKPT_HARD;
 				COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], asid);
-				COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], length);
 				addr = 0;
+				CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
 				return handle_bp_command_set(CMD, addr, asid, length, hw);
 			}
 			/* fallthrough */
@@ -4012,7 +4038,7 @@ COMMAND_HANDLER(handle_bp_command)
 			hw = BKPT_HARD;
 			COMMAND_PARSE_ADDRESS(CMD_ARGV[0], addr);
 			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], asid);
-			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], length);
+			CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
 			return handle_bp_command_set(CMD, addr, asid, length, hw);
 
 		default:
@@ -6630,7 +6656,7 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.handler = handle_bp_command,
 		.mode = COMMAND_EXEC,
 		.help = "list or set hardware or software breakpoint",
-		.usage = "[<address> [<asid>] <length> ['hw'|'hw_ctx']]",
+		.usage = "[<address> [<asid>] (<length>|'default') ['hw'|'hw_ctx']]",
 	},
 	{
 		.name = "rbp",
