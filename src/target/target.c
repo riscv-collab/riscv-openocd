@@ -3987,19 +3987,19 @@ static int handle_bp_command_set(struct command_invocation *cmd,
 static COMMAND_HELPER(parse_bp_length, uint32_t asid, target_addr_t addr,
 		int hw, unsigned int *length)
 {
-	if (strcmp(CMD_ARGV[1], "default") == 0) {
-		struct target *target = get_current_target(CMD_CTX);
-		int ret_errno = target_get_default_breakpoint_size(target, addr, asid, hw, length);
-		if (ret_errno == ERROR_NOT_IMPLEMENTED) {
-			command_print(CMD, "Default breakpoint size derivation is "
-				"not implemented on target %s", target_name(target));
-		} else if (ret_errno != ERROR_OK) {
-			command_print(CMD, "Unknown error when deriving default breakpoint size");
-		}
-		return ret_errno;
+	if (strcmp(CMD_ARGV[1], "default") != 0) {
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], *length);
+		return ERROR_OK;
 	}
-	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], *length);
-	return ERROR_OK;
+	struct target *target = get_current_target(CMD_CTX);
+	int ret_errno = target_get_default_breakpoint_size(target, addr, asid, hw, length);
+	if (ret_errno == ERROR_NOT_IMPLEMENTED) {
+		command_print(CMD, "Default breakpoint size derivation is "
+			"not implemented on target %s", target_name(target));
+	} else if (ret_errno != ERROR_OK) {
+		command_print(CMD, "Unknown error when deriving default breakpoint size");
+	}
+	return ret_errno;
 }
 
 COMMAND_HANDLER(handle_bp_command)
@@ -4008,6 +4008,7 @@ COMMAND_HANDLER(handle_bp_command)
 	uint32_t asid;
 	uint32_t length;
 	int hw = BKPT_SOFT;
+	int ret_errno;
 
 	switch (CMD_ARGC) {
 		case 0:
@@ -4016,7 +4017,9 @@ COMMAND_HANDLER(handle_bp_command)
 		case 2:
 			asid = 0;
 			COMMAND_PARSE_ADDRESS(CMD_ARGV[0], addr);
-			CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
+			ret_errno = CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
+			if (ret_errno != ERROR_OK)
+				return ret_errno;
 			return handle_bp_command_set(CMD, addr, asid, length, hw);
 
 		case 3:
@@ -4024,13 +4027,17 @@ COMMAND_HANDLER(handle_bp_command)
 				hw = BKPT_HARD;
 				COMMAND_PARSE_ADDRESS(CMD_ARGV[0], addr);
 				asid = 0;
-				CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
+				ret_errno = CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
+				if (ret_errno != ERROR_OK)
+					return ret_errno;
 				return handle_bp_command_set(CMD, addr, asid, length, hw);
 			} else if (strcmp(CMD_ARGV[2], "hw_ctx") == 0) {
 				hw = BKPT_HARD;
 				COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], asid);
 				addr = 0;
-				CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
+				ret_errno = CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
+				if (ret_errno != ERROR_OK)
+					return ret_errno;
 				return handle_bp_command_set(CMD, addr, asid, length, hw);
 			}
 			/* fallthrough */
@@ -4038,7 +4045,9 @@ COMMAND_HANDLER(handle_bp_command)
 			hw = BKPT_HARD;
 			COMMAND_PARSE_ADDRESS(CMD_ARGV[0], addr);
 			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], asid);
-			CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
+			ret_errno = CALL_COMMAND_HANDLER(parse_bp_length, asid, addr, hw, &length);
+			if (ret_errno != ERROR_OK)
+				return ret_errno;
 			return handle_bp_command_set(CMD, addr, asid, length, hw);
 
 		default:

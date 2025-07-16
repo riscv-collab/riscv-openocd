@@ -1604,6 +1604,13 @@ int riscv_read_by_any_size(struct target *target, target_addr_t address, uint32_
 	return ERROR_FAIL;
 }
 
+static int riscv_get_default_breakpoint_length(struct target *target, target_addr_t addr,
+	uint32_t asid, int hw, unsigned int *length)
+{
+	*length = riscv_supports_extension(target, 'c') ? 2 : 4;
+	return ERROR_OK;
+}
+
 static int riscv_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
 	LOG_TARGET_DEBUG(target, "@0x%" TARGET_PRIxADDR, breakpoint->address);
@@ -5919,6 +5926,7 @@ struct target_type riscv_target = {
 	.get_gdb_reg_list = riscv_get_gdb_reg_list,
 	.get_gdb_reg_list_noread = riscv_get_gdb_reg_list_noread,
 
+	.get_default_breakpoint_length = riscv_get_default_breakpoint_length,
 	.add_breakpoint = riscv_add_breakpoint,
 	.remove_breakpoint = riscv_remove_breakpoint,
 
