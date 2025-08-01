@@ -3141,10 +3141,66 @@ static int deassert_reset(struct target *target)
 	}
 	info->dcsr_ebreak_is_set = false;
 
-	/* Ack reset and clear DM_DMCONTROL_HALTREQ if previously set */
+	/* Ack reset */
 	control = 0;
 	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
+	control = set_field(control, DM_DMCONTROL_HALTREQ, target->reset_halt ? 1 : 0);
 	control = set_field(control, DM_DMCONTROL_ACKHAVERESET, 1);
+	control = set_dmcontrol_hartsel(control, info->index);
+	result = dm_write(target, DM_DMCONTROL, control);
+	/* Report error */
+	if (result != ERROR_OK) {
+		return result;
+	}
+	/* Don't wait for hart to halt */
+	if (!target->reset_halt) {
+		return result;
+	}
+	/* Don't wait if hart is unavailable */
+	if (target->state == TARGET_UNAVAILABLE) {
+		return result;
+	}
+
+	const int orig_dmi_busy_delay_2nd = info->dmi_busy_delay;
+	time_t start_2nd = time(NULL);
+	LOG_TARGET_DEBUG(target, "Waiting for hart to halt.");
+	do {
+		result = dmstatus_read_timeout(target, &dmstatus, true,
+				riscv_reset_timeout_sec);
+		if (result == ERROR_TIMEOUT_REACHED)
+			LOG_TARGET_ERROR(target, "Hart didn't complete a DMI read while "
+					"waiting for halt in %ds; Increase the timeout with riscv "
+					"set_reset_timeout_sec.",
+					riscv_reset_timeout_sec);
+		if (result != ERROR_OK)
+			return result;
+
+		if (time(NULL) - start_2nd > riscv_reset_timeout_sec) {
+			LOG_TARGET_ERROR(target, "Hart didn't halt in %ds; "
+					"dmstatus=0x%x (allhalted=%s); "
+					"Increase the timeout with riscv set_reset_timeout_sec.",
+					riscv_reset_timeout_sec, dmstatus,
+					get_field(dmstatus, DM_DMSTATUS_ALLHALTED) ? "true" : "false");
+			return ERROR_TIMEOUT_REACHED;
+		}
+	} while (!get_field(dmstatus, DM_DMSTATUS_ALLHALTED));
+
+	info->dmi_busy_delay = orig_dmi_busy_delay_2nd;
+
+	if (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
+		target->state = TARGET_UNAVAILABLE;
+	} else if (target->reset_halt) {
+		target->state = TARGET_HALTED;
+		target->debug_reason = DBG_REASON_DBGRQ;
+	} else {
+		target->state = TARGET_RUNNING;
+		target->debug_reason = DBG_REASON_NOTHALTED;
+	}
+	info->dcsr_ebreak_is_set = false;
+
+	/* Ack halt */
+	control = 0;
+	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
 	control = set_dmcontrol_hartsel(control, info->index);
 	return dm_write(target, DM_DMCONTROL, control);
 }
