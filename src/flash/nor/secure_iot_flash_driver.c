@@ -996,6 +996,14 @@ fclose(file);
    size_t offset = 0x000;
    size_t remaining_bytes = executable_binary_length;
    uint8_t to_read;
+   uint32_t erase_start_address = mask_address & ~(0xFFF);
+   uint32_t erase_end_address = (mask_address+executable_binary_length) & ~(0xFFF);
+   for(uint32_t s = erase_start_address;s<=erase_end_address;s+=0x1000){
+   log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "Erasing sector:%x\n",s);	
+   writeEnable(target,qspi_number);/*Enable write operation*/
+   sector4KErase(target,qspi_number,s);
+   writeDisable(target,qspi_number);/*Enable write operation*/
+   }
    while (remaining_bytes > 0) {
       to_read = (remaining_bytes>CHUNK_SIZE)?CHUNK_SIZE:remaining_bytes;
       bytesReadInChunk = fread(buffer, 1, to_read, file);
