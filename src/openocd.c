@@ -37,9 +37,18 @@
 #include <strings.h>
 #endif
 
+#define REL_MAJOR 1
+#define REL_MINOR 3
+
+#define STRINGIFY_HELPER(x) #x
+#define STRINGIFY(x) STRINGIFY_HELPER(x)
+
+#define RELEASE_VERSION STRINGIFY(REL_MAJOR) "." STRINGIFY(REL_MINOR)
+
 #ifdef PKGBLDDATE
-#define OPENOCD_VERSION	\
-	"Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
+#define OPENOCD_VERSION \
+    "Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")" \
+    " MINDGROVE RELEASE V" RELEASE_VERSION
 #else
 #define OPENOCD_VERSION	\
 	"Open On-Chip Debugger " VERSION RELSTR
