@@ -191,6 +191,9 @@ m4_define([JTAG_VPI_ADAPTER],
 m4_define([RSHIM_ADAPTER],
 	[[[rshim], [BlueField SoC via rshim], [RSHIM]]])
 
+m4_define([NETWORK_ADAPTERS],
+       [[[xvc], [Xilinx XVC TCP], [XVC]]])
+
 # The word 'Adapter' in "Dummy Adapter" below must begin with a capital letter
 # because there is an M4 macro called 'adapter'.
 m4_define([DUMMY_ADAPTER],
@@ -322,7 +325,8 @@ AC_ARG_ADAPTERS([
   JTAG_VPI_ADAPTER,
   RSHIM_ADAPTER,
   PCIE_ADAPTERS,
-  LIBJAYLINK_ADAPTERS
+  LIBJAYLINK_ADAPTERS,
+  NETWORK_ADAPTERS
   ],[auto])
 
 AC_ARG_ENABLE([parport],
@@ -721,6 +725,11 @@ PROCESS_ADAPTERS([JTAG_VPI_ADAPTER], [true], [unused])
 PROCESS_ADAPTERS([RSHIM_ADAPTER], ["x$can_build_rshim" = "xyes"],
                                   [internal error: validation should happen beforehand])
 PROCESS_ADAPTERS([DUMMY_ADAPTER], [true], [unused])
+PROCESS_ADAPTERS([NETWORK_ADAPTERS], [true], [unused])
+
+AS_IF([test "x$enable_xvc" != "xno"], [
+  build_bitbang=yes
+])
 
 AS_IF([test "x$enable_linuxgpiod" != "xno"], [
   build_bitbang=yes
@@ -873,6 +882,7 @@ m4_foreach([adapter], [USB1_ADAPTERS,
 	LIBGPIOD_ADAPTERS,
 	REMOTE_BITBANG_ADAPTER,
 	LIBJAYLINK_ADAPTERS, PCIE_ADAPTERS, SERIAL_PORT_ADAPTERS,
+        NETWORK_ADAPTERS,
 	LINUXSPIDEV_ADAPTER,
 	VDEBUG_ADAPTER,
 	JTAG_DPI_ADAPTER,
