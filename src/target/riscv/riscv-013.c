@@ -2016,6 +2016,12 @@ static int examine(struct target *target)
 		return ERROR_FAIL;
 	}
 
+	if (get_field(dtmcontrol, DTM_DTMCS_DMISTAT) != DTM_DMI_OP_SUCCESS) {
+		if (dtmcs_scan(target->tap, DTM_DTMCS_DTMHARDRESET,
+				NULL /* discard result */) != ERROR_OK)
+			return ERROR_FAIL;
+	}
+
 	riscv013_info_t *info = get_info(target);
 
 	info->index = target->coreid;
