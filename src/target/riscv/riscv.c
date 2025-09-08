@@ -3035,23 +3035,8 @@ static int riscv_mmu(struct target *target, int *enabled)
 	unsigned int xlen = riscv_xlen(target);
 
 	if (v_mode) {
-		/* vsatp and hgatp registers are considered active for the
-		 * purposes of the address-translation algorithm unless the
-		 * effective privilege mode is U and hstatus.HU=0. */
-		if (effective_mode == PRV_U) {
-			riscv_reg_t hstatus;
-			if (riscv_reg_get(target, &hstatus, GDB_REGNO_HSTATUS) != ERROR_OK) {
-				LOG_TARGET_ERROR(target, "Failed to read hstatus register.");
-				return ERROR_FAIL;
-			}
-
-			if (get_field(hstatus, HSTATUS_HU) == 0)
-				/* In hypervisor mode regular satp translation
-				 * doesn't happen. */
-				return ERROR_OK;
-
-		}
-
+		/* In VU or VS mode, MMU is considered enabled when
+		 * either hgatp or vsatp mode is not OFF */
 		riscv_reg_t vsatp;
 		if (riscv_reg_get(target, &vsatp, GDB_REGNO_VSATP) != ERROR_OK) {
 			LOG_TARGET_ERROR(target, "Failed to read vsatp register; priv=0x%" PRIx64,
@@ -3059,7 +3044,7 @@ static int riscv_mmu(struct target *target, int *enabled)
 			return ERROR_FAIL;
 		}
 		/* vsatp is identical to satp, so we can use the satp macros. */
-		if (RISCV_SATP_MODE(xlen) != SATP_MODE_OFF) {
+		if (get_field(vsatp, RISCV_SATP_MODE(xlen)) != SATP_MODE_OFF) {
 			LOG_TARGET_DEBUG(target, "VS-stage translation is enabled.");
 			*enabled = 1;
 			return ERROR_OK;
@@ -3071,7 +3056,7 @@ static int riscv_mmu(struct target *target, int *enabled)
 					priv);
 			return ERROR_FAIL;
 		}
-		if (RISCV_HGATP_MODE(xlen) != HGATP_MODE_OFF) {
+		if (get_field(hgatp, RISCV_HGATP_MODE(xlen)) != HGATP_MODE_OFF) {
 			LOG_TARGET_DEBUG(target, "G-stage address translation is enabled.");
 			*enabled = 1;
 		} else {
