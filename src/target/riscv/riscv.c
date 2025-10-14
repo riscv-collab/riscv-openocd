@@ -2390,23 +2390,17 @@ int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_watchpoi
 	riscv_reg_t dpc;
 	if (riscv_reg_get(target, &dpc, GDB_REGNO_DPC) != ERROR_OK)
 		return ERROR_FAIL;
-	const uint8_t length = 4;
 	LOG_TARGET_DEBUG(target, "dpc is 0x%" PRIx64, dpc);
 
 	/* fetch the instruction at dpc */
-	uint8_t buffer[length];
-	if (target_read_buffer(target, dpc, length, buffer) != ERROR_OK) {
+	uint8_t buffer[4];
+	if (target_read_buffer(target, dpc, sizeof(buffer), buffer) != ERROR_OK) {
 		LOG_TARGET_ERROR(target, "Failed to read instruction at dpc 0x%" PRIx64,
 						 dpc);
 		return ERROR_FAIL;
 	}
 
-	riscv_insn_t instruction = 0;
-
-	for (int i = 0; i < length; i++) {
-		LOG_TARGET_DEBUG(target, "Next byte is %x", buffer[i]);
-		instruction += (buffer[i] << 8 * i);
-	}
+	riscv_insn_t instruction = le_to_h_u32(buffer);
 	LOG_TARGET_DEBUG(target, "Full instruction is %x", instruction);
 
 	int rs;
