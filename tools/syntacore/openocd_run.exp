@@ -907,7 +907,7 @@ proc runSpikeIfNeeded {} {
   spawn $SpikeBinary {*}$SpikeArgs
   send_user -- "==== Spawned Spike PID=[exp_pid -i $spawn_id] ====\n"
   expect {
-    -re "Listening for remote bitbang connection on port (\[0-9\]+)" {
+    -re {Listening for remote bitbang connection on port ([1-9][0-9]*)\.} {
       set MatchedBitbangPort $expect_out(1,string)
       send_user -- "spike launched successfully! bitbang_port = $MatchedBitbangPort\n"
       if {$SETTINGS(bitbang_port) == 0} {
