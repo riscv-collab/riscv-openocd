@@ -175,7 +175,7 @@ namespace eval _SC_INTERNALS {
         return -code error "invalid MXL value: $xlen"
     }
 
-    proc sc_lib_riscv_encode_abstarct_command {regno write transfer aarsize cmdtype} {
+    proc sc_lib_riscv_encode_abstract_command {regno write transfer aarsize cmdtype} {
         set cmd [expr {($regno & 0xFFFF) |
             ($write << 16) |
             ($transfer << 17) |
@@ -191,21 +191,30 @@ namespace eval _SC_INTERNALS {
         }
     }
 
+    proc sc_lib_require_disabled_background_poll {} {
+      set poll_output [poll]
+      if {[string first "background polling: off" $poll_output] == -1} {
+        return -code error "background polling must be disabled"
+      }
+    }
+
     variable FPGA_LIB_BUSY_DURATION 3
 
     proc sc_lib_riscv_csr_impl {csr_num value write xlen} {
         set aarsize [sc_lib_get_aarsize $xlen]
         set COMMAND_ADDR 0x17
-        riscv dmi_write $COMMAND_ADDR [sc_lib_riscv_encode_abstarct_command $csr_num \
+        riscv dmi_write $COMMAND_ADDR [sc_lib_riscv_encode_abstract_command $csr_num \
             $write 1 $aarsize 0]
 
         set ABSTRACTCS_ADDR 0x16
         set abstractcs [riscv dmi_read $ABSTRACTCS_ADDR]
         set start_time [clock seconds]
 
+        set max_busy_duration [sc_fpga_get_busy_duration]
         while {$abstractcs & 0x1000 != 0} {
-            if {([clock seconds] - $start_time) >= [sc_fpga_get_busy_duration]} {
-                return -code error "Busy bit set after duration time"
+            if {([clock seconds] - $start_time) >= $max_busy_duration} {
+                return -code error "busy bit still set after\
+                        $max_busy_duration seconds (see busy_duration)"
             }
             set abstractcs [riscv dmi_read $ABSTRACTCS_ADDR]
         }
@@ -213,7 +222,7 @@ namespace eval _SC_INTERNALS {
         set cmderr [expr {($abstractcs & 0x700) >> 8}]
         if {$cmderr != 0} {
             riscv dmi_write $ABSTRACTCS_ADDR 0x700
-            return -code error "problem with abstract command execution, \
+            return -code error "problem with abstract command execution,\
                     error code : $cmderr"
         }
     }
@@ -364,6 +373,7 @@ proc sc_fpga_set_busy_duration {value} {
 }
 
 proc sc_fpga_riscv_csr_read {csr_num {xlen 64}} {
+    _SC_INTERNALS::sc_lib_require_disabled_background_poll
     _SC_INTERNALS::sc_lib_require_halted_and_check_csr $csr_num
 
     _SC_INTERNALS::sc_lib_riscv_csr_impl $csr_num 0 0 $xlen
@@ -379,6 +389,7 @@ proc sc_fpga_riscv_csr_read {csr_num {xlen 64}} {
 }
 
 proc sc_fpga_riscv_csr_write {csr_num value {xlen 64}} {
+    _SC_INTERNALS::sc_lib_require_disabled_background_poll
     _SC_INTERNALS::sc_lib_require_halted_and_check_csr $csr_num
 
     set DATA_0 0x04
