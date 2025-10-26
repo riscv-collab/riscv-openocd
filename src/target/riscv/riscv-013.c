@@ -1385,6 +1385,11 @@ static int fpr_read_progbuf(struct target *target, uint64_t *value,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31);
+	if (!has_sufficient_progbuf(target, 2)) {
+		LOG_DEBUG("Skipping FPR read: insufficient progbuf (size=%d)",
+		          get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 
 	const unsigned int freg = number - GDB_REGNO_FPR0;
 
@@ -1417,6 +1422,11 @@ static int csr_read_progbuf(struct target *target, uint64_t *value,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095);
+	if (!has_sufficient_progbuf(target, 2)) {
+		LOG_DEBUG("Skipping CSR read: insufficient progbuf (size=%d)",
+		          get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1484,6 +1494,11 @@ static int fpr_write_progbuf(struct target *target, enum gdb_regno number,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31);
+	if (!has_sufficient_progbuf(target, 2)) {
+		LOG_DEBUG("Skipping FPR Write: insufficient progbuf (size=%d)",
+		          get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 	const unsigned int freg = number - GDB_REGNO_FPR0;
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
@@ -1559,6 +1574,11 @@ static int csr_write_progbuf(struct target *target, enum gdb_regno number,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095);
+	if (!has_sufficient_progbuf(target, 2)) {
+		LOG_DEBUG("Skipping CSR write: insufficient progbuf (size=%d)",
+		          get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
