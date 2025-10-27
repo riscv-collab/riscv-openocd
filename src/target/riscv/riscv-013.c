@@ -1385,10 +1385,6 @@ static int fpr_read_progbuf(struct target *target, uint64_t *value,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31);
-	if (!has_sufficient_progbuf(target, 2)) {
-		LOG_TARGET_DEBUG("Skipping FPR read: insufficient progbuf (size=%u)", get_info(target)->progbufsize);
-		return ERROR_FAIL;
-	}
 
 	const unsigned int freg = number - GDB_REGNO_FPR0;
 
@@ -1421,10 +1417,6 @@ static int csr_read_progbuf(struct target *target, uint64_t *value,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095);
-	if (!has_sufficient_progbuf(target, 2)) {
-		LOG_TARGET_DEBUG("Skipping CSR read: insufficient progbuf (size=%u)", get_info(target)->progbufsize);
-		return ERROR_FAIL;
-	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1438,7 +1430,6 @@ static int csr_read_progbuf(struct target *target, uint64_t *value,
 
 	return register_read_abstract(target, value, GDB_REGNO_S0) != ERROR_OK;
 }
-
 
 /**
  * This function reads a register by writing a program to program buffer and
@@ -1493,10 +1484,6 @@ static int fpr_write_progbuf(struct target *target, enum gdb_regno number,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31);
-	if (!has_sufficient_progbuf(target, 2)) {
-		LOG_TARGET_DEBUG("Skipping FPR Write: insufficient progbuf (size=%u)",get_info(target)->progbufsize);
-		return ERROR_FAIL;
-	}
 	const unsigned int freg = number - GDB_REGNO_FPR0;
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
@@ -1528,11 +1515,6 @@ static int fpr_write_progbuf(struct target *target, enum gdb_regno number,
 static int vtype_write_progbuf(struct target *target, riscv_reg_t value)
 {
 	assert(target->state == TARGET_HALTED);
-	/* Ensure program buffer is large enough for 2 instructions */
-	if (!has_sufficient_progbuf(target, 2)) {
-		LOG_TARGET_DEBUG("Skipping vtype write: insufficient progbuf (size=%u)", get_info(target)->progbufsize);
-		return ERROR_FAIL;
-	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1554,11 +1536,6 @@ static int vtype_write_progbuf(struct target *target, riscv_reg_t value)
 static int vl_write_progbuf(struct target *target, riscv_reg_t value)
 {
 	assert(target->state == TARGET_HALTED);
-	/* Ensure program buffer is large enough for 2 instructions */
-	if (!has_sufficient_progbuf(target, 2)) {
-		LOG_TARGET_DEBUG("Skipping vl write: insufficient progbuf (size=%u)", get_info(target)->progbufsize);
-		return ERROR_FAIL;
-	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1582,10 +1559,6 @@ static int csr_write_progbuf(struct target *target, enum gdb_regno number,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095);
-	if (!has_sufficient_progbuf(target, 2)) {
-		LOG_TARGET_DEBUG("Skipping CSR write: insufficient progbuf (size=%u)", get_info(target)->progbufsize);
-		return ERROR_FAIL;
-	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
