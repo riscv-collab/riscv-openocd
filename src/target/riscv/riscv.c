@@ -4258,6 +4258,8 @@ _exit:
 		LOG_TARGET_ERROR(target, "Failed to re-enable watchpoints "
 				"after single-step.");
 	}
+	free(wps_to_enable);
+	//no longer needed to be kept
 
 	if (breakpoint && (riscv_add_breakpoint(target, breakpoint) != ERROR_OK)) {
 		success = false;
