@@ -11,7 +11,7 @@
 #include "field_helpers.h"
 
 // TODO: DTM_DMI_MAX_ADDRESS_LENGTH should be reduced to 32 (per the debug spec)
-#define DTM_DMI_MAX_ADDRESS_LENGTH	((1<<DTM_DTMCS_ABITS_LENGTH)-1)
+#define DTM_DMI_MAX_ADDRESS_LENGTH	((1 << DTM_DTMCS_ABITS_LENGTH) - 1)
 #define DMI_SCAN_MAX_BIT_LENGTH (DTM_DMI_MAX_ADDRESS_LENGTH + DTM_DMI_DATA_LENGTH + DTM_DMI_OP_LENGTH)
 
 #define DMI_SCAN_BUF_SIZE (DIV_ROUND_UP(DMI_SCAN_MAX_BIT_LENGTH, 8))
@@ -295,14 +295,24 @@ int riscv_batch_run_from(struct riscv_batch *batch, size_t start_idx,
 	for (size_t i = start_idx; i < batch->used_scans; ++i) {
 		if (bscan_tunnel_ir_width != 0)
 			riscv_add_bscan_tunneled_scan(batch->target->tap, batch->fields + i,
-							batch->bscan_ctxt + i);
+					batch->bscan_ctxt + i);
 		else
 			jtag_add_dr_scan(batch->target->tap, 1, batch->fields + i, TAP_IDLE);
 
-		delay = get_delay(batch, i, delays, resets_delays,
-				reset_delays_after);
-		if (delay > 0)
-			jtag_add_runtest(delay, TAP_IDLE);
+		//conditional execution
+		const unsigned int out_op = buf_get_u32(batch->fields->out_value,
+					DTM_DMI_OP_OFFSET, DTM_DMI_OP_LENGTH);
+
+		if (out_op == DTM_DMI_OP_NOP) {
+			LOG_TARGET_DEBUG(batch->target, "Skipping RTI for DMI NOP at scan %zu", i);
+			/* leave delay == 0 so batch->last_scan_delay becomes 0 for this run */
+			delay = 0;
+		} else {
+			delay = get_delay(batch, i, delays, resets_delays,
+					reset_delays_after);
+			if (delay > 0)
+				jtag_add_runtest(delay, TAP_IDLE);
+		}
 	}
 
 	keep_alive();
