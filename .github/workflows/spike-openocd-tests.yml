@@ -105,7 +105,15 @@ jobs:
           git clone "$RISCV_TESTS_REPO"
           cd riscv-tests
           git checkout "$RISCV_TESTS_REV"
-          git submodule update --init --recursive
+          git submodule update --init --recursive      
+          
+      - name: Run basic debug test under Valgrind (memory leak check)
+        run: |
+          sudo apt-get install -y valgrind
+          echo "Running RISC-V debug test under Valgrind for memory leak detection..."
+          # Run a minimal configuration to detect leaks in riscv_openocd_step_impl()
+          valgrind --leak-check=full --error-exitcode=1 \
+            ./src/openocd -f tcl/interface/jtag_dummy.cfg -f tcl/target/riscv.cfg -c "init; shutdown"
 
       - name: Run Spike32 Tests
         id: spike32-tests
