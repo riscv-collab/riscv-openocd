@@ -27,6 +27,11 @@ static inline bool riscv_reg_impl_is_initialized(const struct reg *reg)
 	assert(reg->arch_info);
 	assert(((riscv_reg_info_t *)reg->arch_info)->target);
 	assert((!reg->exist && !reg->value) || (reg->exist && reg->value));
+	if (!(reg->valid || !reg->dirty)) {
+        LOG_WARNING("riscv_reg_impl_is_initialized: reg cache invalid or dirty (%s)",
+                    reg->name ? reg->name : "unknown");
+        return false;
+    }
 	assert(reg->valid || !reg->dirty);
 	return true;
 }
