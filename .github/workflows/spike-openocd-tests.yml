@@ -113,7 +113,8 @@ jobs:
           echo "Running RISC-V debug test under Valgrind for memory leak detection..."
           # Run a minimal configuration to detect leaks in riscv_openocd_step_impl()
           valgrind --leak-check=full --error-exitcode=1 \
-            ./src/openocd -f tcl/interface/jtag_dummy.cfg -f tcl/target/riscv.cfg -c "init; shutdown"
+            ./src/openocd -f tcl/target/riscv.cfg -f tcl/target/riscv.cfg -c "init; shutdown"
+
 
       - name: Run Spike32 Tests
         id: spike32-tests
