@@ -257,6 +257,12 @@ typedef struct {
 
 	/* This hart was placed into a halt group in examine(). */
 	bool haltgroup_supported;
+
+    /* Tracks which abstractauto.autoexecdata bits are supported by hardware.
+	 * When set, reading/writing the corresponding data register re-executes
+	 * the last abstract command, enabling efficient batch memory operations.
+	 */
+    bool autoexecdata[12];
 } riscv013_info_t;
 
 static OOCD_LIST_HEAD(dm_list);
@@ -2103,6 +2109,33 @@ static int examine(struct target *target)
 
 	LOG_TARGET_INFO(target, "datacount=%d progbufsize=%d",
 			info->datacount, info->progbufsize);
+
+	/* Check which abstractauto.autoexecdata bits are supported by the hardware */
+	uint32_t abstractauto;
+	if (dm_write(target, DM_ABSTRACTAUTO,
+		DM_ABSTRACTAUTO_AUTOEXECDATA << DM_ABSTRACTAUTO_AUTOEXECDATA_OFFSET) == ERROR_OK) {
+		if (dm_read(target, &abstractauto, DM_ABSTRACTAUTO) == ERROR_OK) {
+			uint32_t autoexecdata_mask = get_field(abstractauto, DM_ABSTRACTAUTO_AUTOEXECDATA);
+			// Check each bit individually
+			for(unsigned int i = 0; i < info->datacount; i++){
+				info->autoexecdata[i] = (autoexecdata_mask & (1 << i)) != 0;
+				LOG_TARGET_DEBUG(target, "abstractauto.autoexecdata[%d] = %s",
+                    i, info->autoexecdata[i] ? "supported" : "not supported");
+			}
+
+			dm_write(target, DM_ABSTRACTAUTO, 0);
+
+			if (info->autoexecdata[0] & info->autoexecdata[1])
+				LOG_TARGET_INFO(target, "abstractauto.autoexecdata supported for efficient memory access");
+			else
+				LOG_TARGET_WARNING(target, "abstractauto.autoexecdata not supported - "
+					"program buffer memory access may not work or will be slower");
+		}
+		else
+			LOG_TARGET_DEBUG(target, "Unable to write abstractauto. Register may not be present on this target.");
+	}
+	else
+		LOG_TARGET_DEBUG(target, "Unable to write abstractauto. Register may not be present on this target.");
 
 	info->impebreak = get_field(dmstatus, DM_DMSTATUS_IMPEBREAK);
 
@@ -4412,6 +4445,44 @@ read_memory_progbuf_inner(struct target *target, const riscv_mem_access_args_t a
 }
 
 /**
+ * Called when the target lacks abstractauto support. Performs a batch of
+ * reads by issuing multiple abstract commands after each read, which is slow.
+ * TODO: Can read from arg0 directly instead of S1, but requires restructuring the loop.
+ */
+static struct mem_access_result
+read_memory_progbuf_inner_slow(struct target *target, const riscv_mem_access_args_t args)
+{
+    assert(riscv_mem_access_is_read(args));
+
+    if (read_memory_progbuf_inner_fill_progbuf(target, args.increment, args.size) != ERROR_OK)
+        return mem_access_result(MEM_ACCESS_SKIPPED_PROGBUF_FILL_FAILED);
+
+    if (register_write_direct(target, GDB_REGNO_S0, args.address) != ERROR_OK)
+        return mem_access_result(MEM_ACCESS_FAILED);
+
+    if (args.increment == 0) {
+        if (register_write_direct(target, GDB_REGNO_A0, 0) != ERROR_OK)
+            return mem_access_result(MEM_ACCESS_FAILED);
+    }
+
+    uint32_t command = riscv013_access_register_command(target,
+        GDB_REGNO_S1, riscv_xlen(target),
+        AC_ACCESS_REGISTER_TRANSFER | AC_ACCESS_REGISTER_POSTEXEC);
+
+    for (uint32_t i = 0; i < args.count; i++) {
+        uint32_t cmderr;
+        if (riscv013_execute_abstract_command(target, command, &cmderr) != ERROR_OK)
+            return mem_access_result(MEM_ACCESS_FAILED);
+
+        struct mem_access_result result = read_word_from_s1(target, args, i);
+        if (!is_mem_access_ok(result))
+            return result;
+    }
+
+    return mem_access_result(MEM_ACCESS_OK);
+}
+
+/**
  * Only need to save/restore one GPR to read a single word, and the progbuf
  * program doesn't need to increment.
  */
@@ -4456,15 +4527,20 @@ read_memory_progbuf(struct target *target, const riscv_mem_access_args_t args)
 {
 	assert(riscv_mem_access_is_read(args));
 
+	RISCV013_INFO(info);
+
 	select_dmi(target->tap);
 	memset(args.read_buffer, 0, args.count * args.size);
 
 	if (execute_autofence(target) != ERROR_OK)
 		return mem_access_result(MEM_ACCESS_SKIPPED_FENCE_EXEC_FAILED);
 
-	return (args.count == 1) ?
-			read_memory_progbuf_inner_one(target, args) :
-			read_memory_progbuf_inner(target, args);
+	if (args.count == 1)
+		return read_memory_progbuf_inner_one(target, args);
+	else if (info->autoexecdata[0] & info->autoexecdata[1])
+		return read_memory_progbuf_inner(target, args);
+	else
+		return read_memory_progbuf_inner_slow(target, args);
 }
 
 static struct mem_access_result
@@ -5051,12 +5127,58 @@ write_memory_progbuf_inner(struct target *target,
 			mem_access_result(MEM_ACCESS_FAILED_PROGBUF_TEARDOWN_FAILED);
 }
 
+/**
+ * Called when the target lacks abstractauto support. Performs a batch of
+ * writes by issuing multiple abstract commands after each write, which is slow.
+ */
+static struct mem_access_result
+write_memory_progbuf_inner_slow(struct target *target,
+		const riscv_mem_access_args_t args)
+{
+	assert(riscv_mem_access_is_write(args));
+
+	if (write_memory_progbuf_fill_progbuf(target, args.size) != ERROR_OK)
+		return mem_access_result(MEM_ACCESS_SKIPPED_PROGBUF_FILL_FAILED);
+
+	if (register_write_direct(target, GDB_REGNO_S0, args.address) != ERROR_OK)
+        return mem_access_result(MEM_ACCESS_FAILED);
+
+    uint32_t command = riscv013_access_register_command(target,
+        GDB_REGNO_S1, riscv_xlen(target),
+        AC_ACCESS_REGISTER_POSTEXEC |
+        AC_ACCESS_REGISTER_TRANSFER |
+        AC_ACCESS_REGISTER_WRITE);
+
+	const uint8_t *buffer = args.write_buffer;
+
+    for (uint32_t i = 0; i < args.count; i++) {
+        uint64_t value = buf_get_u64(buffer + i * args.size, 0, 8 * args.size);
+
+        if (write_abstract_arg(target, 0, value, args.size > 4 ? 64 : 32) != ERROR_OK)
+            return mem_access_result(MEM_ACCESS_FAILED_DM_ACCESS_FAILED);
+
+        uint32_t cmderr;
+        if (riscv013_execute_abstract_command(target, command, &cmderr) != ERROR_OK) {
+            LOG_TARGET_DEBUG(target, "Manual progbuf write failed at element %d", i);
+            return mem_access_result(MEM_ACCESS_FAILED);
+        }
+
+        log_memory_access64(args.address + i * args.size, value, args.size, /*is_read*/ false);
+    }
+
+    return mem_access_result(MEM_ACCESS_OK);
+}
+
 static struct mem_access_result
 write_memory_progbuf(struct target *target, const riscv_mem_access_args_t args)
 {
 	assert(riscv_mem_access_is_write(args));
 
-	struct mem_access_result result = write_memory_progbuf_inner(target, args);
+	RISCV013_INFO(info);
+
+	struct mem_access_result result = (info->autoexecdata[0] & info->autoexecdata[1]) ?
+			write_memory_progbuf_inner(target, args) :
+			write_memory_progbuf_inner_slow(target, args);
 
 	if (execute_autofence(target) != ERROR_OK)
 		return mem_access_result(MEM_ACCESS_FAILED_FENCE_EXEC_FAILED);
