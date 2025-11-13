@@ -309,6 +309,9 @@ struct target_type {
 	 * will typically be 32 for 32-bit targets, and 64 for 64-bit targets. If
 	 * not implemented, it's assumed to be 32. */
 	unsigned int (*data_bits)(struct target *target);
+
+	int (*get_default_breakpoint_length)(struct target *target, target_addr_t addr,
+		uint32_t asid, int hw, unsigned int *length);
 };
 
 extern struct target_type aarch64_target;
