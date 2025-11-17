@@ -293,6 +293,18 @@ static int zephyr_get_arc_state(struct rtos *rtos, target_addr_t *addr,
 	return retval;
 }
 
+static int zephyr_get_riscv_state(struct rtos *rtos, target_addr_t *addr,
+			 struct zephyr_params *params,
+			 struct rtos_reg *callee_saved_reg_list,
+			 struct rtos_reg **reg_list, int *num_regs)
+{
+	/* Getting callee registers */
+	return rtos_generic_stack_read(rtos->target,
+			params->callee_saved_stacking,
+			*addr, reg_list,
+			num_regs);
+}
+
 /* ARM Cortex-M-specific implementation */
 static int zephyr_get_arm_state(struct rtos *rtos, target_addr_t *addr,
 			 struct zephyr_params *params,
@@ -364,6 +376,13 @@ static struct zephyr_params zephyr_params_list[] = {
 		.cpu_saved_nofp_stacking = &arc_cpu_saved_stacking,
 		.get_cpu_state = &zephyr_get_arc_state,
 	},
+	{
+                .target_name = "riscv",
+                .pointer_width = 4,
+                .callee_saved_stacking = &rtos_standard_rv32_stacking,
+                .get_cpu_state = &zephyr_get_riscv_state,
+	},
+       	
 	{
 		.target_name = NULL
 	}
