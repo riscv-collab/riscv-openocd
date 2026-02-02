@@ -195,8 +195,6 @@ static inline bool riscv_reg_impl_gdb_regno_cacheable(enum gdb_regno regno,
 	 * CSRs. */
 	switch (regno) {
 		case GDB_REGNO_DPC:
-		case GDB_REGNO_VXSAT:
-		case GDB_REGNO_VXRM:
 		case GDB_REGNO_VLENB:
 		case GDB_REGNO_MISA:
 		case GDB_REGNO_DCSR:
@@ -215,6 +213,9 @@ static inline bool riscv_reg_impl_gdb_regno_cacheable(enum gdb_regno regno,
 		case GDB_REGNO_VSTART: /* Changes value when vtype is changed. */
 		case GDB_REGNO_VL: /* Changes value when vtype is changed. */
 		case GDB_REGNO_VTYPE: /* Writes to vtype have side effects, so we don't cache it. */
+		case GDB_REGNO_VXSAT: /* Changes value when vcsr is changed. */
+		case GDB_REGNO_VXRM: /* Changes value when vcsr is changed. */
+		case GDB_REGNO_VCSR: /* Changes when vxrm or vxsat are changed. */
 		default:
 			return false;
 	}
