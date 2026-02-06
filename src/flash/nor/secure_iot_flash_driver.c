@@ -4,9 +4,11 @@
 
 #include "imp.h"
 #include<elf.h>
-
+#include <helper/log.h>
+// #define DBG_PRINT(...) LOG_INFO(__VA_ARGS__)
+// or use printf if needed
 #include"secure_iot_flash_driver.h"
-#define CHUNK_SIZE 16
+#define CHUNK_SIZE 128
 qspi_msg flash_msg={.PRESCALER=6,.CLK_MODE=0,.FMEM_SIZE = 27,.FTIE = 0,.TCEN=0,.TEIE=0,.TOIE=0,.SMIE = 0,.APMS= 0,.PMM=0};
 
 
@@ -49,7 +51,7 @@ uint32_t fastReadQuad(struct target *target,uint8_t qspinum,uint8_t* data,uint32
     flash_msg.data_buffer = data;
     flash_msg.functional_mode = CCR_FMODE_INDIRECT_READ;
     flash_msg.dummy_mode = 0;
-    flash_msg.dummy_cycles = 7;
+    flash_msg.dummy_cycles = 8;
     flash_msg.dummy_bit = 0;
     flash_msg.mm_mode = CCR_MM_MODE_XIP;
     flash_msg.alternate_byte_mode = CCR_ABMODE_NIL;
@@ -291,6 +293,7 @@ uint32_t writeEnable(struct target *target,uint8_t qspinum){
     flash_msg.dummy_bit = 0;
     flash_msg.mm_mode = CCR_MM_MODE_XIP;
     flash_msg.alternate_byte_mode = CCR_ABMODE_NIL;
+    flash_msg.length = 0;
     QSPI_Transaction(target,qspinum,&flash_msg);
     uint8_t temp;
     while(1){
@@ -322,6 +325,8 @@ uint32_t writeDisable(struct target *target,uint8_t qspinum){
     flash_msg.dummy_cycles = 1;
     flash_msg.dummy_bit = 0;
     flash_msg.mm_mode = CCR_MM_MODE_XIP;
+    flash_msg.length = 0;
+
     flash_msg.alternate_byte_mode = CCR_ABMODE_NIL;  
     return QSPI_Transaction(target,qspinum,&flash_msg);
     
@@ -804,7 +809,7 @@ uint32_t flash_xip_init(struct target *target,uint8_t qspinum, int flash_size){
     flash_msg.data_mode = CCR_DMODE_FOUR_LINE;
     flash_msg.functional_mode = CCR_FMODE_MMM;
     flash_msg.dummy_mode = 0;
-    flash_msg.dummy_cycles = 7;
+    flash_msg.dummy_cycles = 8;
     flash_msg.dummy_bit = 1;
     flash_msg.mm_mode = CCR_MM_MODE_XIP;
     flash_msg.alternate_byte_mode = CCR_ABMODE_NIL;
@@ -948,6 +953,7 @@ for (int l = 0; l < elf_header.e_phnum; l++) {
                writeDisable(target,qspi_number);/*Enable write operation*/
             }
             size_t offset = 0x000;
+            // DBG_PRINT("remaining bytes=%zu",remaining_bytes);
             while (remaining_bytes > 0) {
                to_read = (remaining_bytes>CHUNK_SIZE)?CHUNK_SIZE:remaining_bytes;
                bytesReadInChunk = fread(buffer, 1, to_read, file);
@@ -959,6 +965,8 @@ for (int l = 0; l < elf_header.e_phnum; l++) {
                if(((mask_address+offset)&(~(0xFF))) == (((mask_address+offset)+bytesReadInChunk-1)&(~(0xFF)))){//check if start address and end address in same sector
                 writeEnable(target,qspi_number);/*Enable write operation*/
                 inputpageQuad(target,qspi_number,buffer,mask_address+offset,bytesReadInChunk);/*To write data to flash*/
+                // DBG_PRINT("addr in flash driver = 0x%zx",mask_address+offset);
+
                 writeDisable(target,qspi_number);/*Enable write operation*/
             }
             else
@@ -1007,9 +1015,14 @@ fclose(file);
    while (remaining_bytes > 0) {
       to_read = (remaining_bytes>CHUNK_SIZE)?CHUNK_SIZE:remaining_bytes;
       bytesReadInChunk = fread(buffer, 1, to_read, file);
+        // DBG_PRINT("1");
       writeEnable(target,qspi_number);/*Enable write operation*/
+        // DBG_PRINT("2, addr %lx",mask_address+offset);
       inputpageQuad(target,qspi_number,buffer,mask_address+offset,bytesReadInChunk);/*To write data to flash*/
-      writeDisable(target,qspi_number);/*Enable write operation*/
+        // DBG_PRINT("3");
+    //   writeDisable(target,qspi_number);/*Enable write operation*/
+        // DBG_PRINT("4");
+
       log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__, "\nWriting at offset:%lx\n",start_address+offset);
       for(uint8_t i = 0;i<16;i++){
           log_printf(LOG_LVL_DEBUG, __FILE__, __LINE__, __func__,  "%x ",buffer[i]);
