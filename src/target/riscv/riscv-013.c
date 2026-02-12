@@ -582,6 +582,7 @@ static int dmstatus_read(struct target *target, uint32_t *dmstatus,
 				"%" PRId32 " (dmstatus=0x%" PRIx32 "). This error might be caused by a JTAG "
 				"signal issue. Try reducing the JTAG clock speed.",
 				get_field32(*dmstatus, DM_DMSTATUS_VERSION), *dmstatus);
+		return ERROR_FAIL;
 	} else if (authenticated && !get_field(*dmstatus, DM_DMSTATUS_AUTHENTICATED)) {
 		LOG_ERROR("Debugger is not authenticated to target Debug Module. "
 				"(dmstatus=0x%x). Use `riscv authdata_read` and "
@@ -2073,11 +2074,6 @@ static int examine(struct target *target)
 	if (dmstatus_read(target, &dmstatus, false) != ERROR_OK)
 		return ERROR_FAIL;
 	LOG_TARGET_DEBUG(target, "dmstatus:  0x%08x", dmstatus);
-	int dmstatus_version = get_field(dmstatus, DM_DMSTATUS_VERSION);
-	if (dmstatus_version != 2 && dmstatus_version != 3) {
-		/* Error was already printed out in dmstatus_read(). */
-		return ERROR_FAIL;
-	}
 
 	uint32_t hartinfo;
 	if (dm_read(target, &hartinfo, DM_HARTINFO) != ERROR_OK)
