@@ -1206,12 +1206,13 @@ static int scratch_reserve(struct target *target,
 	if (info->dataaccess == 1) {
 		/* Sign extend dataaddr. */
 		scratch->hart_address = info->dataaddr;
-		if (info->dataaddr & (1<<11))
-			scratch->hart_address |= 0xfffffffffffff000ULL;
+		if (info->dataaddr & BIT(DM_HARTINFO_DATAADDR_LENGTH - 1))
+			scratch->hart_address |=
+				GENMASK_ULL(riscv_xlen(target) - 1, DM_HARTINFO_DATAADDR_LENGTH);
 		/* Align. */
-		scratch->hart_address = (scratch->hart_address + alignment - 1) & ~(alignment - 1);
+		scratch->hart_address = ALIGN_UP(scratch->hart_address, alignment);
 
-		if ((size_bytes + scratch->hart_address - info->dataaddr + 3) / 4 >=
+		if (DIV_ROUND_UP(size_bytes + scratch->hart_address - info->dataaddr, 4) <=
 				info->datasize) {
 			scratch->memory_space = SPACE_DM_DATA;
 			scratch->debug_address = (scratch->hart_address - info->dataaddr) / 4;
@@ -1225,10 +1226,9 @@ static int scratch_reserve(struct target *target,
 
 	/* Allow for ebreak at the end of the program. */
 	unsigned int program_size = (program->instruction_count + 1) * 4;
-	scratch->hart_address = (info->progbuf_address + program_size + alignment - 1) &
-		~(alignment - 1);
+	scratch->hart_address = ALIGN_UP(info->progbuf_address + program_size, alignment);
 	if ((info->progbuf_writable == YNM_YES) &&
-			((size_bytes + scratch->hart_address - info->progbuf_address + 3) / 4 >=
+			(DIV_ROUND_UP(size_bytes + scratch->hart_address - info->progbuf_address, 4) <=
 			info->progbufsize)) {
 		scratch->memory_space = SPACE_DMI_PROGBUF;
 		scratch->debug_address = (scratch->hart_address - info->progbuf_address) / 4;
@@ -1238,8 +1238,7 @@ static int scratch_reserve(struct target *target,
 	/* Option 3: User-configured memory area as scratch RAM */
 	if (target_alloc_working_area(target, size_bytes + alignment - 1,
 				&scratch->area) == ERROR_OK) {
-		scratch->hart_address = (scratch->area->address + alignment - 1) &
-			~(alignment - 1);
+		scratch->hart_address = ALIGN_UP(scratch->area->address, alignment);
 		scratch->memory_space = SPACE_DMI_RAM;
 		scratch->debug_address = scratch->hart_address;
 		return ERROR_OK;
@@ -2613,8 +2612,8 @@ static int sample_memory_bus_v1(struct target *target,
 {
 	RISCV013_INFO(info);
 	unsigned int sbasize = get_field(info->sbcs, DM_SBCS_SBASIZE);
-	if (sbasize > 64) {
-		LOG_TARGET_ERROR(target, "Memory sampling is only implemented for sbasize <= 64.");
+	if (sbasize == 0 || sbasize > 64) {
+		LOG_TARGET_ERROR(target, "Memory sampling is only implemented for non-zero sbasize <= 64.");
 		return ERROR_NOT_IMPLEMENTED;
 	}
 
