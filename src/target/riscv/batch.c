@@ -55,34 +55,34 @@ struct riscv_batch *riscv_batch_alloc(struct target *target, size_t scans)
 	 * the real DR scan length on the given target) */
 	out->data_out = malloc(sizeof(*out->data_out) * scans * DMI_SCAN_BUF_SIZE);
 	if (!out->data_out) {
-		LOG_ERROR("Failed to allocate data_out in RISC-V batch.");
+		LOG_ERROR("Failed to allocate data_out in RISC-V batch");
 		goto alloc_error;
 	};
 	out->data_in = malloc(sizeof(*out->data_in) * scans * DMI_SCAN_BUF_SIZE);
 	if (!out->data_in) {
-		LOG_ERROR("Failed to allocate data_in in RISC-V batch.");
+		LOG_ERROR("Failed to allocate data_in in RISC-V batch");
 		goto alloc_error;
 	}
 	out->fields = malloc(sizeof(*out->fields) * scans);
 	if (!out->fields) {
-		LOG_ERROR("Failed to allocate fields in RISC-V batch.");
+		LOG_ERROR("Failed to allocate fields in RISC-V batch");
 		goto alloc_error;
 	}
 	out->delay_classes = malloc(sizeof(*out->delay_classes) * scans);
 	if (!out->delay_classes) {
-		LOG_ERROR("Failed to allocate delay_classes in RISC-V batch.");
+		LOG_ERROR("Failed to allocate delay_classes in RISC-V batch");
 		goto alloc_error;
 	}
 	if (bscan_tunnel_ir_width != 0) {
 		out->bscan_ctxt = malloc(sizeof(*out->bscan_ctxt) * scans);
 		if (!out->bscan_ctxt) {
-			LOG_ERROR("Failed to allocate bscan_ctxt in RISC-V batch.");
+			LOG_ERROR("Failed to allocate bscan_ctxt in RISC-V batch");
 			goto alloc_error;
 		}
 	}
 	out->read_keys = malloc(sizeof(*out->read_keys) * scans);
 	if (!out->read_keys) {
-		LOG_ERROR("Failed to allocate read_keys in RISC-V batch.");
+		LOG_ERROR("Failed to allocate read_keys in RISC-V batch");
 		goto alloc_error;
 	}
 

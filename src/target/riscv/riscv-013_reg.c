@@ -140,7 +140,7 @@ static int examine_vlenb(struct target *target)
 	riscv_reg_t vlenb_val;
 	if (riscv_reg_get(target, &vlenb_val, GDB_REGNO_VLENB) != ERROR_OK) {
 		if (riscv_supports_extension(target, 'V'))
-			LOG_TARGET_WARNING(target, "Couldn't read vlenb; vector register access won't work.");
+			LOG_TARGET_WARNING(target, "Couldn't read vlenb; vector register access won't work");
 		r->vlenb = 0;
 		return riscv_reg_impl_set_exist(target, GDB_REGNO_VLENB, false);
 	}

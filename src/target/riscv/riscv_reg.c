@@ -129,7 +129,7 @@ static char *init_reg_name(const char *name)
 
 	char * const buf = calloc(size_buf, sizeof(char));
 	if (!buf) {
-		LOG_ERROR("Failed to allocate memory for a register name.");
+		LOG_ERROR("Failed to allocate memory for a register name");
 		return NULL;
 	}
 	strcpy(buf, name);
@@ -160,7 +160,7 @@ static char *init_reg_name_with_prefix(const char *name_prefix,
 
 	char * const buf = calloc(size_buf, sizeof(char));
 	if (!buf) {
-		LOG_ERROR("Failed to allocate memory for a register name.");
+		LOG_ERROR("Failed to allocate memory for a register name");
 		return NULL;
 	}
 	int result = snprintf(buf, size_buf, "%s%d", name_prefix, num);
@@ -588,7 +588,7 @@ static int resize_reg(const struct target *target, uint32_t regno, bool exist,
 	if (reg->exist) {
 		reg->value = malloc(DIV_ROUND_UP(reg->size, 8));
 		if (!reg->value) {
-			LOG_ERROR("Failed to allocate memory.");
+			LOG_ERROR("Failed to allocate memory");
 			return ERROR_FAIL;
 		}
 	} else {
@@ -627,7 +627,7 @@ int riscv_reg_impl_init_cache_entry(struct target *target, uint32_t regno,
 	} else {
 		reg->arch_info = calloc(1, sizeof(riscv_reg_info_t));
 		if (!reg->arch_info) {
-			LOG_ERROR("Out of memory.");
+			LOG_ERROR("Out of memory");
 			return ERROR_FAIL;
 		}
 		riscv_reg_info_t * const reg_arch_info = reg->arch_info;
@@ -901,7 +901,7 @@ void riscv_reg_cache_invalidate_all(struct target *target)
 	if (!target->reg_cache)
 		return;
 
-	LOG_TARGET_DEBUG(target, "Invalidating register cache.");
+	LOG_TARGET_DEBUG(target, "Invalidating register cache");
 	register_cache_invalidate(target->reg_cache);
 }
 
