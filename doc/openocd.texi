@@ -9548,8 +9548,15 @@ or the @var{address} provided by user.
 @deffnx {Command} {reset halt}
 @deffnx {Command} {reset init}
 Perform as hard a reset as possible, using SRST if possible.
-@emph{All defined targets will be reset, and target
-events will fire during the reset sequence.}
+@emph{The currently selected target's configured reset group will be reset,
+and target events will fire during the reset sequence.}
+
+If the current target is part of an SMP group, all targets in that group are
+reset together. Otherwise only the current target is reset.
+
+Note: if SRST is used, the physical reset signal affects all hardware on the
+board regardless of the SMP group boundary.  Reset event handling and halt
+management, however, are scoped to the selected reset group.
 
 The optional parameter specifies what should
 happen after the reset.

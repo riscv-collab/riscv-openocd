@@ -28,8 +28,17 @@ proc ocd_process_reset { MODE } {
 	}
 }
 
+proc ocd_get_reset_targets { } {
+	set current [target current]
+	if { $current == "" } {
+		return {}
+	}
+
+	return [$current arp_reset_targets]
+}
+
 proc ocd_process_reset_inner { MODE } {
-	set targets [target names]
+	set targets [ocd_get_reset_targets]
 
 	# If this target must be halted...
 	switch $MODE {
@@ -45,8 +54,11 @@ proc ocd_process_reset_inner { MODE } {
 		}
 	}
 
+	# Reset only the current target's configured reset group.
+	# For SMP systems, this corresponds to the current SMP cluster.
+	#
 	# Target event handlers *might* change which TAPs are enabled
-	# or disabled, so we fire all of them.  But don't issue any
+	# or disabled, so we fire all of them. But don't issue any
 	# target "arp_*" commands, which may issue JTAG transactions,
 	# unless we know the underlying TAP is active.
 	#
