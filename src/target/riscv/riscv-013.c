@@ -2150,19 +2150,19 @@ static int examine(struct target *target)
 	/* Don't call any riscv_* functions until after we've counted the number of
 	 * cores and initialized registers. */
 
-	enum riscv_hart_state state_at_examine_start;
-	if (riscv_get_hart_state(target, &state_at_examine_start) != ERROR_OK)
+	enum riscv_hart_state riscv_state_at_examine_start;
+	if (riscv_get_hart_state(target, &riscv_state_at_examine_start) != ERROR_OK)
 		return ERROR_FAIL;
 
 	/* Skip full examination and reporting of hart if it is currently unavailable */
-	const bool hart_unavailable_at_examine_start = state_at_examine_start == RISCV_STATE_UNAVAILABLE;
+	const bool hart_unavailable_at_examine_start = riscv_state_at_examine_start == RISCV_STATE_UNAVAILABLE;
 	if (hart_unavailable_at_examine_start) {
 		LOG_TARGET_DEBUG(target, "Did not fully examine hart %d as it was currently unavailable, deferring examine.", info->index);
 		target->state = TARGET_UNAVAILABLE;
 		target->defer_examine = true;
 		return ERROR_OK;
 	}
-	const bool hart_halted_at_examine_start = state_at_examine_start == RISCV_STATE_HALTED;
+	const bool hart_halted_at_examine_start = riscv_state_at_examine_start == RISCV_STATE_HALTED;
 	if (!hart_halted_at_examine_start) {
 		if (riscv013_halt_target(target) != ERROR_OK) {
 			LOG_TARGET_ERROR(target, "Fatal: Hart %d failed to halt during %s",
@@ -2192,11 +2192,11 @@ static int examine(struct target *target)
 	if (set_dcsr_ebreak(target, false) != ERROR_OK)
 		return ERROR_FAIL;
 
-	if (state_at_examine_start == RISCV_STATE_RUNNING) {
+	if (riscv_state_at_examine_start == RISCV_STATE_RUNNING) {
 		riscv013_step_or_resume_current_hart(target, false);
 		target->state = TARGET_RUNNING;
 		target->debug_reason = DBG_REASON_NOTHALTED;
-	} else if (state_at_examine_start == RISCV_STATE_HALTED) {
+	} else if (riscv_state_at_examine_start == RISCV_STATE_HALTED) {
 		target->state = TARGET_HALTED;
 		target->debug_reason = DBG_REASON_UNDEFINED;
 	}
@@ -2826,7 +2826,7 @@ static int sample_memory(struct target *target,
 	return sample_memory_bus_v1(target, buf, config, until_ms);
 }
 
-static int riscv013_get_hart_state(struct target *target, enum riscv_hart_state *state)
+static int riscv013_get_hart_state(struct target *target, enum riscv_hart_state *riscv_state)
 {
 	RISCV013_INFO(info);
 	if (dm013_select_target(target) != ERROR_OK)
@@ -2858,19 +2858,19 @@ static int riscv013_get_hart_state(struct target *target, enum riscv_hart_state 
 		dm_write(target, DM_DMCONTROL, dmcontrol);
 	}
 	if (get_field(dmstatus, DM_DMSTATUS_ALLNONEXISTENT)) {
-		*state = RISCV_STATE_NON_EXISTENT;
+		*riscv_state = RISCV_STATE_NON_EXISTENT;
 		return ERROR_OK;
 	}
 	if (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
-		*state = RISCV_STATE_UNAVAILABLE;
+		*riscv_state = RISCV_STATE_UNAVAILABLE;
 		return ERROR_OK;
 	}
 	if (get_field(dmstatus, DM_DMSTATUS_ALLHALTED)) {
-		*state = RISCV_STATE_HALTED;
+		*riscv_state = RISCV_STATE_HALTED;
 		return ERROR_OK;
 	}
 	if (get_field(dmstatus, DM_DMSTATUS_ALLRUNNING)) {
-		*state = RISCV_STATE_RUNNING;
+		*riscv_state = RISCV_STATE_RUNNING;
 		return ERROR_OK;
 	}
 	LOG_TARGET_ERROR(target, "Couldn't determine state. dmstatus=0x%x", dmstatus);
@@ -2955,6 +2955,13 @@ static int init_target(struct command_context *cmd_ctx,
 	return ERROR_OK;
 }
 
+static uint32_t riscv013_dmcontrol_for_hart(struct target *target)
+{
+	RISCV013_INFO(info);
+
+	return set_dmcontrol_hartsel(DM_DMCONTROL_DMACTIVE, info->index);
+}
+
 static int assert_reset(struct target *target)
 {
 	RISCV013_INFO(info);
@@ -2970,8 +2977,7 @@ static int assert_reset(struct target *target)
 		if (!dm)
 			return ERROR_FAIL;
 
-		uint32_t control = set_field(0, DM_DMCONTROL_DMACTIVE, 1);
-		control = set_dmcontrol_hartsel(control, info->index);
+		uint32_t control = riscv013_dmcontrol_for_hart(target);
 		control = set_field(control, DM_DMCONTROL_HALTREQ,
 				target->reset_halt ? 1 : 0);
 		control = set_field(control, DM_DMCONTROL_NDMRESET, 1);
@@ -3006,6 +3012,101 @@ static bool dcsr_ebreak_config_equals_reset_value(const struct target *target)
 	return true;
 }
 
+enum riscv013_reset_wait_condition {
+	RISCV013_RESET_WAIT_LEAVE_RESET,
+	RISCV013_RESET_WAIT_HALT,
+};
+
+static const char *riscv013_reset_wait_action(
+		enum riscv013_reset_wait_condition condition)
+{
+	switch (condition) {
+	case RISCV013_RESET_WAIT_LEAVE_RESET:
+		return "come out of reset";
+	case RISCV013_RESET_WAIT_HALT:
+		return "halt";
+	}
+	assert(false);
+	return "complete reset operation";
+}
+
+static bool riscv013_reset_wait_done(enum riscv013_reset_wait_condition condition,
+		uint32_t dmstatus)
+{
+	switch (condition) {
+	case RISCV013_RESET_WAIT_LEAVE_RESET:
+		/* Certain debug modules, like the one in GD32VF103 MCUs,
+		 * violate the specification's requirement that each hart is in
+		 * "exactly one of four states" and, during reset, report harts
+		 * as both unavailable and halted/running. To work around this,
+		 * check for the absence of the unavailable state rather than
+		 * the presence of any other state. */
+		return !get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL) ||
+			get_field(dmstatus, DM_DMSTATUS_ALLHAVERESET);
+	case RISCV013_RESET_WAIT_HALT:
+		return get_field(dmstatus, DM_DMSTATUS_ALLHALTED);
+	}
+	assert(false);
+	return true;
+}
+
+static void riscv013_log_reset_wait_timeout(struct target *target,
+		enum riscv013_reset_wait_condition condition, uint32_t dmstatus)
+{
+	switch (condition) {
+	case RISCV013_RESET_WAIT_LEAVE_RESET:
+		LOG_TARGET_ERROR(target, "Hart didn't leave reset in %ds; "
+				"dmstatus=0x%x (allunavail=%s, allhavereset=%s); "
+				"Increase the timeout with riscv set_command_timeout_sec.",
+				riscv_get_command_timeout_sec(), dmstatus,
+				get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL) ? "true" : "false",
+				get_field(dmstatus, DM_DMSTATUS_ALLHAVERESET) ? "true" : "false");
+		break;
+	case RISCV013_RESET_WAIT_HALT:
+		LOG_TARGET_ERROR(target, "Hart didn't halt in %ds; "
+				"dmstatus=0x%x (allhalted=%s); "
+				"Increase the timeout with riscv set_command_timeout_sec.",
+				riscv_get_command_timeout_sec(), dmstatus,
+				get_field(dmstatus, DM_DMSTATUS_ALLHALTED) ? "true" : "false");
+		break;
+	}
+}
+
+static int riscv013_wait_for_reset_condition(struct target *target,
+		enum riscv013_reset_wait_condition condition, uint32_t *dmstatus)
+{
+	RISCV013_INFO(info);
+	const unsigned int orig_base_delay = riscv_scan_get_delay(&info->learned_delays,
+			RISCV_DELAY_BASE);
+	time_t start = time(NULL);
+	int result = ERROR_OK;
+	bool wait_done = false;
+
+	LOG_TARGET_DEBUG(target, "Waiting for hart to %s.",
+			riscv013_reset_wait_action(condition));
+
+	do {
+		result = dmstatus_read(target, dmstatus, true);
+		if (result != ERROR_OK)
+			break;
+
+		if (time(NULL) - start > riscv_get_command_timeout_sec()) {
+			riscv013_log_reset_wait_timeout(target, condition, *dmstatus);
+			result = ERROR_TIMEOUT_REACHED;
+			break;
+		}
+
+		wait_done = riscv013_reset_wait_done(condition, *dmstatus);
+		if (!wait_done)
+			usleep(10);
+	} while (!wait_done);
+
+	riscv_scan_set_delay(&info->learned_delays, RISCV_DELAY_BASE,
+			orig_base_delay);
+
+	return result;
+}
+
 static int deassert_reset(struct target *target)
 {
 	RISCV013_INFO(info);
@@ -3016,10 +3117,8 @@ static int deassert_reset(struct target *target)
 
 	select_dmi(target->tap);
 	/* Clear the reset, but make sure haltreq is still set */
-	uint32_t control = 0;
-	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
+	uint32_t control = riscv013_dmcontrol_for_hart(target);
 	control = set_field(control, DM_DMCONTROL_HALTREQ, target->reset_halt ? 1 : 0);
-	control = set_dmcontrol_hartsel(control, info->index);
 	/* If `abstractcs.busy` is set, debugger should not
 	 * change `hartsel`.
 	 */
@@ -3034,42 +3133,23 @@ static int deassert_reset(struct target *target)
 		return result;
 
 	uint32_t dmstatus;
-	const unsigned int orig_base_delay = riscv_scan_get_delay(&info->learned_delays,
-			RISCV_DELAY_BASE);
-	time_t start = time(NULL);
-	LOG_TARGET_DEBUG(target, "Waiting for hart to come out of reset.");
-	do {
-		result = dmstatus_read(target, &dmstatus, true);
+	result = riscv013_wait_for_reset_condition(target,
+			RISCV013_RESET_WAIT_LEAVE_RESET, &dmstatus);
+	if (result != ERROR_OK)
+		return result;
+
+	/* If reset-halt was requested and hart is not unavailable,
+	 * wait for the hart to actually halt. */
+	if (target->reset_halt && !get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
+		result = riscv013_wait_for_reset_condition(target,
+				RISCV013_RESET_WAIT_HALT, &dmstatus);
 		if (result != ERROR_OK)
 			return result;
-
-		if (time(NULL) - start > riscv_get_command_timeout_sec()) {
-			LOG_TARGET_ERROR(target, "Hart didn't leave reset in %ds; "
-					"dmstatus=0x%x (allunavail=%s, allhavereset=%s); "
-					"Increase the timeout with riscv set_command_timeout_sec.",
-					riscv_get_command_timeout_sec(), dmstatus,
-					get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL) ? "true" : "false",
-					get_field(dmstatus, DM_DMSTATUS_ALLHAVERESET) ? "true" : "false");
-			return ERROR_TIMEOUT_REACHED;
-		}
-		/* Certain debug modules, like the one in GD32VF103
-		 * MCUs, violate the specification's requirement that
-		 * each hart is in "exactly one of four states" and,
-		 * during reset, report harts as both unavailable and
-		 * halted/running. To work around this, we check for
-		 * the absence of the unavailable state rather than
-		 * the presence of any other state. */
-	} while (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL) &&
-			!get_field(dmstatus, DM_DMSTATUS_ALLHAVERESET));
-
-	riscv_scan_set_delay(&info->learned_delays, RISCV_DELAY_BASE,
-			orig_base_delay);
+	}
 
 	/* Ack reset and clear DM_DMCONTROL_HALTREQ if previously set */
-	control = 0;
-	control = set_field(control, DM_DMCONTROL_DMACTIVE, 1);
+	control = riscv013_dmcontrol_for_hart(target);
 	control = set_field(control, DM_DMCONTROL_ACKHAVERESET, 1);
-	control = set_dmcontrol_hartsel(control, info->index);
 	result = dm_write(target, DM_DMCONTROL, control);
 	if (result != ERROR_OK)
 		return result;
@@ -5321,6 +5401,9 @@ static int riscv013_halt_target(struct target *target)
 
 static int riscv013_resume_go(struct target *target)
 {
+	RISCV_INFO(r);
+
+	r->prepped = false;
 	return riscv013_step_or_resume_current_hart(target, false);
 }
 

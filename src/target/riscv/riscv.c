@@ -2658,10 +2658,10 @@ static int riscv_halt_go_all_harts(struct target *target)
 {
 	RISCV_INFO(r);
 
-	enum riscv_hart_state state;
-	if (riscv_get_hart_state(target, &state) != ERROR_OK)
+	enum riscv_hart_state riscv_state;
+	if (riscv_get_hart_state(target, &riscv_state) != ERROR_OK)
 		return ERROR_FAIL;
-	if (state == RISCV_STATE_HALTED) {
+	if (riscv_state == RISCV_STATE_HALTED) {
 		LOG_TARGET_DEBUG(target, "Hart is already halted.");
 		if (target->state != TARGET_HALTED) {
 			target->state = TARGET_HALTED;
@@ -2953,7 +2953,9 @@ static int riscv_resume(
 	struct target_list *tlist;
 	foreach_smp_target_direction(resume_order == RO_NORMAL, tlist, targets) {
 		struct target *t = tlist->target;
+		struct riscv_info *i = riscv_info(t);
 		LOG_TARGET_DEBUG(t, "target->state=%s", target_state_name(t));
+		i->prepped = false;
 		if (t->state != TARGET_HALTED)
 			LOG_TARGET_DEBUG(t, "skipping this target: target not halted");
 		else if (resume_prep(t, current, address, handle_breakpoints,
@@ -3875,24 +3877,24 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 
 	/* If OpenOCD thinks we're running but this hart is halted then it's time
 	 * to raise an event. */
-	enum riscv_hart_state state;
-	if (riscv_get_hart_state(target, &state) != ERROR_OK)
+	enum riscv_hart_state riscv_state;
+	if (riscv_get_hart_state(target, &riscv_state) != ERROR_OK)
 		return ERROR_FAIL;
 
-	if (state == RISCV_STATE_NON_EXISTENT) {
+	if (riscv_state == RISCV_STATE_NON_EXISTENT) {
 		LOG_TARGET_ERROR(target, "Hart is non-existent!");
 		return ERROR_FAIL;
 	}
 
-	if (state == RISCV_STATE_HALTED && timeval_ms() - r->last_activity > 100) {
+	if (riscv_state == RISCV_STATE_HALTED && timeval_ms() - r->last_activity > 100) {
 		/* If we've been idle for a while, flush the register cache. Just in case
 		 * OpenOCD is going to be disconnected without shutting down cleanly. */
 		if (riscv_reg_flush_all(target) != ERROR_OK)
 			return ERROR_FAIL;
 	}
 
-	if (target->state == TARGET_UNKNOWN || state != previous_riscv_state) {
-		switch (state) {
+	if (target->state == TARGET_UNKNOWN || riscv_state != previous_riscv_state) {
+		switch (riscv_state) {
 			case RISCV_STATE_HALTED:
 				if (previous_riscv_state == RISCV_STATE_UNAVAILABLE)
 					LOG_TARGET_INFO(target, "became available (halted)");
@@ -6079,11 +6081,11 @@ unsigned int riscv_vlenb(const struct target *target)
 	return r->vlenb;
 }
 
-int riscv_get_hart_state(struct target *target, enum riscv_hart_state *state)
+int riscv_get_hart_state(struct target *target, enum riscv_hart_state *riscv_state)
 {
 	RISCV_INFO(r);
 	assert(r->get_hart_state);
-	return r->get_hart_state(target, state);
+	return r->get_hart_state(target, riscv_state);
 }
 
 static enum riscv_halt_reason riscv_halt_reason(struct target *target)

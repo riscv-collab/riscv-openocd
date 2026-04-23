@@ -696,7 +696,7 @@ int target_examine_one(struct target *target)
 	}
 
 	if (target->defer_examine) {
-		LOG_USER("[%s] Target currently unavailable for full examination.", target_name(target));
+		LOG_TARGET_DEBUG(target, "Currently unavailable for full examination");
 		target->defer_examine = defer_state;
 		target_reset_examined(target);
 	} else {
