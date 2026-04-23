@@ -18,6 +18,7 @@
 #include "target/algorithm.h"
 #include "target/target_type.h"
 #include <helper/align.h>
+#include <target/smp.h>
 #include <helper/log.h>
 #include "jtag/jtag.h"
 #include "target/register.h"
@@ -35,7 +36,7 @@
 #include "debug_reg_printer.h"
 #include "field_helpers.h"
 
-static int riscv013_on_step_or_resume(struct target *target, bool step);
+static int riscv013_on_step_or_resume(struct target *target, bool skip, bool step);
 static int riscv013_step_or_resume_current_hart(struct target *target,
 		bool step);
 static int riscv013_clear_abstract_error(struct target *target);
@@ -44,6 +45,7 @@ static int riscv013_clear_abstract_error(struct target *target);
 static int dm013_select_hart(struct target *target, int hart_index);
 static int riscv013_halt_prep(struct target *target);
 static int riscv013_halt_go(struct target *target);
+static int riscv013_halt_target(struct target *target);
 static int riscv013_resume_go(struct target *target);
 static int riscv013_step_current_hart(struct target *target);
 static int riscv013_on_step(struct target *target);
@@ -241,6 +243,7 @@ typedef struct {
 	uint8_t datasize;
 	uint8_t dataaccess;
 	int16_t dataaddr;
+	uint8_t nscratch;
 
 	/* The width of the hartsel field. */
 	unsigned int hartsellen;
@@ -1688,29 +1691,68 @@ static int set_dcsr_ebreak(struct target *target, bool step)
 		return ERROR_FAIL;
 
 	RISCV013_INFO(info);
-	riscv_reg_t original_dcsr, dcsr;
-	/* We want to twiddle some bits in the debug CSR so debugging works. */
-	if (riscv_reg_get(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
-		return ERROR_FAIL;
-	original_dcsr = dcsr;
-	dcsr = set_field(dcsr, CSR_DCSR_STEP, step);
 	const struct riscv_private_config * const config = riscv_private_config(target);
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKM, config->dcsr_ebreak_fields[RISCV_MODE_M]);
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKS, config->dcsr_ebreak_fields[RISCV_MODE_S]);
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKU, config->dcsr_ebreak_fields[RISCV_MODE_U]);
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKVS, config->dcsr_ebreak_fields[RISCV_MODE_VS]);
-	dcsr = set_field(dcsr, CSR_DCSR_EBREAKVU, config->dcsr_ebreak_fields[RISCV_MODE_VU]);
-	if (dcsr != original_dcsr &&
-			riscv_reg_set(target, GDB_REGNO_DCSR, dcsr) != ERROR_OK)
-		return ERROR_FAIL;
+	if (info->nscratch >= 1 && has_sufficient_progbuf(target, 8)) {
+		uint32_t set_ebreak_bits = 0;
+		uint32_t clear_ebreak_bits = 0;
+
+		if (config->dcsr_ebreak_fields[RISCV_MODE_M])
+			set_ebreak_bits |= CSR_DCSR_EBREAKM;
+		else
+			clear_ebreak_bits |= CSR_DCSR_EBREAKM;
+		if (config->dcsr_ebreak_fields[RISCV_MODE_S])
+			set_ebreak_bits |= CSR_DCSR_EBREAKS;
+		else
+			clear_ebreak_bits |= CSR_DCSR_EBREAKS;
+		if (config->dcsr_ebreak_fields[RISCV_MODE_U])
+			set_ebreak_bits |= CSR_DCSR_EBREAKU;
+		else
+			clear_ebreak_bits |= CSR_DCSR_EBREAKU;
+		if (config->dcsr_ebreak_fields[RISCV_MODE_VS])
+			set_ebreak_bits |= CSR_DCSR_EBREAKVS;
+		else
+			clear_ebreak_bits |= CSR_DCSR_EBREAKVS;
+		if (config->dcsr_ebreak_fields[RISCV_MODE_VU])
+			set_ebreak_bits |= CSR_DCSR_EBREAKVU;
+		else
+			clear_ebreak_bits |= CSR_DCSR_EBREAKVU;
+
+		struct riscv_program program;
+		riscv_program_init(&program, target);
+		riscv_program_insert(&program, csrw(S0, CSR_DSCRATCH0));
+		riscv_program_insert(&program, lui(S0, set_ebreak_bits));
+		riscv_program_insert(&program, csrrs(ZERO, S0, CSR_DCSR));
+		riscv_program_insert(&program, lui(S0, clear_ebreak_bits));
+		riscv_program_insert(&program, csrrc(ZERO, S0, CSR_DCSR));
+		if (step)
+			riscv_program_insert(&program, csrsi(CSR_DCSR, 0x4));
+		else
+			riscv_program_insert(&program, csrci(CSR_DCSR, 0x4));
+		riscv_program_insert(&program, csrr(S0, CSR_DSCRATCH0));
+		if (riscv_program_exec(&program, target) != ERROR_OK)
+			return ERROR_FAIL;
+	} else {
+		riscv_reg_t original_dcsr, dcsr;
+		/* We want to twiddle some bits in the debug CSR so debugging works. */
+		if (riscv_reg_get(target, &dcsr, GDB_REGNO_DCSR) != ERROR_OK)
+			return ERROR_FAIL;
+		original_dcsr = dcsr;
+		dcsr = set_field(dcsr, CSR_DCSR_STEP, step);
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKM, config->dcsr_ebreak_fields[RISCV_MODE_M]);
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKS, config->dcsr_ebreak_fields[RISCV_MODE_S]);
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKU, config->dcsr_ebreak_fields[RISCV_MODE_U]);
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKVS, config->dcsr_ebreak_fields[RISCV_MODE_VS]);
+		dcsr = set_field(dcsr, CSR_DCSR_EBREAKVU, config->dcsr_ebreak_fields[RISCV_MODE_VU]);
+		if (dcsr != original_dcsr &&
+				riscv_reg_set(target, GDB_REGNO_DCSR, dcsr) != ERROR_OK)
+			return ERROR_FAIL;
+	}
 	info->dcsr_ebreak_is_set = true;
 	return ERROR_OK;
 }
 
 static int halt_set_dcsr_ebreak(struct target *target)
 {
-	RISCV_INFO(r);
-	RISCV013_INFO(info);
 	LOG_TARGET_DEBUG(target, "Halt to set DCSR.ebreak*");
 
 	/* Remove this hart from the halt group.  This won't work on all targets
@@ -1736,36 +1778,37 @@ static int halt_set_dcsr_ebreak(struct target *target)
 	 */
 
 
-	if (info->haltgroup_supported) {
-		bool supported;
-		if (set_group(target, &supported, 0, HALT_GROUP) != ERROR_OK)
-			return ERROR_FAIL;
-		if (!supported)
-			LOG_TARGET_ERROR(target, "Couldn't place hart in halt group 0. "
-						 "Some harts may be unexpectedly halted.");
+	struct target_list *entry;
+	struct list_head *targets;
+
+	if (target->smp) {
+		targets = target->smp_targets;
+		foreach_smp_target(entry, targets) {
+			struct target *t = entry->target;
+			if (riscv013_halt_prep(t) != ERROR_OK)
+				return ERROR_FAIL;
+		}
 	}
 
 	int result = ERROR_OK;
+	int halt_result = ERROR_OK;
+	int resume_result = ERROR_OK;
 
-	r->prepped = true;
-	if (riscv013_halt_go(target) != ERROR_OK ||
-			set_dcsr_ebreak(target, false) != ERROR_OK ||
-			riscv013_step_or_resume_current_hart(target, false) != ERROR_OK) {
+	halt_result = riscv013_halt_go(target);
+	if (halt_result == ERROR_OK)
+		if (riscv013_on_step_or_resume(target, true, false) == ERROR_OK) {
+			resume_result = riscv013_step_or_resume_current_hart(target, false);
+			if (resume_result == ERROR_OK) {
+				target->state = TARGET_RUNNING;
+				target->debug_reason = DBG_REASON_NOTHALTED;
+			} else if (resume_result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+				target->state = TARGET_UNAVAILABLE;
+			else
+				result = ERROR_FAIL;
+		} else
+			result = ERROR_FAIL;
+	else if (halt_result != ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
 		result = ERROR_FAIL;
-	} else {
-		target->state = TARGET_RUNNING;
-		target->debug_reason = DBG_REASON_NOTHALTED;
-	}
-
-	/* Add it back to the halt group. */
-	if (info->haltgroup_supported) {
-		bool supported;
-		if (set_group(target, &supported, target->smp, HALT_GROUP) != ERROR_OK)
-			return ERROR_FAIL;
-		if (!supported)
-			LOG_TARGET_ERROR(target, "Couldn't place hart back in halt group %d. "
-						 "Some harts may be unexpectedly halted.", target->smp);
-	}
 
 	return result;
 }
@@ -2083,6 +2126,7 @@ static int examine(struct target *target)
 	info->datasize = get_field(hartinfo, DM_HARTINFO_DATASIZE);
 	info->dataaccess = get_field(hartinfo, DM_HARTINFO_DATAACCESS);
 	info->dataaddr = get_field(hartinfo, DM_HARTINFO_DATAADDR);
+	info->nscratch = get_field(hartinfo, DM_HARTINFO_NSCRATCH);
 
 	if (!get_field(dmstatus, DM_DMSTATUS_AUTHENTICATED)) {
 		LOG_TARGET_ERROR(target, "Debugger is not authenticated to target Debug Module. "
@@ -2101,17 +2145,7 @@ static int examine(struct target *target)
 	info->datacount = get_field(abstractcs, DM_ABSTRACTCS_DATACOUNT);
 	info->progbufsize = get_field(abstractcs, DM_ABSTRACTCS_PROGBUFSIZE);
 
-	LOG_TARGET_INFO(target, "datacount=%d progbufsize=%d",
-			info->datacount, info->progbufsize);
-
 	info->impebreak = get_field(dmstatus, DM_DMSTATUS_IMPEBREAK);
-
-	if (!has_sufficient_progbuf(target, 2)) {
-		LOG_TARGET_WARNING(target, "We won't be able to execute fence instructions on this "
-				"target. Memory may not always appear consistent. "
-				"(progbufsize=%d, impebreak=%d)", info->progbufsize,
-				info->impebreak);
-	}
 
 	/* Don't call any riscv_* functions until after we've counted the number of
 	 * cores and initialized registers. */
@@ -2120,16 +2154,33 @@ static int examine(struct target *target)
 	if (riscv_get_hart_state(target, &state_at_examine_start) != ERROR_OK)
 		return ERROR_FAIL;
 
-	RISCV_INFO(r);
+	/* Skip full examination and reporting of hart if it is currently unavailable */
+	const bool hart_unavailable_at_examine_start = state_at_examine_start == RISCV_STATE_UNAVAILABLE;
+	if (hart_unavailable_at_examine_start) {
+		LOG_TARGET_DEBUG(target, "Did not fully examine hart %d as it was currently unavailable, deferring examine.", info->index);
+		target->state = TARGET_UNAVAILABLE;
+		target->defer_examine = true;
+		return ERROR_OK;
+	}
 	const bool hart_halted_at_examine_start = state_at_examine_start == RISCV_STATE_HALTED;
 	if (!hart_halted_at_examine_start) {
-		r->prepped = true;
-		if (riscv013_halt_go(target) != ERROR_OK) {
+		if (riscv013_halt_target(target) != ERROR_OK) {
 			LOG_TARGET_ERROR(target, "Fatal: Hart %d failed to halt during %s",
 					info->index, __func__);
 			return ERROR_FAIL;
 		}
 	}
+
+	LOG_TARGET_INFO(target, "datacount=%d progbufsize=%d",
+			info->datacount, info->progbufsize);
+
+	if (!has_sufficient_progbuf(target, 2)) {
+		LOG_TARGET_WARNING(target, "We won't be able to execute fence instructions on this "
+				"target. Memory may not always appear consistent. "
+				"(progbufsize=%d, impebreak=%d)", info->progbufsize,
+				info->impebreak);
+	}
+
 
 	target->state = TARGET_HALTED;
 	target->debug_reason = hart_halted_at_examine_start ? DBG_REASON_UNDEFINED : DBG_REASON_DBGRQ;
@@ -2164,6 +2215,7 @@ static int examine(struct target *target)
 	/* Some regression suites rely on seeing 'Examined RISC-V core' to know
 	 * when they can connect with gdb/telnet.
 	 * We will need to update those suites if we want to change that text. */
+	RISCV_INFO(r);
 	LOG_TARGET_INFO(target, "Examined RISC-V core");
 	LOG_TARGET_INFO(target, " XLEN=%d, misa=0x%" PRIx64, r->xlen, r->misa);
 	return ERROR_OK;
@@ -2784,7 +2836,7 @@ static int riscv013_get_hart_state(struct target *target, enum riscv_hart_state 
 	if (dmstatus_read(target, &dmstatus, true) != ERROR_OK)
 		return ERROR_FAIL;
 	if (get_field(dmstatus, DM_DMSTATUS_ANYHAVERESET)) {
-		LOG_TARGET_INFO(target, "Hart unexpectedly reset!");
+		LOG_TARGET_DEBUG(target, "Hart unexpectedly reset!");
 		info->dcsr_ebreak_is_set = false;
 		/* TODO: Can we make this more obvious to eg. a gdb user? */
 		uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE |
@@ -3022,7 +3074,9 @@ static int deassert_reset(struct target *target)
 	if (result != ERROR_OK)
 		return result;
 
-	if (target->reset_halt) {
+	if (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
+		target->state = TARGET_UNAVAILABLE;
+	} else if (target->reset_halt) {
 		target->state = TARGET_HALTED;
 		target->debug_reason = DBG_REASON_DBGRQ;
 	} else {
@@ -5164,94 +5218,67 @@ static int dm013_select_hart(struct target *target, int hart_index)
 	return ERROR_OK;
 }
 
-/* Select all harts that were prepped and that are selectable, clearing the
- * prepped flag on the harts that actually were selected. */
-static int select_prepped_harts(struct target *target)
-{
-	RISCV_INFO(r);
-	dm013_info_t *dm = get_dm(target);
-	if (!dm)
-		return ERROR_FAIL;
-	if (!dm->hasel_supported) {
-		r->prepped = false;
-		return dm013_select_target(target);
-	}
-
-	assert(dm->hart_count);
-	unsigned int hawindow_count = (dm->hart_count + 31) / 32;
-	uint32_t *hawindow = calloc(hawindow_count, sizeof(uint32_t));
-	if (!hawindow)
-		return ERROR_FAIL;
-
-	target_list_t *entry;
-	unsigned int total_selected = 0;
-	unsigned int selected_index = 0;
-	list_for_each_entry(entry, &dm->target_list, list) {
-		struct target *t = entry->target;
-		struct riscv_info *info = riscv_info(t);
-		riscv013_info_t *info_013 = get_info(t);
-		unsigned int index = info_013->index;
-		LOG_TARGET_DEBUG(target, "index=%d, prepped=%d", index, info->prepped);
-		if (info->prepped) {
-			info_013->selected = true;
-			hawindow[index / 32] |= 1 << (index % 32);
-			info->prepped = false;
-			total_selected++;
-			selected_index = index;
-		}
-	}
-
-	if (total_selected == 0) {
-		LOG_TARGET_ERROR(target, "No harts were prepped!");
-		free(hawindow);
-		return ERROR_FAIL;
-	} else if (total_selected == 1) {
-		/* Don't use hasel if we only need to talk to one hart. */
-		free(hawindow);
-		return dm013_select_hart(target, selected_index);
-	}
-
-	if (dm013_select_hart(target, HART_INDEX_MULTIPLE) != ERROR_OK) {
-		free(hawindow);
-		return ERROR_FAIL;
-	}
-
-	for (unsigned int i = 0; i < hawindow_count; i++) {
-		if (dm_write(target, DM_HAWINDOWSEL, i) != ERROR_OK) {
-			free(hawindow);
-			return ERROR_FAIL;
-		}
-		if (dm_write(target, DM_HAWINDOW, hawindow[i]) != ERROR_OK) {
-			free(hawindow);
-			return ERROR_FAIL;
-		}
-	}
-
-	free(hawindow);
-	return ERROR_OK;
-}
-
 static int riscv013_halt_prep(struct target *target)
 {
+	LOG_TARGET_DEBUG(target, "grouping hart");
+
+	if (target->smp) {
+		/* Let's make sure that all non-halted harts are in the same halt group */
+		riscv013_info_t *info = get_info(target);
+		if (info->haltgroup_supported) {
+			if (dm013_select_target(target) != ERROR_OK)
+				return ERROR_FAIL;
+			bool supported;
+			if (set_group(target, &supported, target->smp, HALT_GROUP) != ERROR_OK)
+				return ERROR_FAIL;
+			if (!supported)
+				LOG_TARGET_ERROR(target, "Couldn't place hart %d in halt group %d. "
+							 "Some harts may be unexpectedly halted.", target->coreid, target->smp);
+		}
+	}
+
 	return ERROR_OK;
 }
 
 static int riscv013_halt_go(struct target *target)
 {
-	dm013_info_t *dm = get_dm(target);
-	if (!dm)
-		return ERROR_FAIL;
-
-	if (select_prepped_harts(target) != ERROR_OK)
-		return ERROR_FAIL;
-
 	LOG_TARGET_DEBUG(target, "halting hart");
+
+	if (dm013_select_target(target) != ERROR_OK) {
+		return ERROR_FAIL;
+	}
+	if (target->smp) {
+		/* Let's make sure that harts we want to halt are placed in another group */
+		riscv013_info_t *info = get_info(target);
+		if (info->haltgroup_supported) {
+			bool supported;
+			if (set_group(target, &supported, 0, HALT_GROUP) != ERROR_OK)
+				return ERROR_FAIL;
+			if (!supported)
+				LOG_TARGET_ERROR(target, "Couldn't place hart in halt group 0. "
+							 "Some harts may be unexpectedly halted.");
+		}
+	}
+
+	int result = riscv013_halt_target(target);
+	if (result == ERROR_TARGET_RESOURCE_NOT_AVAILABLE)
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	else if (result != ERROR_OK)
+		return ERROR_FAIL;
+
+	return ERROR_OK;
+}
+
+static int riscv013_halt_target(struct target *target)
+{
+	LOG_TARGET_DEBUG(target, "halting one hart");
 
 	/* `haltreq` should not be issued if `abstractcs.busy` is set. */
 	int result = wait_for_idle_if_needed(target);
 	if (result != ERROR_OK)
 		return result;
 
+	dm013_info_t *dm = get_dm(target);
 	/* Issue the halt command, and then wait for the current hart to halt. */
 	uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE | DM_DMCONTROL_HALTREQ;
 	dmcontrol = set_dmcontrol_hartsel(dmcontrol, dm->current_hartid);
@@ -5260,13 +5287,12 @@ static int riscv013_halt_go(struct target *target)
 	for (size_t i = 0; i < 256; ++i) {
 		if (dmstatus_read(target, &dmstatus, true) != ERROR_OK)
 			return ERROR_FAIL;
-		/* When no harts are running, there's no point in continuing this loop. */
+		/* When hart is not running, there's no point in continuing this loop. */
 		if (!get_field(dmstatus, DM_DMSTATUS_ANYRUNNING))
 			break;
 	}
 
-	/* We declare success if no harts are running. One or more of them may be
-	 * unavailable, though. */
+	/* We declare success if hart is not running. It may be unavailable, though. */
 
 	if ((get_field(dmstatus, DM_DMSTATUS_ANYRUNNING))) {
 		if (dm_read(target, &dmcontrol, DM_DMCONTROL) != ERROR_OK)
@@ -5280,44 +5306,14 @@ static int riscv013_halt_go(struct target *target)
 	dmcontrol = set_field(dmcontrol, DM_DMCONTROL_HALTREQ, 0);
 	dm_write(target, DM_DMCONTROL, dmcontrol);
 
-	if (dm->current_hartid == HART_INDEX_MULTIPLE) {
-		target_list_t *entry;
-		list_for_each_entry(entry, &dm->target_list, list) {
-			struct target *t = entry->target;
-			uint32_t t_dmstatus;
-			if (get_field(dmstatus, DM_DMSTATUS_ALLHALTED) ||
-					get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
-				/* All harts are either halted or unavailable. No
-				 * need to read dmstatus for each hart. */
-				t_dmstatus = dmstatus;
-			} else {
-				/* Only some harts were halted/unavailable. Read
-				 * dmstatus for this one to see what its status
-				 * is. */
-				if (dm013_select_target(target) != ERROR_OK)
-					return ERROR_FAIL;
-				if (dm_read(target, &t_dmstatus, DM_DMSTATUS) != ERROR_OK)
-					return ERROR_FAIL;
-			}
-			/* Set state for the current target based on its dmstatus. */
-			if (get_field(t_dmstatus, DM_DMSTATUS_ALLHALTED)) {
-				t->state = TARGET_HALTED;
-				if (t->debug_reason == DBG_REASON_NOTHALTED)
-					t->debug_reason = DBG_REASON_DBGRQ;
-			} else if (get_field(t_dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
-				t->state = TARGET_UNAVAILABLE;
-			}
-		}
-
-	} else {
-		/* Set state for the current target based on its dmstatus. */
-		if (get_field(dmstatus, DM_DMSTATUS_ALLHALTED)) {
-			target->state = TARGET_HALTED;
-			if (target->debug_reason == DBG_REASON_NOTHALTED)
-				target->debug_reason = DBG_REASON_DBGRQ;
-		} else if (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
-			target->state = TARGET_UNAVAILABLE;
-		}
+	/* Set state for the current target based on its dmstatus. */
+	if (get_field(dmstatus, DM_DMSTATUS_ALLHALTED)) {
+		target->state = TARGET_HALTED;
+		if (target->debug_reason == DBG_REASON_NOTHALTED)
+			target->debug_reason = DBG_REASON_DBGRQ;
+	} else if (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
+		target->state = TARGET_UNAVAILABLE;
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
 	return ERROR_OK;
@@ -5325,9 +5321,6 @@ static int riscv013_halt_go(struct target *target)
 
 static int riscv013_resume_go(struct target *target)
 {
-	if (select_prepped_harts(target) != ERROR_OK)
-		return ERROR_FAIL;
-
 	return riscv013_step_or_resume_current_hart(target, false);
 }
 
@@ -5339,12 +5332,12 @@ static int riscv013_step_current_hart(struct target *target)
 static int riscv013_resume_prep(struct target *target)
 {
 	assert(target->state == TARGET_HALTED);
-	return riscv013_on_step_or_resume(target, false);
+	return riscv013_on_step_or_resume(target, false, false);
 }
 
 static int riscv013_on_step(struct target *target)
 {
-	return riscv013_on_step_or_resume(target, true);
+	return riscv013_on_step_or_resume(target, false, true);
 }
 
 static enum riscv_halt_reason riscv013_halt_reason(struct target *target)
@@ -5462,9 +5455,9 @@ static unsigned int riscv013_get_dmi_address_bits(const struct target *target)
 }
 
 /* Helper Functions. */
-static int riscv013_on_step_or_resume(struct target *target, bool step)
+static int riscv013_on_step_or_resume(struct target *target, bool skip, bool step)
 {
-	if (has_sufficient_progbuf(target, 2))
+	if (!skip && has_sufficient_progbuf(target, 2))
 		if (execute_autofence(target) != ERROR_OK)
 			return ERROR_FAIL;
 
@@ -5492,6 +5485,10 @@ static int riscv013_step_or_resume_current_hart(struct target *target,
 
 	riscv_reg_cache_invalidate_all(target);
 
+	if (dm013_select_target(target) != ERROR_OK)
+		return ERROR_FAIL;
+
+
 	dm013_info_t *dm = get_dm(target);
 	/* Issue the resume command, and then wait for the current hart to resume. */
 	uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE | DM_DMCONTROL_RESUMEREQ;
@@ -5509,14 +5506,32 @@ static int riscv013_step_or_resume_current_hart(struct target *target,
 		usleep(10);
 		if (dmstatus_read(target, &dmstatus, true) != ERROR_OK)
 			return ERROR_FAIL;
-		if (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL))
-			return ERROR_FAIL;
+		if (get_field(dmstatus, DM_DMSTATUS_ALLUNAVAIL)) {
+			target->state = TARGET_UNAVAILABLE;
+			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+		}
+		if (get_field(dmstatus, DM_DMSTATUS_ANYHAVERESET))
+			dmcontrol = dmcontrol | DM_DMCONTROL_ACKHAVERESET;
 		if (get_field(dmstatus, DM_DMSTATUS_ALLRESUMEACK) == 0)
 			continue;
 		if (step && get_field(dmstatus, DM_DMSTATUS_ALLHALTED) == 0)
 			continue;
 
 		dm_write(target, DM_DMCONTROL, dmcontrol);
+
+		if (target->smp) {
+			/* Let's make sure that this hart is placed back with all non-halted harts */
+			riscv013_info_t *info = get_info(target);
+			if (info->haltgroup_supported) {
+				bool supported;
+				if (set_group(target, &supported, target->smp, HALT_GROUP) != ERROR_OK)
+					return ERROR_FAIL;
+				if (!supported)
+					LOG_TARGET_ERROR(target, "Couldn't place hart back in halt group %d. "
+								 "Some harts may be unexpectedly halted.", target->smp);
+			}
+		}
+
 		return ERROR_OK;
 	}
 

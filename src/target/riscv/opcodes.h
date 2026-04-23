@@ -99,8 +99,17 @@ static uint32_t jal(unsigned int rd, int32_t imm)
 	return imm_j((uint32_t)imm) | inst_rd(rd) | MATCH_JAL;
 }
 
-static uint32_t csrsi(unsigned int csr, uint8_t imm) __attribute__ ((unused));
-static uint32_t csrsi(unsigned int csr, uint8_t imm)
+static uint32_t csrci(unsigned int csr, uint16_t imm) __attribute__ ((unused));
+static uint32_t csrci(unsigned int csr, uint16_t imm)
+{
+	assert(csr <= MAX_CSR_NUM);
+	assert(imm <= MAX_UINT5);
+
+	return imm_i(csr) | inst_rs1(imm) | MATCH_CSRRCI;
+}
+
+static uint32_t csrsi(unsigned int csr, uint16_t imm) __attribute__ ((unused));
+static uint32_t csrsi(unsigned int csr, uint16_t imm)
 {
 	assert(csr <= MAX_CSR_NUM);
 	assert(imm <= MAX_UINT5);
@@ -214,6 +223,16 @@ static uint32_t csrr(unsigned int rd, unsigned int csr)
 	assert(csr <= MAX_CSR_NUM);
 
 	return imm_i(csr) | inst_rd(rd) | MATCH_CSRRS;
+}
+
+static uint32_t csrrc(unsigned int rd, unsigned int rs, unsigned int csr) __attribute__ ((unused));
+static uint32_t csrrc(unsigned int rd, unsigned int rs, unsigned int csr)
+{
+	assert(rd <= MAX_GPR_NUM);
+	assert(rs <= MAX_GPR_NUM);
+	assert(csr <= MAX_CSR_NUM);
+
+	return imm_i(csr) | inst_rs1(rs) | inst_rd(rd) | MATCH_CSRRC;
 }
 
 static uint32_t csrrs(unsigned int rd, unsigned int rs, unsigned int csr) __attribute__ ((unused));
