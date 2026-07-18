@@ -3017,9 +3017,6 @@ static int riscv_mmu(struct target *target, int *enabled)
 {
 	*enabled = 0;
 
-	if (!riscv_virt2phys_mode_is_sw(target))
-		return ERROR_OK;
-
 	/* Don't use MMU in explicit or effective M (machine) mode */
 	riscv_reg_t priv;
 	if (riscv_reg_get(target, &priv, GDB_REGNO_PRIV) != ERROR_OK) {
@@ -3410,16 +3407,11 @@ static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t 
 		return ERROR_OK;
 	}
 
-	int mmu_enabled;
-	int result = riscv_mmu(target, &mmu_enabled);
-	if (result != ERROR_OK)
-		return result;
-
 	RISCV_INFO(r);
-	if (!mmu_enabled)
+	if (riscv_virt2phys_mode_is_hw(target))
 		return r->access_memory(target, args);
 
-	result = check_virt_memory_access(target, args.address,
+	int result = check_virt_memory_access(target, args.address,
 			args.size, args.count, is_write);
 	if (result != ERROR_OK)
 		return result;
