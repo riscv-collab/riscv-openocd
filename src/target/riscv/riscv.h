@@ -303,7 +303,8 @@ struct riscv_info {
 						 riscv_sample_config_t *config,
 						 int64_t until_ms);
 
-	int (*access_memory)(struct target *target, const riscv_mem_access_args_t args);
+	int (*access_memory)(struct target *target,
+			const riscv_mem_access_args_t args, const bool is_virtual);
 
 	unsigned int (*data_bits)(struct target *target);
 
@@ -411,6 +412,7 @@ typedef struct {
 
 bool riscv_virt2phys_mode_is_hw(const struct target *target);
 bool riscv_virt2phys_mode_is_sw(const struct target *target);
+bool riscv_virt2phys_mode_is_off(const struct target *target);
 
 /* Wall-clock timeout for a command/access. Settable via RISC-V Target commands.*/
 int riscv_get_command_timeout_sec(void);
