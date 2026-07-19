@@ -483,6 +483,21 @@ struct target *get_current_target_or_null(struct command_context *cmd_ctx)
 		: cmd_ctx->current_target;
 }
 
+static bool target_in_reset_group(const struct target *reset_target,
+		const struct target *candidate)
+{
+	if (list_empty(reset_target->smp_targets))
+		return reset_target == candidate;
+
+	struct target_list *group_target;
+	foreach_smp_target(group_target, reset_target->smp_targets) {
+		if (group_target->target == candidate)
+			return true;
+	}
+
+	return false;
+}
+
 int target_poll(struct target *target)
 {
 	int retval;
@@ -611,9 +626,11 @@ static int target_process_reset(struct command_invocation *cmd, enum target_rese
 		return ERROR_FAIL;
 	}
 
+	struct target *reset_target = get_current_target(cmd->ctx);
 	struct target *target;
 	for (target = all_targets; target; target = target->next)
-		target_call_reset_callbacks(target, reset_mode);
+		if (target_in_reset_group(reset_target, target))
+			target_call_reset_callbacks(target, reset_mode);
 
 	/* disable polling during reset to make reset event scripts
 	 * more predictable, i.e. dr/irscan & pathmove in events will
@@ -636,6 +653,9 @@ static int target_process_reset(struct command_invocation *cmd, enum target_rese
 	retval = target_call_timer_callbacks_now();
 
 	for (target = all_targets; target; target = target->next) {
+		if (!target_in_reset_group(reset_target, target))
+			continue;
+
 		target->type->check_reset(target);
 		target->running_alg = false;
 	}
@@ -685,6 +705,7 @@ int target_examine_one(struct target *target)
 
 	target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_START);
 
+	bool defer_state = target->defer_examine;
 	int retval = target->type->examine(target);
 	if (retval != ERROR_OK) {
 		LOG_TARGET_ERROR(target, "Examination failed");
@@ -694,11 +715,17 @@ int target_examine_one(struct target *target)
 		return retval;
 	}
 
-	LOG_USER("[%s] Target successfully examined.", target_name(target));
-	target_set_examined(target);
+	if (target->defer_examine) {
+		LOG_TARGET_DEBUG(target, "Currently unavailable for full examination");
+		target->defer_examine = defer_state;
+		target_reset_examined(target);
+	} else {
+		LOG_USER("[%s] Target successfully examined.", target_name(target));
+		target_set_examined(target);
+	}
 	target_call_event_callbacks(target, TARGET_EVENT_EXAMINE_END);
 
-	LOG_TARGET_INFO(target, "Examination succeed");
+	LOG_TARGET_DEBUG(target, "Examination succeeded");
 	return ERROR_OK;
 }
 
@@ -3297,7 +3324,7 @@ COMMAND_HANDLER(handle_reset_command)
 		reset_mode = n->value;
 	}
 
-	/* reset *all* targets */
+	/* reset the current target's configured reset group */
 	return target_process_reset(CMD, reset_mode);
 }
 
@@ -5283,13 +5310,19 @@ COMMAND_HANDLER(handle_target_examine)
 		return ERROR_OK;
 	}
 
+	bool defer_state = target->defer_examine;
 	int retval = target->type->examine(target);
 	if (retval != ERROR_OK) {
 		target_reset_examined(target);
 		return retval;
 	}
 
-	target_set_examined(target);
+	if (target->defer_examine) {
+		LOG_INFO("Unable to do full examination of %s", target_name(target));
+		target->defer_examine = defer_state;
+		target_reset_examined(target);
+	} else
+		target_set_examined(target);
 
 	return ERROR_OK;
 }
@@ -5429,6 +5462,25 @@ COMMAND_HANDLER(handle_target_wait_state)
 				retval, target_strerror_safe(retval));
 		return retval;
 	}
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(handle_target_reset_targets)
+{
+	if (CMD_ARGC != 0)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	struct target *target = get_current_target(CMD_CTX);
+
+	if (list_empty(target->smp_targets)) {
+		command_print(CMD, "%s", target_name(target));
+		return ERROR_OK;
+	}
+
+	struct target_list *group_target;
+	foreach_smp_target(group_target, target->smp_targets)
+		command_print(CMD, "%s", target_name(group_target->target));
+
 	return ERROR_OK;
 }
 /* List for human, Events defined for this target.
@@ -5679,6 +5731,13 @@ static const struct command_registration target_instance_command_handlers[] = {
 		.handler = handle_target_wait_state,
 		.help = "used internally for reset processing",
 		.usage = "statename timeoutmsecs",
+	},
+	{
+		.name = "arp_reset_targets",
+		.mode = COMMAND_EXEC,
+		.handler = handle_target_reset_targets,
+		.help = "used internally for reset processing",
+		.usage = "",
 	},
 	{
 		.name = "invoke-event",
@@ -6552,7 +6611,7 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.handler = handle_reset_command,
 		.mode = COMMAND_EXEC,
 		.usage = "[run|halt|init]",
-		.help = "Reset all targets into the specified mode. "
+		.help = "Reset the current target's reset group into the specified mode. "
 			"Default reset mode is run, if not given.",
 	},
 	{

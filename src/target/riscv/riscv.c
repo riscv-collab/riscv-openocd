@@ -724,7 +724,9 @@ static void riscv_deinit_target(struct target *target)
 	if (!tt)
 		LOG_TARGET_ERROR(target, "Could not identify target type.");
 
-	if (riscv_reg_flush_all(target) != ERROR_OK)
+	/* Unexamined targets may still own per-target allocations, but they won't
+	 * have dirty register state to flush. */
+	if (target_was_examined(target) && riscv_reg_flush_all(target) != ERROR_OK)
 		LOG_TARGET_ERROR(target, "Failed to flush registers. Ignoring this error.");
 
 	if (tt && info && info->version_specific)
@@ -2656,10 +2658,10 @@ static int riscv_halt_go_all_harts(struct target *target)
 {
 	RISCV_INFO(r);
 
-	enum riscv_hart_state state;
-	if (riscv_get_hart_state(target, &state) != ERROR_OK)
+	enum riscv_hart_state riscv_state;
+	if (riscv_get_hart_state(target, &riscv_state) != ERROR_OK)
 		return ERROR_FAIL;
-	if (state == RISCV_STATE_HALTED) {
+	if (riscv_state == RISCV_STATE_HALTED) {
 		LOG_TARGET_DEBUG(target, "Hart is already halted.");
 		if (target->state != TARGET_HALTED) {
 			target->state = TARGET_HALTED;
@@ -2718,28 +2720,31 @@ int riscv_halt(struct target *target)
 
 	LOG_TARGET_DEBUG(target, "halting all harts");
 
+	/* Only halt a hart if it has been examined (was available) */
 	int result = ERROR_OK;
 	if (target->smp) {
 		struct target_list *tlist;
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
-			if (halt_prep(t) != ERROR_OK)
-				result = ERROR_FAIL;
+			if (target_was_examined(t))
+				if (halt_prep(t) != ERROR_OK)
+					result = ERROR_FAIL;
 		}
 
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
 			struct riscv_info *i = riscv_info(t);
-			if (i->prepped) {
-				if (halt_go(t) != ERROR_OK)
-					result = ERROR_FAIL;
-			}
+			if (target_was_examined(t))
+				if (i->prepped)
+					if (halt_go(t) != ERROR_OK)
+						result = ERROR_FAIL;
 		}
 
 		foreach_smp_target(tlist, target->smp_targets) {
 			struct target *t = tlist->target;
-			if (halt_finish(t) != ERROR_OK)
-				return ERROR_FAIL;
+			if (target_was_examined(t))
+				if (halt_finish(t) != ERROR_OK)
+					return ERROR_FAIL;
 		}
 
 	} else {
@@ -2948,7 +2953,9 @@ static int riscv_resume(
 	struct target_list *tlist;
 	foreach_smp_target_direction(resume_order == RO_NORMAL, tlist, targets) {
 		struct target *t = tlist->target;
+		struct riscv_info *i = riscv_info(t);
 		LOG_TARGET_DEBUG(t, "target->state=%s", target_state_name(t));
+		i->prepped = false;
 		if (t->state != TARGET_HALTED)
 			LOG_TARGET_DEBUG(t, "skipping this target: target not halted");
 		else if (resume_prep(t, current, address, handle_breakpoints,
@@ -3870,24 +3877,24 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 
 	/* If OpenOCD thinks we're running but this hart is halted then it's time
 	 * to raise an event. */
-	enum riscv_hart_state state;
-	if (riscv_get_hart_state(target, &state) != ERROR_OK)
+	enum riscv_hart_state riscv_state;
+	if (riscv_get_hart_state(target, &riscv_state) != ERROR_OK)
 		return ERROR_FAIL;
 
-	if (state == RISCV_STATE_NON_EXISTENT) {
+	if (riscv_state == RISCV_STATE_NON_EXISTENT) {
 		LOG_TARGET_ERROR(target, "Hart is non-existent!");
 		return ERROR_FAIL;
 	}
 
-	if (state == RISCV_STATE_HALTED && timeval_ms() - r->last_activity > 100) {
+	if (riscv_state == RISCV_STATE_HALTED && timeval_ms() - r->last_activity > 100) {
 		/* If we've been idle for a while, flush the register cache. Just in case
 		 * OpenOCD is going to be disconnected without shutting down cleanly. */
 		if (riscv_reg_flush_all(target) != ERROR_OK)
 			return ERROR_FAIL;
 	}
 
-	if (target->state == TARGET_UNKNOWN || state != previous_riscv_state) {
-		switch (state) {
+	if (target->state == TARGET_UNKNOWN || riscv_state != previous_riscv_state) {
+		switch (riscv_state) {
 			case RISCV_STATE_HALTED:
 				if (previous_riscv_state == RISCV_STATE_UNAVAILABLE)
 					LOG_TARGET_INFO(target, "became available (halted)");
@@ -3949,8 +3956,16 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 				break;
 
 			case RISCV_STATE_UNAVAILABLE:
-				LOG_TARGET_DEBUG(target, "  became unavailable");
-				LOG_TARGET_INFO(target, "became unavailable.");
+				if (previous_riscv_state == RISCV_STATE_HALTED) {
+					LOG_TARGET_DEBUG(target, "  became unavailable (halted)");
+					LOG_TARGET_INFO(target, "became unavailable (halted).");
+				} else if (previous_riscv_state == RISCV_STATE_RUNNING) {
+					LOG_TARGET_DEBUG(target, "  became unavailable (running)");
+					LOG_TARGET_INFO(target, "became unavailable (running).");
+				} else {
+					LOG_TARGET_DEBUG(target, "  became unavailable");
+					LOG_TARGET_INFO(target, "became unavailable.");
+				}
 				target->state = TARGET_UNAVAILABLE;
 				if (r->handle_became_unavailable &&
 						r->handle_became_unavailable(target, previous_riscv_state) != ERROR_OK)
@@ -6066,11 +6081,11 @@ unsigned int riscv_vlenb(const struct target *target)
 	return r->vlenb;
 }
 
-int riscv_get_hart_state(struct target *target, enum riscv_hart_state *state)
+int riscv_get_hart_state(struct target *target, enum riscv_hart_state *riscv_state)
 {
 	RISCV_INFO(r);
 	assert(r->get_hart_state);
-	return r->get_hart_state(target, state);
+	return r->get_hart_state(target, riscv_state);
 }
 
 static enum riscv_halt_reason riscv_halt_reason(struct target *target)
