@@ -373,7 +373,7 @@ static void log_debug_reg(struct target *target, enum riscv_debug_reg_ordinal re
 	const riscv_debug_reg_ctx_t context = get_riscv_debug_reg_ctx(target);
 	char * const buf = malloc(riscv_debug_reg_to_s(NULL, reg, context, value, RISCV_DEBUG_REG_HIDE_UNNAMED_0) + 1);
 	if (!buf) {
-		LOG_ERROR("Unable to allocate memory.");
+		LOG_ERROR("Unable to allocate memory");
 		return;
 	}
 	riscv_debug_reg_to_s(buf, reg, context, value, RISCV_DEBUG_REG_HIDE_UNNAMED_0);
@@ -1053,7 +1053,7 @@ static int examine_progbuf(struct target *target)
 
 	if (info->progbufsize < 1) {
 		info->progbuf_writable = YNM_NO;
-		LOG_TARGET_INFO(target, "No program buffer present.");
+		LOG_TARGET_INFO(target, "No program buffer present");
 		return ERROR_OK;
 	}
 
@@ -1774,7 +1774,7 @@ static int halt_set_dcsr_ebreak(struct target *target)
 
 static void deinit_target(struct target *target)
 {
-	LOG_TARGET_DEBUG(target, "Deinitializing target.");
+	LOG_TARGET_DEBUG(target, "Deinitializing target");
 	struct riscv_info *info = target->arch_info;
 	if (!info)
 		return;
@@ -1853,13 +1853,13 @@ static int reset_dm(struct target *target)
 		/* `dmcontrol.hartsel` is not changed. */
 		dmcontrol = (dmcontrol & DM_DMCONTROL_HARTSELLO) |
 			(dmcontrol & DM_DMCONTROL_HARTSELHI);
-		LOG_TARGET_DEBUG(target, "Initiating DM reset.");
+		LOG_TARGET_DEBUG(target, "Initiating DM reset");
 		result = dm_write(target, DM_DMCONTROL, dmcontrol);
 		if (result != ERROR_OK)
 			return result;
 
 		const time_t start = time(NULL);
-		LOG_TARGET_DEBUG(target, "Waiting for the DM to acknowledge reset.");
+		LOG_TARGET_DEBUG(target, "Waiting for the DM to acknowledge reset");
 		do {
 			result = dm_read(target, &dmcontrol, DM_DMCONTROL);
 			if (result != ERROR_OK)
@@ -1872,16 +1872,16 @@ static int reset_dm(struct target *target)
 				return ERROR_TIMEOUT_REACHED;
 			}
 		} while (get_field32(dmcontrol, DM_DMCONTROL_DMACTIVE));
-		LOG_TARGET_DEBUG(target, "DM reset initiated.");
+		LOG_TARGET_DEBUG(target, "DM reset initiated");
 	}
 
-	LOG_TARGET_DEBUG(target, "Activating the DM.");
+	LOG_TARGET_DEBUG(target, "Activating the DM");
 	result = dm_write(target, DM_DMCONTROL, DM_DMCONTROL_DMACTIVE);
 	if (result != ERROR_OK)
 		return result;
 
 	const time_t start = time(NULL);
-	LOG_TARGET_DEBUG(target, "Waiting for the DM to come out of reset.");
+	LOG_TARGET_DEBUG(target, "Waiting for the DM to come out of reset");
 	do {
 		result = dm_read(target, &dmcontrol, DM_DMCONTROL);
 		if (result != ERROR_OK)
@@ -1895,7 +1895,7 @@ static int reset_dm(struct target *target)
 		}
 	} while (!get_field32(dmcontrol, DM_DMCONTROL_DMACTIVE));
 
-	LOG_TARGET_DEBUG(target, "DM successfully reset.");
+	LOG_TARGET_DEBUG(target, "DM successfully reset");
 	dm->was_reset = true;
 	return ERROR_OK;
 }
@@ -1982,7 +1982,7 @@ static int examine_dm(struct target *target)
 	}
 
 	if (dm->hart_count <= 0) {
-		LOG_TARGET_ERROR(target, "No harts found!");
+		LOG_TARGET_ERROR(target, "No harts found");
 		return ERROR_FAIL;
 	}
 
@@ -2172,7 +2172,7 @@ static int examine(struct target *target)
 static int riscv013_authdata_read(struct target *target, uint32_t *value, unsigned int index)
 {
 	if (index > 0) {
-		LOG_TARGET_ERROR(target, "Spec 0.13 only has a single authdata register.");
+		LOG_TARGET_ERROR(target, "Spec 0.13 only has a single authdata register");
 		return ERROR_FAIL;
 	}
 
@@ -2185,7 +2185,7 @@ static int riscv013_authdata_read(struct target *target, uint32_t *value, unsign
 static int riscv013_authdata_write(struct target *target, uint32_t value, unsigned int index)
 {
 	if (index > 0) {
-		LOG_TARGET_ERROR(target, "Spec 0.13 only has a single authdata register.");
+		LOG_TARGET_ERROR(target, "Spec 0.13 only has a single authdata register");
 		return ERROR_FAIL;
 	}
 
@@ -2610,12 +2610,12 @@ static int sample_memory_bus_v1(struct target *target,
 	RISCV013_INFO(info);
 	unsigned int sbasize = get_field(info->sbcs, DM_SBCS_SBASIZE);
 	if (sbasize == 0 || sbasize > 64) {
-		LOG_TARGET_ERROR(target, "Memory sampling is only implemented for non-zero sbasize <= 64.");
+		LOG_TARGET_ERROR(target, "Memory sampling is only implemented for non-zero sbasize <= 64");
 		return ERROR_NOT_IMPLEMENTED;
 	}
 
 	if (get_field(info->sbcs, DM_SBCS_SBVERSION) != 1) {
-		LOG_TARGET_ERROR(target, "Memory sampling is only implemented for SBA version 1.");
+		LOG_TARGET_ERROR(target, "Memory sampling is only implemented for SBA version 1");
 		return ERROR_NOT_IMPLEMENTED;
 	}
 
@@ -2784,7 +2784,7 @@ static int riscv013_get_hart_state(struct target *target, enum riscv_hart_state 
 	if (dmstatus_read(target, &dmstatus, true) != ERROR_OK)
 		return ERROR_FAIL;
 	if (get_field(dmstatus, DM_DMSTATUS_ANYHAVERESET)) {
-		LOG_TARGET_INFO(target, "Hart unexpectedly reset!");
+		LOG_TARGET_INFO(target, "Hart unexpectedly reset");
 		info->dcsr_ebreak_is_set = false;
 		/* TODO: Can we make this more obvious to eg. a gdb user? */
 		uint32_t dmcontrol = DM_DMCONTROL_DMACTIVE |
@@ -2853,7 +2853,7 @@ static int tick(struct target *target)
 static int init_target(struct command_context *cmd_ctx,
 		struct target *target)
 {
-	LOG_TARGET_DEBUG(target, "Init.");
+	LOG_TARGET_DEBUG(target, "Init");
 	RISCV_INFO(generic_info);
 
 	generic_info->select_target = &dm013_select_target;
@@ -2985,7 +2985,7 @@ static int deassert_reset(struct target *target)
 	const unsigned int orig_base_delay = riscv_scan_get_delay(&info->learned_delays,
 			RISCV_DELAY_BASE);
 	time_t start = time(NULL);
-	LOG_TARGET_DEBUG(target, "Waiting for hart to come out of reset.");
+	LOG_TARGET_DEBUG(target, "Waiting for hart to come out of reset");
 	do {
 		result = dmstatus_read(target, &dmstatus, true);
 		if (result != ERROR_OK)
@@ -3816,7 +3816,7 @@ read_memory_abstract(struct target *target, const riscv_mem_access_args_t args)
 			/* Set arg1 to the address: address + c * size */
 			result = write_abstract_arg(target, 1, args.address + c * args.size, riscv_xlen(target));
 			if (result != ERROR_OK) {
-				LOG_TARGET_ERROR(target, "Failed to write arg1.");
+				LOG_TARGET_ERROR(target, "Failed to write arg1");
 				return mem_access_result(MEM_ACCESS_FAILED_DM_ACCESS_FAILED);
 			}
 		}
@@ -3890,7 +3890,7 @@ write_memory_abstract(struct target *target, const riscv_mem_access_args_t args)
 		riscv_reg_t value = buf_get_u64(p, 0, 8 * args.size);
 		result = write_abstract_arg(target, 0, value, riscv_xlen(target));
 		if (result != ERROR_OK) {
-			LOG_TARGET_ERROR(target, "Failed to write arg0.");
+			LOG_TARGET_ERROR(target, "Failed to write arg0");
 			return mem_access_result(MEM_ACCESS_FAILED_DM_ACCESS_FAILED);
 		}
 
@@ -3899,7 +3899,7 @@ write_memory_abstract(struct target *target, const riscv_mem_access_args_t args)
 			/* Set arg1 to the address: address + c * size */
 			result = write_abstract_arg(target, 1, args.address + c * args.size, riscv_xlen(target));
 			if (result != ERROR_OK) {
-				LOG_TARGET_ERROR(target, "Failed to write arg1.");
+				LOG_TARGET_ERROR(target, "Failed to write arg1");
 				return mem_access_result(MEM_ACCESS_FAILED_DM_ACCESS_FAILED);
 			}
 		}
@@ -4749,7 +4749,7 @@ static int write_memory_bus_v1(struct target *target, const riscv_mem_access_arg
 		bool dmi_busy_encountered = riscv_batch_was_batch_busy(batch);
 		riscv_batch_free(batch);
 		if (dmi_busy_encountered)
-			LOG_TARGET_DEBUG(target, "DMI busy encountered during system bus write.");
+			LOG_TARGET_DEBUG(target, "DMI busy encountered during system bus write");
 
 		result = read_sbcs_nonbusy(target, &sbcs);
 		if (result != ERROR_OK)
@@ -4757,7 +4757,7 @@ static int write_memory_bus_v1(struct target *target, const riscv_mem_access_arg
 
 		if (get_field(sbcs, DM_SBCS_SBBUSYERROR)) {
 			/* We wrote while the target was busy. */
-			LOG_TARGET_DEBUG(target, "Sbbusyerror encountered during system bus write.");
+			LOG_TARGET_DEBUG(target, "Sbbusyerror encountered during system bus write");
 			/* Clear the sticky error flag. */
 			dm_write(target, DM_SBCS, sbcs | DM_SBCS_SBBUSYERROR);
 			/* Slow down before trying again.
@@ -5202,7 +5202,7 @@ static int select_prepped_harts(struct target *target)
 	}
 
 	if (total_selected == 0) {
-		LOG_TARGET_ERROR(target, "No harts were prepped!");
+		LOG_TARGET_ERROR(target, "No harts were prepped");
 		free(hawindow);
 		return ERROR_FAIL;
 	} else if (total_selected == 1) {
@@ -5480,7 +5480,7 @@ static int riscv013_step_or_resume_current_hart(struct target *target,
 		bool step)
 {
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_ERROR(target, "Hart is not halted!");
+		LOG_TARGET_ERROR(target, "Hart is not halted");
 		return ERROR_FAIL;
 	}
 

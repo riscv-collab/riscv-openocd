@@ -426,7 +426,7 @@ static dbus_status_t dbus_scan(struct target *target, uint16_t *address_in,
 		*address_in = 0;
 
 	if (info->addrbits == 0) {
-		LOG_TARGET_ERROR(target, "Can't access DMI because addrbits=0.");
+		LOG_TARGET_ERROR(target, "Can't access DMI because addrbits=0");
 		return DBUS_STATUS_FAILED;
 	}
 
@@ -696,7 +696,7 @@ static int read_bits(struct target *target, bits_t *result)
 			if (status == DBUS_STATUS_BUSY) {
 				if (address_in == (1<<info->addrbits) - 1 &&
 						value == (1ULL<<DBUS_DATA_SIZE) - 1) {
-					LOG_ERROR("TDO seems to be stuck high.");
+					LOG_ERROR("TDO seems to be stuck high");
 					return ERROR_FAIL;
 				}
 				increase_dbus_busy_delay(target);
@@ -897,7 +897,7 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 	int retval = scans_execute(scans);
 	if (retval != ERROR_OK) {
 		scans_delete(scans);
-		LOG_ERROR("JTAG execute failed.");
+		LOG_ERROR("JTAG execute failed");
 		return retval;
 	}
 
@@ -938,7 +938,7 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 			cache_clean(target);
 
 		if (wait_for_debugint_clear(target, true) != ERROR_OK) {
-			LOG_ERROR("Debug interrupt didn't clear.");
+			LOG_ERROR("Debug interrupt didn't clear");
 			dump_debug_ram(target);
 			scans_delete(scans);
 			return ERROR_FAIL;
@@ -959,7 +959,7 @@ static int cache_write(struct target *target, unsigned int address, bool run)
 				increase_interrupt_high_delay(target);
 				/* Slow path wait for it to clear. */
 				if (wait_for_debugint_clear(target, false) != ERROR_OK) {
-					LOG_ERROR("Debug interrupt didn't clear.");
+					LOG_ERROR("Debug interrupt didn't clear");
 					dump_debug_ram(target);
 					scans_delete(scans);
 					return ERROR_FAIL;
@@ -1167,7 +1167,7 @@ static int execute_resume(struct target *target, bool step)
 	cache_invalidate(target);
 
 	if (wait_for_debugint_clear(target, true) != ERROR_OK) {
-		LOG_ERROR("Debug interrupt didn't clear.");
+		LOG_ERROR("Debug interrupt didn't clear");
 		return ERROR_FAIL;
 	}
 
@@ -1980,7 +1980,7 @@ static int assert_reset(struct target *target)
 
 	/* The only assumption we can make is that the TAP was reset. */
 	if (wait_for_debugint_clear(target, true) != ERROR_OK) {
-		LOG_ERROR("Debug interrupt didn't clear.");
+		LOG_ERROR("Debug interrupt didn't clear");
 		return ERROR_FAIL;
 	}
 
@@ -2395,7 +2395,7 @@ static int wait_for_authbusy(struct target *target)
 static int riscv011_authdata_read(struct target *target, uint32_t *value, unsigned int index)
 {
 	if (index > 1) {
-		LOG_ERROR("Spec 0.11 only has a two authdata registers.");
+		LOG_ERROR("Spec 0.11 only has a two authdata registers");
 		return ERROR_FAIL;
 	}
 
@@ -2411,7 +2411,7 @@ static int riscv011_authdata_read(struct target *target, uint32_t *value, unsign
 static int riscv011_authdata_write(struct target *target, uint32_t value, unsigned int index)
 {
 	if (index > 1) {
-		LOG_ERROR("Spec 0.11 only has a two authdata registers.");
+		LOG_ERROR("Spec 0.11 only has a two authdata registers");
 		return ERROR_FAIL;
 	}
 

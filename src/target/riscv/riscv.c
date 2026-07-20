@@ -456,7 +456,7 @@ int dtmcs_scan(struct jtag_tap *tap, uint32_t out, uint32_t *in_ptr)
 static struct target_type *get_target_type(struct target *target)
 {
 	if (!target->arch_info) {
-		LOG_TARGET_ERROR(target, "Target has not been initialized.");
+		LOG_TARGET_ERROR(target, "Target has not been initialized");
 		return NULL;
 	}
 
@@ -479,7 +479,7 @@ static struct riscv_private_config *alloc_default_riscv_private_config(void)
 {
 	struct riscv_private_config * const config = malloc(sizeof(*config));
 	if (!config) {
-		LOG_ERROR("Out of memory!");
+		LOG_ERROR("Out of memory");
 		return NULL;
 	}
 
@@ -501,7 +501,7 @@ static int riscv_create_target(struct target *target)
 	}
 	target->arch_info = calloc(1, sizeof(struct riscv_info));
 	if (!target->arch_info) {
-		LOG_TARGET_ERROR(target, "Failed to allocate RISC-V target structure.");
+		LOG_TARGET_ERROR(target, "Failed to allocate RISC-V target structure");
 		return ERROR_FAIL;
 	}
 	riscv_info_init(target, target->arch_info);
@@ -722,7 +722,7 @@ static void riscv_deinit_target(struct target *target)
 	struct riscv_info *info = target->arch_info;
 	struct target_type *tt = get_target_type(target);
 	if (!tt)
-		LOG_TARGET_ERROR(target, "Could not identify target type.");
+		LOG_TARGET_ERROR(target, "Could not identify target type");
 
 	if (riscv_reg_flush_all(target) != ERROR_OK)
 		LOG_TARGET_ERROR(target, "Failed to flush registers. Ignoring this error.");
@@ -1649,7 +1649,7 @@ static int riscv_add_breakpoint(struct target *target, struct breakpoint *breakp
 		int trigger_idx = find_first_trigger_by_id(target, breakpoint->unique_id);
 		breakpoint_hw_set(breakpoint, trigger_idx);
 	} else {
-		LOG_TARGET_INFO(target, "OpenOCD only supports hardware and software breakpoints.");
+		LOG_TARGET_INFO(target, "OpenOCD only supports hardware and software breakpoints");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 	return ERROR_OK;
@@ -1709,7 +1709,7 @@ static int riscv_remove_breakpoint(struct target *target,
 			return result;
 
 	} else {
-		LOG_TARGET_INFO(target, "OpenOCD only supports hardware and software breakpoints.");
+		LOG_TARGET_INFO(target, "OpenOCD only supports hardware and software breakpoints");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
@@ -2473,7 +2473,7 @@ static int riscv_examine(struct target *target)
 {
 	LOG_TARGET_DEBUG(target, "Starting examination");
 	if (target_was_examined(target)) {
-		LOG_TARGET_DEBUG(target, "Target was already examined.");
+		LOG_TARGET_DEBUG(target, "Target was already examined");
 		return ERROR_OK;
 	}
 
@@ -2640,9 +2640,9 @@ static int halt_prep(struct target *target)
 	LOG_TARGET_DEBUG(target, "prep hart, debug_reason=%d", target->debug_reason);
 	r->prepped = false;
 	if (target->state == TARGET_HALTED) {
-		LOG_TARGET_DEBUG(target, "Hart is already halted.");
+		LOG_TARGET_DEBUG(target, "Hart is already halted");
 	} else if (target->state == TARGET_UNAVAILABLE) {
-		LOG_TARGET_DEBUG(target, "Hart is unavailable.");
+		LOG_TARGET_DEBUG(target, "Hart is unavailable");
 	} else {
 		if (r->halt_prep(target) != ERROR_OK)
 			return ERROR_FAIL;
@@ -2660,7 +2660,7 @@ static int riscv_halt_go_all_harts(struct target *target)
 	if (riscv_get_hart_state(target, &state) != ERROR_OK)
 		return ERROR_FAIL;
 	if (state == RISCV_STATE_HALTED) {
-		LOG_TARGET_DEBUG(target, "Hart is already halted.");
+		LOG_TARGET_DEBUG(target, "Hart is already halted");
 		if (target->state != TARGET_HALTED) {
 			target->state = TARGET_HALTED;
 			enum riscv_halt_reason halt_reason = riscv_halt_reason(target);
@@ -2762,7 +2762,7 @@ static int riscv_assert_reset(struct target *target)
 		return ERROR_FAIL;
 
 	if (riscv_reg_cache_any_dirty(target, LOG_LVL_INFO))
-		LOG_TARGET_INFO(target, "Discarding values of dirty registers.");
+		LOG_TARGET_INFO(target, "Discarding values of dirty registers");
 
 	riscv_reg_cache_invalidate_all(target);
 	return tt->assert_reset(target);
@@ -2781,7 +2781,7 @@ static int riscv_deassert_reset(struct target *target)
 static int disable_watchpoints(struct target *target, bool *wp_is_set)
 {
 	RISCV_INFO(r);
-	LOG_TARGET_DEBUG(target, "Disabling triggers.");
+	LOG_TARGET_DEBUG(target, "Disabling triggers");
 
 	/* TODO: The algorithm is flawed and may result in a situation described in
 	 * https://github.com/riscv-collab/riscv-openocd/issues/1108
@@ -2859,7 +2859,7 @@ static int resume_prep(struct target *target, bool current,
 			return ERROR_FAIL;
 	}
 
-	LOG_TARGET_DEBUG(target, "Mark as prepped.");
+	LOG_TARGET_DEBUG(target, "Mark as prepped");
 	r->prepped = true;
 
 	return ERROR_OK;
@@ -2981,7 +2981,7 @@ static int riscv_target_resume(struct target *target, bool current,
 		target_addr_t address, bool handle_breakpoints, bool debug_execution)
 {
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_ERROR(target, "Not halted.");
+		LOG_TARGET_ERROR(target, "Not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 	return riscv_resume(target, current, address, handle_breakpoints,
@@ -2992,14 +2992,14 @@ static int riscv_effective_privilege_mode(struct target *target, int *v_mode, in
 {
 	riscv_reg_t priv;
 	if (riscv_reg_get(target, &priv, GDB_REGNO_PRIV) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read priv register.");
+		LOG_TARGET_ERROR(target, "Failed to read priv register");
 		return ERROR_FAIL;
 	}
 	*v_mode = get_field(priv, VIRT_PRIV_V);
 
 	riscv_reg_t mstatus;
 	if (riscv_reg_get(target, &mstatus, GDB_REGNO_MSTATUS) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read mstatus register.");
+		LOG_TARGET_ERROR(target, "Failed to read mstatus register");
 		return ERROR_FAIL;
 	}
 
@@ -3023,7 +3023,7 @@ static int riscv_mmu(struct target *target, int *enabled)
 	/* Don't use MMU in explicit or effective M (machine) mode */
 	riscv_reg_t priv;
 	if (riscv_reg_get(target, &priv, GDB_REGNO_PRIV) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read priv register.");
+		LOG_TARGET_ERROR(target, "Failed to read priv register");
 		return ERROR_FAIL;
 	}
 
@@ -3045,7 +3045,7 @@ static int riscv_mmu(struct target *target, int *enabled)
 		}
 		/* vsatp is identical to satp, so we can use the satp macros. */
 		if (get_field(vsatp, RISCV_SATP_MODE(xlen)) != SATP_MODE_OFF) {
-			LOG_TARGET_DEBUG(target, "VS-stage translation is enabled.");
+			LOG_TARGET_DEBUG(target, "VS-stage translation is enabled");
 			*enabled = 1;
 			return ERROR_OK;
 		}
@@ -3057,10 +3057,10 @@ static int riscv_mmu(struct target *target, int *enabled)
 			return ERROR_FAIL;
 		}
 		if (get_field(hgatp, RISCV_HGATP_MODE(xlen)) != HGATP_MODE_OFF) {
-			LOG_TARGET_DEBUG(target, "G-stage address translation is enabled.");
+			LOG_TARGET_DEBUG(target, "G-stage address translation is enabled");
 			*enabled = 1;
 		} else {
-			LOG_TARGET_DEBUG(target, "No V-mode address translation enabled.");
+			LOG_TARGET_DEBUG(target, "No V-mode address translation enabled");
 		}
 
 		return ERROR_OK;
@@ -3068,21 +3068,21 @@ static int riscv_mmu(struct target *target, int *enabled)
 
 	/* Don't use MMU in explicit or effective M (machine) mode */
 	if (effective_mode == PRV_M) {
-		LOG_TARGET_DEBUG(target, "SATP/MMU ignored in Machine mode.");
+		LOG_TARGET_DEBUG(target, "SATP/MMU ignored in Machine mode");
 		return ERROR_OK;
 	}
 
 	riscv_reg_t satp;
 	if (riscv_reg_get(target, &satp, GDB_REGNO_SATP) != ERROR_OK) {
-		LOG_TARGET_DEBUG(target, "Couldn't read SATP.");
+		LOG_TARGET_DEBUG(target, "Couldn't read SATP");
 		/* If we can't read SATP, then there must not be an MMU. */
 		return ERROR_OK;
 	}
 
 	if (get_field(satp, RISCV_SATP_MODE(xlen)) == SATP_MODE_OFF) {
-		LOG_TARGET_DEBUG(target, "MMU is disabled.");
+		LOG_TARGET_DEBUG(target, "MMU is disabled");
 	} else {
-		LOG_TARGET_DEBUG(target, "MMU is enabled.");
+		LOG_TARGET_DEBUG(target, "MMU is enabled");
 		*enabled = 1;
 	}
 
@@ -3166,7 +3166,7 @@ static int riscv_address_translate(struct target *target,
 	}
 
 	if (i < 0) {
-		LOG_TARGET_ERROR(target, "Couldn't find the PTE.");
+		LOG_TARGET_ERROR(target, "Couldn't find the PTE");
 		return ERROR_FAIL;
 	}
 
@@ -3191,7 +3191,7 @@ static int riscv_virt2phys_v(struct target *target, target_addr_t virtual, targe
 {
 	riscv_reg_t vsatp;
 	if (riscv_reg_get(target, &vsatp, GDB_REGNO_VSATP) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read vsatp register.");
+		LOG_TARGET_ERROR(target, "Failed to read vsatp register");
 		return ERROR_FAIL;
 	}
 	/* vsatp is identical to satp, so we can use the satp macros. */
@@ -3200,7 +3200,7 @@ static int riscv_virt2phys_v(struct target *target, target_addr_t virtual, targe
 	LOG_TARGET_DEBUG(target, "VS-stage translation mode: %d", vsatp_mode);
 	riscv_reg_t hgatp;
 	if (riscv_reg_get(target, &hgatp, GDB_REGNO_HGATP) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read hgatp register.");
+		LOG_TARGET_ERROR(target, "Failed to read hgatp register");
 		return ERROR_FAIL;
 	}
 	int hgatp_mode = get_field(hgatp, RISCV_HGATP_MODE(xlen));
@@ -3310,7 +3310,7 @@ static int riscv_virt2phys(struct target *target, target_addr_t virtual, target_
 
 	riscv_reg_t priv;
 	if (riscv_reg_get(target, &priv, GDB_REGNO_PRIV) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read priv register.");
+		LOG_TARGET_ERROR(target, "Failed to read priv register");
 		return ERROR_FAIL;
 	}
 
@@ -3319,7 +3319,7 @@ static int riscv_virt2phys(struct target *target, target_addr_t virtual, target_
 
 	riscv_reg_t satp_value;
 	if (riscv_reg_get(target, &satp_value, GDB_REGNO_SATP) != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read SATP register.");
+		LOG_TARGET_ERROR(target, "Failed to read SATP register");
 		return ERROR_FAIL;
 	}
 
@@ -3430,7 +3430,7 @@ static int riscv_rw_memory(struct target *target, const riscv_mem_access_args_t 
 		target_addr_t physical_addr;
 		result = target->type->virt2phys(target, current_address, &physical_addr);
 		if (result != ERROR_OK) {
-			LOG_TARGET_ERROR(target, "Address translation failed.");
+			LOG_TARGET_ERROR(target, "Address translation failed");
 			return result;
 		}
 
@@ -3623,7 +3623,7 @@ static int riscv_run_algorithm(struct target *target, int num_mem_params,
 		}
 
 		if (r->number > GDB_REGNO_XPR31) {
-			LOG_TARGET_ERROR(target, "Only GPRs can be use as argument registers.");
+			LOG_TARGET_ERROR(target, "Only GPRs can be use as argument registers");
 			return ERROR_FAIL;
 		}
 
@@ -3817,7 +3817,7 @@ static int riscv_checksum_memory(struct target *target,
 	if (retval == ERROR_OK)
 		*checksum = buf_get_u32(reg_params[0].value, 0, 32);
 	else
-		LOG_TARGET_ERROR(target, "Error executing RISC-V CRC algorithm.");
+		LOG_TARGET_ERROR(target, "Error executing RISC-V CRC algorithm");
 
 	destroy_reg_param(&reg_params[0]);
 	destroy_reg_param(&reg_params[1]);
@@ -3875,7 +3875,7 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 		return ERROR_FAIL;
 
 	if (state == RISCV_STATE_NON_EXISTENT) {
-		LOG_TARGET_ERROR(target, "Hart is non-existent!");
+		LOG_TARGET_ERROR(target, "Hart is non-existent");
 		return ERROR_FAIL;
 	}
 
@@ -3950,7 +3950,7 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 
 			case RISCV_STATE_UNAVAILABLE:
 				LOG_TARGET_DEBUG(target, "  became unavailable");
-				LOG_TARGET_INFO(target, "became unavailable.");
+				LOG_TARGET_INFO(target, "became unavailable");
 				target->state = TARGET_UNAVAILABLE;
 				if (r->handle_became_unavailable &&
 						r->handle_became_unavailable(target, previous_riscv_state) != ERROR_OK)
@@ -3958,7 +3958,7 @@ static int riscv_poll_hart(struct target *target, enum riscv_next_action *next_a
 				break;
 
 			case RISCV_STATE_NON_EXISTENT:
-				LOG_TARGET_ERROR(target, "Hart is non-existent!");
+				LOG_TARGET_ERROR(target, "Hart is non-existent");
 				target->state = TARGET_UNAVAILABLE;
 				break;
 		}
@@ -4008,7 +4008,7 @@ static int sample_memory(struct target *target)
 exit:
 	riscv_sample_buf_maybe_add_timestamp(target, false);
 	if (result != ERROR_OK) {
-		LOG_TARGET_INFO(target, "Turning off memory sampling because it failed.");
+		LOG_TARGET_INFO(target, "Turning off memory sampling because it failed");
 		r->sample_config.enabled = false;
 	}
 	return result;
@@ -4017,7 +4017,7 @@ exit:
 /*** OpenOCD Interface ***/
 int riscv_openocd_poll(struct target *target)
 {
-	LOG_TARGET_DEBUG(target, "Polling all harts.");
+	LOG_TARGET_DEBUG(target, "Polling all harts");
 
 	struct riscv_info *i = riscv_info(target);
 
@@ -4129,12 +4129,12 @@ int riscv_openocd_poll(struct target *target)
 		 *
 		 * Poll again so that the true halt reason can be discovered (e.g. CSR_DCSR_CAUSE_EBREAK) */
 		if (halted == cause_groups) {
-			LOG_TARGET_DEBUG(target, "The harts appear to just be in the process of halting due to a halt group.");
+			LOG_TARGET_DEBUG(target, "The harts appear to just be in the process of halting due to a halt group");
 			if (i->halt_group_repoll_count < RISCV_HALT_GROUP_REPOLL_LIMIT) {
 				/* Wait a little, then re-poll. */
 				i->halt_group_repoll_count++;
 				alive_sleep(10);
-				LOG_TARGET_DEBUG(target, "Re-polling the state of the SMP group.");
+				LOG_TARGET_DEBUG(target, "Re-polling the state of the SMP group");
 				return riscv_openocd_poll(target);
 			}
 			/* We have already re-polled multiple times but the halt group is still inconsistent. */
@@ -4226,14 +4226,14 @@ static int riscv_openocd_step_impl(struct target *target, bool current,
 		/* Disable Interrupts before stepping. */
 		if (riscv_interrupts_disable(target, &current_mstatus) != ERROR_OK) {
 			success = false;
-			LOG_TARGET_ERROR(target, "Unable to disable interrupts.");
+			LOG_TARGET_ERROR(target, "Unable to disable interrupts");
 			goto _exit;
 		}
 	}
 
 	if (riscv_step_rtos_hart(target) != ERROR_OK) {
 		success = false;
-		LOG_TARGET_ERROR(target, "Unable to step rtos hart.");
+		LOG_TARGET_ERROR(target, "Unable to step rtos hart");
 	}
 
 	if (riscv_reg_cache_any_dirty(target, LOG_LVL_ERROR)) {
@@ -4249,7 +4249,7 @@ static int riscv_openocd_step_impl(struct target *target, bool current,
 	if (info->isrmask_mode == RISCV_ISRMASK_STEPONLY)
 		if (riscv_interrupts_restore(target, current_mstatus) != ERROR_OK) {
 			success = false;
-			LOG_TARGET_ERROR(target, "Unable to restore interrupts.");
+			LOG_TARGET_ERROR(target, "Unable to restore interrupts");
 		}
 
 _exit:
@@ -4261,7 +4261,7 @@ _exit:
 
 	if (breakpoint && (riscv_add_breakpoint(target, breakpoint) != ERROR_OK)) {
 		success = false;
-		LOG_TARGET_ERROR(target, "Unable to restore the disabled breakpoint.");
+		LOG_TARGET_ERROR(target, "Unable to restore the disabled breakpoint");
 	}
 
 	if (success) {
@@ -4347,7 +4347,7 @@ COMMAND_HANDLER(riscv_set_mem_access)
 		}
 	}
 	if (progbuf_cnt > 1 || sysbus_cnt > 1 || abstract_cnt > 1) {
-		LOG_ERROR("Syntax error - duplicate arguments to `riscv set_mem_access`.");
+		LOG_ERROR("Syntax error - duplicate arguments to `riscv set_mem_access`");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
@@ -4593,13 +4593,13 @@ COMMAND_HANDLER(riscv_authdata_read)
 
 	struct target *target = get_current_target(CMD_CTX);
 	if (!target) {
-		LOG_ERROR("target is NULL!");
+		LOG_ERROR("target is NULL");
 		return ERROR_FAIL;
 	}
 
 	RISCV_INFO(r);
 	if (!r) {
-		LOG_TARGET_ERROR(target, "riscv_info is NULL!");
+		LOG_TARGET_ERROR(target, "riscv_info is NULL");
 		return ERROR_FAIL;
 	}
 
@@ -4610,7 +4610,7 @@ COMMAND_HANDLER(riscv_authdata_read)
 		command_print_sameline(CMD, "0x%08" PRIx32, value);
 		return ERROR_OK;
 	} else {
-		LOG_TARGET_ERROR(target, "authdata_read is not implemented for this target.");
+		LOG_TARGET_ERROR(target, "authdata_read is not implemented for this target");
 		return ERROR_FAIL;
 	}
 }
@@ -4634,7 +4634,7 @@ COMMAND_HANDLER(riscv_authdata_write)
 	RISCV_INFO(r);
 
 	if (!r->authdata_write) {
-		LOG_TARGET_ERROR(target, "authdata_write is not implemented for this target.");
+		LOG_TARGET_ERROR(target, "authdata_write is not implemented for this target");
 		return ERROR_FAIL;
 	}
 
@@ -4653,16 +4653,16 @@ uint32_t riscv_get_dmi_address(const struct target *target, uint32_t dm_address)
 static int riscv_dmi_read(struct target *target, uint32_t *value, uint32_t address)
 {
 	if (!target) {
-		LOG_ERROR("target is NULL!");
+		LOG_ERROR("target is NULL");
 		return ERROR_FAIL;
 	}
 	RISCV_INFO(r);
 	if (!r) {
-		LOG_TARGET_ERROR(target, "riscv_info is NULL!");
+		LOG_TARGET_ERROR(target, "riscv_info is NULL");
 		return ERROR_FAIL;
 	}
 	if (!r->dmi_read) {
-		LOG_TARGET_ERROR(target, "dmi_read is not implemented.");
+		LOG_TARGET_ERROR(target, "dmi_read is not implemented");
 		return ERROR_FAIL;
 	}
 	return r->dmi_read(target, value, address);
@@ -4671,16 +4671,16 @@ static int riscv_dmi_read(struct target *target, uint32_t *value, uint32_t addre
 static int riscv_dmi_write(struct target *target, uint32_t dmi_address, uint32_t value)
 {
 	if (!target) {
-		LOG_ERROR("target is NULL!");
+		LOG_ERROR("target is NULL");
 		return ERROR_FAIL;
 	}
 	RISCV_INFO(r);
 	if (!r) {
-		LOG_TARGET_ERROR(target, "riscv_info is NULL!");
+		LOG_TARGET_ERROR(target, "riscv_info is NULL");
 		return ERROR_FAIL;
 	}
 	if (!r->dmi_write) {
-		LOG_TARGET_ERROR(target, "dmi_write is not implemented.");
+		LOG_TARGET_ERROR(target, "dmi_write is not implemented");
 		return ERROR_FAIL;
 	}
 	const int result = r->dmi_write(target, dmi_address, value);
@@ -5046,14 +5046,14 @@ COMMAND_HANDLER(riscv_itrigger)
 		}
 		int result = maybe_add_trigger_t4(target, vs, vu, nmi, m, s, u, interrupts, ITRIGGER_UNIQUE_ID);
 		if (result != ERROR_OK)
-			LOG_TARGET_ERROR(target, "Failed to set requested itrigger.");
+			LOG_TARGET_ERROR(target, "Failed to set requested itrigger");
 		return result;
 
 	} else if (!strcmp(CMD_ARGV[0], "clear")) {
 		return riscv_clear_trigger(CMD, ITRIGGER_UNIQUE_ID, "itrigger");
 
 	} else {
-		LOG_ERROR("First argument must be either 'set' or 'clear'.");
+		LOG_ERROR("First argument must be either 'set' or 'clear'");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 	return ERROR_OK;
@@ -5111,14 +5111,14 @@ COMMAND_HANDLER(riscv_icount)
 		}
 		int result = maybe_add_trigger_t3(target, vs, vu, m, s, u, pending, count, ICOUNT_UNIQUE_ID);
 		if (result != ERROR_OK)
-			LOG_TARGET_ERROR(target, "Failed to set requested icount trigger.");
+			LOG_TARGET_ERROR(target, "Failed to set requested icount trigger");
 		return result;
 
 	} else if (!strcmp(CMD_ARGV[0], "clear")) {
 		return riscv_clear_trigger(CMD, ICOUNT_UNIQUE_ID, "icount trigger");
 
 	} else {
-		LOG_ERROR("First argument must be either 'set' or 'clear'.");
+		LOG_ERROR("First argument must be either 'set' or 'clear'");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 	return ERROR_OK;
@@ -5173,14 +5173,14 @@ COMMAND_HANDLER(riscv_etrigger)
 		}
 		int result = maybe_add_trigger_t5(target, vs, vu, m, s, u, exception_codes, ETRIGGER_UNIQUE_ID);
 		if (result != ERROR_OK)
-			LOG_TARGET_ERROR(target, "Failed to set requested etrigger.");
+			LOG_TARGET_ERROR(target, "Failed to set requested etrigger");
 		return result;
 
 	} else if (!strcmp(CMD_ARGV[0], "clear")) {
 		return riscv_clear_trigger(CMD, ETRIGGER_UNIQUE_ID, "etrigger");
 
 	} else {
-		LOG_ERROR("First argument must be either 'set' or 'clear'.");
+		LOG_ERROR("First argument must be either 'set' or 'clear'");
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 	return ERROR_OK;
@@ -5264,7 +5264,7 @@ COMMAND_HANDLER(handle_memory_sample_command)
 			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], r->sample_config.bucket[bucket].size_bytes);
 			if (r->sample_config.bucket[bucket].size_bytes != 4 &&
 					r->sample_config.bucket[bucket].size_bytes != 8) {
-				LOG_TARGET_ERROR(target, "Only 4-byte and 8-byte sizes are supported.");
+				LOG_TARGET_ERROR(target, "Only 4-byte and 8-byte sizes are supported");
 				return ERROR_COMMAND_ARGUMENT_INVALID;
 			}
 		} else {
@@ -5310,7 +5310,7 @@ COMMAND_HANDLER(handle_dump_sample_buf_command)
 		unsigned char *encoded = base64_encode(r->sample_buf.buf,
 									  r->sample_buf.used, NULL);
 		if (!encoded) {
-			LOG_TARGET_ERROR(target, "Failed base64 encode!");
+			LOG_TARGET_ERROR(target, "Failed base64 encode");
 			result = ERROR_FAIL;
 			goto error;
 		}
@@ -5440,11 +5440,11 @@ COMMAND_HANDLER(riscv_exec_progbuf)
 	riscv_reg_cache_invalidate_all(target);
 
 	if (error != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "exec_progbuf: Program buffer execution failed.");
+		LOG_TARGET_ERROR(target, "exec_progbuf: Program buffer execution failed");
 		return ERROR_FAIL;
 	}
 
-	LOG_TARGET_DEBUG(target, "exec_progbuf: Program buffer execution successful.");
+	LOG_TARGET_DEBUG(target, "exec_progbuf: Program buffer execution successful");
 
 	return ERROR_OK;
 }
@@ -5986,18 +5986,18 @@ static int riscv_resume_go_all_harts(struct target *target)
 		if (r->resume_go(target) != ERROR_OK)
 			return ERROR_FAIL;
 	} else {
-		LOG_TARGET_DEBUG(target, "Hart requested resume, but was already resumed.");
+		LOG_TARGET_DEBUG(target, "Hart requested resume, but was already resumed");
 	}
 	return ERROR_OK;
 }
 
 static int riscv_interrupts_disable(struct target *target, riscv_reg_t *old_mstatus)
 {
-	LOG_TARGET_DEBUG(target, "Disabling interrupts.");
+	LOG_TARGET_DEBUG(target, "Disabling interrupts");
 	riscv_reg_t current_mstatus;
 	int ret = riscv_reg_get(target, &current_mstatus, GDB_REGNO_MSTATUS);
 	if (ret != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read mstatus!");
+		LOG_TARGET_ERROR(target, "Failed to read mstatus");
 		return ret;
 	}
 	if (old_mstatus)
@@ -6007,17 +6007,17 @@ static int riscv_interrupts_disable(struct target *target, riscv_reg_t *old_msta
 
 static int riscv_interrupts_restore(struct target *target, riscv_reg_t old_mstatus)
 {
-	LOG_TARGET_DEBUG(target, "Restoring interrupts.");
+	LOG_TARGET_DEBUG(target, "Restoring interrupts");
 	riscv_reg_t current_mstatus;
 	int ret = riscv_reg_get(target, &current_mstatus, GDB_REGNO_MSTATUS);
 	if (ret != ERROR_OK) {
-		LOG_TARGET_ERROR(target, "Failed to read mstatus!");
+		LOG_TARGET_ERROR(target, "Failed to read mstatus");
 		return ret;
 	}
 	if ((current_mstatus & mstatus_ie_mask) != 0) {
-		LOG_TARGET_WARNING(target, "Interrupt enable bits in mstatus changed during single-step.");
-		LOG_TARGET_WARNING(target, "OpenOCD might have affected the program when it restored the interrupt bits after single-step.");
-		LOG_TARGET_WARNING(target, "Hint: Use 'riscv set_maskisr off' to prevent OpenOCD from touching mstatus during single-step.");
+		LOG_TARGET_WARNING(target, "Interrupt enable bits in mstatus changed during single-step");
+		LOG_TARGET_WARNING(target, "OpenOCD might have affected the program when it restored the interrupt bits after single-step");
+		LOG_TARGET_WARNING(target, "Hint: Use 'riscv set_maskisr off' to prevent OpenOCD from touching mstatus during single-step");
 	}
 	return riscv_reg_set(target, GDB_REGNO_MSTATUS, current_mstatus | (old_mstatus & mstatus_ie_mask));
 }
@@ -6025,17 +6025,17 @@ static int riscv_interrupts_restore(struct target *target, riscv_reg_t old_mstat
 static int riscv_step_rtos_hart(struct target *target)
 {
 	RISCV_INFO(r);
-	LOG_TARGET_DEBUG(target, "Stepping.");
+	LOG_TARGET_DEBUG(target, "Stepping");
 
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_ERROR(target, "Hart isn't halted before single step!");
+		LOG_TARGET_ERROR(target, "Hart isn't halted before single step");
 		return ERROR_FAIL;
 	}
 	r->on_step(target);
 	if (r->step_current_hart(target) != ERROR_OK)
 		return ERROR_FAIL;
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_ERROR(target, "Hart was not halted after single step!");
+		LOG_TARGET_ERROR(target, "Hart was not halted after single step");
 		return ERROR_FAIL;
 	}
 	return ERROR_OK;
@@ -6077,7 +6077,7 @@ static enum riscv_halt_reason riscv_halt_reason(struct target *target)
 {
 	RISCV_INFO(r);
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_ERROR(target, "Hart is not halted!");
+		LOG_TARGET_ERROR(target, "Hart is not halted");
 		return RISCV_HALT_UNKNOWN;
 	}
 	return r->halt_reason(target);
@@ -6218,7 +6218,7 @@ int riscv_enumerate_triggers(struct target *target)
 		return ERROR_OK;
 
 	if (target->state != TARGET_HALTED) {
-		LOG_TARGET_ERROR(target, "Unable to enumerate triggers: target not halted.");
+		LOG_TARGET_ERROR(target, "Unable to enumerate triggers: target not halted");
 		return ERROR_FAIL;
 	}
 
@@ -6246,7 +6246,7 @@ int riscv_enumerate_triggers(struct target *target)
 		LOG_TARGET_DEBUG(target, "Trigger tinfo.version = %d.", r->tinfo_version);
 	} else {
 		r->tinfo_version = RISCV_TINFO_VERSION_UNKNOWN;
-		LOG_TARGET_DEBUG(target, "Trigger tinfo.version is unknown.");
+		LOG_TARGET_DEBUG(target, "Trigger tinfo.version is unknown");
 	}
 
 	unsigned int t = 0;
