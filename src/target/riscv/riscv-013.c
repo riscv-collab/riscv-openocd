@@ -201,6 +201,8 @@ static void ac_cache_insert(struct ac_cache *cache, uint32_t command)
 
 static bool ac_cache_contains(const struct ac_cache *cache, uint32_t command)
 {
+	if (cache->size == 0)
+		return false;
 	return bsearch(&command, cache->commands, cache->size,
 			sizeof(*cache->commands), ac_cache_elem_comparator);
 }
