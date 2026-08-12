@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 /*
- * Support for RISC-V, debug version 0.13, which is currently (2/4/17) the
- * latest draft.
- */
+* Support for RISC-V, debug version 0.13, which is currently (2/4/17) the
+* latest draft.
+*/
 
 #include <assert.h>
 #include <stdint.h>
@@ -76,11 +76,11 @@ static int set_group(struct target *target, bool *supported, unsigned int group,
 		grouptype_t grouptype);
 
 /**
- * Since almost everything can be accomplish by scanning the dbus register, all
- * functions here assume dbus is already selected. The exception are functions
- * called directly by OpenOCD, which can't assume anything about what's
- * currently in IR. They should set IR to dbus explicitly.
- */
+	* Since almost everything can be accomplish by scanning the dbus register, all
+	* functions here assume dbus is already selected. The exception are functions
+	* called directly by OpenOCD, which can't assume anything about what's
+	* currently in IR. They should set IR to dbus explicitly.
+	*/
 
 #define RISCV013_INFO(r) riscv013_info_t *r = get_info(target)
 
@@ -270,10 +270,10 @@ static riscv013_info_t *get_info(const struct target *target)
 }
 
 /**
- * Return the DM structure for this target. If there isn't one, find it in the
- * global list of DMs. If it's not in there, then create one and initialize it
- * to 0.
- */
+	* Return the DM structure for this target. If there isn't one, find it in the
+	* global list of DMs. If it's not in there, then create one and initialize it
+	* to 0.
+	*/
 static dm013_info_t *get_dm(struct target *target)
 {
 	RISCV013_INFO(info);
@@ -779,13 +779,13 @@ cleanup:
 }
 
 /**
- * Queue scans into a batch that read the value from abstract data registers:
- * data[index] (and data[index+1] in case of 64-bit value).
- *
- * No extra DTM delay is added after the write to data[N]. It is assumed that
- * this is a one-shot abstract command, that means no auto-execution is set up
- * (abstractauto.autoexecdata bits are zero).
- */
+	* Queue scans into a batch that read the value from abstract data registers:
+	* data[index] (and data[index+1] in case of 64-bit value).
+	*
+	* No extra DTM delay is added after the write to data[N]. It is assumed that
+	* this is a one-shot abstract command, that means no auto-execution is set up
+	* (abstractauto.autoexecdata bits are zero).
+	*/
 static void abstract_data_read_fill_batch(struct riscv_batch *batch, unsigned int index,
 		unsigned int size_bits)
 {
@@ -831,13 +831,13 @@ static int read_abstract_arg(struct target *target, riscv_reg_t *value,
 }
 
 /**
- * Queue scans into a batch that write the value to abstract data registers:
- * data[index] (and data[index+1] in case of 64-bit value).
- *
- * No extra DTM delay is added after the write to data[N]. It is assumed that
- * this is a one-shot abstract command, that means no auto-execution is set up
- * (abstractauto.autoexecdata bits are zero).
- */
+	* Queue scans into a batch that write the value to abstract data registers:
+	* data[index] (and data[index+1] in case of 64-bit value).
+	*
+	* No extra DTM delay is added after the write to data[N]. It is assumed that
+	* this is a one-shot abstract command, that means no auto-execution is set up
+	* (abstractauto.autoexecdata bits are zero).
+	*/
 static void abstract_data_write_fill_batch(struct riscv_batch *batch,
 		riscv_reg_t value, unsigned int index, unsigned int size_bits)
 {
@@ -874,8 +874,8 @@ static int write_abstract_arg(struct target *target, unsigned int index,
 }
 
 /**
- * @par size in bits
- */
+	* @par size in bits
+	*/
 uint32_t riscv013_access_register_command(struct target *target, uint32_t number,
 		unsigned int size, uint32_t flags)
 {
@@ -1004,9 +1004,9 @@ cleanup:
 }
 
 /*
- * Sets the AAMSIZE field of a memory access abstract command based on
- * the width (bits).
- */
+	* Sets the AAMSIZE field of a memory access abstract command based on
+	* the width (bits).
+	*/
 static uint32_t abstract_memory_size(unsigned int width)
 {
 	switch (width) {
@@ -1027,8 +1027,8 @@ static uint32_t abstract_memory_size(unsigned int width)
 }
 
 /*
- * Creates a memory access abstract command.
- */
+	* Creates a memory access abstract command.
+	*/
 static uint32_t access_memory_command(struct target *target, bool virtual,
 		unsigned int width, bool postincrement, bool is_write)
 {
@@ -1083,7 +1083,7 @@ static int examine_progbuf(struct target *target)
 	uint32_t written;
 	if (dm_read(target, &written, DM_PROGBUF0) != ERROR_OK)
 		return ERROR_FAIL;
-	if (written == (uint32_t) info->progbuf_address) {
+	if (written == (uint32_t)info->progbuf_address) {
 		LOG_TARGET_INFO(target, "progbuf is writable at 0x%" PRIx64,
 				info->progbuf_address);
 		info->progbuf_writable = YNM_YES;
@@ -1184,8 +1184,8 @@ typedef struct {
 } scratch_mem_t;
 
 /**
- * Find some scratch memory to be used with the given program.
- */
+	* Find some scratch memory to be used with the given program.
+	*/
 static int scratch_reserve(struct target *target,
 		scratch_mem_t *scratch,
 		struct riscv_program *program,
@@ -1263,7 +1263,7 @@ static int scratch_read64(struct target *target, scratch_mem_t *scratch,
 			*value = v;
 			if (dm_read(target, &v, DM_DATA1 + scratch->debug_address) != ERROR_OK)
 				return ERROR_FAIL;
-			*value |= ((uint64_t) v) << 32;
+			*value |= ((uint64_t)v) << 32;
 			break;
 		case SPACE_DMI_PROGBUF:
 			if (dm_read(target, &v, DM_PROGBUF0 + scratch->debug_address) != ERROR_OK)
@@ -1271,7 +1271,7 @@ static int scratch_read64(struct target *target, scratch_mem_t *scratch,
 			*value = v;
 			if (dm_read(target, &v, DM_PROGBUF1 + scratch->debug_address) != ERROR_OK)
 				return ERROR_FAIL;
-			*value |= ((uint64_t) v) << 32;
+			*value |= ((uint64_t)v) << 32;
 			break;
 		case SPACE_DMI_RAM:
 			{
@@ -1351,11 +1351,11 @@ static bool has_sufficient_progbuf(struct target *target, unsigned int size)
 }
 
 /**
- * This function is used to read a 64-bit value from a register by executing a
- * program.
- * The program stores a register to address located in S0.
- * The caller should save S0.
- */
+	* This function is used to read a 64-bit value from a register by executing a
+	* program.
+	* The program stores a register to address located in S0.
+	* The caller should save S0.
+	*/
 static int internal_register_read64_progbuf_scratch(struct target *target,
 		struct riscv_program *program, riscv_reg_t *value)
 {
@@ -1385,6 +1385,11 @@ static int fpr_read_progbuf(struct target *target, uint64_t *value,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31);
+	if (!has_sufficient_progbuf(target, 2)) {
+		LOG_TARGET_DEBUG(target, "Skipping fpr write: insufficient progbuf (size=%u)",
+			 get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 
 	const unsigned int freg = number - GDB_REGNO_FPR0;
 
@@ -1417,6 +1422,11 @@ static int csr_read_progbuf(struct target *target, uint64_t *value,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095);
+	if (!has_sufficient_progbuf(target, 2)) {
+		LOG_TARGET_DEBUG(target, "Skipping csr read: insufficient progbuf (size=%u)",
+			 get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1431,10 +1441,11 @@ static int csr_read_progbuf(struct target *target, uint64_t *value,
 	return register_read_abstract(target, value, GDB_REGNO_S0) != ERROR_OK;
 }
 
+
 /**
- * This function reads a register by writing a program to program buffer and
- * executing it.
- */
+	* This function reads a register by writing a program to program buffer and
+	* executing it.
+	*/
 static int register_read_progbuf(struct target *target, uint64_t *value,
 		enum gdb_regno number)
 {
@@ -1451,11 +1462,11 @@ static int register_read_progbuf(struct target *target, uint64_t *value,
 }
 
 /**
- * This function is used to write a 64-bit value to a register by executing a
- * program.
- * The program loads a value from address located in S0 to a register.
- * The caller should save S0.
- */
+	* This function is used to write a 64-bit value to a register by executing a
+	* program.
+	* The program loads a value from address located in S0 to a register.
+	* The caller should save S0.
+	*/
 static int internal_register_write64_progbuf_scratch(struct target *target,
 		struct riscv_program *program, riscv_reg_t value)
 {
@@ -1484,6 +1495,11 @@ static int fpr_write_progbuf(struct target *target, enum gdb_regno number,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_FPR0 && number <= GDB_REGNO_FPR31);
+	if (!has_sufficient_progbuf(target, 2)) {
+		LOG_TARGET_DEBUG(target, "Skipping fpr write: insufficient progbuf (size=%u)",
+				 get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 	const unsigned int freg = number - GDB_REGNO_FPR0;
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
@@ -1515,6 +1531,12 @@ static int fpr_write_progbuf(struct target *target, enum gdb_regno number,
 static int vtype_write_progbuf(struct target *target, riscv_reg_t value)
 {
 	assert(target->state == TARGET_HALTED);
+	/* Ensure program buffer is large enough for 3 instructions */
+	if (!has_sufficient_progbuf(target, 3)) {
+		LOG_TARGET_DEBUG(target, "Skipping vtype write: insufficient progbuf (size=%u)",
+				 get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1536,6 +1558,12 @@ static int vtype_write_progbuf(struct target *target, riscv_reg_t value)
 static int vl_write_progbuf(struct target *target, riscv_reg_t value)
 {
 	assert(target->state == TARGET_HALTED);
+	/* Ensure program buffer is large enough for 3 instructions */
+	if (!has_sufficient_progbuf(target, 3)) {
+		LOG_TARGET_DEBUG(target, "Skipping vl write: insufficient progbuf (size=%u)",
+			 get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1559,6 +1587,11 @@ static int csr_write_progbuf(struct target *target, enum gdb_regno number,
 {
 	assert(target->state == TARGET_HALTED);
 	assert(number >= GDB_REGNO_CSR0 && number <= GDB_REGNO_CSR4095);
+	if (!has_sufficient_progbuf(target, 2)) {
+		LOG_TARGET_DEBUG(target, "Skipping csr write: insufficient progbuf (size=%u)",
+			 get_info(target)->progbufsize);
+		return ERROR_FAIL;
+	}
 
 	if (riscv013_reg_save(target, GDB_REGNO_S0) != ERROR_OK)
 		return ERROR_FAIL;
@@ -1574,9 +1607,9 @@ static int csr_write_progbuf(struct target *target, enum gdb_regno number,
 }
 
 /**
- * This function writes a register by writing a program to program buffer and
- * executing it.
- */
+	* This function writes a register by writing a program to program buffer and
+	* executing it.
+	*/
 static int register_write_progbuf(struct target *target, enum gdb_regno number,
 		riscv_reg_t value)
 {
@@ -1597,9 +1630,9 @@ static int register_write_progbuf(struct target *target, enum gdb_regno number,
 }
 
 /**
- * Immediately write the new value to the requested register. This mechanism
- * bypasses any caches.
- */
+	* Immediately write the new value to the requested register. This mechanism
+	* bypasses any caches.
+	*/
 static int register_write_direct(struct target *target, enum gdb_regno number,
 		riscv_reg_t value)
 {
@@ -2532,8 +2565,8 @@ static int batch_run(struct target *target, struct riscv_batch *batch)
 }
 
 /* It is expected that during creation of the batch
- * "riscv_batch_add_dm_write(..., false)" was not used.
- */
+	* "riscv_batch_add_dm_write(..., false)" was not used.
+	*/
 static int batch_run_timeout(struct target *target, struct riscv_batch *batch)
 {
 	RISCV013_INFO(info);
@@ -3149,7 +3182,7 @@ static void log_memory_access(target_addr_t address, uint32_t *sbvalue,
 }
 
 /* Read the relevant sbdata regs depending on size, and put the results into
- * buffer. */
+	* buffer. */
 static int read_memory_bus_word(struct target *target, target_addr_t address,
 		uint32_t size, uint8_t *buffer)
 {
@@ -3354,8 +3387,8 @@ static int read_memory_bus_v0(struct target *target, const riscv_mem_access_args
 }
 
 /**
- * Read the requested memory using the system bus interface.
- */
+	* Read the requested memory using the system bus interface.
+	*/
 static int read_memory_bus_v1(struct target *target, const riscv_mem_access_args_t args)
 {
 	assert(riscv_mem_access_is_read(args));
@@ -3601,7 +3634,7 @@ enum mem_access_result_enum {
 #undef MEM_ACCESS_RESULT_HANDLER
 
 /* Structure is intentionally used to contain the memory access result,
-   for type safety - to avoid implicit conversions to integers. */
+	for type safety - to avoid implicit conversions to integers. */
 struct mem_access_result {
 	enum mem_access_result_enum value;
 };
@@ -3779,10 +3812,10 @@ mem_should_skip_abstract(struct target *target, const riscv_mem_access_args_t ar
 }
 
 /*
- * Performs a memory read using memory access abstract commands. The read sizes
- * supported are 1, 2, and 4 bytes despite the spec's support of 8 and 16 byte
- * aamsize fields in the memory access abstract command.
- */
+	* Performs a memory read using memory access abstract commands. The read sizes
+	* supported are 1, 2, and 4 bytes despite the spec's support of 8 and 16 byte
+	* aamsize fields in the memory access abstract command.
+	*/
 static struct mem_access_result
 read_memory_abstract(struct target *target, const riscv_mem_access_args_t args)
 {
@@ -3856,10 +3889,10 @@ read_memory_abstract(struct target *target, const riscv_mem_access_args_t args)
 }
 
 /*
- * Performs a memory write using memory access abstract commands. The write
- * sizes supported are 1, 2, and 4 bytes despite the spec's support of 8 and 16
- * byte aamsize fields in the memory access abstract command.
- */
+	* Performs a memory write using memory access abstract commands. The write
+	* sizes supported are 1, 2, and 4 bytes despite the spec's support of 8 and 16
+	* byte aamsize fields in the memory access abstract command.
+	*/
 static struct mem_access_result
 write_memory_abstract(struct target *target, const riscv_mem_access_args_t args)
 {
@@ -3932,14 +3965,14 @@ write_memory_abstract(struct target *target, const riscv_mem_access_args_t args)
 }
 
 /**
- * This function is used to start the memory-reading pipeline.
- * The pipeline looks like this:
- * memory -> s1 -> dm_data[0:1] -> debugger
- * Prior to calling it, the program buffer should contain the appropriate
- * program.
- * This function sets DM_ABSTRACTAUTO_AUTOEXECDATA to trigger second stage of the
- * pipeline (s1 -> dm_data[0:1]) whenever dm_data is read.
- */
+	* This function is used to start the memory-reading pipeline.
+	* The pipeline looks like this:
+	* memory -> s1 -> dm_data[0:1] -> debugger
+	* Prior to calling it, the program buffer should contain the appropriate
+	* program.
+	* This function sets DM_ABSTRACTAUTO_AUTOEXECDATA to trigger second stage of the
+	* pipeline (s1 -> dm_data[0:1]) whenever dm_data is read.
+	*/
 static int read_memory_progbuf_inner_startup(struct target *target,
 		target_addr_t address, uint32_t increment, uint32_t index)
 {
@@ -4003,13 +4036,13 @@ clear_abstractauto_and_fail:
 }
 
 /**
- * This function attempts to restore the pipeline after a busy on abstract
- * access.
- * Target's state is as follows:
- * s0 contains address + index_on_target * increment
- * s1 contains mem[address + (index_on_target - 1) * increment]
- * dm_data[0:1] contains mem[address + (index_on_target - 2) * increment]
- */
+	* This function attempts to restore the pipeline after a busy on abstract
+	* access.
+	* Target's state is as follows:
+	* s0 contains address + index_on_target * increment
+	* s1 contains mem[address + (index_on_target - 1) * increment]
+	* dm_data[0:1] contains mem[address + (index_on_target - 2) * increment]
+	*/
 static int read_memory_progbuf_inner_on_ac_busy(struct target *target,
 		uint32_t start_index, uint32_t *elements_read,
 		const riscv_mem_access_args_t args)
@@ -4067,8 +4100,8 @@ static int read_memory_progbuf_inner_on_ac_busy(struct target *target,
 }
 
 /**
- * This function attempts to restore the pipeline after a dmi busy.
- */
+	* This function attempts to restore the pipeline after a dmi busy.
+	*/
 static int read_memory_progbuf_inner_on_dmi_busy(struct target *target,
 		uint32_t start_index, uint32_t next_start_index,
 		const riscv_mem_access_args_t args)
@@ -4087,8 +4120,8 @@ static int read_memory_progbuf_inner_on_dmi_busy(struct target *target,
 }
 
 /**
- * This function extracts the data from the batch.
- */
+	* This function extracts the data from the batch.
+	*/
 static int read_memory_progbuf_inner_extract_batch_data(struct target *target,
 		const struct riscv_batch *batch,
 		uint32_t start_index, uint32_t elements_to_read, uint32_t *elements_read,
@@ -4143,11 +4176,11 @@ static int read_memory_progbuf_inner_extract_batch_data(struct target *target,
 }
 
 /**
- * This function reads a batch of elements from memory.
- * Prior to calling this function the folowing conditions should be met:
- * - Appropriate program loaded to program buffer.
- * - DM_ABSTRACTAUTO_AUTOEXECDATA is set.
- */
+	* This function reads a batch of elements from memory.
+	* Prior to calling this function the folowing conditions should be met:
+	* - Appropriate program loaded to program buffer.
+	* - DM_ABSTRACTAUTO_AUTOEXECDATA is set.
+	*/
 static int read_memory_progbuf_inner_run_and_process_batch(struct target *target,
 		struct riscv_batch *batch, const riscv_mem_access_args_t args,
 		uint32_t start_index, uint32_t elements_to_read, uint32_t *elements_read)
@@ -4239,9 +4272,9 @@ static int read_memory_progbuf_inner_try_to_read(struct target *target,
 }
 
 /**
- * read_memory_progbuf_inner_startup() must be called before calling this function
- * with the address argument equal to curr_target_address.
- */
+	* read_memory_progbuf_inner_startup() must be called before calling this function
+	* with the address argument equal to curr_target_address.
+	*/
 static int read_memory_progbuf_inner_ensure_forward_progress(struct target *target,
 		const riscv_mem_access_args_t args, uint32_t start_index)
 {
@@ -4353,10 +4386,10 @@ static int read_memory_progbuf_inner_fill_progbuf(struct target *target,
 }
 
 /**
- * Read the requested memory, taking care to minimize the number of reads and
- * re-read the data only if `abstract command busy` or `DMI busy`
- * is encountered in the process.
- */
+	* Read the requested memory, taking care to minimize the number of reads and
+	* re-read the data only if `abstract command busy` or `DMI busy`
+	* is encountered in the process.
+	*/
 static struct mem_access_result
 read_memory_progbuf_inner(struct target *target, const riscv_mem_access_args_t args)
 {
@@ -4412,9 +4445,9 @@ read_memory_progbuf_inner(struct target *target, const riscv_mem_access_args_t a
 }
 
 /**
- * Only need to save/restore one GPR to read a single word, and the progbuf
- * program doesn't need to increment.
- */
+	* Only need to save/restore one GPR to read a single word, and the progbuf
+	* program doesn't need to increment.
+	*/
 static struct mem_access_result
 read_memory_progbuf_inner_one(struct target *target, const riscv_mem_access_args_t args)
 {
@@ -4449,8 +4482,8 @@ read_memory_progbuf_inner_one(struct target *target, const riscv_mem_access_args
 }
 
 /**
- * Read the requested memory, silently handling memory access errors.
- */
+	* Read the requested memory, silently handling memory access errors.
+	*/
 static struct mem_access_result
 read_memory_progbuf(struct target *target, const riscv_mem_access_args_t args)
 {
@@ -4808,16 +4841,16 @@ static int write_memory_bus_v1(struct target *target, const riscv_mem_access_arg
 }
 
 /**
- * This function is used to start the memory-writing pipeline.
- * As part of the process, the function writes the first item and waits for completion,
- * so forward progress is ensured.
- * The pipeline looks like this:
- * debugger -> dm_data[0:1] -> s1 -> memory
- * Prior to calling it, the program buffer should contain the appropriate
- * program.
- * This function sets DM_ABSTRACTAUTO_AUTOEXECDATA to trigger second stage of the
- * pipeline (dm_data[0:1] -> s1) whenever dm_data is written.
- */
+	* This function is used to start the memory-writing pipeline.
+	* As part of the process, the function writes the first item and waits for completion,
+	* so forward progress is ensured.
+	* The pipeline looks like this:
+	* debugger -> dm_data[0:1] -> s1 -> memory
+	* Prior to calling it, the program buffer should contain the appropriate
+	* program.
+	* This function sets DM_ABSTRACTAUTO_AUTOEXECDATA to trigger second stage of the
+	* pipeline (dm_data[0:1] -> s1) whenever dm_data is written.
+	*/
 static int write_memory_progbuf_startup(struct target *target, target_addr_t *address_p,
 		const uint8_t *buffer, uint32_t size)
 {
@@ -4860,18 +4893,18 @@ static int write_memory_progbuf_startup(struct target *target, target_addr_t *ad
 }
 
 /**
- * This function reverts the changes made by `write_memory_progbuf_startup()`
- */
+	* This function reverts the changes made by `write_memory_progbuf_startup()`
+	*/
 static int write_memory_progbuf_teardown(struct target *target)
 {
 	return dm_write(target, DM_ABSTRACTAUTO, 0);
 }
 
 /**
- * This function attempts to restore the pipeline after a busy on abstract
- * access or a DMI busy by reading the content of s0 -- the address of the
- * failed write.
- */
+	* This function attempts to restore the pipeline after a busy on abstract
+	* access or a DMI busy by reading the content of s0 -- the address of the
+	* failed write.
+	*/
 static int write_memory_progbuf_handle_busy(struct target *target,
 		target_addr_t *address_p, uint32_t size, const uint8_t *buffer)
 {
@@ -4896,9 +4929,9 @@ static int write_memory_progbuf_handle_busy(struct target *target,
 }
 
 /**
- * This function fills the batch with DMI writes (but does not execute the batch).
- * It returns the next address -- the address that will be the start of the next batch.
- */
+	* This function fills the batch with DMI writes (but does not execute the batch).
+	* It returns the next address -- the address that will be the start of the next batch.
+	*/
 static target_addr_t write_memory_progbuf_fill_batch(struct riscv_batch *batch,
 		target_addr_t start_address, target_addr_t end_address, uint32_t size,
 		const uint8_t *buffer)
@@ -4927,9 +4960,9 @@ static target_addr_t write_memory_progbuf_fill_batch(struct riscv_batch *batch,
 }
 
 /**
- * This function runs the batch of writes and updates address_p with the
- * address of the next write.
- */
+	* This function runs the batch of writes and updates address_p with the
+	* address of the next write.
+	*/
 static int write_memory_progbuf_run_batch(struct target *target, struct riscv_batch *batch,
 		target_addr_t *address_p, target_addr_t end_address, uint32_t size,
 		const uint8_t *buffer)
@@ -5165,7 +5198,7 @@ static int dm013_select_hart(struct target *target, int hart_index)
 }
 
 /* Select all harts that were prepped and that are selectable, clearing the
- * prepped flag on the harts that actually were selected. */
+	* prepped flag on the harts that actually were selected. */
 static int select_prepped_harts(struct target *target)
 {
 	RISCV_INFO(r);
@@ -5555,3 +5588,4 @@ static int riscv013_clear_abstract_error(struct target *target)
 		result = ERROR_FAIL;
 	return result;
 }
+
